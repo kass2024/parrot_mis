@@ -125,8 +125,8 @@ abstract class ProfessionalPDFGenerator {
                 
         .header {
             text-align: center;
-            margin-bottom: 5pt;
-            padding-bottom: 5pt;
+            margin-bottom: 1pt;
+            padding-bottom: 1pt;
             border-bottom: 3px solid #1a1a1a;
             position: relative;
         }
@@ -134,12 +134,12 @@ abstract class ProfessionalPDFGenerator {
         h1 { 
             text-align: center; 
             font-size: 24pt; 
-            margin: 5pt 0 3pt 0;
+            margin: 1pt 0 0pt 0;
             font-weight: bold;
             letter-spacing: 2px;
             color: #1a1a1a;
             text-transform: uppercase;
-            line-height: 1.1;
+            line-height: 1.0;
         }
         
         .subtitle {
@@ -147,18 +147,18 @@ abstract class ProfessionalPDFGenerator {
             font-size: 14pt;
             font-style: italic;
             color: #555;
-            margin-bottom: 8pt;
+            margin-bottom: 0pt;
             letter-spacing: 0.5px;
         }
         
         h2 { 
             font-size: 16pt; 
             font-weight: bold; 
-            margin-top: 10pt; 
-            margin-bottom: 8pt;
+            margin-top: 0pt; 
+            margin-bottom: 1pt;
             color: #1a1a1a;
             border-bottom: 2px solid #1a1a1a;
-            padding-bottom: 3pt;
+            padding-bottom: 0pt;
             page-break-after: avoid;
             page-break-inside: avoid;
             text-align: left;
@@ -183,12 +183,12 @@ abstract class ProfessionalPDFGenerator {
         }
         
         p { 
-            margin: 0 0 5pt 0; 
+            margin: 0 0 1pt 0; 
             text-align: left !important;
             orphans: 2;
             widows: 2;
             text-indent: 0;
-            line-height: 1.4;
+            line-height: 1.1;
         }
         
         strong { 
@@ -197,32 +197,32 @@ abstract class ProfessionalPDFGenerator {
         }
         
         ul, ol {
-            margin: 5pt 0;
+            margin: 1pt 0;
             padding-left: 25pt;
-            line-height: 1.4;
+            line-height: 1.1;
             text-align: left;
         }
         
         li {
-            margin-bottom: 2pt;
-            line-height: 1.4;
+            margin-bottom: 0pt;
+            line-height: 1.1;
             text-align: left;
         }
         
         .party-info { 
-            padding: 10pt; 
-            margin: 5pt 0; 
+            padding: 5pt; 
+            margin: 2pt 0; 
             border: none;
             background: #ffffff;
             page-break-inside: avoid;
         }
         
         .party-info h4 { 
-            margin: 0 0 5pt 0; 
+            margin: 0 0 2pt 0; 
             color: #1a1a1a;
             font-size: 14pt;
             border-bottom: none;
-            padding-bottom: 3pt;
+            padding-bottom: 1pt;
             text-align: left;
         }
         
@@ -354,17 +354,17 @@ abstract class ProfessionalPDFGenerator {
             }
             
             .header {
-                margin-bottom: 3pt;
-                padding-bottom: 3pt;
+                margin-bottom: 0pt;
+                padding-bottom: 0pt;
             }
             
             h1 {
-                margin: 3pt 0 2pt 0;
-                line-height: 1.1;
+                margin: 0pt 0 0pt 0;
+                line-height: 1.0;
             }
             
             .subtitle {
-                margin-bottom: 5pt;
+                margin-bottom: 0pt;
             }
             
             .signature-section { 
@@ -412,25 +412,25 @@ abstract class ProfessionalPDFGenerator {
             }
             
             h2 {
-                margin-top: 8pt;
-                margin-bottom: 5pt;
-                padding-bottom: 2pt;
+                margin-top: 0pt;
+                margin-bottom: 1pt;
+                padding-bottom: 0pt;
             }
             
             p {
-                margin: 0 0 3pt 0;
+                margin: 0 0 1pt 0;
                 text-align: left !important;
-                line-height: 1.3;
+                line-height: 1.1;
             }
             
             ul, ol {
-                margin: 3pt 0;
-                line-height: 1.3;
+                margin: 1pt 0;
+                line-height: 1.1;
             }
             
             li {
-                margin-bottom: 1pt;
-                line-height: 1.3;
+                margin-bottom: 0pt;
+                line-height: 1.1;
             }
         }
         
@@ -531,28 +531,7 @@ abstract class ProfessionalPDFGenerator {
             294 Rue Vezina App 202; Lasalle, Quebec H8R 3M9'
         );
         
-        return "
-        <div class='page-break'>
-            <h2>1. " . $this->t('PARTIES', 'PARTIES') . "</h2>
-            <p><strong>$between</strong></p>
-            
-            <div class='party-info'>
-                <h4>$partnerName</h4>
-                <p><strong>$companyName:</strong> $partnerName</p>
-                <p><strong>$representative:</strong> $repName</p>
-                <p><strong>$position:</strong> $repTitle</p>
-                <p><strong>$email:</strong> $companyEmail</p>
-                <p><strong>$phone:</strong> $companyPhone</p>
-                <p><strong>$fullAddress:</strong> $companyAddress</p>
-            </div>
-            
-            <p><strong>$and</strong></p>
-            
-            <div class='party-info'>
-                <h4>Parrot Canada Visa Consultant Co. Ltd</h4>
-                <p>$parrotInfo</p>
-            </div>
-        </div>";
+        return "<h2>1. " . $this->t('PARTIES', 'PARTIES') . "</h2><p><strong>$between</strong></p><div class='party-info'><h4>$partnerName</h4><p><strong>$companyName:</strong> $partnerName</p><p><strong>$representative:</strong> $repName</p><p><strong>$position:</strong> $repTitle</p><p><strong>$email:</strong> $companyEmail</p><p><strong>$phone:</strong> $companyPhone</p><p><strong>$fullAddress:</strong> $companyAddress</p></div><p><strong>$and</strong></p><div class='party-info'><h4>Parrot Canada Visa Consultant Co. Ltd</h4><p>$parrotInfo</p></div>";
     }
     
     protected function getSignatureSection(): string {
@@ -576,43 +555,7 @@ abstract class ProfessionalPDFGenerator {
         $parrotRepName = $this->t('Dr Jean Pierre Twajamahoro', 'Dr Jean Pierre Twajamahoro');
         $parrotRepTitle = $this->t('Owner & Managing Director', 'Propriétaire & Directeur Général');
         
-        return "
-        <div class='signature-section page-break'>
-            <h2>$signaturesTitle</h2>
-            <p>$executedBy</p>
-            
-            <div class='signature-container'>
-                <div class='signature-block'>
-                    <div class='signature-box'>
-                        <div class='company-title'>$partnerName</div>
-                        <div class='representative-info'>
-                            <p><strong>$representativeName:</strong> $repName</p>
-                            <p><strong>" . $this->t('Position', 'Fonction') . ":</strong> $repTitle</p>
-                        </div>
-                        <div class='signature-label'>$authorizedSignature</div>
-                        <div class='signature-area'>
-                            $partnerSignature
-                        </div>
-                        <div class='date-line'>$signedOn: $signedDate</div>
-                    </div>
-                </div>
-                
-                <div class='signature-block'>
-                    <div class='signature-box'>
-                        <div class='company-title'>Parrot Canada Visa Consultant Co. Ltd</div>
-                        <div class='representative-info'>
-                            <p><strong>$representativeName:</strong> $parrotRepName</p>
-                            <p><strong>" . $this->t('Position', 'Fonction') . ":</strong> $parrotRepTitle</p>
-                        </div>
-                        <div class='signature-label'>$authorizedSignature</div>
-                        <div class='signature-area'>
-                            $employerSignature
-                        </div>
-                        <div class='date-line'>$signedOn: $signedDate</div>
-                    </div>
-                </div>
-            </div>
-        </div>";
+        return "<div class='signature-section'><h2>$signaturesTitle</h2><p>$executedBy</p><div class='signature-container'><div class='signature-block'><div class='signature-box'><div class='company-title'>$partnerName</div><div class='representative-info'><p><strong>$representativeName:</strong> $repName</p><p><strong>" . $this->t('Position', 'Fonction') . ":</strong> $repTitle</p></div><div class='signature-label'>$authorizedSignature</div><div class='signature-area'>$partnerSignature</div><div class='date-line'>$signedOn: $signedDate</div></div></div><div class='signature-block'><div class='signature-box'><div class='company-title'>Parrot Canada Visa Consultant Co. Ltd</div><div class='representative-info'><p><strong>$representativeName:</strong> $parrotRepName</p><p><strong>" . $this->t('Position', 'Fonction') . ":</strong> $parrotRepTitle</p></div><div class='signature-label'>$authorizedSignature</div><div class='signature-area'>$employerSignature</div><div class='date-line'>$signedOn: $signedDate</div></div></div></div></div>";
     }
     
     protected function getFooterSection(): string {
@@ -621,10 +564,7 @@ abstract class ProfessionalPDFGenerator {
             'Cet accord constitue l\'entente complète entre les parties et remplace toutes les discussions, négociations et accords antérieurs.<br>EN FOI DE QUOI, les parties ont exécuté cet Accord de Partenariat Stratégique à la date indiquée ci-dessus.'
         );
         
-        return "
-        <div class='footer avoid-break'>
-            <p>$footerText</p>
-        </div>";
+        return "<div class='footer avoid-break'><p>$footerText</p></div>";
     }
     
     abstract protected function getMainContent(): string;
@@ -634,35 +574,7 @@ abstract class ProfessionalPDFGenerator {
             return null;
         }
         
-        $html = '
-        <!DOCTYPE html>
-        <html lang="' . ($this->isFrench ? 'fr' : 'en') . '">
-        <head>
-        <meta charset="utf-8">
-        <title>' . $this->getContractTitle() . '</title>
-        <style>' . $this->getProfessionalStyles() . '</style>
-        </head>
-        <body>
-        
-        <div class="document">
-        
-        <div class="header">
-            <h1>' . $this->getContractTitle() . '</h1>
-            <div class="subtitle">' . $this->getSubtitle() . '</div>
-        </div>
-        
-        ' . $this->getPartiesSection() . '
-        
-        ' . $this->getMainContent() . '
-        
-        ' . $this->getSignatureSection() . '
-        
-        ' . $this->getFooterSection() . '
-        
-        </div>
-        
-        </body>
-        </html>';
+        $html = '<!DOCTYPE html><html lang="' . ($this->isFrench ? 'fr' : 'en') . '"><head><meta charset="utf-8"><title>' . $this->getContractTitle() . '</title><style>' . $this->getProfessionalStyles() . '</style></head><body><div class="document"><div class="header"><h1>' . $this->getContractTitle() . '</h1><div class="subtitle">' . $this->getSubtitle() . '</div></div>' . $this->getPartiesSection() . $this->getMainContent() . $this->getSignatureSection() . $this->getFooterSection() . '</div></body></html>';
         
         return $this->createPDF($html);
     }
