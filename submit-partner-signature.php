@@ -122,6 +122,30 @@ try {
     $conn->commit();
     logMsg("Partner contract finalized", ["contract_id" => $contractId]);
 
+    // Generate PDF based on contract language
+    $stmt = $conn->prepare("SELECT language FROM partner_contracts WHERE id = ?");
+    $stmt->bind_param("i", $contractId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $contractData = $result->fetch_assoc();
+    $stmt->close();
+    
+    $language = $contractData['language'] ?? 'english';
+    
+    if ($language === 'french') {
+        require_once __DIR__ . '/generate-partner-contract-pdf-french-professional.php';
+        $pdfPath = generatePartnerContractPDFFrench($contractId);
+    } else {
+        require_once __DIR__ . '/generate-partner-contract-pdf-professional.php';
+        $pdfPath = generatePartnerContractPDF($contractId);
+    }
+    
+    if ($pdfPath) {
+        logMsg("PDF generated successfully", ["contract_id" => $contractId, "language" => $language, "path" => $pdfPath]);
+    } else {
+        logMsg("PDF generation failed", ["contract_id" => $contractId, "language" => $language]);
+    }
+
 } catch (Throwable $e) {
     $conn->rollback();
     fail("Signing failed", 500, ["message" => $e->getMessage(), "line" => $e->getLine()]);

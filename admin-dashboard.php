@@ -304,7 +304,8 @@ $cards = [
     'title' => 'Partner Contract',
     'icon' => 'bi-handshake',
     'links' => [
-      'admin-generate-partner-contract.php' => 'Issue partner contract link',
+      'admin-generate-partner-contract.php' => 'Issue partner contract link (English)',
+      'admin-generate-partner-contract-french.php' => 'Issue partner contract link (French)',
       'admin-partner-contracts.php' => 'View partner contracts',
     ]
   ],
@@ -1905,9 +1906,13 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <i class="bi bi-chevron-down arrow"></i>
       </a>
       <div class="sidebar-submenu" id="submenu_partner_contracts">
-        <a href="#" onclick="loadInFrame('admin-generate-partner-contract.php', 'Issue Partner Contract Link')">
+        <a href="#" onclick="loadInFrame('admin-generate-partner-contract.php', 'Issue Partner Contract Link (English)')">
           <i class="bi bi-link"></i>
-          Issue partner contract link
+          Issue partner contract link (English)
+        </a>
+        <a href="#" onclick="loadInFrame('admin-generate-partner-contract-french.php', 'Issue Partner Contract Link (French)')">
+          <i class="bi bi-link"></i>
+          Issue partner contract link (French)
         </a>
         <a href="#" onclick="loadInFrame('admin-partner-contracts.php', 'View Partner Contracts')">
           <i class="bi bi-files"></i>

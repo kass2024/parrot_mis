@@ -16,7 +16,7 @@ if (!isset($_GET['id']) || !ctype_digit($_GET['id'])) {
 $contractId = (int) $_GET['id'];
 
 $stmt = $conn->prepare("
-    SELECT pdf_path, signature_image
+    SELECT pdf_path, signature_image, language
     FROM partner_contracts
     WHERE id = ? AND status = 'signed'
     LIMIT 1
@@ -34,9 +34,21 @@ if (!$row) {
 $pdfPath = $row['pdf_path'];
 
 if (!$pdfPath && !empty($row['signature_image'])) {
-    require_once __DIR__ . '/generate-partner-contract-pdf.php';
-    if (function_exists('generatePartnerContractPDF')) {
-        $pdfPath = generatePartnerContractPDF($contractId);
+    $language = $row['language'] ?? 'english';
+    
+    if ($language === 'french') {
+        require_once __DIR__ . '/generate-partner-contract-pdf-french-professional.php';
+        if (function_exists('generatePartnerContractPDFFrench')) {
+            $pdfPath = generatePartnerContractPDFFrench($contractId);
+        }
+    } else {
+        require_once __DIR__ . '/generate-partner-contract-pdf-professional.php';
+        if (function_exists('generatePartnerContractPDF')) {
+            $pdfPath = generatePartnerContractPDF($contractId);
+        }
+    }
+    
+    if ($pdfPath) {
         $stmt = $conn->prepare("UPDATE partner_contracts SET pdf_path = ? WHERE id = ?");
         $stmt->bind_param("si", $pdfPath, $contractId);
         $stmt->execute();
@@ -50,7 +62,9 @@ if (!$pdfPath || !file_exists($pdfPath)) {
 }
 
 header("Content-Type: application/pdf");
-header("Content-Disposition: attachment; filename=\"partner-contract-{$contractId}.pdf\"");
+$language = $row['language'] ?? 'english';
+$filename = $language === 'french' ? "contrat-partenariat-{$contractId}.pdf" : "partner-contract-{$contractId}.pdf";
+header("Content-Disposition: attachment; filename=\"{$filename}\"");
 header("Content-Length: " . filesize($pdfPath));
 header("Cache-Control: no-store");
 header("Pragma: no-cache");
