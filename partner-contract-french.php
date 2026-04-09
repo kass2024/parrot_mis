@@ -39,7 +39,7 @@ $isSigned = ($contract['status'] === 'signed');
 <head>
 <meta charset="UTF-8">
 <title>ACCORD DE PARTENARIAT STRATÉGIQUE</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
 :root {
   --ink: #111827;
@@ -61,6 +61,144 @@ body {
   background: linear-gradient(180deg, #eef2f7, #e5e7eb);
   font-family: "Inter", "Segoe UI", system-ui, sans-serif;
   color: var(--ink);
+}
+
+/* Enhanced Mobile Responsive Design */
+@media screen and (max-width: 768px) {
+  body {
+    padding: 20px 12px !important;
+  }
+  
+  .contract-page {
+    padding: 28px 20px !important;
+    margin: 8px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  
+  .contract-page h1 {
+    font-size: 18pt !important;
+    margin-bottom: 20pt !important;
+    line-height: 1.2 !important;
+  }
+  
+  .contract-page h3 {
+    font-size: 14pt !important;
+    margin-top: 20pt !important;
+    margin-bottom: 12pt !important;
+    line-height: 1.3 !important;
+  }
+  
+  .contract-page p {
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    margin: 0 0 12pt 0 !important;
+  }
+  
+  .form-section {
+    padding: 16px !important;
+    margin: 12px 0 !important;
+    border-radius: 6px !important;
+  }
+  
+  .form-section h4 {
+    font-size: 13pt !important;
+    margin-bottom: 12px !important;
+  }
+  
+  .signature-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  
+  .signature-section {
+    margin-bottom: 20px !important;
+    padding: 16px !important;
+  }
+  
+  .input-group {
+    margin-bottom: 16px !important;
+  }
+  
+  .input-group input {
+    font-size: 14px !important;
+    padding: 12px !important;
+    max-width: 100% !important;
+  }
+  
+  .btn {
+    padding: 14px 20px !important;
+    font-size: 14px !important;
+    margin: 8px 4px !important;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  body {
+    padding: 12px 6px !important;
+  }
+  
+  .contract-page {
+    padding: 20px 12px !important;
+    margin: 4px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
+  }
+  
+  .contract-page h1 {
+    font-size: 16pt !important;
+    margin-bottom: 16pt !important;
+    line-height: 1.2 !important;
+  }
+  
+  .contract-page h3 {
+    font-size: 12pt !important;
+    margin-top: 16pt !important;
+    margin-bottom: 8pt !important;
+    line-height: 1.3 !important;
+  }
+  
+  .contract-page p {
+    font-size: 10pt !important;
+    line-height: 1.5 !important;
+    margin: 0 0 8pt 0 !important;
+  }
+  
+  .form-section {
+    padding: 12px !important;
+    margin: 8px 0 !important;
+    border-radius: 4px !important;
+  }
+  
+  .form-section h4 {
+    font-size: 12pt !important;
+    margin-bottom: 10px !important;
+  }
+  
+  .signature-canvas {
+    width: 100% !important;
+    max-width: 260px !important;
+    height: 100px !important;
+  }
+  
+  .btn {
+    width: 100% !important;
+    margin: 6px 0 !important;
+    text-align: center !important;
+    padding: 12px 16px !important;
+  }
+  
+  .btn-clear {
+    margin-bottom: 8px !important;
+  }
+  
+  .input-group input {
+    font-size: 16px !important;
+    padding: 12px !important;
+    max-width: 100% !important;
+  }
 }
 
 .contract-page {
@@ -119,6 +257,7 @@ body {
   border-radius: 4px;
   outline: none;
   transition: all 0.3s ease;
+  box-sizing: border-box;
 }
 
 .contract-page input:focus {
@@ -160,6 +299,32 @@ body {
   margin-bottom: 15px;
 }
 
+/* Mobile input group layout */
+@media screen and (max-width: 768px) {
+  .input-group {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+    margin-bottom: 16px !important;
+  }
+  
+  .input-group label {
+    margin-bottom: 6px !important;
+    font-size: 12pt !important;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .input-group {
+    gap: 6px !important;
+    margin-bottom: 14px !important;
+  }
+  
+  .input-group label {
+    margin-bottom: 4px !important;
+    font-size: 11pt !important;
+  }
+}
+
 .input-group label {
   font-weight: 600;
   color: var(--muted);
@@ -196,16 +361,29 @@ input[type="date"]::-moz-calendar-picker {
 }
 
 .signature-canvas {
+  border: 1px dashed #9ca3af;
+  height: 130px;
   width: 100%;
-  height: 140px;
   max-width: 400px;
-  border: 2px dashed #9ca3af;
-  border-radius: var(--radius-sm);
-  background: #ffffff;
   cursor: crosshair;
-  transition: all 0.3s ease;
+  background: #fafafa;
+  border-radius: 4px;
   touch-action: none;
-  display: block;
+}
+
+/* Mobile canvas optimization */
+@media (max-width: 768px) {
+  .signature-canvas {
+    height: 120px;
+    max-width: 280px;
+  }
+}
+
+@media (max-width: 480px) {
+  .signature-canvas {
+    height: 100px;
+    max-width: 240px;
+  }
 }
 
 .signature-canvas:hover {
@@ -218,20 +396,6 @@ input[type="date"]::-moz-calendar-picker {
   border-color: var(--link);
   background: #f0f9ff;
   box-shadow: 0 0 10px rgba(31, 79, 216, 0.1);
-}
-
-@media (max-width: 768px) {
-  .signature-canvas {
-    height: 120px;
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 480px) {
-  .signature-canvas {
-    height: 100px;
-    max-width: 100%;
-  }
 }
 
 /* Signature section improvements */
@@ -250,14 +414,30 @@ input[type="date"]::-moz-calendar-picker {
 }
 
 .btn {
-  padding: 10px 20px;
+  padding: 14px 28px;
   border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
   font-weight: 600;
+  font-size: 15px;
   cursor: pointer;
   transition: all 0.3s ease;
-  font-family: system-ui, sans-serif;
+}
+
+/* Mobile button optimization */
+@media (max-width: 768px) {
+  .btn {
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .btn {
+    padding: 14px 16px;
+    font-size: 13px;
+    width: 100%;
+    margin: 6px 0;
+  }
 }
 
 .btn-clear {
@@ -304,7 +484,22 @@ input[type="date"]::-moz-calendar-picker {
 .signature-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 40pt 64pt;
+  gap: 40px;
+  margin-top: 30px;
+}
+
+/* Mobile responsive signature grid */
+@media (max-width: 768px) {
+  .signature-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .signature-grid {
+    gap: 15px;
+  }
 }
 
 @media (max-width: 768px) {
