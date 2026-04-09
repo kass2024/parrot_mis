@@ -1,0 +1,43 @@
+[2025-09-26 11:47:33] ERROR in C:\xampp\htdocs\parrot\save_form_indo.php:97
+Template not found: C:\xampp\htdocs\parrot/Indo European_enquiry form.xlsx
+POST DATA:
+Array
+(
+    [name] => Ukundabarezi Jean Methode
+    [age] => 38
+    [intake] => 208
+    [passport_place] => kigali
+    [y10] => 
+    [s10] => 
+    [p10] => 
+    [n10] => 
+    [y12] => 
+    [s12] => 
+    [p12] => 
+    [n12] => 
+    [ydip] => 
+    [sdip] => 
+    [pdip] => 
+    [ndip] => 
+    [ybach] => 
+    [sbach] => 
+    [pbach] => 
+    [nbach] => 
+    [ymas] => 
+    [smas] => 
+    [pmas] => 
+    [nmas] => 
+    [work] => 
+    [gre] => 
+    [english] => 
+    [country1] => 
+    [other1] => 
+    [ielts] => 
+    [country2] => 
+    [other2] => 
+    [budget] => 
+    [country3] => 
+    [other3] => 
+)
+
+----------------------

@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "parrotchatsupport",
+  "private_key_id": "92ee49c779cf2e2d2616b6a0ddf73ac51475e485",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDJ/Kr3ntgONoHK\nN1JBaoVKYuvnvGYvOqeTgxxFjek3nVkIBynWACFZ6GLBzogzs5Tb1GZvuvOhe+ex\nxkx3Mq2QwrvO5PeWGN6BlPnQtIdm8xHlmNym3Qu4/bw55tzuH595xyZS+WhPdyNU\nueB4SNG+pW0J1hwzlKhsY6g2TM+8DZdybkWcullkt/kB+3gqK8DhHteb4C05VtJG\napO0g2+r3va1xom2DbT0te8s1trf5xNOGDWi83e5Ogo/S1X1+losn83gldvnOHPp\njQnGfgwGUXQ8EHEXiY/PQgExEKexRd3KCyZnM52pOLbdAn99XTJWzr3K1hmSfxnt\nJpSJTyABAgMBAAECggEAMXGGvk+lTrFcCw6ItZeoIiHd4l+VWelPPQZCpOoMlT8Q\nnKz4OjjU8Se4CP4QDCvg/ADdxGrsmXJ1sGg8ro76uq1YgNg+nQDgcrLvhf2zCWnl\nzyCgnr4MUQ/XhAr1uNqH1K0BvhzsQkuFHAfWIUueAD+JVfeR9rRkmAe7FPOvhDYV\nzUS6t5af+qvb9G13ZaRWyCx3DOLI7wqT7DUl1yWbXYDf5+LlL3LtuaR8X1+IDSFx\ntsqtkSWd9W5y13L7PKmrdyQFTUU2fN4nry1CouSZJjgd+2Vt105C3HufqmXZPOCw\n5dTDu2eJfFzTm5ZQhmXXqcGDlQb9INpK+Dnwi34iuQKBgQD3PP8A1x7L1bcTh9gd\nwkMaPhwMSiwPm/kw93hsaB5LpneJxLbFCJgoi2kghkawthfT6Tln905POFa1NrEm\nTq0s8YBLb3J7qvInTLoLWCYYIVsle0rMznR1eMmH7kZ8SklEle5XKnKwZl3diUwG\nOjyQ/VF2vowPzfmiBWxhxNSgdQKBgQDRJSQ0SmS4thQLI/XUMVJvZjdpLqW3gTVW\ndGOqzvH1XgVR0UkB0E0BYSZ6D8Pmhj59mdv7LSmEVri0fFZzeqM531XKT3Wb/tPZ\ntmWr1wedCj4rZhIE4ZJeEu4kiqWJY5bAqI16LC1mgjm9yRklUmCIFEEiyJ6swuEF\nITdRT7rP3QKBgQDbUl/ARhUKq16J09MSqxbNu9UzzcSCYFHRb2aDfGWLpHOcYkXk\nSfh41xr+AD/LWO2QTe9f3BG60vaQMKE7o0Wafe3afVXogL/pvvW3RI4ej9CEUngL\ncQX8g5b7n5MlhNy0G/DfoEc3Vsfj03z+dUDvOdi/Zs9m4ciWQwtfO7WHVQKBgD4d\nUctV7OQO75T/cRs8Ksd7DCno+L6vWS/8ET3BiIrfCaVrCsvHGZe3Sr4lwIDOjfCv\nqW3H0/TB7MltxB835RJjCg+z2bIi1LhsO3X1vwUc7anl/qQEenwGE0Q3CULsmPFP\nHfWS+UjglFWRTC6RcKn5mf7Cpp2Yo0vquYskqs7hAoGBAI56M9POuyszznNURtPx\nsZzLqHMjlbNteirFh4MHanh0fIB6bL5yVEPhMhuVejcz79dVhqUTZwJEv4HNDBdp\nCRDdC7gLW6HAEujGGFLE+UV0NpSQfwZCv1RVSI+MEKqx2dWGv4cNHEQKe96Ypo2i\n/QteDpstuuFpx+9/o0Dw13Ps\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-fbsvc@parrotchatsupport.iam.gserviceaccount.com",
+  "client_id": "104474340114466238371",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40parrotchatsupport.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

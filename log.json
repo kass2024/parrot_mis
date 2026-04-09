@@ -1,0 +1,273 @@
+{
+    "time": "2025-07-18 12:19:30",
+    "error": "Unsupported step for debugging."
+}{
+    "time": "2025-07-18 12:19:36",
+    "error": "Unsupported step for debugging."
+}{
+    "time": "2025-07-18 12:19:40",
+    "error": "Unsupported step for debugging."
+}{
+    "time": "2025-07-18 12:19:42",
+    "error": "Unsupported step for debugging."
+}{
+    "time": "2025-07-18 12:19:47",
+    "error": "Unsupported step for debugging."
+}{
+    "time": "2025-07-18 12:19:50",
+    "error": "Unsupported step for debugging."
+}{
+    "time": "2025-07-18 12:21:11",
+    "sql": "INSERT INTO dphu (user_id, prefix, prenom, deuxiemenom, nomfamille, sexe, birth_month, birth_day, birth_year, adresse, ville, province, postal, pays, email, telephone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "params": [
+        "user-1752814681-1633",
+        "Mr.",
+        "",
+        "",
+        "",
+        "M\u00e2le",
+        "Select",
+        "Select",
+        "Select",
+        "",
+        "",
+        "",
+        "",
+        "Afghanistan",
+        "",
+        ""
+    ],
+    "step": "1",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": "",
+        "user_id": "user-1752814681-1633"
+    }
+}{
+    "time": "2025-07-18 12:21:15",
+    "sql": "UPDATE dphu SET orgName = ?, position = ?, orgTel = ?, orgEmail = ?, orgStreet = ?, orgApt = ?, orgCity = ?, orgState = ?, orgZip = ?, orgCountry = ? WHERE user_id = ?",
+    "params": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Afghanistan",
+        "user-1752814681-1633"
+    ],
+    "step": "2",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:21:20",
+    "sql": "UPDATE dphu SET school1_name = ?, school1_field = ?, school1_degree = ?, school1_from_month = ?, school1_from_day = ?, school1_from_year = ?, school1_to_month = ?, school1_to_day = ?, school1_to_year = ?, school2_name = ?, school2_field = ?, school2_degree = ?, school2_from_month = ?, school2_from_day = ?, school2_from_year = ?, school2_to_month = ?, school2_to_day = ?, school2_to_year = ?, school3_name = ?, school3_field = ?, school3_degree = ?, school3_from_month = ?, school3_from_day = ?, school3_from_year = ?, school3_to_month = ?, school3_to_day = ?, school3_to_year = ? WHERE user_id = ?",
+    "params": [
+        "",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "user-1752814681-1633"
+    ],
+    "step": "3",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:21:24",
+    "sql": "UPDATE dphu SET study_degree = ?, study_course = ?, study_field = ?, study_specialty = ?, study_language = ?, english_proficiency = ?, study_additional_info = ? WHERE user_id = ?",
+    "params": [
+        "Select",
+        "",
+        "Select",
+        "",
+        "Select",
+        "Select",
+        "",
+        "user-1752814681-1633"
+    ],
+    "step": "4",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:21:29",
+    "sql": "UPDATE dphu SET photo = ?, passport = ?, degree_certificate = ?, academic_transcript = ?, language_proof = ?, recommendation_letters = ?, other_documents = ? WHERE user_id = ?",
+    "params": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "[\"\"]",
+        "[\"\"]",
+        "user-1752814681-1633"
+    ],
+    "step": "5",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:24:40",
+    "sql": "INSERT INTO dphu (user_id, prefix, prenom, deuxiemenom, nomfamille, sexe, birth_month, birth_day, birth_year, adresse, ville, province, postal, pays, email, telephone) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    "params": [
+        "user-1752814681-1633",
+        "Mr.",
+        "",
+        "",
+        "",
+        "M\u00e2le",
+        "Select",
+        "Select",
+        "Select",
+        "",
+        "",
+        "",
+        "",
+        "Afghanistan",
+        "",
+        ""
+    ],
+    "step": "1",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": "",
+        "user_id": "user-1752814681-1633"
+    }
+}{
+    "time": "2025-07-18 12:24:41",
+    "sql": "UPDATE dphu SET orgName = ?, position = ?, orgTel = ?, orgEmail = ?, orgStreet = ?, orgApt = ?, orgCity = ?, orgState = ?, orgZip = ?, orgCountry = ? WHERE user_id = ?",
+    "params": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Afghanistan",
+        "user-1752814681-1633"
+    ],
+    "step": "2",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:24:44",
+    "sql": "UPDATE dphu SET school1_name = ?, school1_field = ?, school1_degree = ?, school1_from_month = ?, school1_from_day = ?, school1_from_year = ?, school1_to_month = ?, school1_to_day = ?, school1_to_year = ?, school2_name = ?, school2_field = ?, school2_degree = ?, school2_from_month = ?, school2_from_day = ?, school2_from_year = ?, school2_to_month = ?, school2_to_day = ?, school2_to_year = ?, school3_name = ?, school3_field = ?, school3_degree = ?, school3_from_month = ?, school3_from_day = ?, school3_from_year = ?, school3_to_month = ?, school3_to_day = ?, school3_to_year = ? WHERE user_id = ?",
+    "params": [
+        "",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "Select",
+        "",
+        "",
+        "user-1752814681-1633"
+    ],
+    "step": "3",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:24:45",
+    "sql": "UPDATE dphu SET study_degree = ?, study_course = ?, study_field = ?, study_specialty = ?, study_language = ?, english_proficiency = ?, study_additional_info = ? WHERE user_id = ?",
+    "params": [
+        "Select",
+        "",
+        "Select",
+        "",
+        "Select",
+        "Select",
+        "",
+        "user-1752814681-1633"
+    ],
+    "step": "4",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}{
+    "time": "2025-07-18 12:24:46",
+    "sql": "UPDATE dphu SET photo = ?, passport = ?, degree_certificate = ?, academic_transcript = ?, language_proof = ?, recommendation_letters = ?, other_documents = ? WHERE user_id = ?",
+    "params": [
+        "",
+        "",
+        "",
+        "",
+        "",
+        "[\"\"]",
+        "[\"\"]",
+        "user-1752814681-1633"
+    ],
+    "step": "5",
+    "user_id": "user-1752814681-1633",
+    "final_response": {
+        "status": "success",
+        "message": ""
+    }
+}
