@@ -10,7 +10,6 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
         $companyName = $this->esc($this->contract['company_name']);
         
         return "
-        <div class='page-break'>
             <h2>2. OBJET DE L\'ACCORD</h2>
             <p>L\'objectif principal de cet accord est de mettre en place un système complet et structuré d\'accompagnement des étudiants, comprenant :</p>
             <ul>
@@ -22,9 +21,7 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
                 <li>L\'organisation du voyage</li>
                 <li>L\'accueil à l\'aéroport et l\'assistance à l\'installation dans le pays de destination</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>3. PORTÉE DU PARTENARIAT</h2>
             
             <h3>3.1 Recrutement et Conseil aux Étudiants</h3>
@@ -62,9 +59,7 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
                 <li>Aide à l\'installation à l\'arrivée</li>
                 <li>Coordination avec les partenaires locaux</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>4. MISSION PRINCIPALE</h2>
             <p>Les deux parties conviennent d\'opérer comme un cabinet global de conseil en éducation internationale, offrant :</p>
             <ul>
@@ -73,9 +68,7 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
                 <li>Incluant admission, visa, voyage et accompagnement à l\'arrivée</li>
                 <li>Ce partenariat garantit une transition fluide depuis l\'évaluation initiale jusqu\'à l\'installation complète à l\'étranger</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>5. RÔLES ET RESPONSABILITÉS</h2>
             
             <h3>5.1 Nom de l\'Entreprise : $companyName</h3>
@@ -101,9 +94,7 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
                 <li>Organiser l\'accueil à l\'aéroport et l\'assistance à l\'installation dans le pays de destination</li>
                 <li>Fournir un accompagnement après l\'arrivée si nécessaire</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>6. DISPOSITIONS FINANCIÈRES</h2>
             <ul>
                 <li>Chaque partie conserve le droit de facturer ses propres frais de service aux étudiants selon ses politiques internes.</li>
@@ -116,9 +107,7 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
                 <li>Le paiement doit être effectué immédiatement après l\'obtention de la lettre d\'admission, selon les modalités convenues.</li>
                 <li>Les deux parties s\'engagent à assurer transparence et traçabilité financière.</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>7. VALEUR AJOUTÉE</h2>
             <p>Ce partenariat offre :</p>
             <ul>
@@ -127,9 +116,7 @@ class FrenchContractPDF extends ProfessionalPDFGenerator {
                 <li>Une assistance financière (bourses et prêts)</li>
                 <li>Une arrivée sécurisée et une intégration réussie à l\'étranger</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>8. COMMUNICATION ET COORDINATION</h2>
             <ul>
                 <li>Désignation de représentants dédiés</li>

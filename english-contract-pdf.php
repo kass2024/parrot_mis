@@ -10,7 +10,6 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
         $companyName = $this->esc($this->contract['company_name']);
         
         return "
-        <div class='page-break'>
             <h2>2. PURPOSE OF AGREEMENT</h2>
             <p>The primary objective of this agreement is to establish a comprehensive and structured student support system, including:</p>
             <ul>
@@ -22,9 +21,7 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
                 <li>Travel arrangement</li>
                 <li>Airport pickup and settlement assistance in destination country</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>3. SCOPE OF PARTNERSHIP</h2>
             
             <h3>3.1 Student Recruitment and Counseling</h3>
@@ -62,9 +59,7 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
                 <li>Arrival settlement support</li>
                 <li>Coordination with local partners</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>4. PRIMARY MISSION</h2>
             <p>Both parties agree to operate as a global education consultancy firm, offering:</p>
             <ul>
@@ -73,9 +68,7 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
                 <li>Including admission, visa, travel, and arrival support</li>
                 <li>This partnership ensures a smooth transition from initial evaluation to complete settlement abroad</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>5. ROLES AND RESPONSIBILITIES</h2>
             
             <h3>5.1 Company Name: $companyName</h3>
@@ -101,9 +94,7 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
                 <li>Arrange airport pickup and settlement assistance in destination country</li>
                 <li>Provide post-arrival support if needed</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>6. FINANCIAL ARRANGEMENTS</h2>
             <ul>
                 <li>Each party retains the right to charge their own service fees to students according to their internal policies.</li>
@@ -116,9 +107,7 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
                 <li>Payment must be made immediately after admission letter receipt, according to agreed terms.</li>
                 <li>Both parties commit to financial transparency and traceability.</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>7. ADDED VALUE</h2>
             <p>This partnership offers:</p>
             <ul>
@@ -127,9 +116,7 @@ class EnglishContractPDF extends ProfessionalPDFGenerator {
                 <li>Financial assistance (scholarships and loans)</li>
                 <li>Safe arrival and successful integration abroad</li>
             </ul>
-        </div>
-        
-        <div class='page-break'>
+            
             <h2>8. COMMUNICATION AND COORDINATION</h2>
             <ul>
                 <li>Designation of dedicated representatives</li>

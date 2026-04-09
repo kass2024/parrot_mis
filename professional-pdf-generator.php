@@ -75,21 +75,21 @@ abstract class ProfessionalPDFGenerator {
         return '
         @page {
             size: A4;
-            margin: 2.5cm 2cm 2.5cm 2cm; /* top right bottom left */
+            margin: 1.5cm 1.5cm 1.5cm 1.5cm; /* ultra-compact margins */
             @bottom-center {
                 content: counter(page);
-                font-size: 9pt;
+                font-size: 8pt;
                 color: #666;
                 font-family: "Georgia", serif;
                 border-top: 1px solid #ddd;
-                padding-top: 5mm;
+                padding-top: 2mm;
                 width: 100%;
                 text-align: center;
             }
             @top-center {
                 content: "";
                 border-bottom: 1px solid #ddd;
-                padding-bottom: 5mm;
+                padding-bottom: 2mm;
                 width: 100%;
             }
         }
@@ -100,8 +100,8 @@ abstract class ProfessionalPDFGenerator {
         
         body { 
             font-family: "Georgia", "Times New Roman", serif; 
-            font-size: 11pt; 
-            line-height: 1.6; 
+            font-size: 12pt; 
+            line-height: 1.4; 
             margin: 0;
             padding: 0;
             color: #1a1a1a;
@@ -109,6 +109,7 @@ abstract class ProfessionalPDFGenerator {
             text-rendering: optimizeLegibility;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            letter-spacing: 0.01em;
         }
         
         .document {
@@ -125,39 +126,39 @@ abstract class ProfessionalPDFGenerator {
                 
         .header {
             text-align: center;
-            margin-bottom: 1pt;
-            padding-bottom: 1pt;
-            border-bottom: 3px solid #1a1a1a;
+            margin-bottom: 0pt;
+            padding-bottom: 0pt;
+            border-bottom: 2px solid #1a1a1a;
             position: relative;
         }
         
         h1 { 
             text-align: center; 
-            font-size: 24pt; 
-            margin: 1pt 0 0pt 0;
+            font-size: 22pt; 
+            margin: 0pt 0 0pt 0;
             font-weight: bold;
-            letter-spacing: 2px;
+            letter-spacing: 1px;
             color: #1a1a1a;
             text-transform: uppercase;
-            line-height: 1.0;
+            line-height: 0.9;
         }
         
         .subtitle {
             text-align: center;
-            font-size: 14pt;
+            font-size: 13pt;
             font-style: italic;
             color: #555;
-            margin-bottom: 0pt;
-            letter-spacing: 0.5px;
+            margin-bottom: 2pt;
+            letter-spacing: 0.3px;
         }
         
         h2 { 
             font-size: 16pt; 
             font-weight: bold; 
-            margin-top: 0pt; 
+            margin-top: 2pt; 
             margin-bottom: 1pt;
             color: #1a1a1a;
-            border-bottom: 2px solid #1a1a1a;
+            border-bottom: 1px solid #1a1a1a;
             padding-bottom: 0pt;
             page-break-after: avoid;
             page-break-inside: avoid;
@@ -167,77 +168,89 @@ abstract class ProfessionalPDFGenerator {
         h3 { 
             font-size: 14pt; 
             font-weight: bold; 
-            margin-top: 15pt; 
-            margin-bottom: 8pt;
+            margin-top: 8pt; 
+            margin-bottom: 4pt;
             color: #1a1a1a;
             page-break-after: avoid;
             text-align: left;
         }
         
         h4 { 
-            font-size: 12pt; 
+            font-size: 13pt; 
             font-weight: bold; 
-            margin: 12pt 0 6pt 0;
+            margin: 6pt 0 3pt 0;
             color: #1a1a1a;
             text-align: left;
         }
         
         p { 
-            margin: 0 0 1pt 0; 
+            margin: 0 0 3pt 0; 
             text-align: left !important;
             orphans: 2;
             widows: 2;
             text-indent: 0;
-            line-height: 1.1;
+            line-height: 1.4;
+            font-size: 12pt;
+            font-weight: 400;
+            color: #1a1a1a;
+            letter-spacing: 0.01em;
         }
         
         strong { 
-            font-weight: bold; 
-            color: #1a1a1a;
+            font-weight: 700; 
+            color: #0d47a1;
+            letter-spacing: 0.02em;
         }
         
         ul, ol {
-            margin: 1pt 0;
-            padding-left: 25pt;
-            line-height: 1.1;
+            margin: 2pt 0;
+            padding-left: 24pt;
+            line-height: 1.4;
             text-align: left;
         }
         
         li {
-            margin-bottom: 0pt;
-            line-height: 1.1;
+            margin-bottom: 1pt;
+            line-height: 1.4;
             text-align: left;
+            font-size: 12pt;
+            color: #2c2c2c;
         }
         
         .party-info { 
-            padding: 5pt; 
+            padding: 4pt 6pt; 
             margin: 2pt 0; 
-            border: none;
-            background: #ffffff;
+            border: 1px solid #e3f2fd;
+            background: #f8faff;
+            border-radius: 3px;
             page-break-inside: avoid;
         }
         
         .party-info h4 { 
-            margin: 0 0 2pt 0; 
-            color: #1a1a1a;
-            font-size: 14pt;
-            border-bottom: none;
-            padding-bottom: 1pt;
+            margin: 0 0 3pt 0; 
+            color: #0d47a1;
+            font-size: 15pt;
+            font-weight: 700;
+            border-bottom: 1px solid #e3f2fd;
+            padding-bottom: 2pt;
             text-align: left;
+            letter-spacing: 0.02em;
         }
         
         .signature-section {
-            margin-top: 30pt;
+            margin-top: 25pt;
+            padding: 15pt 0;
             page-break-inside: avoid;
             page-break-before: avoid;
             page-break-after: avoid;
+            border-top: 2px solid #e3f2fd;
         }
         
         .signature-container {
             display: flex;
             justify-content: space-between;
-            gap: 40px;
-            margin-top: 20pt;
+            gap: 50px;
+            margin-top: 15pt;
             page-break-inside: avoid;
         }
         
@@ -245,112 +258,99 @@ abstract class ProfessionalPDFGenerator {
             flex: 1;
             min-width: 0;
             page-break-inside: avoid;
+            padding: 8pt;
+            border: 1px solid #e8eaf6;
+            border-radius: 4px;
+            background: #fafbff;
         }
         
         .signature-box {
-            border: none;
-            padding: 10px 15px;
+            border: 1px solid #e3f2fd;
+            padding: 12px 15px;
             text-align: center;
             background: #ffffff;
             page-break-inside: avoid;
+            border-radius: 4px;
         }
         
         .company-title {
-            font-size: 14pt;
-            font-weight: bold;
-            margin-bottom: 10pt;
+            font-size: 15pt;
+            font-weight: 700;
+            margin-bottom: 8pt;
             text-align: center;
-            color: #1a1a1a;
-            border-bottom: 2px solid #1a1a1a;
-            padding-bottom: 5pt;
+            color: #0d47a1;
+            border-bottom: 2px solid #0d47a1;
+            padding-bottom: 4pt;
+            letter-spacing: 0.02em;
         }
         
         .representative-info {
-            margin-bottom: 8pt;
+            margin-bottom: 6pt;
             text-align: left;
+            font-size: 11pt;
+            color: #424242;
         }
         
         .representative-info p {
-            margin: 2pt 0;
+            margin: 1pt 0;
             text-align: left;
             font-size: 11pt;
+            line-height: 1.3;
+            color: #424242;
         }
         
         .signature-label {
-            font-weight: bold;
+            font-weight: 700;
             font-size: 12pt;
-            margin: 15pt 0 10pt 0;
+            margin: 12pt 0 8pt 0;
             text-align: center;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            border-top: 1px solid #1a1a1a;
-            padding-top: 8pt;
+            letter-spacing: 0.05em;
+            border-top: 1px solid #e3f2fd;
+            padding-top: 6pt;
+            color: #0d47a1;
         }
         
         .signature-area {
             border: none;
-            min-height: 400px;
+            min-height: 300px;
             display: flex; 
             align-items: center; 
             justify-content: center; 
-            margin: 10pt 0;
+            margin: 8pt 0;
             background: #ffffff;
-            padding: 5px;
+            padding: 25px;
             position: relative;
         }
         
         .signature-img {
-            max-height: 380px;
-            max-width: 98%;
+            max-height: 280px;
+            max-width: 100%;
             width: auto;
             height: auto;
             object-fit: contain;
             display: block;
             margin: 0 auto;
-        }
-        
-        .signature-placeholder {
-            width: 200px;
-            height: 2px;
-            background: #1a1a1a;
-            position: relative;
-        }
-        
-        .signature-placeholder::after {
-            content: "";
-            position: absolute;
-            bottom: -8px;
-            left: 0;
-            right: 0;
-            text-align: center;
-            font-size: 10pt;
-            color: #666;
-            font-style: italic;
+            transform: scale(1.2);
+            transform-origin: center;
         }
         
         .date-line {
-            margin-top: 8pt;
+            margin-top: 6pt;
             text-align: center;
-            font-size: 11pt;
+            font-size: 12pt;
             font-style: italic;
-            color: #555;
-        }
-        
-        .footer {
-            margin-top: 20pt;
-            text-align: center;
-            font-size: 10pt;
             color: #666;
-            border-top: none;
-            padding-top: 10pt;
-            page-break-inside: avoid;
+            font-weight: 500;
         }
         
-        /* Print optimization */
+        /* Print optimization - Enhanced for Smart UI */
         @media print {
             body { 
-                font-size: 10pt; 
-                line-height: 1.3;
+                font-size: 12pt; 
+                line-height: 1.4;
+                letter-spacing: 0.01em;
+                color: #1a1a1a;
             }
             
             .header {
@@ -360,77 +360,184 @@ abstract class ProfessionalPDFGenerator {
             
             h1 {
                 margin: 0pt 0 0pt 0;
-                line-height: 1.0;
+                line-height: 0.9;
+                font-size: 22pt;
+                letter-spacing: 0.02em;
             }
             
             .subtitle {
-                margin-bottom: 0pt;
+                margin-bottom: 2pt;
+                font-size: 13pt;
             }
             
-            .signature-section { 
-                margin-top: 15pt; 
+            h2 {
+                font-size: 16pt;
+                margin-top: 2pt;
+                margin-bottom: 1pt;
+                padding-bottom: 0pt;
+                color: #0d47a1;
+                font-weight: 700;
+                letter-spacing: 0.02em;
             }
             
-            .signature-img {
-                max-height: 350px;
-                image-rendering: auto;
+            h3 {
+                font-size: 14pt;
+                margin-top: 8pt;
+                margin-bottom: 4pt;
+                font-weight: 700;
+                color: #1a1a1a;
             }
             
-            .signature-box {
-                border: none;
-                background: #ffffff;
-                padding: 6px 10px;
+            h4 {
+                font-size: 13pt;
+                margin: 6pt 0 3pt 0;
+                font-weight: 700;
+                color: #1a1a1a;
             }
             
-            .signature-area {
-                background: #ffffff;
-                border: none;
-                min-height: 380px;
-                padding: 2px;
+            p {
+                margin: 0 0 3pt 0;
+                text-align: left !important;
+                line-height: 1.4;
+                font-size: 12pt;
+                font-weight: 400;
+                color: #1a1a1a;
+                letter-spacing: 0.01em;
+            }
+            
+            strong {
+                font-weight: 700;
+                color: #0d47a1;
+                letter-spacing: 0.02em;
+            }
+            
+            ul, ol {
+                margin: 2pt 0;
+                padding-left: 24pt;
+                line-height: 1.4;
+            }
+            
+            li {
+                margin-bottom: 1pt;
+                line-height: 1.4;
+                font-size: 12pt;
+                color: #2c2c2c;
             }
             
             .party-info {
-                border: none;
-                padding: 8pt;
-                margin: 3pt 0;
+                border: 1px solid #e3f2fd;
+                background: #f8faff;
+                padding: 4pt 6pt;
+                margin: 2pt 0;
+                border-radius: 3px;
             }
             
             .party-info h4 {
                 margin: 0 0 3pt 0;
                 padding-bottom: 2pt;
+                color: #0d47a1;
+                font-size: 15pt;
+                font-weight: 700;
+                border-bottom: 1px solid #e3f2fd;
+                letter-spacing: 0.02em;
+            }
+            
+            .signature-section { 
+                margin-top: 25pt;
+                padding: 15pt 0;
+                border-top: 2px solid #e3f2fd;
+            }
+            
+            .signature-container {
+                display: flex;
+                justify-content: space-between;
+                gap: 50px;
+                margin-top: 15pt;
+            }
+            
+            .signature-block {
+                flex: 1;
+                min-width: 0;
+                padding: 8pt;
+                border: 1px solid #e8eaf6;
+                border-radius: 4px;
+                background: #fafbff;
+            }
+            
+            .signature-box {
+                border: 1px solid #e3f2fd;
+                background: #ffffff;
+                padding: 12px 15px;
+                border-radius: 4px;
+            }
+            
+            .company-title {
+                font-size: 15pt;
+                font-weight: 700;
+                margin-bottom: 8pt;
+                color: #0d47a1;
+                border-bottom: 2px solid #0d47a1;
+                padding-bottom: 4pt;
+                letter-spacing: 0.02em;
+            }
+            
+            .representative-info {
+                margin-bottom: 6pt;
+                font-size: 11pt;
+                color: #424242;
+            }
+            
+            .representative-info p {
+                margin: 1pt 0;
+                font-size: 11pt;
+                line-height: 1.3;
+                color: #424242;
+            }
+            
+            .signature-label {
+                font-weight: 700;
+                font-size: 12pt;
+                margin: 12pt 0 8pt 0;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                border-top: 1px solid #e3f2fd;
+                padding-top: 6pt;
+                color: #0d47a1;
+            }
+            
+            .signature-area {
+                border: none;
+                background: #ffffff;
+                min-height: 300px;
+                padding: 25px;
+                margin: 8pt 0;
+            }
+            
+            .signature-img {
+                max-height: 280px;
+                max-width: 100%;
+                border-radius: 2px;
+                transform: scale(1.2);
+                transform-origin: center;
+            }
+            
+            .date-line {
+                margin-top: 6pt;
+                font-size: 12pt;
+                font-style: italic;
+                color: #666;
+                font-weight: 500;
             }
             
             .footer {
                 border-top: none;
-                margin-top: 10pt;
-                padding-top: 5pt;
+                margin-top: 20pt;
+                padding-top: 10pt;
             }
             
             .page-break {
                 page-break-before: avoid;
                 page-break-inside: avoid;
-            }
-            
-            h2 {
-                margin-top: 0pt;
-                margin-bottom: 1pt;
-                padding-bottom: 0pt;
-            }
-            
-            p {
-                margin: 0 0 1pt 0;
-                text-align: left !important;
-                line-height: 1.1;
-            }
-            
-            ul, ol {
-                margin: 1pt 0;
-                line-height: 1.1;
-            }
-            
-            li {
-                margin-bottom: 0pt;
-                line-height: 1.1;
             }
         }
         
