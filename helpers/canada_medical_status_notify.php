@@ -49,6 +49,8 @@ function xander_medical_notify_detail_lines(array $row): array
  */
 function xander_medical_notify_email(array $row, string $status, string $rejectionReason = ''): bool
 {
+    require_once __DIR__ . '/mail_smtp.php';
+    
     $to = trim((string) ($row['email'] ?? ''));
     if ($to === '') {
         return false;
@@ -132,13 +134,22 @@ function xander_medical_notify_email(array $row, string $status, string $rejecti
     </body>
     </html>";
     
-    // Set headers for HTML email
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= "From: noreply@parrotcanada.com" . "\r\n";
-    
-    // Send email
-    return mail($to, $subject, $body, $headers);
+    try {
+        // Send email using SMTP
+        $result = sendSMTPMail($to, $subject, $body);
+        
+        if (!$result) {
+            error_log("Failed to send medical status email to: " . $to);
+            return false;
+        }
+        
+        error_log("Medical status email sent successfully to: " . $to);
+        return true;
+        
+    } catch (Exception $e) {
+        error_log("SMTP Email failed for medical status: " . $e->getMessage());
+        return false;
+    }
 }
 
 /**

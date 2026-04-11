@@ -177,6 +177,8 @@ function moveUploadedFile($tempPath, $field) {
 }
 
 function sendNotificationEmail($request_id, $reference_id, $first_name, $last_name, $email) {
+    require_once __DIR__ . '/helpers/mail_smtp.php';
+    
     // Get admin emails for notification
     $admin_sql = "SELECT email FROM admins WHERE role IN ('superadmin', 'staff') AND status = 'active'";
     $admin_result = mysqli_query($GLOBALS['conn'], $admin_sql);
@@ -185,6 +187,16 @@ function sendNotificationEmail($request_id, $reference_id, $first_name, $last_na
     while ($admin = mysqli_fetch_assoc($admin_result)) {
         $admin_emails[] = $admin['email'];
     }
+    
+    // Get form data for admin email
+    $phone_area_code = $_POST['phone_area_code'] ?? '';
+    $phone_number = $_POST['phone_number'] ?? '';
+    $address = $_POST['address'] ?? '';
+    $emergency_full_name = $_POST['emergency_full_name'] ?? '';
+    $emergency_relationship = $_POST['emergency_relationship'] ?? '';
+    $emergency_email = $_POST['emergency_email'] ?? '';
+    $emergency_area_code = $_POST['emergency_area_code'] ?? '';
+    $emergency_phone_number = $_POST['emergency_phone_number'] ?? '';
     
     // Email to applicant
     $applicant_subject = "Canada Medical Exams Request Received - Reference: " . $reference_id;
@@ -256,7 +268,7 @@ function sendNotificationEmail($request_id, $reference_id, $first_name, $last_na
                 <li><strong>Name:</strong> $first_name $last_name</li>
                 <li><strong>Email:</strong> $email</li>
                 <li><strong>Phone:</strong> +$phone_area_code $phone_number</li>
-                <li><strong>Address:</strong> " . htmlspecialchars($_POST['address']) . "</li>
+                <li><strong>Address:</strong> " . htmlspecialchars($address) . "</li>
             </ul>
             
             <h3 style='color: #333;'>Emergency Contact:</h3>
@@ -278,17 +290,27 @@ function sendNotificationEmail($request_id, $reference_id, $first_name, $last_na
     </html>
     ";
     
-    // Set headers for HTML email
-    $headers = "MIME-Version: 1.0" . "\r\n";
-    $headers .= "Content-type:text/html;charset=UTF-8" . "\r\n";
-    $headers .= "From: noreply@parrotcanada.com" . "\r\n";
-    
-    // Send to applicant
-    mail($email, $applicant_subject, $applicant_body, $headers);
-    
-    // Send to admins
-    foreach ($admin_emails as $admin_email) {
-        mail($admin_email, $admin_subject, $admin_body, $headers);
+    try {
+        // Send to applicant using SMTP
+        $applicant_sent = sendSMTPMail($email, $applicant_subject, $applicant_body);
+        
+        if (!$applicant_sent) {
+            throw new Exception("Failed to send email to applicant");
+        }
+        
+        // Send to admins using SMTP
+        $admin_sent_count = 0;
+        foreach ($admin_emails as $admin_email) {
+            if (sendSMTPMail($admin_email, $admin_subject, $admin_body)) {
+                $admin_sent_count++;
+            }
+        }
+        
+        error_log("Medical request notification sent: Applicant=$applicant_sent, Admins=$admin_sent_count/" . count($admin_emails));
+        
+    } catch (Exception $e) {
+        error_log("SMTP Email failed for medical request: " . $e->getMessage());
+        throw $e;
     }
 }
 ?>
