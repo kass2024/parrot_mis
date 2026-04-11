@@ -238,13 +238,21 @@ $index_translations = [
         'card6_point2' => 'Accommodation assistance',
         'card6_point3' => 'Airport pickup',
         
-        // Card 7: Airticketing Reservation
-        'card7_title' => 'Airticketing Reservation',
-        'card7_subtitle' => 'Flight bookings for students & professionals',
-        'card7_description' => 'Hassle-free international and domestic flight booking.',
-        'card7_point1' => 'Exclusive student/academic fares',
-        'card7_point2' => 'Flexible change & cancellation',
-        'card7_point3' => 'End-to-end travel support',
+        // Card 7: Canada Medical Exams
+        'card7_title' => 'Canada Medical Exams',
+        'card7_subtitle' => 'Medical examination services for Canada visa',
+        'card7_description' => 'Complete medical examination support for Canadian immigration and visa requirements.',
+        'card7_point1' => 'Approved medical centers',
+        'card7_point2' => 'Fast processing',
+        'card7_point3' => 'Document assistance',
+        
+        // Card 8: Airticketing Reservation
+        'card8_title' => 'Airticketing Reservation',
+        'card8_subtitle' => 'Flight bookings for students & professionals',
+        'card8_description' => 'Hassle-free international and domestic flight booking.',
+        'card8_point1' => 'Exclusive student/academic fares',
+        'card8_point2' => 'Flexible change & cancellation',
+        'card8_point3' => 'End-to-end travel support',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -471,13 +479,21 @@ $index_translations = [
         'card6_point2' => 'Assistance logement',
         'card6_point3' => 'Transfert aéroport',
         
-        // Card 7: Airticketing Reservation
-        'card7_title' => 'Réservation de Billets',
-        'card7_subtitle' => 'Vols pour étudiants & professionnels',
-        'card7_description' => 'Réservation de vols sans tracas.',
-        'card7_point1' => 'Tarifs étudiants',
-        'card7_point2' => 'Modification flexible',
-        'card7_point3' => 'Support voyage',
+        // Card 7: Canada Medical Exams
+        'card7_title' => 'Examens Médicaux Canada',
+        'card7_subtitle' => 'Services d\'examens médicaux pour visa Canada',
+        'card7_description' => 'Support complet pour les examens médicaux requis pour l\'immigration canadienne.',
+        'card7_point1' => 'Centres médicaux approuvés',
+        'card7_point2' => 'Traitement rapide',
+        'card7_point3' => 'Assistance documents',
+        
+        // Card 8: Airticketing Reservation
+        'card8_title' => 'Réservation de Billets',
+        'card8_subtitle' => 'Vols pour étudiants & professionnels',
+        'card8_description' => 'Réservation de vols sans tracas.',
+        'card8_point1' => 'Tarifs étudiants',
+        'card8_point2' => 'Modification flexible',
+        'card8_point3' => 'Support voyage',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -550,13 +566,23 @@ $cards = [
     ],
     [
         'id' => 'jobs',
-        'icon' => '💼',
+        'icon' => '',
         'title_key' => 'card6_title',
         'subtitle_key' => 'card6_subtitle',
         'description_key' => 'card6_description',
         'points_keys' => ['card6_point1', 'card6_point2', 'card6_point3'],
         'form' => 'job-application.php',
         'color' => '#2f5a26'
+    ],
+    [
+        'id' => 'medical',
+        'icon' => '',
+        'title_key' => 'card7_title',
+        'subtitle_key' => 'card7_subtitle',
+        'description_key' => 'card7_description',
+        'points_keys' => ['card7_point1', 'card7_point2', 'card7_point3'],
+        'form' => 'canada-medical-exams-request.php',
+        'color' => '#E21D1E'
     ]
 ];
 

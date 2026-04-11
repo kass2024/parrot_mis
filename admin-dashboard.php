@@ -284,6 +284,13 @@ $cards = [
       'job-applicant.php?process_status=rejected' => 'Rejected',
     ]
   ],
+  'canada_medical' => [
+    'title' => 'Canada Medical Exams',
+    'icon' => 'bi-hospital',
+    'links' => [
+      'canada-medical-exams-applications.php' => 'View Applications',
+    ]
+  ],
   'platform' => [
     'title' => 'Platforms management',
     'icon' => 'bi-diagram-3',
@@ -324,7 +331,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'jobsabrod', 'platform', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'jobsabrod', 'canada_medical', 'platform', 'contracts', 'partner_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -1854,6 +1861,37 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           Check job Applicants
         </a>
         <a href="#" onclick="loadInFrame('job-applicant.php?process_status=rejected', 'Job Applicants — Rejected')">
+          <i class="bi bi-x-circle"></i>
+          Rejected
+        </a>
+      </div>
+      <?php endif; ?>
+      
+      <?php if (in_array('canada_medical', $allowedSidebarItems)): ?>
+      <!-- Canada Medical Exams -->
+      <a href="#canada_medical" class="sidebar-link" onclick="toggleSidebarMenu('canada_medical')">
+        <i class="bi bi-hospital"></i>
+        <span>Canada Medical Exams</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_canada_medical">
+        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php', 'View Applications')">
+          <i class="bi bi-list-ul"></i>
+          View Applications
+        </a>
+        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=pending', 'Pending')">
+          <i class="bi bi-clock"></i>
+          Pending
+        </a>
+        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=under_review', 'Under Review')">
+          <i class="bi bi-eye"></i>
+          Under Review
+        </a>
+        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=approved', 'Approved')">
+          <i class="bi bi-check-circle"></i>
+          Approved
+        </a>
+        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=rejected', 'Rejected')">
           <i class="bi bi-x-circle"></i>
           Rejected
         </a>

@@ -1,42 +1,51 @@
 <?php
-declare(strict_types=1);
+/**
+ * upload_medical_file.php
+ * Dedicated file upload handler for Canada Medical Exams Request
+ */
+
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 header('Content-Type: application/json');
 
-// Start session - handle both job form and medical form sessions
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
+// Start session
+session_start();
 
-// Check for either session type
-$user_id = null;
-if (!empty($_SESSION['user_id'])) {
-    $user_id = $_SESSION['user_id'];
-} elseif (!empty($_SESSION['MED_USER_ID'])) {
-    $user_id = $_SESSION['MED_USER_ID'];
-}
+// Debug: Log session info
+error_log("Session started. Name: " . session_name() . ", ID: " . session_id());
+error_log("Session data: " . json_encode($_SESSION));
 
-if (empty($user_id)) {
+// Check if user is logged in
+if (empty($_SESSION['user_id'])) {
     http_response_code(401);
     echo json_encode(['success'=>false, 'message'=>'Session expired']);
     exit;
 }
 
-// Validate CSRF token if present
-if (isset($_POST['csrf_token']) && isset($_SESSION['csrf_token'])) {
-    if ($_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-        http_response_code(403);
-        echo json_encode(['success'=>false, 'message'=>'Invalid CSRF token']);
-        exit;
-    }
+$user_id = $_SESSION['user_id'];
+
+// Validate CSRF token
+if (empty($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+    http_response_code(403);
+    echo json_encode(['success'=>false, 'message'=>'Invalid CSRF token']);
+    exit;
 }
 
+// Debug: Log files info
+error_log("FILES data: " . json_encode($_FILES));
+error_log("POST data: " . json_encode($_POST));
+
 if (empty($_FILES['file']['name'])) {
+    error_log("No file uploaded");
     http_response_code(400);
     echo json_encode(['success'=>false, 'message'=>'No file uploaded']);
     exit;
 }
 
 $field = $_POST['field'] ?? 'unknown';
+error_log("Field: " . $field);
 
 // Allowed file types
 $allowed = ['pdf','jpg','jpeg','png','doc','docx'];
@@ -84,3 +93,4 @@ echo json_encode([
     'original_name' => $_FILES['file']['name'],
     'size' => $_FILES['file']['size']
 ]);
+?>
