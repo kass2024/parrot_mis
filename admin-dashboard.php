@@ -335,19 +335,19 @@ $sidebarAccess = [
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'schools', 'marketing', 'visit_study_visa'
+    'all_admissions', 'schools', 'marketing', 'visit_study_visa', 'platform'
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
     'agent_report', 'university_portal', 'commission_request', 'staff_attendance',
-    'schools', 'marketing', 'visit_study_visa'
+    'schools', 'marketing', 'visit_study_visa', 'platform'
   ],
   'Catholic university of America' => [
-    'university_admissions', 'application_flag_summary', 'schools', 'marketing', 'abroad', 'visit_study_visa'
+    'university_admissions', 'application_flag_summary', 'schools', 'marketing', 'abroad', 'visit_study_visa', 'platform'
   ]
 ];
 
@@ -1898,8 +1898,8 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       </div>
       <?php endif; ?>
       
-      <?php if (in_array('platform', $allowedSidebarItems) && $role === 'superadmin'): ?>
-      <!-- Platforms management - Superadmin only -->
+      <?php if (in_array('platform', $allowedSidebarItems)): ?>
+      <!-- Platforms management - All admins -->
       <a href="#platform" class="sidebar-link" onclick="toggleSidebarMenu('platform')">
         <i class="bi bi-diagram-3"></i>
         <span>Platforms management</span>

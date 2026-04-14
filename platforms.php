@@ -1,5 +1,21 @@
 <?php
+session_start();
 require_once __DIR__ . '/db.php';
+
+// Check if user is logged in and get role
+$admin_id = $_SESSION['id'] ?? null;
+$role = 'standard'; // default role
+
+if ($admin_id) {
+    $admin_id_safe = mysqli_real_escape_string($conn, $admin_id);
+    $result = mysqli_query($conn, "SELECT role FROM admins WHERE id = '$admin_id_safe'");
+    if ($result && mysqli_num_rows($result) > 0) {
+        $admin = mysqli_fetch_assoc($result);
+        $role = $admin['role'] ?? 'standard';
+    }
+}
+
+$isSuperAdmin = ($role === 'superadmin');
 /* ------------------------ SERIAL GENERATOR ------------------------ */
 function generatePlatformSerial($conn) {
     $year = date("Y");
@@ -107,11 +123,13 @@ if (isset($_GET["delete"])) {
 
     <h2 class="page-title text-center mb-3">Platforms Access Manager</h2>
 
+    <?php if ($isSuperAdmin): ?>
     <div class="d-flex justify-content-end mb-4">
         <button class="btn btn-primary px-3" data-bs-toggle="modal" data-bs-target="#addModal">
             <i class="bi bi-plus-circle"></i> Add Platform
         </button>
     </div>
+    <?php endif; ?>
 
     <div class="card shadow-sm p-3">
         <table id="pltTable" class="table table-striped table-bordered">
@@ -170,12 +188,16 @@ if (isset($_GET["delete"])) {
                     </td>
 
                     <td class='text-center'>
+                        <?php if ($isSuperAdmin): ?>
                         <button class='btn btn-warning btn-sm me-1' onclick='editPlatform($safeRow)'>
                             <i class='bi bi-pencil-square'></i>
                         </button>
                         <a href='?delete={$row['id']}' class='btn btn-danger btn-sm' onclick='return confirm(\"Delete this platform?\")'>
                             <i class='bi bi-trash'></i>
                         </a>
+                        <?php else: ?>
+                        <span class='text-muted'>-</span>
+                        <?php endif; ?>
                     </td>
                 </tr>";
             }
@@ -186,6 +208,7 @@ if (isset($_GET["delete"])) {
 
 </div>
 
+<?php if ($isSuperAdmin): ?>
 <!-- ADD MODAL -->
 <div class="modal fade" id="addModal">
     <div class="modal-dialog modal-dialog-centered">
@@ -248,8 +271,10 @@ if (isset($_GET["delete"])) {
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 
+<?php if ($isSuperAdmin): ?>
 <!-- EDIT MODAL -->
 <div class="modal fade" id="editModal">
     <div class="modal-dialog modal-dialog-centered">
@@ -313,6 +338,7 @@ if (isset($_GET["delete"])) {
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 
 <!-- JS -->
