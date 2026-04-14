@@ -2,20 +2,26 @@
 session_start();
 require_once __DIR__ . '/db.php';
 
-// Check if user is logged in and get role
+// Check if user is logged in
 $admin_id = $_SESSION['id'] ?? null;
-$role = 'standard'; // default role
+if (!$admin_id) {
+    header("Location: admin-login.php");
+    exit;
+}
 
-if ($admin_id) {
-    $admin_id_safe = mysqli_real_escape_string($conn, $admin_id);
-    $result = mysqli_query($conn, "SELECT role FROM admins WHERE id = '$admin_id_safe'");
-    if ($result && mysqli_num_rows($result) > 0) {
-        $admin = mysqli_fetch_assoc($result);
-        $role = $admin['role'] ?? 'standard';
-    }
+// Get role
+$role = 'standard'; // default role
+$admin_id_safe = mysqli_real_escape_string($conn, $admin_id);
+$result = mysqli_query($conn, "SELECT role FROM admins WHERE id = '$admin_id_safe'");
+if ($result && mysqli_num_rows($result) > 0) {
+    $admin = mysqli_fetch_assoc($result);
+    $role = $admin['role'] ?? 'standard';
 }
 
 $isSuperAdmin = ($role === 'superadmin');
+
+// Debug: Uncomment for testing
+// echo "Role: " . htmlspecialchars($role) . " | IsSuperAdmin: " . ($isSuperAdmin ? 'true' : 'false');
 /* ------------------------ SERIAL GENERATOR ------------------------ */
 function generatePlatformSerial($conn) {
     $year = date("Y");
@@ -163,43 +169,44 @@ if (isset($_GET["delete"])) {
                 $admin = $conn->query("SELECT full_name FROM admins WHERE id={$row['person_in_charge']}")->fetch_assoc();
                 $adminName = $admin ? $admin['full_name'] : "Unknown";
 
-                echo "
+                ?>
                 <tr>
-                    <td>{$row['serial_no']}</td>
-                    <td>{$row['platform_name']}</td>
-                    <td>{$row['username']}</td>
+                    <td><?= $row['serial_no'] ?></td>
+                    <td><?= $row['platform_name'] ?></td>
+                    <td><?= $row['username'] ?></td>
 
                     <td class='nowrap text-center'>
-                        <span id='pwd_{$row['id']}' style='letter-spacing:2px;'>•••••••</span>
-                        <i class='bi bi-eye ms-2 text-primary' style='cursor:pointer;' onclick=\"togglePassword('{$row['password']}', {$row['id']})\"></i>
+                        <span id='pwd_<?= $row['id'] ?>' style='letter-spacing:2px;'>•••••••</span>
+                        <i class='bi bi-eye ms-2 text-primary' style='cursor:pointer;' onclick="togglePassword('<?= $row['password'] ?>', <?= $row['id'] ?>)"></i>
                     </td>
 
-                    <td>{$adminName}</td>
-                    <td>{$row['status']}</td>
+                    <td><?= $adminName ?></td>
+                    <td><?= $row['status'] ?></td>
 
                     <td class='nowrap text-center'>
-                        " . ($row['platform_link'] ? "
-                            <a href='{$row['platform_link']}' target='_blank' class='text-primary text-decoration-none' title='{$row['platform_link']}'>
+                        <?php if ($row['platform_link']): ?>
+                            <a href='<?= $row['platform_link'] ?>' target='_blank' class='text-primary text-decoration-none' title='<?= $row['platform_link'] ?>'>
                                 <i class='bi bi-link-45deg'></i>
-                                <span class='link-preview'>" . previewLink($row['platform_link']) . "</span>
+                                <span class='link-preview'><?= previewLink($row['platform_link']) ?></span>
                             </a>
-                            <i class='bi bi-clipboard text-success ms-2 copy-btn' onclick=\"copyText('{$row['platform_link']}')\"></i>
-                        " : "") . "
+                            <i class='bi bi-clipboard text-success ms-2 copy-btn' onclick="copyText('<?= $row['platform_link'] ?>')"></i>
+                        <?php endif; ?>
                     </td>
 
                     <td class='text-center'>
                         <?php if ($isSuperAdmin): ?>
-                        <button class='btn btn-warning btn-sm me-1' onclick='editPlatform($safeRow)'>
-                            <i class='bi bi-pencil-square'></i>
-                        </button>
-                        <a href='?delete={$row['id']}' class='btn btn-danger btn-sm' onclick='return confirm(\"Delete this platform?\")'>
-                            <i class='bi bi-trash'></i>
-                        </a>
+                            <button class='btn btn-warning btn-sm me-1' onclick='editPlatform(<?= $safeRow ?>)'>
+                                <i class='bi bi-pencil-square'></i>
+                            </button>
+                            <a href='?delete=<?= $row['id'] ?>' class='btn btn-danger btn-sm' onclick='return confirm("Delete this platform?")'>
+                                <i class='bi bi-trash'></i>
+                            </a>
                         <?php else: ?>
-                        <span class='text-muted'>-</span>
+                            <span class='text-muted'>-</span>
                         <?php endif; ?>
                     </td>
-                </tr>";
+                </tr>
+<?php
             }
             ?>
             </tbody>
