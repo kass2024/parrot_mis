@@ -134,9 +134,16 @@ switch ($field) {
         break;
 
     case 'cv_resume':
-        $userPrompt = "Check if this is a curriculum vitae (CV) or résumé. 
-        Identify academic background, work experience, or skills summary. 
-        $nameInstruction";
+        $userPrompt = "Determine whether this document is a Curriculum Vitae (CV) or résumé. "
+        . "A CV/resume is often self-authored and may be simple; do NOT require stamps/signatures. "
+        . "ACCEPT if it plausibly matches CV/resume structure and includes multiple typical sections such as: "
+        . "name/contact details, education, skills, experience (optional), projects, internships, certifications, "
+        . "languages, references, or a professional summary. "
+        . "Do NOT require employment history; fresh graduates may only list education + skills + projects. "
+        . "REJECT if it is clearly another document type (passport/ID, transcript, diploma/certificate, "
+        . "recommendation letter, personal statement, bank/payment proof, or English test certificate). "
+        . "If uncertain but it plausibly looks like a CV/resume, prefer valid=true. "
+        . $nameInstruction;
         break;
 
     case 'valid_passport':

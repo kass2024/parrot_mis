@@ -333,12 +333,14 @@ if ($fileId || $isImage || $isScannedPdf) {
 
         $userPrompt =
             "Determine whether this document is a genuine Curriculum Vitae (CV) or Resume. "
-          . "ACCEPT ONLY documents that clearly list employment history, job titles, "
-          . "professional experience, internships, skills, or work responsibilities "
-          . "in a standard CV or resume format. "
-          . "REJECT English proficiency certificates, academic confirmation letters, "
-          . "transcripts, diplomas, recommendation letters, passports, or personal statements. "
-          . "If the document does not clearly look like a CV or resume, set valid=false. "
+          . "A CV/resume can be simple and may NOT contain stamps/signatures (it is often self-authored). "
+          . "ACCEPT if it looks like a CV/resume and contains multiple typical sections such as: "
+          . "name/contact details, education, skills, experience (optional), projects, internships, "
+          . "certifications, languages, publications, references, or a professional summary. "
+          . "Do NOT require employment history; fresh graduates may only list education + skills + projects. "
+          . "REJECT if it is clearly a different document type (passport/ID, transcript, diploma/certificate, "
+          . "recommendation letter, personal statement/motivation letter, bank/payment receipt, or English test certificate). "
+          . "If uncertain but it plausibly matches CV/resume structure, prefer valid=true. "
           . $nameInstruction;
 
     } else {
