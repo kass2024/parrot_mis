@@ -112,7 +112,7 @@ if (!str_starts_with($signature, 'data:image/png;base64,')) {
    4. LOAD CONTRACT (NO LOCK YET)
 ===================================================== */
 $stmt = $conn->prepare("
-    SELECT id, status
+    SELECT id, status, student_id
     FROM student_contracts_special
     WHERE contract_token = ?
     LIMIT 1
@@ -162,64 +162,28 @@ try {
     logMsg("Contract locked", ["contract_id" => $contractId]);
 
     /* =====================================================
-       6.2 UPSERT STUDENT (MANUAL OR AUTOFILL)
+       6.2 RESOLVE STUDENT (NO INSERT/UPDATE)
     ===================================================== */
-    $stmt = $conn->prepare("
-        SELECT id
-        FROM student_applications
-        WHERE email = ?
-        LIMIT 1
-    ");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $existing = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if ($existing) {
-        $studentId = (int)$existing['id'];
-
+    $studentId = !empty($contract['student_id']) ? (int)$contract['student_id'] : 0;
+    if ($studentId <= 0) {
+        // fallback: try to match by email, but DO NOT insert/update (prevents duplicates)
         $stmt = $conn->prepare("
-            UPDATE student_applications SET
-                first_name      = ?,
-                dob             = ?,
-                nationality     = ?,
-                passport_number = ?,
-                phone_number    = ?,
-                updated_at      = NOW()
-            WHERE id = ?
+            SELECT id
+            FROM student_applications
+            WHERE email = ?
+            LIMIT 1
         ");
-        $stmt->bind_param(
-            "sssssi",
-            $name,
-            $dob,
-            $nationality,
-            $passport,
-            $phone,
-            $studentId
-        );
+        $stmt->bind_param("s", $email);
         $stmt->execute();
+        $existing = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-    } else {
-        $stmt = $conn->prepare("
-            INSERT INTO student_applications
-            (email, first_name, dob, nationality, passport_number, phone_number, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, NOW())
-        ");
-        $stmt->bind_param(
-            "ssssss",
-            $email,
-            $name,
-            $dob,
-            $nationality,
-            $passport,
-            $phone
-        );
-        $stmt->execute();
-        $studentId = $stmt->insert_id;
-        $stmt->close();
+
+        $studentId = !empty($existing['id']) ? (int)$existing['id'] : 0;
     }
 
-    logMsg("Student saved", ["student_id" => $studentId]);
+    if ($studentId <= 0) {
+        throw new RuntimeException("Student record not linked to this contract. Please issue the contract for a specific student first.");
+    }
 
     /* =====================================================
        6.3 SAVE SIGNATURE
