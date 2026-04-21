@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+ob_start(); // ensure ONLY JSON is returned
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . "/vendor/autoload.php";
 
@@ -28,6 +29,9 @@ function logMsg(string $msg, array $data = []): void {
 }
 
 function respond(array $payload, int $code = 200): void {
+    if (ob_get_length()) {
+        ob_clean(); // remove any accidental output (warnings/notices)
+    }
     http_response_code($code);
     echo json_encode($payload);
     exit;
@@ -85,7 +89,15 @@ if (
     $pkgLabel === '' ||
     $pkgCode === ''
 ) {
-    fail("Missing required fields", 400);
+    $missing = [];
+    if ($token === '') $missing[] = 'token';
+    if ($name === '') $missing[] = 'student_name';
+    if ($signedDate === '') $missing[] = 'signed_date';
+    if ($email === '') $missing[] = 'student_email';
+    if ($signature === '') $missing[] = 'signature';
+    if ($pkgLabel === '') $missing[] = 'selected_package_label';
+    if ($pkgCode === '') $missing[] = 'selected_package_code';
+    fail("Missing required fields: " . implode(', ', $missing), 400, ["missing" => $missing]);
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -270,7 +282,14 @@ if (!function_exists('generateContractPDF')) {
     fail("PDF generator missing", 500);
 }
 
-$pdfPath = generateContractPDF($contractId);
+try {
+    $pdfPath = generateContractPDF($contractId);
+} catch (Throwable $e) {
+    fail("PDF generation failed", 500, [
+        "message" => $e->getMessage(),
+        "line" => $e->getLine(),
+    ]);
+}
 
 if (!$pdfPath || !file_exists($pdfPath)) {
     fail("PDF generation failed", 500);

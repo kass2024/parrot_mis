@@ -53,6 +53,28 @@ if (!$contract) {
  * 4. Contract state flag (DO NOT EXIT)
  */
 $isSigned = ($contract['status'] === 'signed');
+
+// Load student signature image (stored as data URL) when signed
+$studentSignatureData = null;
+if ($isSigned && !empty($contract['id'])) {
+    $contractId = (int)$contract['id'];
+    $stmt = $conn->prepare("
+        SELECT signature_image
+        FROM student_signatures
+        WHERE contract_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    ");
+    if ($stmt) {
+        $stmt->bind_param("i", $contractId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!empty($row['signature_image']) && is_string($row['signature_image'])) {
+            $studentSignatureData = $row['signature_image'];
+        }
+    }
+}
 ?>
 <?php
 /* =====================================================
@@ -1067,18 +1089,18 @@ For the Consultant Representative
 </p>
 
 <div style="margin-bottom:18px;">
-Name:
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+Name: <strong>Jean Pierre TWAJAMAHORO</strong>
 </div>
 
 <div style="margin-bottom:18px;">
-Title:
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+Title: <strong>Managing Director</strong>
 </div>
 
 <div style="margin-bottom:18px;">
 Signature:
-<div style="border-bottom:1px solid #000;height:45px;width:85%;margin-top:6px;"></div>
+<div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;position:relative;">
+  <img src="admin/signature-manager.png" style="max-height:55px;position:absolute;bottom:2px;left:0;">
+</div>
 </div>
 
 <div>
@@ -1154,8 +1176,8 @@ align-items:center;
 justify-content:center;
 ">
 
-<?php if ($isSigned && $studentSignaturePath): ?>
-<img src="<?= $studentSignaturePath ?>" style="max-height:110px;">
+<?php if ($isSigned && !empty($studentSignatureData)): ?>
+<img src="<?= $studentSignatureData ?>" style="max-height:110px;">
 <?php else: ?>
 <canvas class="signature-canvas"></canvas>
 <?php endif; ?>
@@ -1209,6 +1231,17 @@ padding:2px 4px;
   const inputName = document.getElementById('sig_student_name');
   const inputDate = document.getElementById('sig_signed_date');
   const hiddenSignature = document.getElementById('signatureData');
+
+  // Auto-fill signature name + date from main student fields
+  const mainStudentName = document.getElementById('student_name');
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (inputDate && !inputDate.value) inputDate.value = todayIso;
+  if (mainStudentName && inputName && !inputName.value) inputName.value = (mainStudentName.value || '').trim();
+  if (mainStudentName && inputName) {
+    mainStudentName.addEventListener('input', () => {
+      inputName.value = (mainStudentName.value || '').trim();
+    });
+  }
 
   let drawing = false;
 let points = [];
@@ -1525,10 +1558,10 @@ fetch("submit-signature.php", {
 .catch(err => {
   console.error("Signature submission error:", err);
 
-  alert(
+  alert(err?.message || (
     "Unable to submit at this time.\n" +
     "Please check your connection and try again."
-  );
+  ));
 });
 
 

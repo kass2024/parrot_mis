@@ -53,6 +53,28 @@ if (!$contract) {
  * 4. Contract state flag (DO NOT EXIT)
  */
 $isSigned = ($contract['status'] === 'signed');
+
+// Load student signature image (stored as data URL) when signed
+$studentSignatureData = null;
+if ($isSigned && !empty($contract['id'])) {
+    $contractId = (int)$contract['id'];
+    $stmt = $conn->prepare("
+        SELECT signature_image
+        FROM student_signatures_special
+        WHERE contract_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+    ");
+    if ($stmt) {
+        $stmt->bind_param("i", $contractId);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!empty($row['signature_image']) && is_string($row['signature_image'])) {
+            $studentSignatureData = $row['signature_image'];
+        }
+    }
+}
 ?>
 <?php
 /* =====================================================
@@ -1119,7 +1141,7 @@ button {
     For the Consultant
   </p>
 
-  <p>Name: <strong>Dr. TWAJAMAHORO Jean Pierre</strong></p>
+  <p>Name: <strong>Jean Pierre TWAJAMAHORO</strong></p>
   <p>Title: <strong>Managing Director</strong></p>
 
   <p style="margin-top:16px;">Signature:</p>
@@ -1131,7 +1153,7 @@ button {
     margin-bottom:10px;
     position:relative;
   ">
-    <img src="admin/employer-signature.png"
+    <img src="admin/signature-manager.png"
          style="
            max-height:55px;
            position:absolute;
@@ -1173,8 +1195,8 @@ button {
     margin-bottom:14px;
     box-sizing:border-box;
   ">
-    <?php if ($isSigned && $studentSignaturePath): ?>
-      <img src="<?= $studentSignaturePath ?>"
+    <?php if ($isSigned && !empty($studentSignatureData)): ?>
+      <img src="<?= $studentSignatureData ?>"
            style="max-height:120px;">
     <?php else: ?>
       <canvas class="signature-canvas"></canvas>
@@ -1230,20 +1252,16 @@ button {
         For the Representative of Consultant
       </p>
 
-      <p>Name:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+      <p>Name: <strong>Jean Pierre TWAJAMAHORO</strong></p>
+      <p>Title: <strong>Managing Director</strong></p>
+      <p>Branch: <strong>Nduba, Gasabo, Kigali</strong></p>
+      <p>Phone: <strong>+250788520750</strong></p>
 
-      <p>Title:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
-
-      <p>Branch:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
-
-      <p>Phone:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:14px;"></div>
-
-      <p>Signature:</p>
-      <div style="border-bottom:1px solid #000;height:38px;margin-bottom:8px;"></div>
+      <p style="margin-top:16px;">Signature:</p>
+      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;position:relative;">
+        <img src="admin/signature-manager.png"
+             style="max-height:55px;position:absolute;bottom:2px;left:0;">
+      </div>
 
       <p>Date: ____________________________</p>
 
@@ -1297,6 +1315,17 @@ button {
   const inputName = document.getElementById('sig_student_name');
   const inputDate = document.getElementById('sig_signed_date');
   const hiddenSignature = document.getElementById('signatureData');
+
+  // Auto-fill signature name + date from main student fields
+  const mainStudentName = document.getElementById('student_name');
+  const todayIso = new Date().toISOString().slice(0, 10);
+  if (inputDate && !inputDate.value) inputDate.value = todayIso;
+  if (mainStudentName && inputName && !inputName.value) inputName.value = (mainStudentName.value || '').trim();
+  if (mainStudentName && inputName) {
+    mainStudentName.addEventListener('input', () => {
+      inputName.value = (mainStudentName.value || '').trim();
+    });
+  }
 
   let drawing = false;
 let points = [];
@@ -1613,10 +1642,10 @@ fetch("submit-signature-special.php", {
 .catch(err => {
   console.error("Signature submission error:", err);
 
-  alert(
+  alert(err?.message || (
     "Unable to submit at this time.\n" +
     "Please check your connection and try again."
-  );
+  ));
 });
 
 

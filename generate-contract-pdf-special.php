@@ -262,7 +262,7 @@ $stmt = $conn->prepare("
 
     $studentSignature = $data['signature_image'];
 
-    $consultantSigPath = __DIR__ . '/admin/employer-signature.png';
+    $consultantSigPath = __DIR__ . '/admin/signature-manager.png';
     if (!file_exists($consultantSigPath)) {
         throw new RuntimeException('Consultant signature missing.');
     }
@@ -663,7 +663,7 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 <tr>
 <td>
 <strong>For the Consultant</strong><br>
-Name: TWAJAMAHORO Jean Pierre<br>
+Name: Jean Pierre TWAJAMAHORO<br>
 Title: Managing Director
 
 <div class="signature-box">
@@ -675,10 +675,14 @@ Date: <?= esc($data['signed_date']) ?>
 
 <td>
 <strong>For the Consultant Representative</strong><br><br>
-Name: ___________________________<br>
-Title: __________________________<br>
-Signature: ______________________<br>
-Date: ___________________________
+Name: Jean Pierre TWAJAMAHORO<br>
+Title: Managing Director<br>
+
+<div class="signature-box">
+    <img src="<?= $consultantSignature ?>" alt="Representative Signature">
+</div>
+
+Date: <?= esc($data['signed_date']) ?>
 </td>
 </tr>
 

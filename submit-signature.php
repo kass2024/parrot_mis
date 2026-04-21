@@ -73,6 +73,8 @@ $pkgCode  = trim($data['selected_package_code'] ?? '');
 
 /* --- CLIENT / STUDENT --- */
 $fullName    = trim($data['full_name'] ?? '');
+$fullName    = $fullName !== '' ? $fullName : $name;
+$name        = $name !== '' ? $name : $fullName;
 $email       = trim($data['student_email'] ?? '');
 $dob         = $data['student_dob'] ?? null;
 $nationality = trim($data['student_nationality'] ?? '');
@@ -178,65 +180,45 @@ try {
     if ($existing) {
         $studentId = (int)$existing['id'];
 
+        // Keep compatible with minimal student_applications schema
         $stmt = $conn->prepare("
-       UPDATE student_applications SET
-    first_name      = ?,
-    dob             = ?,
-    nationality     = ?,
-    passport_number = ?,
-    phone_number    = ?,
-    country         = ?,
-    address         = ?,
-    client_type     = ?,
-    updated_at      = NOW()
-WHERE id = ?
-
+            UPDATE student_applications SET
+                first_name      = ?,
+                dob             = ?,
+                nationality     = ?,
+                passport_number = ?,
+                phone_number    = ?,
+                updated_at      = NOW()
+            WHERE id = ?
         ");
-       $stmt->bind_param(
-    "ssssssssi",
-    $fullName,
-    $dob,
-    $nationality,
-    $passport,
-    $phone,
-    $country,
-    $address,
-    $clientTypes,
-    $studentId
-);
+        $stmt->bind_param(
+            "sssssi",
+            $fullName,
+            $dob,
+            $nationality,
+            $passport,
+            $phone,
+            $studentId
+        );
 
         $stmt->execute();
         $stmt->close();
     } else {
+        // Keep compatible with minimal student_applications schema
         $stmt = $conn->prepare("
             INSERT INTO student_applications
-(
-  email,
-  first_name,
-  dob,
-  nationality,
-  passport_number,
-  phone_number,
-  country,
-  address,
-  client_type,
-  created_at
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-
+            (email, first_name, dob, nationality, passport_number, phone_number, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, NOW())
         ");
-$stmt->bind_param(
-    "sssssssss",
-    $email,
-    $fullName,
-    $dob,
-    $nationality,
-    $passport,
-    $phone,
-    $country,
-    $address,
-    $clientTypes
-);
+        $stmt->bind_param(
+            "ssssss",
+            $email,
+            $fullName,
+            $dob,
+            $nationality,
+            $passport,
+            $phone
+        );
 
 
         $stmt->execute();
