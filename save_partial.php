@@ -14,6 +14,7 @@ error_reporting(E_ALL);
 ini_set('display_errors', 1);
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/student_portal_accounts.php';
 /* ---------- Helper Functions ---------- */
 function send_json($arr, $code = 200) {
     http_response_code($code);
@@ -260,6 +261,22 @@ if (!$stmt->execute()) {
 $insertId = $conn->insert_id;
 $finalId = $_SESSION['application_id'];
 log_debug('INSERT SUCCESS', ['insert_id'=>$insertId, 'app_id'=>$finalId]);
+
+// Auto-create/link student portal account (email-based).
+try {
+    $portalAppId = 0;
+    if (!empty($finalId) && is_numeric($finalId)) {
+        $portalAppId = (int)$finalId;
+    } elseif (!empty($insertId) && is_numeric($insertId)) {
+        $portalAppId = (int)$insertId;
+    }
+    if ($portalAppId > 0) {
+        pcvc_student_portal_ensure_account_for_application($conn, $portalAppId);
+    }
+} catch (Throwable $e) {
+    // Don't block autosave.
+    log_debug('STUDENT PORTAL ACCOUNT AUTO-CREATE FAILED', $e->getMessage());
+}
 
 // Async confirmation email
 $url = (($_SERVER['HTTP_HOST'] ?? '') === 'localhost')

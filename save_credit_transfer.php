@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/student_portal_accounts.php';
 header('Content-Type: application/json');
 
 // ✅ Keep/issue a stable user id - EXACTLY AS YOU HAD IT
@@ -110,6 +111,14 @@ if ($step === 'step1') {
   $stmt->bind_param($types, ...$values);
 
   if ($stmt->execute()) {
+    // Ensure student portal account exists for this email (default password).
+    try {
+      if (!empty($email)) {
+        pcvc_student_portal_ensure_account_for_email($conn, (string)$email);
+      }
+    } catch (Throwable $e) {
+      // do not block
+    }
     echo json_encode(['status' => 'success', 'user_id' => $userId]);
   } else {
     echo json_encode(['status' => 'error', 'message' => $stmt->error]);

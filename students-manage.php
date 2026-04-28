@@ -517,12 +517,38 @@ usort($all_applicants, function($a, $b) {
       transition: background 0.2s, transform 0.15s;
     }
 
+    .btn-share-access {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      padding: 0.4rem 0.65rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #fff;
+      background: #1e66d0;
+      border: 1px solid #1558b6;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.15s;
+    }
+
     .btn-delete-app:hover:not(:disabled) {
       background: #b91c1c;
       transform: translateY(-1px);
     }
 
+    .btn-share-access:hover:not(:disabled) {
+      background: #1558b6;
+      transform: translateY(-1px);
+    }
+
     .btn-delete-app:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-share-access:disabled {
       opacity: 0.45;
       cursor: not-allowed;
     }
@@ -996,18 +1022,34 @@ usort($all_applicants, function($a, $b) {
               </textarea>
             </td>
 
-            <!-- Delete (Superadmin · main student_applications only — same API as application list) -->
+            <!-- Actions: Share access + Delete -->
             <td class="col-actions text-center">
-              <?php if ($canDeleteApplication && ($s['source'] ?? '') === 'student_applications'): ?>
-                <button type="button" class="btn-delete-app" data-delete-id="<?= (int) $s['id'] ?>" title="Delete this application permanently">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                  Delete
-                </button>
-              <?php elseif ($canDeleteApplication): ?>
-                <span class="text-muted small" title="Delete is only available for main student applications">—</span>
-              <?php else: ?>
-                <span class="text-muted small">—</span>
-              <?php endif; ?>
+              <div class="d-flex justify-content-center gap-2 flex-wrap">
+                <?php $rowEmail = trim((string)($s['email'] ?? '')); ?>
+                <?php if ($rowEmail !== '' && filter_var($rowEmail, FILTER_VALIDATE_EMAIL)): ?>
+                  <button type="button"
+                          class="btn-share-access"
+                          data-share-email="<?= htmlspecialchars(strtolower($rowEmail), ENT_QUOTES, 'UTF-8') ?>"
+                          data-share-name="<?= htmlspecialchars(trim((string)($s['first_name'] ?? '') . ' ' . (string)($s['last_name'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
+                          title="Send student portal access email">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4h16v16H4V4zm2 3l6 5 6-5"/></svg>
+                    Share access
+                  </button>
+                <?php else: ?>
+                  <span class="text-muted small">—</span>
+                <?php endif; ?>
+
+                <?php if ($canDeleteApplication && ($s['source'] ?? '') === 'student_applications'): ?>
+                  <button type="button" class="btn-delete-app" data-delete-id="<?= (int) $s['id'] ?>" title="Delete this application permanently">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                    Delete
+                  </button>
+                <?php elseif ($canDeleteApplication): ?>
+                  <span class="text-muted small" title="Delete is only available for main student applications">—</span>
+                <?php else: ?>
+                  <span class="text-muted small">—</span>
+                <?php endif; ?>
+              </div>
             </td>
           </tr>
           <?php endforeach; ?>
@@ -1312,6 +1354,51 @@ $(function() {
         console.error(err);
         alert('Delete failed. Check your connection and try again.');
       });
+  });
+
+  // SHARE PORTAL ACCESS (email login link + default password)
+  $(document).on('click', '.btn-share-access', async function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.currentTarget;
+    const email = (btn.getAttribute('data-share-email') || '').trim();
+    const name = (btn.getAttribute('data-share-name') || '').trim();
+    if (!email) return;
+
+    const oldHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Sending...';
+    try {
+      const fd = new FormData();
+      fd.append('email', email);
+      fd.append('name', name);
+      const res = await fetch('api/student-portal-share-access.php', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin'
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || !json || json.success === false) {
+        const msg = (json && (json.message || json.error)) ? (json.message || json.error) : 'Failed to send email.';
+        alert(msg);
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+        return;
+      }
+      btn.innerHTML = 'Sent';
+      if (typeof window.showSuccessToast === 'function') {
+        window.showSuccessToast('Access email sent');
+      }
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }, 2000);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to send email. Check your connection and try again.');
+      btn.disabled = false;
+      btn.innerHTML = oldHtml;
+    }
   });
 
   // STATUS DROPDOWN TOGGLE

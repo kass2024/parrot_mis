@@ -5,6 +5,7 @@ ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(0);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/student_portal_accounts.php';
 $userId = $_POST['user_id'] ?? null;
 $step   = $_POST['step'] ?? null;
 
@@ -110,6 +111,14 @@ if ($stmt === false) {
 $stmt->bind_param($typesForInsert . $types, ...$paramsForInsert, ...$params);
 
 if ($stmt->execute()) {
+    // Ensure student portal account exists for this email (default password).
+    try {
+        if (!empty($_POST['email'])) {
+            pcvc_student_portal_ensure_account_for_email($conn, (string)$_POST['email']);
+        }
+    } catch (Throwable $e) {
+        // do not block
+    }
     ob_end_clean();
     echo json_encode([
         'status' => 'success',

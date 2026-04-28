@@ -285,6 +285,65 @@ nav a:hover::after {
   margin-left: 0;
 }
 
+.portal-switcher {
+  position: relative;
+}
+
+.portal-switcher-toggle {
+  border: none;
+}
+
+.portal-switcher-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  min-width: 210px;
+  overflow: hidden;
+  display: none;
+  z-index: 1001;
+  border: 1px solid var(--border);
+}
+
+.portal-switcher-dropdown.active {
+  display: block;
+  animation: fadeIn 0.2s ease;
+}
+
+.portal-option {
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--text);
+  font-weight: 600;
+  transition: var(--transition);
+  border-bottom: 1px solid var(--border);
+}
+
+.portal-option:last-child {
+  border-bottom: none;
+}
+
+.portal-option:hover {
+  background: var(--bg);
+  color: var(--primary);
+}
+
+.portal-option i {
+  width: 20px;
+  text-align: center;
+  color: var(--primary);
+}
+
+.portal-option:hover i {
+  color: var(--accent);
+}
+
 .language-switcher-toggle {
   background: rgba(255, 255, 255, 0.15);
   color: white;
@@ -752,7 +811,22 @@ nav a:hover::after {
         </div>
       </div>
       
-      <a href="admin-login.php" class="get-started"><?php echo ht('get_started'); ?></a>
+      <!-- Get Started: choose portal -->
+      <div class="portal-switcher" id="portalSwitcher">
+        <button type="button" class="get-started portal-switcher-toggle" id="portalToggle" aria-expanded="false" aria-haspopup="listbox" aria-controls="portalDropdown">
+          <?php echo ht('get_started'); ?> <i class="fas fa-chevron-down" aria-hidden="true" style="margin-left:8px;"></i>
+        </button>
+        <div class="portal-switcher-dropdown" id="portalDropdown" role="listbox" aria-label="Choose portal">
+          <a href="admin-login.php" class="portal-option">
+            <i class="fas fa-user-shield" aria-hidden="true"></i>
+            <span>Admin login</span>
+          </a>
+          <a href="student-login.php" class="portal-option">
+            <i class="fas fa-user-graduate" aria-hidden="true"></i>
+            <span>Student login</span>
+          </a>
+        </div>
+      </div>
     </div>
     
     <button type="button" class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Menu" aria-expanded="false" aria-controls="mainNav">
@@ -767,6 +841,8 @@ const mobileMenuToggle = document.getElementById('mobileMenuToggle');
 const mainNav = document.getElementById('mainNav');
 const languageToggle = document.getElementById('languageToggle');
 const languageDropdown = document.getElementById('languageDropdown');
+const portalToggle = document.getElementById('portalToggle');
+const portalDropdown = document.getElementById('portalDropdown');
 
 // Mobile menu toggle
 if (mobileMenuToggle && mainNav) {
@@ -819,6 +895,23 @@ if (languageToggle && languageDropdown) {
   });
 }
 
+// Portal switcher toggle (Get Started)
+if (portalToggle && portalDropdown) {
+  portalToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = !portalDropdown.classList.contains('active');
+    portalDropdown.classList.toggle('active', open);
+    portalToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!portalToggle.contains(e.target) && !portalDropdown.contains(e.target)) {
+      portalDropdown.classList.remove('active');
+      portalToggle.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+
 // Payment dropdown: click to toggle (always works); hover still works via CSS
 (function () {
   const payWrap = document.getElementById('navPaymentDropdown');
@@ -861,6 +954,8 @@ document.addEventListener('keydown', (e) => {
     }
     if (languageDropdown) languageDropdown.classList.remove('active');
     if (languageToggle) languageToggle.setAttribute('aria-expanded', 'false');
+    if (portalDropdown) portalDropdown.classList.remove('active');
+    if (portalToggle) portalToggle.setAttribute('aria-expanded', 'false');
     const payWrap = document.getElementById('navPaymentDropdown');
     if (payWrap) payWrap.classList.remove('is-open');
     const payBtn = document.getElementById('paymentDropdownBtn');

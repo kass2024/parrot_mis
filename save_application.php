@@ -51,6 +51,7 @@ function trigger_async_email(int $applicationId): void
     ]);
 }
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/student_portal_accounts.php';
 function debug_log(string $label, $data = null): void
 {
     $logFile = __DIR__ . '/email_debug.log';
@@ -767,6 +768,17 @@ $stmt->bind_param(
 
             $stmt->close();
         }
+
+/* ===============================
+   STUDENT PORTAL ACCOUNT (AUTO)
+   - create/link account once email exists
+=============================== */
+try {
+    pcvc_student_portal_ensure_account_for_application($conn, (int)$appId);
+} catch (Throwable $e) {
+    // Do not block application submission if portal account creation fails.
+    debug_log('STUDENT PORTAL ACCOUNT AUTO-CREATE FAILED', $e->getMessage());
+}
 
 /* ===============================
    COMMIT SUCCESS
