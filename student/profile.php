@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
+require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -40,8 +41,8 @@ require_once __DIR__ . '/layout.php';
     <div class="muted">Read-only view. Use Edit to complete missing fields.</div>
   </div>
   <div class="d-flex gap-2">
-    <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/edit_profile.php">Edit</a>
-    <a class="btn btn-sm btn-outline-secondary" href="/parrot_mis/student/index.php">Back</a>
+    <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/edit_profile.php'), ENT_QUOTES, 'UTF-8') ?>">Edit</a>
+    <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">Back</a>
   </div>
 </div>
 

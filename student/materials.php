@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
 require_once __DIR__ . '/../helpers/csrf.php';
+require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -73,7 +74,7 @@ function pcvc_material_link_html(string $relPath, string $label = 'View'): strin
 {
     $relPath = pcvc_norm_rel_path($relPath);
     if ($relPath === '') return '';
-    $url = '/parrot_mis/' . $relPath;
+    $url = pcvc_url('/' . $relPath);
     return '<a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</a>';
 }
 
@@ -107,27 +108,27 @@ foreach ($docMap as $key => $meta) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'upload') {
     if (!pcvc_csrf_validate_post()) {
         $_SESSION['pcvc_flash_error_materials'] = 'Security check failed. Please refresh and try again.';
-        header('Location: /parrot_mis/student/materials.php');
+        header('Location: ' . pcvc_url('/student/materials.php'));
         exit;
     } elseif ($appId <= 0) {
         $_SESSION['pcvc_flash_error_materials'] = 'Could not detect your application record.';
-        header('Location: /parrot_mis/student/materials.php');
+        header('Location: ' . pcvc_url('/student/materials.php'));
         exit;
     } elseif (empty($_FILES['material']) || !is_array($_FILES['material'])) {
         $_SESSION['pcvc_flash_error_materials'] = 'Please choose a file.';
-        header('Location: /parrot_mis/student/materials.php');
+        header('Location: ' . pcvc_url('/student/materials.php'));
         exit;
     } else {
         $docType = (string)($_POST['doc_type'] ?? '');
         if ($docType === '' || !isset($docMap[$docType])) {
             $_SESSION['pcvc_flash_error_materials'] = 'Please select a valid document type.';
-            header('Location: /parrot_mis/student/materials.php');
+            header('Location: ' . pcvc_url('/student/materials.php'));
             exit;
         } else {
         $f = $_FILES['material'];
         if (($f['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             $_SESSION['pcvc_flash_error_materials'] = 'Upload failed. Please try again.';
-            header('Location: /parrot_mis/student/materials.php');
+            header('Location: ' . pcvc_url('/student/materials.php'));
             exit;
         } else {
             $orig = (string)($f['name'] ?? '');
@@ -136,11 +137,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
             if ($size <= 0 || $size > (20 * 1024 * 1024)) {
                 $_SESSION['pcvc_flash_error_materials'] = 'File too large. Max 20MB.';
-                header('Location: /parrot_mis/student/materials.php');
+                header('Location: ' . pcvc_url('/student/materials.php'));
                 exit;
             } elseif (!is_uploaded_file($tmp)) {
                 $_SESSION['pcvc_flash_error_materials'] = 'Invalid upload.';
-                header('Location: /parrot_mis/student/materials.php');
+                header('Location: ' . pcvc_url('/student/materials.php'));
                 exit;
             } else {
                 $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
@@ -154,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                 ];
                 if (!isset($allowed[$ext])) {
                     $_SESSION['pcvc_flash_error_materials'] = 'Unsupported file type. Allowed: PDF, JPG, PNG, DOC, DOCX.';
-                    header('Location: /parrot_mis/student/materials.php');
+                    header('Location: ' . pcvc_url('/student/materials.php'));
                     exit;
                 } else {
                     $finfo = new finfo(FILEINFO_MIME_TYPE);
@@ -170,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
                     if (!$mimeOk) {
                         $_SESSION['pcvc_flash_error_materials'] = 'File content type not allowed.';
-                        header('Location: /parrot_mis/student/materials.php');
+                        header('Location: ' . pcvc_url('/student/materials.php'));
                         exit;
                     } else {
                         $dir = pcvc_student_upload_dir($accountId);
@@ -180,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
 
                         if (!@move_uploaded_file($tmp, $path)) {
                             $_SESSION['pcvc_flash_error_materials'] = 'Could not save uploaded file.';
-                            header('Location: /parrot_mis/student/materials.php');
+                            header('Location: ' . pcvc_url('/student/materials.php'));
                             exit;
                         } else {
                             $relPath = 'uploads/student_materials/' . $accountId . '/' . $stored;
@@ -192,7 +193,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                             if (!$stmt) {
                                 @unlink($path);
                                 $_SESSION['pcvc_flash_error_materials'] = 'Database error while saving upload.';
-                                header('Location: /parrot_mis/student/materials.php');
+                                header('Location: ' . pcvc_url('/student/materials.php'));
                                 exit;
                             } else {
                                 $stmt->bind_param('issssis', $accountId, $docType, $safeOrig, $stored, $mime, $size, $relPath);
@@ -222,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'uploa
                                 }
 
                                 $_SESSION['pcvc_flash_success_materials'] = 'File uploaded successfully.';
-                                header('Location: /parrot_mis/student/materials.php');
+                                header('Location: ' . pcvc_url('/student/materials.php'));
                                 exit;
                             }
                         }
@@ -269,7 +270,7 @@ require_once __DIR__ . '/layout.php';
     <h1 class="h4 fw-bold mb-1">Materials</h1>
     <div class="muted">Upload documents requested by your consultant.</div>
   </div>
-  <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/index.php">Back to overview</a>
+  <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">Back to overview</a>
 </div>
 
 <div class="card mb-3">
@@ -379,7 +380,7 @@ require_once __DIR__ . '/layout.php';
                 <td class="muted text-nowrap"><?= htmlspecialchars(pcvc_human_bytes((int)$u['size_bytes']), ENT_QUOTES, 'UTF-8') ?></td>
                 <td class="muted text-nowrap"><?= htmlspecialchars((string)$u['uploaded_at'], ENT_QUOTES, 'UTF-8') ?></td>
                 <td class="text-end">
-                  <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/download.php?id=<?= (int)$u['id'] ?>">Download</a>
+                  <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/download.php'), ENT_QUOTES, 'UTF-8') ?>?id=<?= (int)$u['id'] ?>">Download</a>
                 </td>
               </tr>
             <?php endforeach; ?>

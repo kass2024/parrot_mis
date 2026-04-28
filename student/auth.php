@@ -6,7 +6,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 if (empty($_SESSION['student_account_id'])) {
-    header('Location: /parrot_mis/student-login.php');
+    require_once __DIR__ . '/../helpers/urls.php';
+    header('Location: ' . pcvc_url('/student-login.php'));
     exit;
 }
 

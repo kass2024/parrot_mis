@@ -8,12 +8,13 @@ require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/csrf.php';
 require_once __DIR__ . '/helpers/student_portal_schema.php';
 require_once __DIR__ . '/helpers/student_portal_accounts.php';
+require_once __DIR__ . '/helpers/urls.php';
 
 pcvc_student_portal_ensure_schema($conn);
 
 // If already logged in, go to dashboard.
 if (!empty($_SESSION['student_account_id'])) {
-    header('Location: /parrot_mis/student/index.php');
+    header('Location: ' . pcvc_url('/student/index.php'));
     exit;
 }
 
@@ -135,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $up->close();
                         }
 
-                        header('Location: /parrot_mis/student/index.php');
+                        header('Location: ' . pcvc_url('/student/index.php'));
                         exit;
                     }
                 }

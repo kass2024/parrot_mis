@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
 require_once __DIR__ . '/../helpers/csrf.php';
+require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -108,11 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? 'save');
     if (!pcvc_csrf_validate_post()) {
         $_SESSION['pcvc_flash_error_credit_transfer'] = 'Security check failed.';
-        header('Location: /parrot_mis/student/edit_credit_transfer.php');
+        header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
         exit;
     } elseif (!$credit || empty($credit['id'])) {
         $_SESSION['pcvc_flash_error_credit_transfer'] = 'No credit transfer record found for your email.';
-        header('Location: /parrot_mis/student/edit_credit_transfer.php');
+        header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
         exit;
     } else {
         $id = (int)$credit['id'];
@@ -123,19 +124,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $docType = (string)($_POST['doc_type'] ?? '');
             if ($docType === '' || !in_array($docType, $fileFields, true)) {
                 $_SESSION['pcvc_flash_error_credit_transfer'] = 'Invalid document type.';
-                header('Location: /parrot_mis/student/edit_credit_transfer.php');
+                header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
                 exit;
             }
             if (empty($_FILES['material']) || !is_array($_FILES['material'])) {
                 $_SESSION['pcvc_flash_error_credit_transfer'] = 'Please choose a file.';
-                header('Location: /parrot_mis/student/edit_credit_transfer.php');
+                header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
                 exit;
             }
 
             $rel = pcvc_upload_student_file_ct($accountId, 'credit_' . $docType, $_FILES['material']);
             if (!$rel) {
                 $_SESSION['pcvc_flash_error_credit_transfer'] = 'Upload failed. Please try another file.';
-                header('Location: /parrot_mis/student/edit_credit_transfer.php');
+                header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
                 exit;
             }
 
@@ -148,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try { pcvc_log_student_upload_ct($conn, $accountId, $docType, (array)$_FILES['material'], $rel); } catch (Throwable $e) {}
 
             $_SESSION['pcvc_flash_success_credit_transfer'] = 'Document uploaded.';
-            header('Location: /parrot_mis/student/edit_credit_transfer.php');
+            header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
             exit;
         }
 
@@ -181,20 +182,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $allowedUniversities = ['UPAFA', 'DPHU', 'IST'];
         if ($university !== '' && !in_array($university, $allowedUniversities, true)) {
             $_SESSION['pcvc_flash_error_credit_transfer'] = 'Invalid university. Choose UPAFA, DPHU or IST.';
-            header('Location: /parrot_mis/student/edit_credit_transfer.php');
+            header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
             exit;
         }
 
         if (empty($sets)) {
             $_SESSION['pcvc_flash_error_credit_transfer'] = 'Nothing to update.';
-            header('Location: /parrot_mis/student/edit_credit_transfer.php');
+            header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
             exit;
         } else {
             $sql = "UPDATE credit_transfer_applications SET " . implode(', ', $sets) . " WHERE id = ? LIMIT 1";
             $st = $conn->prepare($sql);
             if (!$st) {
                 $_SESSION['pcvc_flash_error_credit_transfer'] = 'Update failed.';
-                header('Location: /parrot_mis/student/edit_credit_transfer.php');
+                header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
                 exit;
             } else {
                 $types .= 'i';
@@ -204,7 +205,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $st->close();
 
                 $_SESSION['pcvc_flash_success_credit_transfer'] = 'Saved.';
-                header('Location: /parrot_mis/student/edit_credit_transfer.php');
+                header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
                 exit;
             }
         }
@@ -236,7 +237,7 @@ require_once __DIR__ . '/layout.php';
     <h1 class="h4 fw-bold mb-1">Credit transfer</h1>
     <div class="muted">Complete missing fields then save.</div>
   </div>
-  <a class="btn btn-sm btn-outline-secondary" href="/parrot_mis/student/index.php">Back</a>
+  <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">Back</a>
 </div>
 
 <?php if ($flash_success): ?><div class="alert alert-success"><?= htmlspecialchars($flash_success, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
@@ -386,7 +387,7 @@ require_once __DIR__ . '/layout.php';
                 <div class="d-flex justify-content-between align-items-center gap-2">
                   <div class="fw-semibold"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></div>
                   <?php if ($p !== ''): ?>
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" href="/parrot_mis/<?= htmlspecialchars($p, ENT_QUOTES, 'UTF-8') ?>">View</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" href="<?= htmlspecialchars(pcvc_url('/' . ltrim((string)$p, '/')), ENT_QUOTES, 'UTF-8') ?>">View</a>
                   <?php else: ?>
                     <span class="badge text-bg-warning">Missing</span>
                   <?php endif; ?>

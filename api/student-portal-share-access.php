@@ -8,6 +8,7 @@ require_once __DIR__ . '/../helpers/response.php';
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/mailer.php';
 require_once __DIR__ . '/../helpers/student_portal_accounts.php';
+require_once __DIR__ . '/../helpers/urls.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonResponse('Method not allowed', false, 405);
@@ -57,7 +58,7 @@ try {
 $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
 $base = $scheme . '://' . $host;
-$loginUrl = $base . '/parrot_mis/student-login.php?email=' . rawurlencode($email);
+$loginUrl = $base . pcvc_url('/student-login.php') . '?email=' . rawurlencode($email);
 
 $defaultPw = PCVC_STUDENT_DEFAULT_PASSWORD;
 $studentName = $name !== '' ? $name : 'Student';

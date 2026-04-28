@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
 require_once __DIR__ . '/../helpers/csrf.php';
+require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -133,11 +134,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? 'save');
     if (!pcvc_csrf_validate_post()) {
         $_SESSION['pcvc_flash_error_master_loan'] = 'Security check failed.';
-        header('Location: /parrot_mis/student/edit_master_loan.php');
+        header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
         exit;
     } elseif (!$loan || empty($loan['id'])) {
         $_SESSION['pcvc_flash_error_master_loan'] = 'No loan record found for your email.';
-        header('Location: /parrot_mis/student/edit_master_loan.php');
+        header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
         exit;
     } else {
         $id = (int)$loan['id'];
@@ -152,19 +153,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $docType = (string)($_POST['doc_type'] ?? '');
             if ($docType === '' || !in_array($docType, $fileFields, true)) {
                 $_SESSION['pcvc_flash_error_master_loan'] = 'Invalid document type.';
-                header('Location: /parrot_mis/student/edit_master_loan.php');
+                header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
                 exit;
             }
             if (empty($_FILES['material']) || !is_array($_FILES['material'])) {
                 $_SESSION['pcvc_flash_error_master_loan'] = 'Please choose a file.';
-                header('Location: /parrot_mis/student/edit_master_loan.php');
+                header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
                 exit;
             }
 
             $rel = pcvc_upload_student_file($accountId, 'loan_' . $docType, $_FILES['material']);
             if (!$rel) {
                 $_SESSION['pcvc_flash_error_master_loan'] = 'Upload failed. Please try another file.';
-                header('Location: /parrot_mis/student/edit_master_loan.php');
+                header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
                 exit;
             }
 
@@ -177,7 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try { pcvc_log_student_upload($conn, $accountId, $docType, (array)$_FILES['material'], $rel); } catch (Throwable $e) {}
 
             $_SESSION['pcvc_flash_success_master_loan'] = 'Document uploaded.';
-            header('Location: /parrot_mis/student/edit_master_loan.php');
+            header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
             exit;
         }
 
@@ -199,7 +200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if (empty($sets)) {
             $_SESSION['pcvc_flash_error_master_loan'] = 'Nothing to update.';
-            header('Location: /parrot_mis/student/edit_master_loan.php');
+            header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
             exit;
         }
 
@@ -207,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $st = $conn->prepare($sql);
         if (!$st) {
             $_SESSION['pcvc_flash_error_master_loan'] = 'Update failed.';
-            header('Location: /parrot_mis/student/edit_master_loan.php');
+            header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
             exit;
         }
         $types .= 'i';
@@ -217,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $st->close();
 
         $_SESSION['pcvc_flash_success_master_loan'] = 'Saved.';
-        header('Location: /parrot_mis/student/edit_master_loan.php');
+        header('Location: ' . pcvc_url('/student/edit_master_loan.php'));
         exit;
     }
 }
@@ -247,7 +248,7 @@ require_once __DIR__ . '/layout.php';
     <h1 class="h4 fw-bold mb-1">Master loan</h1>
     <div class="muted">Complete missing fields then save.</div>
   </div>
-  <a class="btn btn-sm btn-outline-secondary" href="/parrot_mis/student/index.php">Back</a>
+  <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">Back</a>
 </div>
 
 <?php if ($flash_success): ?><div class="alert alert-success"><?= htmlspecialchars($flash_success, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
@@ -377,7 +378,7 @@ require_once __DIR__ . '/layout.php';
                 <div class="d-flex justify-content-between align-items-center gap-2">
                   <div class="fw-semibold"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></div>
                   <?php if ($p !== ''): ?>
-                    <a class="btn btn-sm btn-outline-primary" target="_blank" href="/parrot_mis/<?= htmlspecialchars($p, ENT_QUOTES, 'UTF-8') ?>">View</a>
+                    <a class="btn btn-sm btn-outline-primary" target="_blank" href="<?= htmlspecialchars(pcvc_url('/' . ltrim((string)$p, '/')), ENT_QUOTES, 'UTF-8') ?>">View</a>
                   <?php else: ?>
                     <span class="badge text-bg-warning">Missing</span>
                   <?php endif; ?>

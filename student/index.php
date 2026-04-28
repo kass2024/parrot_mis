@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
+require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -173,8 +174,8 @@ $hasAny = (bool)$student || (bool)$credit || (bool)$loan || !empty($contracts);
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h2 class="h6 fw-bold mb-0">Progress checklist</h2>
           <div class="d-flex gap-2">
-            <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/edit_profile.php">Review / edit</a>
-            <a class="btn btn-sm btn-success" href="/parrot_mis/student/materials.php">Materials</a>
+            <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/edit_profile.php'), ENT_QUOTES, 'UTF-8') ?>">Review / edit</a>
+            <a class="btn btn-sm btn-success" href="<?= htmlspecialchars(pcvc_url('/student/materials.php'), ENT_QUOTES, 'UTF-8') ?>">Materials</a>
           </div>
         </div>
         <div class="small muted mb-3">Statuses are updated by your consultant.</div>
@@ -207,7 +208,7 @@ $hasAny = (bool)$student || (bool)$credit || (bool)$loan || !empty($contracts);
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h2 class="h6 fw-bold mb-0">Credit transfer application</h2>
-          <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/edit_credit_transfer.php">Edit / complete</a>
+          <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/edit_credit_transfer.php'), ENT_QUOTES, 'UTF-8') ?>">Edit / complete</a>
         </div>
         <div class="row g-2">
           <div class="col-md-4"><div class="muted small fw-semibold">University</div><div class="fw-semibold"><?= htmlspecialchars((string)($credit['university'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></div></div>
@@ -223,7 +224,7 @@ $hasAny = (bool)$student || (bool)$credit || (bool)$loan || !empty($contracts);
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h2 class="h6 fw-bold mb-0">Master loan application</h2>
-          <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/edit_master_loan.php">Edit / complete</a>
+          <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/edit_master_loan.php'), ENT_QUOTES, 'UTF-8') ?>">Edit / complete</a>
         </div>
         <div class="row g-2">
           <div class="col-md-4"><div class="muted small fw-semibold">Provider ID</div><div class="fw-semibold"><?= htmlspecialchars((string)($loan['loan_provider_id'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></div></div>
@@ -250,7 +251,7 @@ $hasAny = (bool)$student || (bool)$credit || (bool)$loan || !empty($contracts);
                   <td class="muted text-nowrap"><?= htmlspecialchars((string)($c['signed_at'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
                   <td class="text-end">
                     <?php if (!empty($c['contract_token'])): ?>
-                      <a class="btn btn-sm btn-outline-primary" target="_blank" href="/parrot_mis/student-contract.php?token=<?= urlencode((string)$c['contract_token']) ?>">Open</a>
+                      <a class="btn btn-sm btn-outline-primary" target="_blank" href="<?= htmlspecialchars(pcvc_url('/student-contract.php'), ENT_QUOTES, 'UTF-8') ?>?token=<?= urlencode((string)$c['contract_token']) ?>">Open</a>
                     <?php endif; ?>
                   </td>
                 </tr>

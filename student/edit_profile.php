@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
 require_once __DIR__ . '/../helpers/csrf.php';
+require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -311,8 +312,8 @@ require_once __DIR__ . '/layout.php';
     <div class="muted">Complete missing fields in your <code>student_applications</code> profile.</div>
   </div>
   <div class="d-flex gap-2">
-    <a class="btn btn-sm btn-outline-secondary" href="/parrot_mis/student/index.php">Back</a>
-    <a class="btn btn-sm btn-outline-primary" href="/parrot_mis/student/profile.php">View read-only</a>
+    <a class="btn btn-sm btn-outline-secondary" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">Back</a>
+    <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/profile.php'), ENT_QUOTES, 'UTF-8') ?>">View read-only</a>
   </div>
 </div>
 
@@ -596,7 +597,7 @@ require_once __DIR__ . '/layout.php';
 
       <div class="mt-3 d-flex gap-2">
         <button class="btn btn-success fw-semibold" type="submit">Save changes</button>
-        <a class="btn btn-outline-primary" href="/parrot_mis/student/materials.php">Upload materials</a>
+        <a class="btn btn-outline-primary" href="<?= htmlspecialchars(pcvc_url('/student/materials.php'), ENT_QUOTES, 'UTF-8') ?>">Upload materials</a>
       </div>
     </div>
   </form>

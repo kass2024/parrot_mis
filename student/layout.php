@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/company_branding.php';
+require_once __DIR__ . '/../helpers/urls.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -98,7 +99,7 @@ if (isset($conn) && ($conn instanceof mysqli) && $studentEmail !== '') {
       <div class="ms-auto d-flex align-items-center gap-3">
         <div class="text-white-50 small d-none d-md-block">Signed in as</div>
         <div class="text-white fw-semibold"><?= htmlspecialchars($studentName, ENT_QUOTES, 'UTF-8') ?></div>
-        <a class="btn btn-sm btn-light" href="/parrot_mis/student/logout.php">Logout</a>
+        <a class="btn btn-sm btn-light" href="<?= htmlspecialchars(pcvc_url('/student/logout.php'), ENT_QUOTES, 'UTF-8') ?>">Logout</a>
       </div>
     </div>
   </nav>
@@ -112,22 +113,22 @@ if (isset($conn) && ($conn instanceof mysqli) && $studentEmail !== '') {
         </div>
         <nav class="nav nav-pills flex-column gap-2">
           <?php if ($pcvc_has_profile): ?>
-            <a class="nav-link <?= pcvc_student_nav_active('/student/index.php') ?>" href="/parrot_mis/student/index.php">All university admissions</a>
+            <a class="nav-link <?= pcvc_student_nav_active('/student/index.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">All university admissions</a>
           <?php endif; ?>
           <?php if ($pcvc_has_loan): ?>
-            <a class="nav-link <?= pcvc_student_nav_active('/student/edit_master_loan.php') ?>" href="/parrot_mis/student/edit_master_loan.php">Study Loan Applications</a>
+            <a class="nav-link <?= pcvc_student_nav_active('/student/edit_master_loan.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/edit_master_loan.php'), ENT_QUOTES, 'UTF-8') ?>">Study Loan Applications</a>
           <?php endif; ?>
           <?php if ($pcvc_has_credit): ?>
-            <a class="nav-link <?= pcvc_student_nav_active('/student/edit_credit_transfer.php') ?>" href="/parrot_mis/student/edit_credit_transfer.php">Credit Transfer Applications</a>
+            <a class="nav-link <?= pcvc_student_nav_active('/student/edit_credit_transfer.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/edit_credit_transfer.php'), ENT_QUOTES, 'UTF-8') ?>">Credit Transfer Applications</a>
           <?php endif; ?>
           <?php if ($pcvc_has_contract): ?>
-            <a class="nav-link <?= pcvc_student_nav_active('/student/index.php') ?>" href="/parrot_mis/student/index.php">Student contract</a>
+            <a class="nav-link <?= pcvc_student_nav_active('/student/index.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/index.php'), ENT_QUOTES, 'UTF-8') ?>">Student contract</a>
           <?php endif; ?>
 
           <div class="mt-3 small muted fw-semibold">My portal</div>
           <?php if ($pcvc_has_profile): ?>
-            <a class="nav-link <?= pcvc_student_nav_active('/student/edit_profile.php') ?>" href="/parrot_mis/student/edit_profile.php">Track my infos</a>
-            <a class="nav-link <?= pcvc_student_nav_active('/student/materials.php') ?>" href="/parrot_mis/student/materials.php">Upload materials</a>
+            <a class="nav-link <?= pcvc_student_nav_active('/student/edit_profile.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/edit_profile.php'), ENT_QUOTES, 'UTF-8') ?>">Track my infos</a>
+            <a class="nav-link <?= pcvc_student_nav_active('/student/materials.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/materials.php'), ENT_QUOTES, 'UTF-8') ?>">Upload materials</a>
           <?php endif; ?>
         </nav>
       </aside>

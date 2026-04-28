@@ -7,6 +7,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 unset($_SESSION['student_account_id'], $_SESSION['student_application_id'], $_SESSION['student_email'], $_SESSION['student_name']);
 
-header('Location: /parrot_mis/student-login.php');
+require_once __DIR__ . '/../helpers/urls.php';
+header('Location: ' . pcvc_url('/student-login.php'));
 exit;
 
