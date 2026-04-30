@@ -109,6 +109,19 @@ const studyLine = [
 ].filter(Boolean).join(" • ");
 
 
+    const timeData = formatFullTime(meta.created_at);
+    const timeDisplay = timeData ? `
+        <div class="mt-1 text-[11px] font-medium application-time"
+             style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;color:${timeData.color}">
+            <span>${timeData.icon}</span>
+            <span>${timeAgo(meta.created_at)}</span>
+            <span class="text-gray-400">•</span>
+            <span>${timeData.date}</span>
+            <span class="text-gray-400">•</span>
+            <span>${timeData.time}</span>
+        </div>
+    ` : "";
+
     li.innerHTML = `
         <div class="min-w-0">
             <div class="font-semibold text-sm whitespace-normal break-words">
@@ -128,9 +141,7 @@ const studyLine = [
 }
 
 
-            <div class="text-xs text-gray-400 mt-0.5">
-                ${timeAgo(meta.created_at)}
-            </div>
+            ${timeDisplay}
         </div>
 
         ${Number(meta.is_read) === 0 ? unreadDot() : ""}
@@ -900,6 +911,43 @@ function setText(id, value) {
 
 function unreadDot() {
     return `<span class="unread-dot w-2 h-2 bg-blue-600 rounded-full mt-1"></span>`;
+}
+
+function formatFullTime(dateStr) {
+    if (!dateStr) return null;
+
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+
+    const now = new Date();
+    const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+
+    let color = "#94a3b8"; // slate-400
+    let icon = "⏱";
+
+    if (diffDays <= 1) {
+        color = "#16a34a"; // green-600
+        icon = "🆕";
+    } else if (diffDays <= 5) {
+        color = "#f59e0b"; // amber-500
+        icon = "⏱";
+    } else {
+        color = "#dc2626"; // red-600
+        icon = "📅";
+    }
+
+    const date = d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric"
+    });
+
+    const time = d.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+
+    return { color, icon, date, time, diffDays };
 }
 
 function timeAgo(dateStr) {

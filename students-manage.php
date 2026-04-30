@@ -53,6 +53,7 @@ $query1 = $conn->query("
         COALESCE(sa.masters_program, sa.bachelor_program, sa.phd_program) as masters_program,
         sa.destination,
         sa.application_date,
+        sa.created_at,
         sa.application_id,
         sa.application_remarks,
         sa.incomplete_app,
@@ -931,9 +932,21 @@ usort($all_applicants, function($a, $b) {
           <tr data-row-id="<?= $s['id'] ?>" data-source="<?= $s['source'] ?>">
             <td><?= $counter++ ?></td>
 
-            <!-- Name (first + last) -->
+            <!-- Name (first + last) + report-like time under name -->
             <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>" data-field="first_name">
-              <?= htmlspecialchars(ucfirst((string) ($s['first_name'] ?? '')) . ' ' . ucfirst((string) ($s['last_name'] ?? ''))) ?>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+                <div style="font-weight:700">
+                  <?= htmlspecialchars(ucfirst((string) ($s['first_name'] ?? '')) . ' ' . ucfirst((string) ($s['last_name'] ?? ''))) ?>
+                </div>
+                <?php
+                  $dtForNameTime = $s['source'] === 'student_applications'
+                    ? ((string)($s['created_at'] ?? '') ?: (string)($s['application_date'] ?? ''))
+                    : (string)($s['application_date'] ?? '');
+                ?>
+                <div class="application-time js-app-time"
+                     data-dt="<?= htmlspecialchars($dtForNameTime, ENT_QUOTES, 'UTF-8') ?>"
+                     style="display:none;font-size:12px;font-weight:600"></div>
+              </div>
             </td>
 
             <!-- Email -->
@@ -1284,6 +1297,87 @@ usort($all_applicants, function($a, $b) {
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
   window.CAN_DELETE_STUDENT_APP = <?= json_encode($canDeleteApplication) ?>;
+</script>
+
+<script>
+// Render application times in browser timezone (same as Student Application Report)
+(function () {
+  function timeAgo(dateStr) {
+    if (!dateStr) return "-";
+    const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+    const units = [
+      [31536000, "y"],
+      [2592000, "mo"],
+      [86400, "d"],
+      [3600, "h"],
+      [60, "m"],
+    ];
+    for (const [s, l] of units) {
+      const v = Math.floor(seconds / s);
+      if (v >= 1) return `${v}${l} ago`;
+    }
+    return "just now";
+  }
+
+  function formatFullTime(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    const now = new Date();
+    const diffDays = Math.floor((now - d) / (1000 * 60 * 60 * 24));
+
+    let color = "#64748b";
+    let icon = "⏱";
+    if (diffDays <= 1) {
+      color = "#16a34a";
+      icon = "🆕";
+    } else if (diffDays <= 5) {
+      color = "#f59e0b";
+      icon = "⏱";
+    } else {
+      color = "#dc2626";
+      icon = "📅";
+    }
+
+    const date = d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    const time = d.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return { color, icon, date, time };
+  }
+
+  function renderAllTimes() {
+    document.querySelectorAll(".js-app-time").forEach((el) => {
+      const dt = (el.getAttribute("data-dt") || "").trim();
+      const t = formatFullTime(dt);
+      if (!t) return;
+      el.style.display = "inline-flex";
+      el.style.alignItems = "center";
+      el.style.gap = "6px";
+      el.style.flexWrap = "wrap";
+      el.style.color = t.color;
+      el.innerHTML = `
+        <span class="time-icon">${t.icon}</span>
+        <span class="time-days">${timeAgo(dt)}</span>
+        <span class="time-separator">•</span>
+        <span>${t.date}</span>
+        <span class="time-separator">•</span>
+        <span>${t.time}</span>
+      `;
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", renderAllTimes);
+  } else {
+    renderAllTimes();
+  }
+})();
 </script>
 
 <script>

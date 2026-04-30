@@ -85,18 +85,13 @@ if ($flag === 'deny' && ($notifyEmail || $notifyWhatsapp) && $rejectionReasonPos
 }
 
 /* =====================================================
-   UPDATE STATUS (RESET ALL OTHERS TO 0)
+  UPDATE STATUS (MILESTONE MODE)
+  - Keep previous flags as-is (do NOT reset others to 0)
+  - Set selected flag to 1
 ===================================================== */
 
 try {
-    $setParts = [];
-    foreach ($allowed_flags as $column) {
-        if ($column === $flag) {
-            $setParts[] = "`$column` = 1";
-        } else {
-            $setParts[] = "`$column` = 0";
-        }
-    }
+    $setParts = ["`$flag` = 1"];
 
     if ($flag === 'deny') {
         $setParts[] = '`rejection_reason` = ?';

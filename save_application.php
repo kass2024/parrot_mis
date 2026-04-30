@@ -52,6 +52,9 @@ function trigger_async_email(int $applicationId): void
 }
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/student_portal_accounts.php';
+require_once __DIR__ . '/helpers/mailer.php';
+require_once __DIR__ . '/helpers/urls.php';
+require_once __DIR__ . '/includes/company_branding.php';
 function debug_log(string $label, $data = null): void
 {
     $logFile = __DIR__ . '/email_debug.log';
@@ -67,6 +70,62 @@ function debug_log(string $label, $data = null): void
     }
 
     file_put_contents($logFile, $msg . PHP_EOL, FILE_APPEND | LOCK_EX);
+}
+
+function pcvc_send_student_portal_access_email(string $email, string $studentName = ''): void
+{
+    $email = strtolower(trim($email));
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return;
+
+    $studentName = trim($studentName) !== '' ? trim($studentName) : 'Student';
+
+    // Ensure portal account exists / reset to default password.
+    global $conn;
+    try {
+        if (isset($conn) && $conn instanceof mysqli) {
+            pcvc_student_portal_ensure_account_for_email($conn, $email);
+        }
+    } catch (Throwable $e) {
+        // Do not block submission
+        debug_log('PORTAL ACCOUNT ENSURE FAILED', $e->getMessage());
+    }
+
+    // Build login link (prefill email)
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $base = $scheme . '://' . $host;
+    $loginUrl = $base . pcvc_url('/student-login.php') . '?email=' . rawurlencode($email);
+
+    $defaultPw = PCVC_STUDENT_DEFAULT_PASSWORD;
+    $subject = 'Your Student Portal Access – ' . PCVC_COMPANY_DISPLAY_NAME;
+    $body = "
+      <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#111\">
+        <h2 style=\"margin:0 0 12px 0\">Student Portal Access</h2>
+        <p>Hello <strong>" . htmlspecialchars($studentName, ENT_QUOTES, 'UTF-8') . "</strong>,</p>
+        <p>Thank you for submitting your application. Your student portal is ready — you can track your application status and upload required materials securely.</p>
+        <p style=\"margin:16px 0\">
+          <a href=\"" . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . "\" style=\"
+            display:inline-block;background:#3661B9;color:#fff;text-decoration:none;
+            padding:10px 14px;border-radius:8px;font-weight:700;
+          \">Open Student Portal</a>
+        </p>
+        <p><strong>Login details</strong></p>
+        <ul>
+          <li>Email: <strong>" . htmlspecialchars($email, ENT_QUOTES, 'UTF-8') . "</strong></li>
+          <li>Default password: <strong>" . htmlspecialchars($defaultPw, ENT_QUOTES, 'UTF-8') . "</strong></li>
+        </ul>
+        <p>If the button doesn’t work, copy/paste this link:</p>
+        <p><a href=\"" . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . "\">" . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . "</a></p>
+        <p style=\"margin-top:18px\">Thank you,<br>" . htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') . "</p>
+      </div>
+    ";
+
+    $mail = app_mailer();
+    $mail->addAddress($email, $studentName);
+    $mail->Subject = $subject;
+    $mail->Body = $body;
+    $mail->AltBody = "Student Portal Access\n\nLogin: {$loginUrl}\nEmail: {$email}\nPassword: {$defaultPw}\n";
+    $mail->send();
 }
 
 
@@ -811,6 +870,16 @@ debug_log('FINAL SUBMIT CONFIRMED – EMAIL SHOULD SEND', [
 
 if ($isFinal === 1) {
     trigger_async_email($appId);
+
+    // Also send student portal access email with credentials (non-blocking)
+    try {
+        $studentEmail = isset($_POST['email']) ? (string)$_POST['email'] : '';
+        $studentName = trim((string)($_POST['first_name'] ?? '') . ' ' . (string)($_POST['last_name'] ?? ''));
+        pcvc_send_student_portal_access_email($studentEmail, $studentName);
+        debug_log('PORTAL ACCESS EMAIL SENT', ['email' => $studentEmail, 'appId' => $appId]);
+    } catch (Throwable $e) {
+        debug_log('PORTAL ACCESS EMAIL FAILED', $e->getMessage());
+    }
 }
 
 exit;
