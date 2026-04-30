@@ -93,6 +93,41 @@ if ($appId > 0) {
     }
 }
 
+// 5) Study choices: all selections saved from student-application.php
+$studyChoices = [];
+if ($appId > 0) {
+    $st = $conn->prepare("
+        SELECT
+            ascx.id,
+            ascx.region_id,
+            r.name AS region_name,
+            ascx.university_id,
+            u.name AS university_name,
+            ctry.name AS country_name,
+            ascx.program_level_id,
+            pl.name AS program_level_name,
+            ascx.program_id,
+            p.program_name
+        FROM application_study_choices ascx
+        LEFT JOIN regions r ON r.id = ascx.region_id
+        LEFT JOIN universities u ON u.id = ascx.university_id
+        LEFT JOIN countries ctry ON ctry.id = u.country_id
+        LEFT JOIN program_levels pl ON pl.id = ascx.program_level_id
+        LEFT JOIN programs p ON p.id = ascx.program_id
+        WHERE ascx.application_id = ?
+        ORDER BY ascx.id ASC
+    ");
+    if ($st) {
+        $st->bind_param('i', $appId);
+        $st->execute();
+        $res = $st->get_result();
+        while ($row = $res->fetch_assoc()) {
+            $studyChoices[] = $row;
+        }
+        $st->close();
+    }
+}
+
 function pcvc_current_stage(array $s): array
 {
     // Highest priority first.
@@ -167,6 +202,44 @@ $hasAny = (bool)$student || (bool)$credit || (bool)$loan || !empty($contracts);
       <div class="col-12 col-md-4"><div class="kpi"><div class="label">Application ID</div><div class="value"><?= htmlspecialchars((string)($student['application_id'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></div></div></div>
       <div class="col-12 col-md-4"><div class="kpi"><div class="label">Destination</div><div class="value"><?= htmlspecialchars((string)($student['destination'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></div></div></div>
       <div class="col-12 col-md-4"><div class="kpi"><div class="label">Materials uploaded</div><div class="value"><?= (int)$uploadsCount ?></div></div></div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h2 class="h6 fw-bold mb-0">My study choices</h2>
+          <div class="small muted">From your application submission</div>
+        </div>
+
+        <?php if (empty($studyChoices)): ?>
+          <div class="muted">No study choices found yet.</div>
+        <?php else: ?>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr class="text-muted small">
+                  <th style="min-width:160px">University</th>
+                  <th style="min-width:120px">Region</th>
+                  <th style="min-width:140px">Country</th>
+                  <th style="min-width:140px">Level</th>
+                  <th style="min-width:220px">Program</th>
+                </tr>
+              </thead>
+              <tbody>
+                <?php foreach ($studyChoices as $ch): ?>
+                  <tr>
+                    <td class="fw-semibold"><?= htmlspecialchars((string)($ch['university_name'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($ch['region_name'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($ch['country_name'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($ch['program_level_name'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                    <td><?= htmlspecialchars((string)($ch['program_name'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+                  </tr>
+                <?php endforeach; ?>
+              </tbody>
+            </table>
+          </div>
+        <?php endif; ?>
+      </div>
     </div>
 
     <div class="card mb-3">
