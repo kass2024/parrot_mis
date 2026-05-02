@@ -186,6 +186,7 @@ $cards = [
       'application-list.php' => 'Student application Report',
       'students-manage.php' => 'Applicants Management',
       'receipt_viewer.php' => 'Check payment Receipt',
+      'applyboard-dashboard.php' => 'ApplyBoard Applications',
     ]
   ],
   'loan_applications' => [
@@ -1620,6 +1621,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('receipt_viewer.php', 'Check Payment Receipt')">
           <i class="bi bi-receipt"></i>
           Check payment Receipt
+        </a>
+        <a href="#" onclick="loadInFrame('applyboard-dashboard.php', 'ApplyBoard Applications')">
+          <i class="bi bi-grid-1x2"></i>
+          ApplyBoard Applications
         </a>
       </div>
       <?php endif; ?>
