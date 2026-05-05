@@ -71,6 +71,14 @@ foreach ($students as &$s) $s['source'] = 'student_applications';
 
 // Combine all applicants
 $all_applicants = $students;
+
+$universities_for_admission = [];
+$uq = @$conn->query('SELECT id, name FROM universities ORDER BY name ASC');
+if ($uq) {
+    while ($ur = $uq->fetch_assoc()) {
+        $universities_for_admission[] = $ur;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -427,59 +435,68 @@ textarea.form-control-sm {
 
   </table>
 </div>
-<!-- Admission Letter Modal -->
+<!-- Admission Letter Modal (multi-university, one email) -->
 <div class="modal fade" id="admissionModal" tabindex="-1" aria-labelledby="admissionModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <form id="admissionForm" enctype="multipart/form-data">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form id="admissionForm" enctype="multipart/form-data" autocomplete="off" novalidate>
       <div class="modal-content">
         <div class="modal-header bg-primary text-white">
-          <h5 class="modal-title" id="admissionModalLabel">Send Admission Letter</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          <h5 class="modal-title" id="admissionModalLabel">Send Admission Letter(s)</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
           <input type="hidden" name="student_id" id="modal_student_id">
           <input type="hidden" name="table" id="modal_table">
 
           <div class="mb-3">
-            <label>Email:</label>
-            <input type="email" name="email" id="modal_email" class="form-control" required readonly>
+            <label class="form-label">Email</label>
+            <input type="email" name="email" id="modal_email" class="form-control" readonly>
           </div>
 
-          <div class="mb-3">
-            <label>Attach Admission Letter (PDF):</label>
-            <input type="file" name="letter" class="form-control" accept=".pdf" required>
-          </div>
+          <p class="small text-muted mb-2">Add one row per university. All letters are sent in a single email.</p>
 
-          <!-- Progress Indicator -->
+          <div id="admissionRows" class="mb-2"></div>
+
+          <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="btnAddAdmissionRow">+ Add another university</button>
+
           <div id="sendingProgress" style="display:none;" class="text-info fw-bold mt-2">
             ⏳ Sending email... Please wait.
           </div>
 
-          <!-- Result Message -->
           <div id="sendResult" class="mt-2 fw-semibold"></div>
         </div>
 
         <div class="modal-footer">
-          <button type="submit" class="btn btn-success">📧 Send Letter</button>
+          <button type="submit" class="btn btn-success">📧 Send all letters</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         </div>
       </div>
     </form>
   </div>
 </div>
 
-<!-- Include this script at the end of body if not already -->
-<script>
-  document.getElementById("searchInput").addEventListener("keyup", function() {
-    const value = this.value.toLowerCase();
-    const rows = document.querySelectorAll("#applicantTable tbody tr");
-
-    rows.forEach(row => {
-      const rowText = row.textContent.toLowerCase();
-      row.style.display = rowText.includes(value) ? "" : "none";
-    });
-  });
-</script>
-</body>
+<template id="admissionRowTpl">
+  <div class="admission-row border rounded p-2 mb-2 bg-light">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label small mb-0">University</label>
+        <select name="university_id[]" class="form-select form-select-sm admission-uni-select">
+          <option value="">Select university…</option>
+          <?php foreach ($universities_for_admission as $uu): ?>
+            <option value="<?= (int) $uu['id'] ?>"><?= htmlspecialchars((string) $uu['name'], ENT_QUOTES, 'UTF-8') ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small mb-0">Admission letter (PDF)</label>
+        <input type="file" name="letters[]" class="form-control form-control-sm admission-letter-file" accept=".pdf,application/pdf">
+      </div>
+      <div class="col-md-1 text-end pb-1">
+        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-admission-row d-none" title="Remove row">×</button>
+      </div>
+    </div>
+  </div>
+</template>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -503,7 +520,6 @@ $(function() {
 
     // If "Admit" button is clicked and it's not yet active
     if (flag === 'admit' && !btn.prop('disabled')) {
-      // Prefill modal form
       const row = btn.closest('tr');
       const email = row.find('td[data-field="email"]').text().trim();
 
@@ -511,8 +527,10 @@ $(function() {
       $('#modal_table').val(table);
       $('#modal_email').val(email);
 
-      // Show modal
-      $('#admissionModal').modal('show');
+      const admEl = document.getElementById('admissionModal');
+      if (admEl && typeof bootstrap !== 'undefined') {
+        bootstrap.Modal.getOrCreateInstance(admEl, { backdrop: 'static', keyboard: false }).show();
+      }
       return;
     }
 
@@ -567,101 +585,127 @@ $(function() {
     dateFormat: "Y-m-d",
     maxDate: "today"
   });
-});
 
-// SEND ADMISSION LETTER
-$('#admissionForm').on('submit', function(e){
-  e.preventDefault();
-  const formData = new FormData(this);
-
-  $.ajax({
-    url: 'send_admission.php',
-    method: 'POST',
-    data: formData,
-    contentType: false,
-    processData: false,
-    success: function(resp) {
-      if (resp === 'ok') {
-        alert('Letter sent successfully!');
-        $('#admissionModal').modal('hide');
-
-        // Refresh flag buttons
-        const id = $('#modal_student_id').val();
-        const table = $('#modal_table').val();
-        $.get('render-flags.php', { id, table }, function(html){
-          $('.flag-wrapper[data-id="' + id + '"]').html(html);
-        });
+  function updateAdmissionRemoveButtons() {
+    const rows = document.querySelectorAll('#admissionRows .admission-row');
+    rows.forEach(function (row) {
+      const b = row.querySelector('.btn-remove-admission-row');
+      if (!b) return;
+      if (rows.length > 1) {
+        b.classList.remove('d-none');
       } else {
-        alert('Failed to send: ' + resp);
+        b.classList.add('d-none');
       }
-    }
+    });
+  }
+
+  function addAdmissionRow() {
+    const tpl = document.getElementById('admissionRowTpl');
+    const container = document.getElementById('admissionRows');
+    if (!tpl || !container || !tpl.content) return;
+    container.appendChild(document.importNode(tpl.content, true));
+    updateAdmissionRemoveButtons();
+  }
+
+  function resetAdmissionRows() {
+    const container = document.getElementById('admissionRows');
+    if (!container) return;
+    container.innerHTML = '';
+    addAdmissionRow();
+  }
+
+  $('#admissionModal').on('show.bs.modal', function () {
+    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
+    $('#sendingProgress').hide();
+    resetAdmissionRows();
   });
-});
-</script>
 
-<!-- Duplicate search script (optional, already exists above) -->
-<script>
-  document.getElementById("searchInput").addEventListener("keyup", function() {
-    const value = this.value.toLowerCase();
-    const rows = document.querySelectorAll("#applicantTable tbody tr");
+  $('#btnAddAdmissionRow').on('click', function () {
+    addAdmissionRow();
+  });
 
-    rows.forEach(row => {
-      const rowText = row.textContent.toLowerCase();
-      row.style.display = rowText.includes(value) ? "" : "none";
+  $(document).on('click', '.btn-remove-admission-row', function () {
+    const rows = document.querySelectorAll('#admissionRows .admission-row');
+    if (rows.length <= 1) return;
+    $(this).closest('.admission-row').remove();
+    updateAdmissionRemoveButtons();
+  });
+
+  $('#admissionForm').on('submit', function(e){
+    e.preventDefault();
+    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
+
+    const email = ($('#modal_email').val() || '').trim();
+    if (!email) {
+      $('#sendResult').text('❌ Applicant email is missing.').addClass('text-danger fw-bold');
+      return;
+    }
+
+    let completeRows = 0;
+    let brokenRow = false;
+    $('#admissionRows .admission-row').each(function () {
+      const uni = ($(this).find('.admission-uni-select').val() || '').trim();
+      const f = $(this).find('.admission-letter-file')[0];
+      const hasFile = f && f.files && f.files.length > 0;
+      if (!uni && !hasFile) return;
+      if (uni && hasFile) {
+        completeRows++;
+        return;
+      }
+      brokenRow = true;
+      return false;
+    });
+
+    if (brokenRow) {
+      $('#sendResult').text('❌ Each row needs both a university and a PDF (or leave the row empty).').addClass('text-danger fw-bold');
+      return;
+    }
+    if (completeRows < 1) {
+      $('#sendResult').text('❌ Add at least one university and attach its PDF letter.').addClass('text-danger fw-bold');
+      return;
+    }
+
+    const formData = new FormData(this);
+    const sid = $('#modal_student_id').val();
+    const tbl = $('#modal_table').val();
+
+    $('#sendingProgress').show();
+
+    $.ajax({
+      url: 'send_admission.php',
+      method: 'POST',
+      data: formData,
+      contentType: false,
+      processData: false,
+      success: function(resp) {
+        $('#sendingProgress').hide();
+        if (resp.trim() === 'ok') {
+          $('#sendResult').text('✅ Admission email sent successfully!').addClass('text-success fw-bold');
+          $.get('render-flags.php', { id: sid, table: tbl }, function(html){
+            $('.flag-wrapper[data-id="' + sid + '"]').html(html);
+          });
+          setTimeout(() => {
+            const inst = bootstrap.Modal.getInstance(document.getElementById('admissionModal'));
+            if (inst) inst.hide();
+            $('#admissionForm')[0].reset();
+            $('#sendResult').text('');
+            resetAdmissionRows();
+          }, 2000);
+        } else {
+          $('#sendResult').text('❌ Failed to send: ' + resp).addClass('text-danger fw-bold');
+        }
+      },
+      error: function(xhr, status, error) {
+        $('#sendingProgress').hide();
+        $('#sendResult').text('❌ Network error: ' + error).addClass('text-danger fw-bold');
+      }
     });
   });
-</script>
-<script>
-document.getElementById('admissionForm').addEventListener('submit', function (e) {
-  e.preventDefault();
 
-  const form = this;
-  const formData = new FormData(form);
-  const progress = document.getElementById('sendingProgress');
-  const result = document.getElementById('sendResult');
-  const id = document.getElementById('modal_student_id').value;
-  const table = document.getElementById('modal_table').value;
-
-  // Reset display
-  result.innerText = '';
-  result.className = '';
-  progress.style.display = 'block';
-
-  fetch('send_admission.php', {
-    method: 'POST',
-    body: formData
-  })
-  .then(resp => resp.text())
-  .then(resp => {
-    progress.style.display = 'none';
-    if (resp.trim() === 'ok') {
-      result.innerText = '✅ Letter sent successfully!';
-      result.className = 'text-success fw-bold';
-
-      // Refresh flag UI
-      fetch('render-flags.php?id=' + id + '&table=' + table)
-        .then(res => res.text())
-        .then(html => {
-          const wrapper = document.querySelector('.flag-wrapper[data-id="' + id + '"]');
-          if (wrapper) wrapper.innerHTML = html;
-        });
-
-      // Hide modal after short delay
-      setTimeout(() => {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('admissionModal'));
-        modal.hide();
-        form.reset();
-        result.innerText = '';
-      }, 2000);
-    } else {
-      result.innerText = '❌ Failed to send: ' + resp;
-      result.className = 'text-danger fw-bold';
-    }
-  })
-  .catch(error => {
-    progress.style.display = 'none';
-    result.innerText = '❌ Error: ' + error;
-    result.className = 'text-danger fw-bold';
+  $('#admissionModal').on('hidden.bs.modal', function () {
+    $('#admissionForm')[0].reset();
+    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
+    resetAdmissionRows();
   });
 });
 </script>

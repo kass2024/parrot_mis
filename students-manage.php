@@ -202,6 +202,14 @@ usort($all_applicants, function($a, $b) {
     return ($b['id'] ?? 0) - ($a['id'] ?? 0);
 });
 
+$universities_for_admission = [];
+$uq = @$conn->query('SELECT id, name FROM universities ORDER BY name ASC');
+if ($uq) {
+    while ($ur = $uq->fetch_assoc()) {
+        $universities_for_admission[] = $ur;
+    }
+}
+
 // Debug: Check what data we have
 // echo "<pre>Total applicants found: " . count($all_applicants) . "</pre>";
 // echo "<pre>";
@@ -1073,13 +1081,13 @@ usort($all_applicants, function($a, $b) {
   </div>
 </div>
 
-<!-- Admission Letter Modal -->
+<!-- Admission Letter Modal (multi-university, one email) -->
 <div class="modal fade" id="admissionModal" tabindex="-1" aria-labelledby="admissionModalLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <form id="admissionForm" enctype="multipart/form-data">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form id="admissionForm" enctype="multipart/form-data" autocomplete="off" novalidate>
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="admissionModalLabel">Send Admission Letter</h5>
+          <h5 class="modal-title" id="admissionModalLabel">Send Admission Letter(s)</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
@@ -1087,14 +1095,15 @@ usort($all_applicants, function($a, $b) {
           <input type="hidden" name="table" id="modal_table">
 
           <div class="mb-3">
-            <label>Email:</label>
-            <input type="email" name="email" id="modal_email" class="form-control" required readonly>
+            <label class="form-label">Email</label>
+            <input type="email" name="email" id="modal_email" class="form-control" readonly>
           </div>
 
-          <div class="mb-3">
-            <label>Attach Admission Letter (PDF):</label>
-            <input type="file" name="letter" class="form-control" accept=".pdf" required>
-          </div>
+          <p class="small text-muted mb-2">Add one row per university. All letters are sent in a single email.</p>
+
+          <div id="admissionRows" class="mb-2"></div>
+
+          <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="btnAddAdmissionRow">+ Add another university</button>
 
           <!-- Progress Indicator -->
           <div id="sendingProgress" style="display:none;" class="text-info fw-bold mt-2">
@@ -1106,13 +1115,36 @@ usort($all_applicants, function($a, $b) {
         </div>
 
         <div class="modal-footer">
-          <button type="submit" class="btn btn-success">📧 Send Letter</button>
+          <button type="submit" class="btn btn-success">📧 Send all letters</button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
         </div>
       </div>
     </form>
   </div>
 </div>
+
+<template id="admissionRowTpl">
+  <div class="admission-row border rounded p-2 mb-2 bg-light">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label small mb-0">University</label>
+        <select name="university_id[]" class="form-select form-select-sm admission-uni-select">
+          <option value="">Select university…</option>
+          <?php foreach ($universities_for_admission as $uu): ?>
+            <option value="<?= (int) $uu['id'] ?>"><?= htmlspecialchars((string) $uu['name'], ENT_QUOTES, 'UTF-8') ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small mb-0">Admission letter (PDF)</label>
+        <input type="file" name="letters[]" class="form-control form-control-sm admission-letter-file" accept=".pdf,application/pdf">
+      </div>
+      <div class="col-md-1 text-end pb-1">
+        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-admission-row d-none" title="Remove row">×</button>
+      </div>
+    </div>
+  </div>
+</template>
 
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
@@ -1391,6 +1423,51 @@ $(function() {
   function hideLoading() {
     $('#loadingOverlay').fadeOut();
   }
+
+  function updateAdmissionRemoveButtons() {
+    const rows = document.querySelectorAll('#admissionRows .admission-row');
+    rows.forEach(function (row) {
+      const b = row.querySelector('.btn-remove-admission-row');
+      if (!b) return;
+      if (rows.length > 1) {
+        b.classList.remove('d-none');
+      } else {
+        b.classList.add('d-none');
+      }
+    });
+  }
+
+  function addAdmissionRow() {
+    const tpl = document.getElementById('admissionRowTpl');
+    const container = document.getElementById('admissionRows');
+    if (!tpl || !container || !tpl.content) return;
+    container.appendChild(document.importNode(tpl.content, true));
+    updateAdmissionRemoveButtons();
+  }
+
+  function resetAdmissionRows() {
+    const container = document.getElementById('admissionRows');
+    if (!container) return;
+    container.innerHTML = '';
+    addAdmissionRow();
+  }
+
+  $('#admissionModal').on('show.bs.modal', function () {
+    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
+    $('#sendingProgress').hide();
+    resetAdmissionRows();
+  });
+
+  $('#btnAddAdmissionRow').on('click', function () {
+    addAdmissionRow();
+  });
+
+  $(document).on('click', '.btn-remove-admission-row', function () {
+    const rows = document.querySelectorAll('#admissionRows .admission-row');
+    if (rows.length <= 1) return;
+    $(this).closest('.admission-row').remove();
+    updateAdmissionRemoveButtons();
+  });
 
   // SEARCH
   $('#searchInput').on('keyup', function(){
@@ -1785,54 +1862,87 @@ $(function() {
       maxDate: "today"
     });
   }
-});
 
-// SEND ADMISSION LETTER
-$('#admissionForm').on('submit', function(e){
-  e.preventDefault();
-  const formData = new FormData(this);
+  // SEND ADMISSION LETTER(S)
+  $('#admissionForm').on('submit', function(e){
+    e.preventDefault();
+    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
 
-  showLoading();
-  $('#sendingProgress').show();
-  $('#sendResult').text('').removeClass('text-success text-danger');
-
-  $.ajax({
-    url: 'send_admission.php',
-    method: 'POST',
-    data: formData,
-    contentType: false,
-    processData: false,
-    success: function(resp) {
-      hideLoading();
-      $('#sendingProgress').hide();
-      if (resp.trim() === 'ok') {
-        $('#sendResult').text('✅ Letter sent successfully!').addClass('text-success fw-bold');
-        showSuccessToast('Admission letter sent successfully');
-        
-        // Hide modal after delay
-        setTimeout(() => {
-          const modal = bootstrap.Modal.getInstance(document.getElementById('admissionModal'));
-          modal.hide();
-          $('#admissionForm')[0].reset();
-          $('#sendResult').text('');
-        }, 2000);
-      } else {
-        $('#sendResult').text('❌ Failed to send: ' + resp).addClass('text-danger fw-bold');
-      }
-    },
-    error: function(xhr, status, error) {
-      hideLoading();
-      $('#sendingProgress').hide();
-      $('#sendResult').text('❌ Network error: ' + error).addClass('text-danger fw-bold');
-      console.error('Send admission error:', status, error);
+    const email = ($('#modal_email').val() || '').trim();
+    if (!email) {
+      $('#sendResult').text('❌ Applicant email is missing. Edit the email cell in the table, then try again.').addClass('text-danger fw-bold');
+      return;
     }
-  });
-});
 
-// Close admission modal
-$('#admissionModal').on('hidden.bs.modal', function () {
-  $('#admissionForm')[0].reset();
-  $('#sendResult').text('');
+    let completeRows = 0;
+    let brokenRow = false;
+    $('#admissionRows .admission-row').each(function () {
+      const uni = ($(this).find('.admission-uni-select').val() || '').trim();
+      const f = $(this).find('.admission-letter-file')[0];
+      const hasFile = f && f.files && f.files.length > 0;
+      if (!uni && !hasFile) {
+        return;
+      }
+      if (uni && hasFile) {
+        completeRows++;
+        return;
+      }
+      brokenRow = true;
+      return false;
+    });
+
+    if (brokenRow) {
+      $('#sendResult').text('❌ Each row needs both a university and a PDF (or leave the row empty).').addClass('text-danger fw-bold');
+      return;
+    }
+    if (completeRows < 1) {
+      $('#sendResult').text('❌ Add at least one university and attach its PDF letter.').addClass('text-danger fw-bold');
+      return;
+    }
+
+    const formData = new FormData(this);
+
+    showLoading();
+    $('#sendingProgress').show();
+
+    $.ajax({
+      url: 'send_admission.php',
+      method: 'POST',
+      data: formData,
+      contentType: false,
+      processData: false,
+      success: function(resp) {
+        hideLoading();
+        $('#sendingProgress').hide();
+        if (resp.trim() === 'ok') {
+          $('#sendResult').text('✅ Admission email sent successfully!').addClass('text-success fw-bold');
+          showSuccessToast('Admission letter(s) sent successfully');
+
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('admissionModal'));
+            modal.hide();
+            $('#admissionForm')[0].reset();
+            $('#sendResult').text('');
+            resetAdmissionRows();
+          }, 2000);
+        } else {
+          $('#sendResult').text('❌ Failed to send: ' + resp).addClass('text-danger fw-bold');
+        }
+      },
+      error: function(xhr, status, error) {
+        hideLoading();
+        $('#sendingProgress').hide();
+        $('#sendResult').text('❌ Network error: ' + error).addClass('text-danger fw-bold');
+        console.error('Send admission error:', status, error);
+      }
+    });
+  });
+
+  $('#admissionModal').on('hidden.bs.modal', function () {
+    $('#admissionForm')[0].reset();
+    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
+    resetAdmissionRows();
+  });
 });
 
 /* =========================================================
