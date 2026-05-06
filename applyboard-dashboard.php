@@ -363,6 +363,11 @@ if (!$tableMissing && $destCol && $stats['total'] > 0) {
         if ($d === '') {
             $d = 'Without Applications';
         }
+        // Exclude Malaysia from dashboard stats (per request)
+        $low = strtolower(trim($d));
+        if ($low === 'malaysia' || $low === 'malasia') {
+            continue;
+        }
         $counts[$d] = ($counts[$d] ?? 0) + 1;
     }
     arsort($counts);
@@ -436,6 +441,7 @@ if (!$tableMissing && $univCol && ($stats['total'] ?? 0) > 0) {
 $displayCols = $tableMissing ? [] : applyboard_display_order($fields);
 if (!$tableMissing) {
     array_unshift($displayCols, 'App #');
+    $displayCols[] = 'Action';
 }
 
 $pageTitle = 'ApplyBoard Applications';
@@ -719,6 +725,105 @@ $pageTitle = 'ApplyBoard Applications';
             color: var(--green);
             font-variant-numeric: tabular-nums;
         }
+
+        /* Sticky right "Action" column (fixed during horizontal scroll) */
+        th.ab-action-col,
+        td.ab-action-col {
+            position: sticky;
+            right: 0;
+            z-index: 6;
+            width: 1%;
+            white-space: nowrap;
+            box-shadow: -10px 0 18px rgba(15, 31, 26, .08);
+        }
+        th.ab-action-col {
+            z-index: 7;
+        }
+        tr:nth-child(even) td.ab-action-col { background: var(--td-alt); }
+        tr:nth-child(odd) td.ab-action-col { background: #fff; }
+
+        .ab-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid var(--border);
+            background: #fff;
+            color: var(--text);
+            padding: 7px 10px;
+            border-radius: 10px;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .ab-btn:hover { border-color: var(--green-light); box-shadow: 0 0 0 3px rgba(30, 92, 74, .12); }
+        .ab-btn-danger { border-color: #f0c7c4; background: #fff5f5; color: #8a1c15; }
+        .ab-btn-danger:hover { border-color: #e6a9a4; box-shadow: 0 0 0 3px rgba(138, 28, 21, .12); }
+
+        .ab-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 31, 26, .45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 18px;
+        }
+        .ab-modal {
+            width: min(520px, 100%);
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid rgba(0,0,0,.08);
+            box-shadow: 0 18px 60px rgba(0,0,0,.25);
+            overflow: hidden;
+        }
+        .ab-modal .hd {
+            padding: 14px 16px;
+            background: linear-gradient(180deg, #236b56 0%, var(--green) 100%);
+            color: #fff;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .ab-modal .bd { padding: 16px; }
+        .ab-modal .ft {
+            padding: 14px 16px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            border-top: 1px solid #e7efea;
+            background: #fbfdfc;
+        }
+        .ab-modal .x {
+            border: none;
+            background: rgba(255,255,255,.18);
+            color: #fff;
+            border-radius: 10px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-weight: 900;
+        }
+        .ab-modal .x:hover { background: rgba(255,255,255,.28); }
+        .ab-help {
+            font-size: 13px;
+            color: var(--muted);
+            margin-top: 6px;
+        }
+        .ab-toast {
+            position: fixed;
+            left: 18px;
+            bottom: 18px;
+            z-index: 60;
+            display: none;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 12px 14px;
+            box-shadow: 0 10px 30px rgba(15, 31, 26, .16);
+            max-width: min(520px, calc(100vw - 36px));
+        }
     </style>
 </head>
 <body class="<?= !$tableMissing ? 'ab-page' : '' ?>" data-total-records="<?= (int) ($stats['total'] ?? 0) ?>" data-student-records="<?= (int) ($stats['student_records'] ?? 0) ?>">
@@ -868,7 +973,7 @@ $pageTitle = 'ApplyBoard Applications';
                 <tr>
                     <?php foreach ($displayCols as $ci => $col): ?>
                         <th
-                            class="th-sort"
+                            class="<?= $col === 'Action' ? 'ab-action-col' : 'th-sort' ?>"
                             data-col-index="<?= (int) $ci ?>"
                             scope="col"
                         ><?= htmlspecialchars($col, ENT_QUOTES, 'UTF-8') ?></th>
@@ -887,6 +992,11 @@ $pageTitle = 'ApplyBoard Applications';
                     $regYear = applyboard_row_year_for_filter($r, $regCol, $updCol);
                     $statusVal = ($statusCol !== null) ? trim((string) ($r[$statusCol] ?? '')) : '';
                     $univVal = $univCol ? trim((string) ($r[$univCol] ?? '')) : '';
+                    $idCol = applyboard_pick_col($fields, ['Student ID', 'student_id'])
+                        ?: applyboard_column_by_name_substrings($fields, ['student id', 'student_id', 'student']);
+                    $studentId = $idCol ? trim((string) ($r[$idCol] ?? '')) : '';
+                    $appIndex = (int) ($r['__app_index'] ?? 1);
+                    $appOf = (int) ($r['__app_of'] ?? 1);
                     ?>
                     <tr
                         data-search="<?= htmlspecialchars($hay, ENT_QUOTES, 'UTF-8') ?>"
@@ -894,14 +1004,30 @@ $pageTitle = 'ApplyBoard Applications';
                         <?= $univCol ? 'data-univ="' . htmlspecialchars($univVal, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
                         <?= ($regCol || $updCol) ? 'data-reg-year="' . htmlspecialchars($regYear, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
                         <?= $statusCol ? 'data-status="' . htmlspecialchars($statusVal, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
+                        <?= $studentId !== '' ? 'data-student-id="' . htmlspecialchars($studentId, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
+                        data-app-index="<?= (int) $appIndex ?>"
+                        data-app-of="<?= (int) $appOf ?>"
                     >
                         <?php foreach ($displayCols as $col): ?>
                             <?php if ($col === 'App #'): ?>
                                 <td class="ab-app-col"><span class="ab-row-ord"><?= (int) $listOrd ?></span></td>
+                            <?php elseif ($col === 'Action'): ?>
+                                <td class="ab-action-col">
+                                    <button
+                                        type="button"
+                                        class="ab-btn ab-btn-edit"
+                                        <?= $studentId === '' ? 'disabled title="Missing Student ID column — cannot edit"' : '' ?>
+                                    ><i class="bi bi-pencil"></i> Edit</button>
+                                    <button
+                                        type="button"
+                                        class="ab-btn ab-btn-danger ab-btn-del"
+                                        <?= $studentId === '' ? 'disabled title="Missing Student ID column — cannot delete"' : '' ?>
+                                    ><i class="bi bi-trash"></i> Delete</button>
+                                </td>
                             <?php elseif ($statusCol && $col === $statusCol): ?>
                                 <td><?= applyboard_status_badge_html((string) ($r[$col] ?? '')) ?></td>
                             <?php else: ?>
-                                <td><?= htmlspecialchars((string) ($r[$col] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td<?= ($destCol && $col === $destCol) ? ' data-col-dest="1"' : '' ?>><?= htmlspecialchars((string) ($r[$col] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                             <?php endif; ?>
                         <?php endforeach; ?>
                     </tr>
@@ -912,6 +1038,37 @@ $pageTitle = 'ApplyBoard Applications';
     </div><!-- .ab-table-dock -->
     <?php endif; ?>
 </div>
+
+<?php if (!$tableMissing): ?>
+<?php
+// Destination edit list (fixed 5 as per screenshot)
+$destEditOpts = ['Canada', 'United States', 'United Kingdom', 'Germany', 'Ireland'];
+?>
+<div class="ab-modal-backdrop" id="abModal">
+    <div class="ab-modal" role="dialog" aria-modal="true" aria-labelledby="abModalTitle">
+        <div class="hd">
+            <div id="abModalTitle">Edit application</div>
+            <button type="button" class="x" id="abModalClose" aria-label="Close">✕</button>
+        </div>
+        <div class="bd">
+            <div class="filter-field">
+                <label for="abEditDest">Destination country</label>
+                <select id="abEditDest">
+                    <?php foreach ($destEditOpts as $d): ?>
+                        <option value="<?= htmlspecialchars($d, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($d, ENT_QUOTES, 'UTF-8') ?></option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="ab-help">Only the 5 existing destination countries (from “Top destinations”).</div>
+            </div>
+        </div>
+        <div class="ft">
+            <button type="button" class="ab-btn" id="abEditCancel">Cancel</button>
+            <button type="button" class="ab-btn" id="abEditSave"><i class="bi bi-check2"></i> Save</button>
+        </div>
+    </div>
+</div>
+<div class="ab-toast" id="abToast"></div>
+<?php endif; ?>
 
 <script>
 (function () {
@@ -1051,6 +1208,140 @@ $pageTitle = 'ApplyBoard Applications';
         });
     });
 
+    // --- Sticky Action column: Edit + Delete ---
+    var modal = document.getElementById('abModal');
+    var modalClose = document.getElementById('abModalClose');
+    var btnCancel = document.getElementById('abEditCancel');
+    var btnSave = document.getElementById('abEditSave');
+    var selDest = document.getElementById('abEditDest');
+    var toast = document.getElementById('abToast');
+    var currentRow = null;
+
+    function showToast(msg, isErr) {
+        if (!toast) return;
+        toast.textContent = msg;
+        toast.style.display = 'block';
+        toast.style.borderColor = isErr ? '#f0c7c4' : '#c5d4cd';
+        toast.style.background = isErr ? '#fff5f5' : '#fff';
+        setTimeout(function () { toast.style.display = 'none'; }, 3200);
+    }
+
+    function openModalForRow(tr) {
+        if (!modal || !selDest) return;
+        currentRow = tr;
+        // preselect current destination if it exists in the 5 options
+        var cur = (tr.getAttribute('data-dest') || '').trim();
+        if (cur) selDest.value = cur;
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+        if (!modal) return;
+        modal.style.display = 'none';
+        currentRow = null;
+    }
+
+    function rowStudentId(tr) {
+        return (tr.getAttribute('data-student-id') || '').trim();
+    }
+    function rowAppIndex(tr) {
+        return parseInt(tr.getAttribute('data-app-index') || '1', 10) || 1;
+    }
+
+    function updateDestinationInRowDom(tr, newDest) {
+        tr.setAttribute('data-dest', newDest);
+        // update the visible td for destination column
+        var td = tr.querySelector('td[data-col-dest="1"]');
+        if (td) td.textContent = newDest;
+    }
+
+    async function postJson(url, payload) {
+        var res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        var txt = await res.text();
+        var data = null;
+        try { data = JSON.parse(txt); } catch (e) { data = { ok: false, error: txt || 'Bad response' }; }
+        if (!res.ok) {
+            throw new Error((data && data.error) ? data.error : ('HTTP ' + res.status));
+        }
+        return data;
+    }
+
+    function onTbodyClick(e) {
+        var t = e.target;
+        if (!t) return;
+        var btn = t.closest ? t.closest('button') : null;
+        if (!btn) return;
+        var tr = btn.closest ? btn.closest('tr') : null;
+        if (!tr) return;
+
+        if (btn.classList.contains('ab-btn-edit')) {
+            openModalForRow(tr);
+            return;
+        }
+        if (btn.classList.contains('ab-btn-del')) {
+            var sid = rowStudentId(tr);
+            if (!sid) return;
+            var idx = rowAppIndex(tr);
+            if (!confirm('Delete this application row? (Student ID: ' + sid + ', App #' + idx + ')')) return;
+
+            postJson('applyboard_application_api.php', {
+                action: 'delete_application',
+                student_id: sid,
+                app_index: idx
+            }).then(function (r) {
+                if (!r || !r.ok) throw new Error((r && r.error) ? r.error : 'Delete failed');
+                tr.remove();
+                applyFilters();
+                showToast('Deleted.');
+                recomputeTopDestinationsFromDom();
+            }).catch(function (err) {
+                showToast('Delete failed: ' + (err && err.message ? err.message : String(err)), true);
+            });
+        }
+    }
+
+    if (tbody) tbody.addEventListener('click', onTbodyClick);
+    if (modalClose) modalClose.addEventListener('click', closeModal);
+    if (btnCancel) btnCancel.addEventListener('click', closeModal);
+    if (modal) modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeModal();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeModal();
+    });
+
+    if (btnSave) btnSave.addEventListener('click', function () {
+        if (!currentRow || !selDest) return;
+        var sid = rowStudentId(currentRow);
+        if (!sid) return;
+        var idx = rowAppIndex(currentRow);
+        var newDest = (selDest.value || '').trim();
+        if (!newDest) return;
+
+        btnSave.disabled = true;
+        postJson('applyboard_application_api.php', {
+            action: 'update_destination',
+            student_id: sid,
+            app_index: idx,
+            destination_country: newDest
+        }).then(function (r) {
+            if (!r || !r.ok) throw new Error((r && r.error) ? r.error : 'Update failed');
+            updateDestinationInRowDom(currentRow, newDest);
+            applyFilters();
+            showToast('Saved.');
+            closeModal();
+            recomputeTopDestinationsFromDom();
+        }).catch(function (err) {
+            showToast('Save failed: ' + (err && err.message ? err.message : String(err)), true);
+        }).finally(function () {
+            btnSave.disabled = false;
+        });
+    });
+
     if (btnReset) {
         btnReset.addEventListener('click', function () {
             searchInput.value = '';
@@ -1077,7 +1368,31 @@ $pageTitle = 'ApplyBoard Applications';
         applyFilters();
     });
 
+    function recomputeTopDestinationsFromDom() {
+        var dqEl = document.getElementById('destQuick');
+        if (!dqEl) return;
+        var counts = {};
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            var d = (tr.getAttribute('data-dest') || '').trim();
+            if (!d) d = 'Without Applications';
+            var low = d.toLowerCase();
+            if (low === 'malaysia' || low === 'malasia') return;
+            counts[d] = (counts[d] || 0) + 1;
+        });
+        // sort desc by count
+        var items = Object.keys(counts).map(function (k) { return [k, counts[k]]; });
+        items.sort(function (a, b) { return (b[1] - a[1]) || String(a[0]).localeCompare(String(b[0])); });
+        items = items.slice(0, 12);
+        dqEl.innerHTML = items.map(function (it) {
+            var name = it[0];
+            var c = it[1];
+            var safeName = String(name).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+            return '<span data-dest="' + safeName + '" title="Click to filter">' + safeName + ' (' + c + ')</span>';
+        }).join('');
+    }
+
     applyFilters();
+    recomputeTopDestinationsFromDom();
 })();
 </script>
 </body>
