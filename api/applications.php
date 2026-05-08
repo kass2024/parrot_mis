@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/../helpers/db.php';
+require_once __DIR__ . '/../helpers/datetime_utc.php';
 require_once "../helpers/response.php";
 require_once "../helpers/role.php";
 
@@ -313,7 +314,7 @@ $data = array_map(function ($r) {
 
 
         "meta" => [
-            "created_at" => $r["created_at"],
+            "created_at" => pcvc_mysql_utc_to_iso8601_z($r["created_at"] ?? null) ?? ($r["created_at"] ?? null),
             "is_read"    => (bool)$r["is_read"]
         ]
     ];
@@ -670,8 +671,8 @@ foreach ($studyChoicesForJobs as $choice) {
 
      "meta" => [
     "application_id" => $app['application_id'],
-    "created_at" => $app['created_at'],
-    "updated_at" => $app['updated_at'],
+    "created_at" => pcvc_mysql_utc_to_iso8601_z($app['created_at'] ?? null) ?? ($app['created_at'] ?? null),
+    "updated_at" => pcvc_mysql_utc_to_iso8601_z($app['updated_at'] ?? null) ?? ($app['updated_at'] ?? null),
     "is_read"    => 1,
     "jobs_created" => $jobsCreated, // 👈 ADD THIS
     "can_delete_application" => $canDeleteApplicationMeta
@@ -718,6 +719,17 @@ if ($action === 'journey' && !empty($_GET['id'])) {
     $stmt->execute();
 
     $jobs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+
+    $jobs = array_map(static function (array $row): array {
+        if (array_key_exists('created_at', $row)) {
+            $iso = pcvc_mysql_utc_to_iso8601_z($row['created_at'] !== null ? (string) $row['created_at'] : null);
+            if ($iso !== null) {
+                $row['created_at'] = $iso;
+            }
+        }
+        return $row;
+    }, $jobs);
 
     jsonResponse($jobs);
     exit;

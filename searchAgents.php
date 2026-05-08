@@ -18,15 +18,15 @@ $sql = "
     email,
     full_name
 FROM admins
-WHERE role IN ('agent', 'staff', 'superadmin', 'standard')
-  AND (
+WHERE (
         full_name LIKE ?
      OR first_name LIKE ?
      OR last_name LIKE ?
      OR email LIKE ?
+     OR username LIKE ?
   )
 ORDER BY full_name ASC
-LIMIT 10
+LIMIT 50
 
 ";
 
@@ -37,7 +37,7 @@ if (!$stmt) {
     exit;
 }
 
-$stmt->bind_param("ssss", $search, $search, $search, $search);
+$stmt->bind_param("sssss", $search, $search, $search, $search, $search);
 $stmt->execute();
 
 $result = $stmt->get_result();

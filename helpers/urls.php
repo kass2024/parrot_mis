@@ -5,9 +5,9 @@ declare(strict_types=1);
  * Compute the application base path dynamically.
  *
  * Examples:
- * - Local XAMPP:   /parrot_mis/student/index.php  -> base "/parrot_mis"
- * - cPanel root:   /student/index.php            -> base ""
- * - API endpoint:  /parrot_mis/api/x.php         -> base "/parrot_mis"
+ * - Local XAMPP:   /Xander/student/index.php  -> base "/Xander"
+ * - cPanel root:   /student/index.php        -> base ""
+ * - API endpoint:  /Xander/api/x.php         -> base "/Xander"
  */
 function pcvc_app_base_path(): string
 {
@@ -22,7 +22,6 @@ function pcvc_app_base_path(): string
         }
     }
 
-    // Fallback: directory of script (e.g. /parrot_mis)
     $dir = rtrim(dirname($sn), '/');
     return $dir === '/' ? '' : $dir;
 }

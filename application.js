@@ -28,6 +28,54 @@ const steps = [...document.querySelectorAll(".step")];
 const bars  = [...document.querySelectorAll(".progress-step span")];
 const form  = document.getElementById("applicationForm");
 
+function getErrorMessage(err, fallback = "Something went wrong. Please try again.") {
+  if (err == null) return fallback;
+  if (typeof err === "string") {
+    const s = err.trim();
+    return s !== "" ? s : fallback;
+  }
+  const m = err.message;
+  if (typeof m === "string") {
+    const t = m.trim();
+    if (t !== "") return t;
+  }
+  return fallback;
+}
+
+function showApplicationSaveError(message, options = {}) {
+  const msg = typeof message === "string" && message.trim() !== "" ? message.trim() : getErrorMessage(message);
+  const modalEl = document.getElementById("applicationSaveErrorModal");
+  if (!modalEl || typeof bootstrap === "undefined" || !bootstrap.Modal) {
+    window.alert(msg);
+    return;
+  }
+  const titleEl = modalEl.querySelector(".modal-title");
+  const bodyEl = modalEl.querySelector(".application-save-error-body");
+  const defaultTitle = titleEl ? titleEl.textContent.trim() : "";
+  if (titleEl && options.title) titleEl.textContent = options.title;
+  if (bodyEl) bodyEl.textContent = msg;
+  const inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modalEl.addEventListener(
+    "hidden.bs.modal",
+    function resetTitle() {
+      if (titleEl && defaultTitle) titleEl.textContent = defaultTitle;
+      modalEl.removeEventListener("hidden.bs.modal", resetTitle);
+    },
+    { once: true }
+  );
+  inst.show();
+}
+
+function syncApplicationIdToForm(id) {
+  if (id == null || id === "") return;
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 0) return;
+  currentApplicationId = n;
+  window.currentApplicationId = n;
+  const hid = document.querySelector('input[name="application_id"]');
+  if (hid) hid.value = String(n);
+}
+
 function showStep(index) {
   steps.forEach(s => s.classList.remove("active"));
   bars.forEach(b => b.classList.remove("active"));
@@ -78,7 +126,7 @@ document.getElementById("nextBtn").addEventListener("click", async () => {
     if (step === steps.length - 1) {
 
       if (!validateRequiredUploads()) return;
-      if (!validateRequiredAgent()) return;
+      if (!(await validateRequiredAgent())) return;
 
       await submitForm();
       return;
@@ -93,7 +141,7 @@ document.getElementById("nextBtn").addEventListener("click", async () => {
 
   } catch (err) {
     console.error("Next step failed:", err);
-    alert("Failed to save your data. Please try again.");
+    showApplicationSaveError(getErrorMessage(err, "Failed to save your data. Please try again."));
   } finally {
     isNavigating = false;
   }
@@ -151,7 +199,12 @@ async function shouldRedirectToKorea() {
 const regionsSelect     = document.getElementById("regions");
 const studyChoicesWrap  = document.getElementById("studyChoices");
 const studyEmpty        = document.getElementById("studyEmpty");
+const studyEmptyText    = document.getElementById("studyEmptyText");
 const studyTemplate     = document.getElementById("studyChoiceTemplate");
+const studyLevelRowTemplate = document.getElementById("studyLevelRowTemplate");
+const addUniversitySelect = document.getElementById("addUniversitySelect");
+const studyAddUniversityPanel = document.getElementById("studyAddUniversityPanel");
+const btnAddUniversity = document.getElementById("btnAddUniversity");
 
 /* OLD ELEMENTS (KEEP – DO NOT REMOVE) */
 const regionSelect       = document.getElementById("region");
@@ -183,12 +236,14 @@ function initCountryPlaceholders() {
     // Keep disabled until countries load
     select.disabled = true;
 
-    // Init Select2 with correct placeholder
+    // Init Select2 with correct placeholder (search always on for long country lists)
     $(select).select2({
       theme: "bootstrap-5",
       width: "100%",
       placeholder: placeholder,
-      allowClear: true
+      allowClear: true,
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
     });
   });
 }
@@ -227,6 +282,54 @@ async function loadCountries() {
 
 
 /* =====================================================
+   SELECT2: SEARCHABLE DROPDOWNS (FORM + ADD UNIVERSITY)
+===================================================== */
+function initApplicationFormSmartSelects() {
+  const form = document.getElementById("applicationForm");
+  if (!form) return;
+
+  $(form).find("select.form-select").each(function () {
+    const $el = $(this);
+    const id = $el.attr("id");
+    if (id === "regions" || id === "addUniversitySelect" || id === "searchLevel") return;
+    if ($el.hasClass("country-select")) return;
+    if ($el.closest("#studyChoices").length) return;
+    if ($el.closest("template").length) return;
+    if ($el.hasClass("select2-hidden-accessible")) return;
+
+    const ph = ($el.find('option[value=""]').first().text() || "").trim();
+    const required = $el.prop("required");
+    const multiple = $el.prop("multiple");
+
+    $el.select2({
+      theme: "bootstrap-5",
+      width: "100%",
+      placeholder: ph || "Select",
+      allowClear: !required && !multiple,
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
+    });
+  });
+}
+
+function initAddUniversitySelect2() {
+  const $el = $("#addUniversitySelect");
+  if (!$el.length) return;
+  if ($el.hasClass("select2-hidden-accessible")) {
+    $el.select2("destroy");
+  }
+  const ph = $el.attr("data-placeholder") || "Choose a university…";
+  $el.select2({
+    theme: "bootstrap-5",
+    width: "100%",
+    placeholder: ph,
+    allowClear: true,
+    minimumResultsForSearch: 0,
+    dropdownParent: $(document.body)
+  });
+}
+
+/* =====================================================
    SELECT2 INITIALIZATION (GLOBAL SAFE)
 ===================================================== */
 $(function () {
@@ -245,6 +348,9 @@ $regions.select2({
   placeholder: 'Select one or more regions',
   closeOnSelect: false,
   allowClear: false,
+  /* No search field in dropdown or inline (avoids text cursor; UI uses custom picker) */
+  minimumResultsForSearch: Infinity,
+  dropdownParent: $(document.body),
 
   templateSelection: function (data) {
     if (!data.id) return data.text;
@@ -285,15 +391,59 @@ $regions.select2({
 }
 
 
-  if (regionSelect) $('#region').select2({ theme: 'bootstrap-5', width: '100%' });
-  if (universitySelect) $('#universities').select2({ theme: 'bootstrap-5', width: '100%' });
-  if (programLevelSelect) $('#programLevel').select2({ theme: 'bootstrap-5', width: '100%' });
-  if (programsSelect) $('#programs').select2({ theme: 'bootstrap-5', width: '100%' });
+  if (regionSelect) {
+    $('#region').select2({
+      theme: 'bootstrap-5',
+      width: '100%',
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
+    });
+  }
+  if (universitySelect) {
+    $('#universities').select2({
+      theme: 'bootstrap-5',
+      width: '100%',
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
+    });
+  }
+  if (programLevelSelect) {
+    $('#programLevel').select2({
+      theme: 'bootstrap-5',
+      width: '100%',
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
+    });
+  }
+  if (programsSelect) {
+    $('#programs').select2({
+      theme: 'bootstrap-5',
+      width: '100%',
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
+    });
+  }
 /* ✅ COUNTRY SELECTS – CORRECT PLACE */
 if (countrySelects.length) {
   initCountryPlaceholders(); // placeholders FIRST
   loadCountries();           // data SECOND
 }
+
+  /* Optional study filter: expanded on tablet+, compact on phone */
+  (function syncStudyFilterDetails() {
+    const el = document.querySelector(".study-filter-details");
+    if (!el || typeof window.matchMedia !== "function") return;
+    const mq = window.matchMedia("(min-width: 768px)");
+    const apply = () => {
+      el.open = mq.matches;
+    };
+    if (mq.addEventListener) mq.addEventListener("change", apply);
+    else if (mq.addListener) mq.addListener(apply);
+    apply();
+  })();
+
+  /* All static form dropdowns (gender, yes/no, finance, referral, etc.) */
+  initApplicationFormSmartSelects();
 });
 
 /* =====================================================
@@ -317,6 +467,10 @@ if (countrySelects.length) {
       $('#regions').trigger("change.select2");
     }
 
+    updateStudyPanelVisibility();
+    await refreshAddUniversitySelect();
+    updateStudyEmptyMessage();
+
     // Old Step 1 (kept for compatibility)
     if (regionSelect) {
       resetSelect(regionSelect, "Select Region", false);
@@ -335,171 +489,295 @@ if (countrySelects.length) {
 })();
 
 /* =====================================================
-   STEP 1 – REGION SELECTION → STUDY BLOCKS
+   STEP 1 – REGION → ADD UNIVERSITIES → LEVEL ROWS
 ===================================================== */
-if (regionsSelect && studyChoicesWrap && studyTemplate) {
-
-  $('#regions').on('change', async function () {
-    const regionIds = $(this).val() || [];
-
-    studyChoicesWrap.innerHTML = "";
-    studyEmpty.style.display = regionIds.length ? "none" : "block";
-
-    for (const regionId of regionIds) {
-      await loadUniversitiesForRegion(regionId);
-    }
+function getExistingUniversityIds() {
+  const ids = new Set();
+  document.querySelectorAll("#studyChoices .study-choice .university").forEach(sel => {
+    const id = Number(sel.value);
+    if (id) ids.add(id);
   });
+  return ids;
 }
 
-/* =====================================================
-   LOAD UNIVERSITIES PER REGION
-===================================================== */
-async function loadUniversitiesForRegion(regionId) {
-  const universities = await fetch(
-    `${API}?action=universities&region_id=${regionId}`
-  ).then(r => r.json());
-
-  universities.forEach(u => createStudyChoice(regionId, u));
+function destroySelect2IfAny($el) {
+  if ($el && $el.length && $el.hasClass("select2-hidden-accessible")) {
+    $el.select2("destroy");
+  }
 }
 
-/* =====================================================
-   CREATE STUDY BLOCK (UNIVERSITY + LEVEL + PROGRAM)
-===================================================== */
-function createStudyChoice(regionId, university) {
+function teardownStudyCard(block) {
+  $(block).find(".program").each(function () {
+    destroySelect2IfAny($(this));
+  });
+  $(block).find(".level").each(function () {
+    destroySelect2IfAny($(this));
+  });
+  destroySelect2IfAny($(block).find(".university"));
+}
+
+function updateStudyPanelVisibility() {
+  const regionIds = $("#regions").val() || [];
+  if (studyAddUniversityPanel) {
+    studyAddUniversityPanel.style.display = regionIds.length ? "" : "none";
+  }
+}
+
+function updateStudyEmptyMessage() {
+  if (!studyEmpty || !studyEmptyText) return;
+
+  const regionIds = $("#regions").val() || [];
+  const hasCards = studyChoicesWrap && studyChoicesWrap.children.length > 0;
+  const noRegion = studyEmpty.dataset.msgNoRegion || "";
+  const addUni = studyEmpty.dataset.msgAddUni || "";
+
+  if (!regionIds.length) {
+    studyEmpty.style.display = "block";
+    studyEmptyText.textContent = noRegion;
+  } else if (!hasCards) {
+    studyEmpty.style.display = "block";
+    studyEmptyText.textContent = addUni;
+  } else {
+    studyEmpty.style.display = "none";
+  }
+}
+
+async function refreshAddUniversitySelect() {
+  if (!addUniversitySelect) return;
+
+  if ($(addUniversitySelect).hasClass("select2-hidden-accessible")) {
+    $(addUniversitySelect).select2("destroy");
+  }
+
+  const ph =
+    addUniversitySelect.getAttribute("data-placeholder") ||
+    "Choose a university…";
+
+  addUniversitySelect.innerHTML = "";
+  addUniversitySelect.add(new Option(ph, ""));
+
+  const regionIds = $("#regions").val() || [];
+  if (!regionIds.length) {
+    initAddUniversitySelect2();
+    return;
+  }
+
+  const existing = getExistingUniversityIds();
+  const seenUni = new Set();
+
+  for (const rid of regionIds) {
+    let universities = [];
+    try {
+      const res = await fetch(`${API}?action=universities&region_id=${rid}`);
+      universities = await res.json();
+    } catch (e) {
+      console.error(e);
+      continue;
+    }
+    if (!Array.isArray(universities)) continue;
+
+    universities.forEach(u => {
+      const uid = Number(u.id);
+      if (!uid || existing.has(uid) || seenUni.has(uid)) return;
+      seenUni.add(uid);
+      const opt = new Option(u.name, String(uid));
+      opt.dataset.regionId = String(rid);
+      addUniversitySelect.add(opt);
+    });
+  }
+
+  initAddUniversitySelect2();
+}
+
+function appendLevelProgramRow(levelRowsWrap, university) {
+  if (!studyLevelRowTemplate) return;
+
+  const row = studyLevelRowTemplate.content.cloneNode(true).firstElementChild;
+  const levelSelect = row.querySelector(".level");
+  const programSelect = row.querySelector(".program");
+  const btnRemoveRow = row.querySelector(".btn-remove-row");
+
+  levelSelect.innerHTML = "";
+  levelSelect.add(new Option("Select level", ""));
+  programSelect.innerHTML = "";
+  programSelect.multiple = true;
+  programSelect.disabled = true;
+
+  fetch(`${API}?action=program_levels&university_id=${university.id}`)
+    .then(r => r.json())
+    .then(levels => {
+      levelSelect.innerHTML = "";
+      levelSelect.add(new Option("Select level", ""));
+      if (Array.isArray(levels)) {
+        levels.forEach(l => {
+          const opt = new Option(l.name, l.id);
+          opt.dataset.name = l.name;
+          levelSelect.add(opt);
+        });
+      }
+
+      $(levelSelect).select2({
+        theme: "bootstrap-5",
+        width: "100%",
+        placeholder: "Select level",
+        allowClear: true,
+        minimumResultsForSearch: 0,
+        dropdownParent: $(document.body)
+      });
+
+      $(levelSelect).off("change.levelRow").on("change.levelRow", async function () {
+        const levelId = this.value;
+
+        destroySelect2IfAny($(programSelect));
+
+        programSelect.innerHTML = "";
+        programSelect.disabled = true;
+
+        if (!levelId) {
+          programSelect.multiple = true;
+          if (window.buildStudyCart) window.buildStudyCart();
+          return;
+        }
+
+        programSelect.add(new Option("Loading programs…", ""));
+        programSelect.disabled = true;
+
+        try {
+          const res = await fetch(
+            `${API}?action=programs&university_id=${university.id}&program_level_id=${levelId}`
+          );
+          const text = await res.text();
+          if (!text) throw new Error("Empty response");
+
+          const programs = JSON.parse(text);
+          if (!Array.isArray(programs)) throw new Error("Invalid programs");
+
+          programSelect.innerHTML = "";
+
+          programs.forEach(p => {
+            programSelect.add(new Option(p.program_name, p.id));
+          });
+
+          programSelect.disabled = false;
+
+          $(programSelect).select2({
+            theme: "bootstrap-5",
+            width: "100%",
+            placeholder: "Select one or more programs",
+            closeOnSelect: false,
+            allowClear: true,
+            minimumResultsForSearch: 0,
+            dropdownParent: $(document.body)
+          });
+        } catch (err) {
+          console.error("Failed to load programs", err);
+          programSelect.innerHTML = "";
+          programSelect.add(new Option("Failed to load programs", ""));
+          programSelect.disabled = true;
+        }
+
+        if (window.buildStudyCart) window.buildStudyCart();
+      });
+    })
+    .catch(err => console.error("Failed to load program levels", err));
+
+  btnRemoveRow.addEventListener("click", () => {
+    destroySelect2IfAny($(levelSelect));
+    destroySelect2IfAny($(programSelect));
+    row.remove();
+    if (window.buildStudyCart) window.buildStudyCart();
+    updateStudyEmptyMessage();
+  });
+
+  levelRowsWrap.appendChild(row);
+}
+
+function createUniversityStudyCard(regionId, university) {
+  if (!studyTemplate || !studyLevelRowTemplate) return;
 
   const block = studyTemplate.content.cloneNode(true).firstElementChild;
 
-  const regionInput   = block.querySelector(".region-id");
-  const regionBadge   = block.querySelector(".region-badge");
-  const uniSelect     = block.querySelector(".university");
-  const levelSelect   = block.querySelector(".level");
-  const programSelect = block.querySelector(".program");
-  const removeBtn     = block.querySelector(".btn-remove");
+  const regionInput = block.querySelector(".region-id");
+  const regionBadge = block.querySelector(".region-badge");
+  const uniSelect = block.querySelector(".university");
+  const levelRowsWrap = block.querySelector(".study-level-rows");
+  const btnAddLevel = block.querySelector(".btn-add-level");
+  const removeUniBtn = block.querySelector(".btn-remove-uni");
 
-  // Region info
   regionInput.value = regionId;
   regionBadge.textContent =
     $('#regions option[value="' + regionId + '"]').text();
 
-  // University (fixed but searchable)
+  uniSelect.innerHTML = "";
   uniSelect.add(new Option(university.name, university.id, true, true));
   uniSelect.disabled = true;
+
   $(uniSelect).select2({
-    theme: 'bootstrap-5',
-    width: '100%',
-    minimumResultsForSearch: 0
-  });
-
-  // Load program levels
-  fetch(`${API}?action=program_levels&university_id=${university.id}`)
-    .then(r => r.json())
-    .then(levels => {
-      resetSelect(levelSelect, "Select level", false);
-      levels.forEach(l =>
-        levelSelect.add(new Option(l.name, l.id))
-      );
-
-      $(levelSelect).select2({
-        theme: 'bootstrap-5',
-        width: '100%',
-        minimumResultsForSearch: 0
-      });
-    });
-/* =====================================================
-   PROGRAM LEVEL → PROGRAMS (FIXED FOR SELECT2)
-===================================================== */
-
-$(levelSelect).off("change").on("change", async function () {
-
-  const levelId = this.value;
-
-  /* =============================
-     RESET PROGRAM SELECT
-  ============================== */
-
-  // Destroy Select2 safely if exists
-  if ($(programSelect).hasClass("select2-hidden-accessible")) {
-    $(programSelect).select2("destroy");
-  }
-
-  // Clear & disable
-  programSelect.innerHTML = "";
-  programSelect.add(new Option("Loading programs…", ""));
-  programSelect.disabled = true;
-
-  if (!levelId) return;
-
-  /* =============================
-     LOAD PROGRAMS
-  ============================== */
-
-  let programs = [];
-
-try {
-  const res = await fetch(
-    `${API}?action=programs&university_id=${university.id}&program_level_id=${levelId}`
-  );
-
-  const text = await res.text();
-
-  if (!text) {
-    throw new Error("Empty response");
-  }
-
-  try {
-    programs = JSON.parse(text);
-  } catch (e) {
-    console.error("Non-JSON response from server:", text);
-    throw new Error("Invalid JSON");
-  }
-
-  if (!Array.isArray(programs)) {
-    throw new Error("Programs is not an array");
-  }
-
-} catch (err) {
-  console.error("Failed to load programs", err);
-
-  programSelect.innerHTML = "";
-  programSelect.add(new Option("Failed to load programs", ""));
-  programSelect.disabled = true;
-
-  return;
-}
-
-
-  /* =============================
-     REBUILD PROGRAM SELECT
-  ============================== */
-
-  programSelect.innerHTML = "";
-  programSelect.add(new Option("Select program", ""));
-
-  programs.forEach(p => {
-    programSelect.add(new Option(p.program_name, p.id));
-  });
-
-  // Enable BEFORE Select2 init
-  programSelect.disabled = false;
-
-  /* =============================
-     INIT SELECT2 (FRESH INSTANCE)
-  ============================== */
-
-  $(programSelect).select2({
     theme: "bootstrap-5",
     width: "100%",
-    placeholder: "Select program",
-    allowClear: true,
-    minimumResultsForSearch: 0
+    minimumResultsForSearch: 0,
+    dropdownParent: $(document.body)
   });
 
-});
+  btnAddLevel.addEventListener("click", () => {
+    appendLevelProgramRow(levelRowsWrap, university);
+    if (window.buildStudyCart) window.buildStudyCart();
+  });
 
-  // Remove single university block
-  removeBtn.onclick = () => block.remove();
+  removeUniBtn.addEventListener("click", () => {
+    teardownStudyCard(block);
+    block.remove();
+    refreshAddUniversitySelect();
+    updateStudyEmptyMessage();
+    if (window.buildStudyCart) window.buildStudyCart();
+  });
 
   studyChoicesWrap.appendChild(block);
+
+  appendLevelProgramRow(levelRowsWrap, university);
+
+  refreshAddUniversitySelect();
+  updateStudyEmptyMessage();
+}
+
+if (regionsSelect && studyChoicesWrap && studyTemplate) {
+  $("#regions").on("change", async function () {
+    [...studyChoicesWrap.children].forEach(child => {
+      teardownStudyCard(child);
+      child.remove();
+    });
+
+    updateStudyPanelVisibility();
+    await refreshAddUniversitySelect();
+    updateStudyEmptyMessage();
+    if (window.buildStudyCart) window.buildStudyCart();
+  });
+}
+
+if (btnAddUniversity && addUniversitySelect) {
+  btnAddUniversity.addEventListener("click", () => {
+    const $sel = $("#addUniversitySelect");
+    const val = $sel.val();
+    if (!val) return;
+
+    const $opt = $sel.find("option:selected");
+    const optEl = $opt.get(0);
+    let regionId = null;
+    if (optEl) {
+      regionId =
+        (optEl.dataset && optEl.dataset.regionId) ||
+        optEl.getAttribute("data-region-id");
+    }
+    const university = {
+      id: Number(val),
+      name: $opt.text()
+    };
+
+    if (!regionId || !university.id) return;
+
+    createUniversityStudyCard(String(regionId), university);
+    $sel.val(null).trigger("change");
+  });
 }
 
 /* =====================================================
@@ -509,14 +787,18 @@ function removeRegionBlocks(regionId) {
   [...studyChoicesWrap.children].forEach(block => {
     const input = block.querySelector(".region-id");
     if (input && input.value === regionId) {
+      teardownStudyCard(block);
       block.remove();
     }
   });
 
-  if (!studyChoicesWrap.children.length) {
-    studyEmpty.style.display = "block";
-  }
+  refreshAddUniversitySelect();
+  updateStudyEmptyMessage();
+  if (window.buildStudyCart) window.buildStudyCart();
 }
+
+window.refreshAddUniversitySelect = refreshAddUniversitySelect;
+window.updateStudyEmptyMessage = updateStudyEmptyMessage;
 
 /* =====================================================
    STEP 1 VALIDATION – AT LEAST ONE PROGRAM SELECTED
@@ -525,10 +807,13 @@ function validateStudyChoices() {
   let hasAtLeastOneProgram = false;
 
   document.querySelectorAll(".study-choice").forEach(block => {
-    const program = block.querySelector(".program");
-    if (program && program.value) {
-      hasAtLeastOneProgram = true;
-    }
+    block.querySelectorAll(".study-level-row .program").forEach(programEl => {
+      const vals = $(programEl).val();
+      const ids = Array.isArray(vals) ? vals : vals ? [vals] : [];
+      if (ids.length && ids.some(id => id && String(id).trim())) {
+        hasAtLeastOneProgram = true;
+      }
+    });
   });
 
   if (!hasAtLeastOneProgram) {
@@ -543,24 +828,58 @@ function validateStudyChoices() {
 ===================================================== */
 function collectStudyChoices() {
   const choices = [];
+  const seen = new Set();
 
-  document.querySelectorAll('.study-choice').forEach(block => {
-    const regionId  = block.querySelector('.region-id')?.value;
-    const universityId = block.querySelector('.university')?.value;
-    const levelId   = block.querySelector('.level')?.value;
-    const programId = block.querySelector('.program')?.value;
+  document.querySelectorAll(".study-choice").forEach(block => {
+    const regionId = block.querySelector(".region-id")?.value;
+    const universityId = block.querySelector(".university")?.value;
 
-    if (regionId && universityId && levelId && programId) {
-      choices.push({
-        region_id: Number(regionId),
-        university_id: Number(universityId),
-        program_level_id: Number(levelId),
-        program_id: Number(programId)
+    block.querySelectorAll(".study-level-row").forEach(row => {
+      const levelId = row.querySelector(".level")?.value;
+      const programSelect = row.querySelector(".program");
+      if (!programSelect || !levelId) return;
+
+      let programIds = $(programSelect).val();
+      if (!Array.isArray(programIds)) {
+        programIds = programIds ? [programIds] : [];
+      }
+
+      programIds.forEach(programId => {
+        if (!regionId || !universityId || !levelId || !programId) return;
+
+        const key = `${regionId}|${universityId}|${levelId}|${programId}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        choices.push({
+          region_id: Number(regionId),
+          university_id: Number(universityId),
+          program_level_id: Number(levelId),
+          program_id: Number(programId)
+        });
       });
-    }
+    });
   });
 
   return choices;
+}
+
+/* =====================================================
+   SERVER VALIDATION FEEDBACK (e.g. duplicate email)
+===================================================== */
+function applyServerFieldErrors(fields) {
+  if (!fields || typeof fields !== "object") return;
+  form.querySelectorAll(".is-invalid").forEach(el => el.classList.remove("is-invalid"));
+  let first = null;
+  Object.keys(fields).forEach(name => {
+    const el = form.querySelector(`[name="${CSS.escape(name)}"]`);
+    if (el) {
+      el.classList.add("is-invalid");
+      el.title = String(fields[name]);
+      if (!first) first = el;
+    }
+  });
+  if (first) first.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 /* =====================================================
@@ -622,16 +941,18 @@ if (currentApplicationId) {
        VALIDATE RESPONSE
     ============================== */
     if (!res.ok) {
-      throw new Error(data.debug || data.message || "Server error");
+      applyServerFieldErrors(data.fields);
+      throw new Error(data.message || data.debug || "Server error");
     }
 
    if (data.status !== "success") {
-  throw new Error(data.debug || data.message || "Save failed");
+      applyServerFieldErrors(data.fields);
+  throw new Error(data.message || data.debug || "Save failed");
 }
 
 /* ✅ STORE APPLICATION ID */
 if (data.application_id) {
-  currentApplicationId = data.application_id;
+  syncApplicationIdToForm(data.application_id);
 }
 
 return true;
@@ -661,21 +982,32 @@ if (currentApplicationId) {
 
 
     const res = await fetch(API, { method: "POST", body: fd });
-    const data = await res.json();
+    const rawText = await res.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      showApplicationSaveError("Submission error. Please try again.");
+      return;
+    }
 
     if (data.status === "success") {
   alert("Application submitted successfully");
 
   /* ✅ RESET STATE FOR NEXT PERSON */
   currentApplicationId = null;
+  window.currentApplicationId = null;
+  const hid = document.querySelector('input[name="application_id"]');
+  if (hid) hid.value = "";
 
   location.reload();
 }
  else {
-      alert(data.message || "Submission failed");
+      applyServerFieldErrors(data.fields);
+      showApplicationSaveError(getErrorMessage({ message: data.message || data.debug }, "Submission failed"));
     }
-  } catch {
-    alert("Submission error. Please try again.");
+  } catch (err) {
+    showApplicationSaveError(getErrorMessage(err, "Submission error. Please try again."));
   }
 }
 
@@ -703,11 +1035,12 @@ function validateRequiredUploads() {
 /* =====================================================
    REQUIRED AGENT VALIDATION (FINAL STEP ONLY)
 ===================================================== */
-function validateRequiredAgent() {
+async function validateRequiredAgent() {
 
   const first = document.getElementById("agent_first_name");
   const last  = document.getElementById("agent_last_name");
   const email = document.getElementById("agent_email");
+  const referral = document.getElementById("referral_source");
 
   // Safety: elements must exist
   if (!first || !last || !email) {
@@ -715,7 +1048,29 @@ function validateRequiredAgent() {
     return false;
   }
 
-  // Must be auto-filled (readonly + value)
+  /* Online / website: ensure default superadmin is applied before final check */
+  if (referral && referral.value === "online") {
+    if (
+      !first.value.trim() ||
+      !last.value.trim() ||
+      !email.value.trim()
+    ) {
+      try {
+        const res = await fetch("getDefaultOnlineAgent.php", {
+          cache: "no-store"
+        });
+        const agent = await res.json();
+        if (agent && agent.email) {
+          first.value = agent.first_name || "";
+          last.value = agent.last_name || "";
+          email.value = agent.email || "";
+        }
+      } catch (e) {
+        console.error("Default online agent fetch failed:", e);
+      }
+    }
+  }
+
   if (
     !first.value.trim() ||
     !last.value.trim() ||
@@ -725,7 +1080,6 @@ function validateRequiredAgent() {
       "Please select an authorized agent before submitting your application."
     );
 
-    // UX: scroll user to agent section
     first.scrollIntoView({
       behavior: "smooth",
       block: "center"
@@ -736,100 +1090,235 @@ function validateRequiredAgent() {
 
   return true;
 }
-
 /* =====================================================
-   REQUIRED FIELD VALIDATION – STEPS 1 TO 5 ONLY
+REQUIRED FIELD VALIDATION – STEPS 1 TO 5 (SMART FINAL)
 ===================================================== */
 function validateSteps2to6() {
 
-  // step index reference:
-  // 0 = study choices
-  // 1 → 5 = required fields
-  // 6 = uploads
+if (step < 1 || step > 5) return true;
 
-  if (step < 1 || step > 5) {
-    return true;
-  }
+const currentStep = steps[step];
+if (!currentStep) return true;
 
-  const currentStep = steps[step];
-  if (!currentStep) return true;
+let isValid = true;
+let firstInvalid = null;
 
-  let isValid = true;
-  let firstInvalid = null;
+const fields = currentStep.querySelectorAll("input, select, textarea");
 
-  const fields = currentStep.querySelectorAll(
-    "input, select, textarea"
-  );
+fields.forEach(field => {
 
-  fields.forEach(field => {
+if (field.disabled) return;
 
-    if (field.disabled) return;
-    if (!field.hasAttribute("required")) return;
+const value = field.value?.trim();
+const name  = field.name;
 
-    const value = field.value?.trim();
+/* ===============================
+   REQUIRED CHECK (ALL STEPS)
+=============================== */
+if (field.hasAttribute("required") && !value) {
+  invalidate(field);
+  isValid = false;
+  if (!firstInvalid) firstInvalid = field;
+  return;
+}
 
-    if (!value) {
+/* ===============================
+   STEP 2 STRICT VALIDATION ONLY
+=============================== */
+if (step === 1 && value) {
+
+  // NAME - Use our comprehensive validation
+  if (name === "first_name" || name === "last_name") {
+    // Check for meaningless patterns
+    const meaninglessPatterns = [
+      /^(test|demo|sample|asdf|qwer|123|abc|xyz|null|none|na|n\/a)$/i,
+      /^.{1,2}$/, // Too short
+      /^[^a-zA-Z]+$/, // No letters
+      /^(.)\1+$/, // All same character
+      /^[0-9\s\-_\.]+$/, // Only numbers/symbols
+    ];
+    
+    let isMeaningless = false;
+    for (const pattern of meaninglessPatterns) {
+      if (pattern.test(value)) {
+        isMeaningless = true;
+        break;
+      }
+    }
+    
+    if (isMeaningless || !/^[A-Za-z\u00C0-\u024F\s'\-\.]{2,50}$/.test(value)) {
+      invalidate(field);
       isValid = false;
-      field.classList.add("is-invalid");
-
-      if (!firstInvalid) {
-        firstInvalid = field;
-      }
-    } else {
-      field.classList.remove("is-invalid");
+      if (!firstInvalid) firstInvalid = field;
+      return;
     }
-  });
-
-  // 🔴 HARD STOP — NO ALERT, NO STEP CHANGE
-  if (!isValid) {
-    // Scroll to first invalid field
-    if (firstInvalid) {
-      firstInvalid.scrollIntoView({
-        behavior: "smooth",
-        block: "center"
-      });
-
-      // Open Select2 if needed
-      if ($(firstInvalid).hasClass("select2-hidden-accessible")) {
-        $(firstInvalid).select2("open");
-      } else {
-        firstInvalid.focus();
-      }
-    }
-
-    return false;
   }
 
-  return true;
+  // EMAIL
+  if (name === "email") {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value)) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+
+  // PASSPORT
+  if (name === "passport_number") {
+    if (!/^[A-Z0-9]{6,20}$/.test(value.toUpperCase())) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+
+  // NATIONAL ID
+  if (name === "student_national_id") {
+    if (!/^[A-Za-z0-9-]{5,30}$/.test(value)) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+
+  // CITY
+  if (name === "city_of_birth") {
+    if (!/^[A-Za-z\s'-]{2,100}$/.test(value)) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+
+  // COUNTRY / NATIONALITY
+  if (name === "country_of_birth" || name === "nationality") {
+    if (value && isNaN(value)) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+
+  // SECOND NATIONALITY (OPTIONAL ✅)
+  if (name === "second_nationality") {
+    if (value && isNaN(value)) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+
+  // DOB
+  if (name === "dob") {
+    const date = new Date(value);
+    if (!value || isNaN(date.getTime()) || date > new Date()) {
+      invalidate(field);
+      isValid = false;
+      if (!firstInvalid) firstInvalid = field;
+      return;
+    }
+  }
+}
+
+// VALID FIELD
+field.classList.remove("is-invalid");
+
+});
+
+/* ===============================
+PHONE VALIDATION (STEP 2 ONLY)
+=============================== */
+if (step === 1) {
+const phoneInput = document.getElementById("intl_phone");
+
+if (phoneInput && window.intlTelInputGlobals) {
+  const iti = window.intlTelInputGlobals.getInstance(phoneInput);
+
+  if (!iti || !iti.isValidNumber()) {
+    invalidate(phoneInput);
+    isValid = false;
+    if (!firstInvalid) firstInvalid = phoneInput;
+  }
+}
+
+}
+
+/* ===============================
+FINAL HANDLING
+=============================== */
+if (!isValid) {
+scrollToField(firstInvalid);
+return false;
+}
+
+return true;
 }
 
 /* =====================================================
-   HELPERS (UNCHANGED)
+HELPERS (CLEAN + REUSABLE)
+===================================================== */
+
+function invalidate(field) {
+field.classList.add("is-invalid");
+}
+
+function scrollToField(field) {
+if (!field) return;
+
+field.scrollIntoView({
+behavior: "smooth",
+block: "center"
+});
+
+if ($(field).hasClass("select2-hidden-accessible")) {
+$(field).select2("open");
+} else {
+field.focus();
+}
+}
+
+/* =====================================================
+SELECT RESET (UNCHANGED BUT CLEANED)
 ===================================================== */
 function resetSelect(select, placeholder, disabled = true) {
-  if (!select) return;
-  select.innerHTML = "";
-  select.disabled = disabled;
-  select.add(new Option(placeholder, ""));
-  if ($(select).hasClass("select2-hidden-accessible")) {
-    $(select).trigger("change.select2");
-  }
+if (!select) return;
+
+select.innerHTML = "";
+select.disabled = disabled;
+select.add(new Option(placeholder, ""));
+
+if ($(select).hasClass("select2-hidden-accessible")) {
+$(select).trigger("change.select2");
+}
 }
 
-
-
 /* =====================================================
-   AUTO-FILL DESTINATIONS (UNCHANGED)
+AUTO-FILL DESTINATIONS (SAFE + CLEAN)
 ===================================================== */
 (function () {
-  if (!regionsSelect) return;
 
-  const preferred = document.getElementById("preferredDestination");
-  const loan = document.getElementById("loanDestination");
+if (!regionsSelect) return;
 
-  $('#regions').on('change', function () {
-    const names = $(this).select2('data').map(r => r.text).join(", ");
-    if (preferred) preferred.value = names;
-    if (loan) loan.value = names;
-  });
+const preferred = document.getElementById("preferredDestination");
+const loan      = document.getElementById("loanDestination");
+
+$('#regions').on('change', function () {
+
+const names = $(this)
+  .select2('data')
+  .map(r => r.text)
+  .join(", ");
+
+if (preferred) preferred.value = names;
+if (loan) loan.value = names;
+
+});
+
 })();

@@ -18,6 +18,28 @@
 
 (function () {
 
+  function escapeHtml(s) {
+    const t = document.createElement("template");
+    t.textContent = s == null ? "" : String(s);
+    return t.innerHTML;
+  }
+
+  function initSearchLevelSelect2() {
+    if (!levelSelect || typeof jQuery === "undefined") return;
+    const $lvl = $(levelSelect);
+    if ($lvl.hasClass("select2-hidden-accessible")) {
+      $lvl.select2("destroy");
+    }
+    $lvl.select2({
+      theme: "bootstrap-5",
+      width: "100%",
+      placeholder: "All levels",
+      allowClear: true,
+      minimumResultsForSearch: 0,
+      dropdownParent: $(document.body)
+    });
+  }
+
   /* =====================================================
      DOM REFERENCES
   ===================================================== */
@@ -55,6 +77,7 @@ const cartList = cartWrap?.querySelector(".list-group");
           levelSelect.add(new Option(l.name, l.id));
         });
       }
+      initSearchLevelSelect2();
     })
     .catch(() => {
       console.warn("[study-search] Failed to load program levels");
@@ -177,18 +200,21 @@ function runSearch() {
     });
 }
 function isStudyChoiceComplete(card) {
-  const uniSel   = card.querySelector(".university");
-  const levelSel = card.querySelector(".level");
-  const progSel  = card.querySelector(".program");
+  const uniSel = card.querySelector(".university");
+  if (!uniSel?.value) return false;
 
-  const programs = $(progSel).val(); // Select2 → array
+  const rows = card.querySelectorAll(".study-level-row");
+  for (const row of rows) {
+    const levelSel = row.querySelector(".level");
+    const progSel = row.querySelector(".program");
+    if (!levelSel?.value) continue;
 
-  return (
-    uniSel?.value &&
-    levelSel?.value &&
-    Array.isArray(programs) &&
-    programs.length > 0
-  );
+    const programs = $(progSel).val();
+    const ids = Array.isArray(programs) ? programs : programs ? [programs] : [];
+    if (ids.length > 0) return true;
+  }
+
+  return false;
 }
 
 function buildStudyCart() {
@@ -206,59 +232,59 @@ function buildStudyCart() {
   let hasValid = false;
 
   cards.forEach(card => {
-    const uniSel   = card.querySelector(".university");
-    const levelSel = card.querySelector(".level");
-    const progSel  = card.querySelector(".program");
-    const regionEl = card.querySelector(".region-badge");
-
-   if (!isStudyChoiceComplete(card)) return;
-
+    if (!isStudyChoiceComplete(card)) return;
 
     hasValid = true;
+
+    const uniSel = card.querySelector(".university");
+    const regionEl = card.querySelector(".region-badge");
+
+    const universityText =
+      uniSel?.selectedOptions?.[0]?.text || "Unknown University";
+    const regionText = regionEl?.textContent || "";
+
+    const lines = [];
+    card.querySelectorAll(".study-level-row").forEach(row => {
+      const levelSel = row.querySelector(".level");
+      const progSel = row.querySelector(".program");
+      if (!levelSel?.value) return;
+
+      const levelText =
+        levelSel.selectedOptions?.[0]?.text || "Level";
+
+      let programText = "";
+      if (progSel) {
+        if ($(progSel).data("select2")) {
+          const programs = $(progSel).select2("data") || [];
+          programText = programs.map(p => p.text).join(", ");
+        } else if (progSel.selectedOptions?.length) {
+          programText = [...progSel.selectedOptions]
+            .map(o => o.text)
+            .join(", ");
+        }
+      }
+      if (!programText.trim()) return;
+
+      lines.push(
+        `<div class="small text-muted">${escapeHtml(levelText)} — ${escapeHtml(programText)}</div>`
+      );
+    });
+
+    if (!lines.length) return;
 
     const item = document.createElement("div");
     item.className =
       "list-group-item d-flex justify-content-between align-items-start";
 
-   const universityText =
-  uniSel?.selectedOptions?.[0]?.text || "Unknown University";
-
-const levelText =
-  levelSel?.selectedOptions?.[0]?.text || "Level not selected";
-
-/* ✅ Program text (Select2 or native select fallback) */
-let programText = "Program not selected";
-
-if (progSel) {
-  if ($(progSel).data("select2")) {
-    const programs = $(progSel).select2("data") || [];
-    if (programs.length) {
-      programText = programs.map(p => p.text).join(", ");
-    }
-  } else if (progSel.selectedOptions?.length) {
-    programText = [...progSel.selectedOptions]
-      .map(o => o.text)
-      .join(", ");
-  }
-}
-
-const regionText = regionEl?.textContent || "";
-
-item.innerHTML = `
+    item.innerHTML = `
   <div class="me-2 flex-grow-1">
     <div class="fw-semibold text-dark">
-      ${universityText}
+      ${escapeHtml(universityText)}
     </div>
-
-    <div class="small text-muted">
-      ${levelText}
-      <span class="mx-1">—</span>
-      ${programText}
-    </div>
-
+    ${lines.join("")}
     ${regionText ? `
       <div class="small text-primary fw-semibold mt-1">
-        ${regionText}
+        ${escapeHtml(regionText)}
       </div>
     ` : ""}
   </div>
@@ -270,9 +296,19 @@ item.innerHTML = `
   </button>
 `;
 
-    // Remove handler (REAL removal)
     item.querySelector("button").addEventListener("click", () => {
+      $(card).find("select").each(function () {
+        if ($(this).hasClass("select2-hidden-accessible")) {
+          $(this).select2("destroy");
+        }
+      });
       card.remove();
+      if (window.refreshAddUniversitySelect) {
+        window.refreshAddUniversitySelect();
+      }
+      if (window.updateStudyEmptyMessage) {
+        window.updateStudyEmptyMessage();
+      }
       buildStudyCart();
     });
 
@@ -423,10 +459,12 @@ document.addEventListener("change", e => {
 });
 
 
-// When a study-choice is removed (red Remove button)
+// When a study-choice is removed (Remove university button)
 document.addEventListener("click", e => {
-  if (e.target.classList.contains("btn-remove")) {
-    // allow DOM removal first
+  if (
+    e.target.classList.contains("btn-remove-uni") ||
+    e.target.closest(".btn-remove-uni")
+  ) {
     setTimeout(buildStudyCart, 0);
   }
 });
@@ -441,7 +479,11 @@ document.addEventListener("click", e => {
 if (clearBtn) {
   clearBtn.addEventListener("click", () => {
     searchInput.value = "";
-    levelSelect.value = "";
+    if (typeof jQuery !== "undefined" && $(levelSelect).hasClass("select2-hidden-accessible")) {
+      $(levelSelect).val("").trigger("change");
+    } else {
+      levelSelect.value = "";
+    }
     resultsWrap.innerHTML = "";
     showAllChoices();
     buildStudyCart(); // ✅ keep cart in sync
@@ -456,6 +498,7 @@ $(document).ready(function () {
   buildStudyCart();
 });
 
+window.buildStudyCart = buildStudyCart;
 
 })();
 

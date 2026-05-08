@@ -33,7 +33,10 @@ const filterLevel = document.getElementById("filterLevel");
  * INITIAL LOAD
  * =====================================================
  */
-document.addEventListener("DOMContentLoaded", loadStudents);
+document.addEventListener("DOMContentLoaded", () => {
+    startTimeAgoTicker();
+    loadStudents();
+});
 
 /**
  * =====================================================
@@ -78,6 +81,7 @@ function loadStudents() {
             res.data.forEach(app => {
                 studentListEl.appendChild(renderStudentItem(app));
             });
+            refreshTimeAgoLabels();
         })
         .catch(err => {
             console.error("loadStudents error:", err);
@@ -114,7 +118,7 @@ const studyLine = [
         <div class="mt-1 text-[11px] font-medium application-time"
              style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;color:${timeData.color}">
             <span>${timeData.icon}</span>
-            <span>${timeAgo(meta.created_at)}</span>
+            <span data-time-ago="${escapeAttr(String(meta.created_at || ""))}">${timeAgo(meta.created_at)}</span>
             <span class="text-gray-400">•</span>
             <span>${timeData.date}</span>
             <span class="text-gray-400">•</span>
@@ -474,9 +478,15 @@ function renderApplication(data, applicationNumericId) {
     setText("studentName", `${bio.first_name || ""} ${bio.last_name || ""}`.trim());
     setText("studentEmail", bio.email);
     setText("studentPhone", bio.phone);
-    setText("applicationMeta",
-        meta.created_at ? `Applied ${timeAgo(meta.created_at)}` : "-"
-    );
+    const appMetaEl = document.getElementById("applicationMeta");
+    if (appMetaEl) {
+        if (meta.created_at) {
+            const ts = String(meta.created_at);
+            appMetaEl.innerHTML = `Applied <span data-time-ago="${escapeAttr(ts)}" class="tabular-nums">${timeAgo(ts)}</span>`;
+        } else {
+            appMetaEl.textContent = "-";
+        }
+    }
 
     // PERSONAL
     setText("pGender", bio.gender);
@@ -773,6 +783,7 @@ function loadJourney(applicationId) {
             res.data.forEach(job => {
                 timeline.appendChild(renderJourneyStep(job));
             });
+            refreshTimeAgoLabels();
             syncJourneyDeleteOnly(applicationId, canDelete);
         })
         .catch(err => {
@@ -814,7 +825,7 @@ function renderJourneyStep(job) {
             </div>
 
             <div class="text-[11px] mt-1 ${completed ? "text-green-600" : "text-slate-400"}">
-                ${completed ? "Completed" : "In progress"} • ${timeAgo(job.created_at)}
+                ${completed ? "Completed" : "In progress"} • <span data-time-ago="${escapeAttr(String(job.created_at || ""))}" class="tabular-nums">${timeAgo(job.created_at)}</span>
             </div>
         </div>
     `;
@@ -916,7 +927,9 @@ function unreadDot() {
 function formatFullTime(dateStr) {
     if (!dateStr) return null;
 
-    const d = new Date(dateStr);
+    const t = normalizeDateInput(dateStr);
+    if (Number.isNaN(t)) return null;
+    const d = new Date(t);
     if (isNaN(d.getTime())) return null;
 
     const now = new Date();
@@ -950,21 +963,73 @@ function formatFullTime(dateStr) {
     return { color, icon, date, time, diffDays };
 }
 
+/**
+ * MySQL / PHP often returns "YYYY-MM-DD HH:mm:ss" without timezone.
+ * Normalize so elapsed time matches wall-clock expectations across browsers.
+ */
+function normalizeDateInput(dateStr) {
+    const s = String(dateStr || "").trim();
+    if (!s) return NaN;
+    // Explicit offset / Z — use as-is (API returns ISO UTC with Z).
+    if (/Z$/i.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) {
+        return Date.parse(s);
+    }
+    // MySQL naive UTC from DB session time_zone '+00:00' — must not parse as local.
+    if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(s)) {
+        return Date.parse(s.replace(" ", "T") + "Z");
+    }
+    return Date.parse(s);
+}
+
+/**
+ * Human-readable relative time: seconds & minutes first, then hours+minutes
+ * under 24h (e.g. "3h 15m ago"), then days / months / years.
+ */
 function timeAgo(dateStr) {
     if (!dateStr) return "-";
-    const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
-    const units = [
-        [31536000, "y"],
-        [2592000, "mo"],
-        [86400, "d"],
-        [3600, "h"],
-        [60, "m"]
-    ];
-    for (const [s, l] of units) {
-        const v = Math.floor(seconds / s);
-        if (v >= 1) return `${v}${l} ago`;
+    const t = normalizeDateInput(dateStr);
+    if (Number.isNaN(t)) return "-";
+
+    let diffMs = Date.now() - t;
+    if (diffMs < 0) diffMs = 0;
+
+    const sec = Math.floor(diffMs / 1000);
+    if (sec < 10) return "just now";
+    if (sec < 60) return `${sec}s ago`;
+
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min}m ago`;
+
+    const hr = Math.floor(sec / 3600);
+    if (hr < 24) {
+        const remMin = Math.floor((sec % 3600) / 60);
+        if (remMin > 0) return `${hr}h ${remMin}m ago`;
+        return `${hr}h ago`;
     }
-    return "just now";
+
+    const day = Math.floor(sec / 86400);
+    if (day < 30) return `${day}d ago`;
+
+    const mo = Math.floor(day / 30);
+    if (mo < 12) return `${mo}mo ago`;
+
+    const yr = Math.floor(day / 365);
+    return `${yr > 0 ? yr : 1}y ago`;
+}
+
+let __timeAgoTimer = null;
+
+function refreshTimeAgoLabels() {
+    document.querySelectorAll("[data-time-ago]").forEach(el => {
+        const ts = el.getAttribute("data-time-ago");
+        if (ts) el.textContent = timeAgo(ts);
+    });
+}
+
+function startTimeAgoTicker() {
+    if (__timeAgoTimer) clearInterval(__timeAgoTimer);
+    refreshTimeAgoLabels();
+    __timeAgoTimer = setInterval(refreshTimeAgoLabels, 30000);
 }
 
 function debounce(fn, delay) {
@@ -984,6 +1049,14 @@ function escapeHTML(str) {
         '"': "&quot;",
         "'": "&#039;"
     }[m]));
+}
+
+function escapeAttr(str) {
+    if (typeof str !== "string") return "";
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 /**
  * =====================================================

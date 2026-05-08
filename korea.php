@@ -935,8 +935,8 @@ body {
       type="text"
       class="form-control mb-3"
       name="address_line2"
-      placeholder="Address Line 2"
-      required
+      placeholder="Address Line 2 (optional)"
+      autocomplete="address-line2"
     >
 
     <div class="row">

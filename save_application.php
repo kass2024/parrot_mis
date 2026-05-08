@@ -50,9 +50,10 @@ function trigger_async_email(int $applicationId): void
         'response'  => $response
     ]);
 }
+
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/helpers/student_portal_accounts.php';
 require_once __DIR__ . '/helpers/mailer.php';
+require_once __DIR__ . '/helpers/student_portal_accounts.php';
 require_once __DIR__ . '/helpers/urls.php';
 require_once __DIR__ . '/includes/company_branding.php';
 function debug_log(string $label, $data = null): void
@@ -79,14 +80,14 @@ function pcvc_send_student_portal_access_email(string $email, string $studentNam
 
     $studentName = trim($studentName) !== '' ? trim($studentName) : 'Student';
 
-    // Ensure portal account exists / reset to default password.
+    // Ensure portal account exists / reset to default password (same as Share access)
     global $conn;
     try {
         if (isset($conn) && $conn instanceof mysqli) {
             pcvc_student_portal_ensure_account_for_email($conn, $email);
         }
     } catch (Throwable $e) {
-        // Do not block submission
+        // Don't block submission flow
         debug_log('PORTAL ACCOUNT ENSURE FAILED', $e->getMessage());
     }
 
@@ -126,6 +127,115 @@ function pcvc_send_student_portal_access_email(string $email, string $studentNam
     $mail->Body = $body;
     $mail->AltBody = "Student Portal Access\n\nLogin: {$loginUrl}\nEmail: {$email}\nPassword: {$defaultPw}\n";
     $mail->send();
+}
+
+/* =====================================================
+   SMART VALIDATION (ANTI-JUNK)
+===================================================== */
+function json_error(string $message, array $fields = [], int $code = 400): void
+{
+    http_response_code($code);
+    echo json_encode([
+        'status'  => 'error',
+        'message' => $message,
+        'fields'  => (object)$fields,
+    ]);
+    exit;
+}
+
+function norm_ws(string $s): string
+{
+    $s = trim($s);
+    $s = preg_replace('/\s+/u', ' ', $s);
+    return $s ?? '';
+}
+
+function looks_like_human_name(string $name): bool
+{
+    $name = norm_ws($name);
+    if ($name === '') return false;
+    if (mb_strlen($name, 'UTF-8') < 2 || mb_strlen($name, 'UTF-8') > 60) return false;
+
+    // Allow letters (unicode), spaces, hyphen, apostrophe, dot.
+    if (!preg_match("/^[\\p{L} .'-]+$/u", $name)) return false;
+
+    // Must contain at least 2 letters total.
+    if (preg_match_all("/\\p{L}/u", $name, $m) < 2) return false;
+
+    // Block repeated same character junk like "aaaaaa" or "zzzzzz".
+    $compact = mb_strtolower(preg_replace('/\s+/u', '', $name), 'UTF-8');
+    if ($compact !== '' && preg_match('/(.)\\1\\1\\1/u', $compact)) return false;
+
+    // Block names that are mostly 1–2 unique letters (random spam-ish).
+    $lettersOnly = mb_strtolower(preg_replace("/[^\\p{L}]+/u", '', $name), 'UTF-8');
+    if ($lettersOnly !== '' && mb_strlen($lettersOnly, 'UTF-8') >= 6) {
+        $chars = function_exists('mb_str_split') ? mb_str_split($lettersOnly) : preg_split('//u', $lettersOnly, -1, PREG_SPLIT_NO_EMPTY);
+        if (is_array($chars)) {
+            $unique = array_unique($chars);
+            if (count($unique) <= 2) return false;
+        }
+    }
+
+    return true;
+}
+
+function normalize_area_code(?string $areaCode): string
+{
+    $areaCode = trim((string)$areaCode);
+    if ($areaCode === '') return '';
+    // keep only digits, preserve leading +
+    $digits = preg_replace('/\D+/', '', $areaCode);
+    if ($digits === null) $digits = '';
+    return $digits === '' ? '' : ('+' . $digits);
+}
+
+function normalize_phone_digits(?string $phone): string
+{
+    $digits = preg_replace('/\D+/', '', (string)$phone);
+    return $digits ?? '';
+}
+
+function is_valid_phone_pair(string $areaCode, string $phoneDigits): bool
+{
+    // E.164-like: country code 1–4 digits, national number 6–15 digits.
+    if ($areaCode === '' || $phoneDigits === '') return false;
+    if (!preg_match('/^\\+\\d{1,4}$/', $areaCode)) return false;
+    if (!preg_match('/^\\d{6,15}$/', $phoneDigits)) return false;
+
+    // Block "all same digit" like 0000000 / 11111111.
+    if (preg_match('/^(\\d)\\1+$/', $phoneDigits)) return false;
+
+    // Block 6+ repeats anywhere (e.g. 1234444444).
+    if (preg_match('/(\\d)\\1{5,}/', $phoneDigits)) return false;
+
+    return true;
+}
+
+/**
+ * Whether another application row already uses this email (case-insensitive).
+ * Excludes the current draft/application id so the same user can save their own row.
+ */
+function pcvc_applicant_email_taken(mysqli $conn, string $emailNorm, int $excludeApplicationId): bool
+{
+    if ($emailNorm === '' || !filter_var($emailNorm, FILTER_VALIDATE_EMAIL)) {
+        return false;
+    }
+    $stmt = $conn->prepare(
+        'SELECT id FROM student_applications
+         WHERE LOWER(TRIM(email)) = ?
+           AND TRIM(COALESCE(email, \'\')) <> \'\'
+           AND id <> ?
+         LIMIT 1'
+    );
+    if (!$stmt) {
+        throw new Exception($conn->error);
+    }
+    $stmt->bind_param('si', $emailNorm, $excludeApplicationId);
+    $stmt->execute();
+    $stmt->bind_result($foundId);
+    $has = $stmt->fetch();
+    $stmt->close();
+    return $has && (int)$foundId > 0;
 }
 
 
@@ -450,6 +560,63 @@ if ($isFinal === 1) {
     }
 }
 
+    /* ===============================
+       SMART VALIDATION (SERVER-SIDE)
+       - Blocks junk names / invalid phones even if UI is bypassed
+    =============================== */
+    $fieldErrors = [];
+
+    // Validate email if present (required on final submit)
+    $email = isset($_POST['email']) ? trim((string)$_POST['email']) : '';
+    if ($isFinal === 1 || $email !== '') {
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $fieldErrors['email'] = 'Please enter a valid email address.';
+        }
+    }
+
+    // Validate names if present (required on final submit)
+    foreach (['first_name' => 'First name', 'last_name' => 'Last name'] as $key => $label) {
+        $val = isset($_POST[$key]) ? (string)$_POST[$key] : '';
+        if ($isFinal === 1 || trim($val) !== '') {
+            if (!looks_like_human_name($val)) {
+                $fieldErrors[$key] = $label . ' looks invalid. Use real letters only (no random characters).';
+            } else {
+                $_POST[$key] = norm_ws($val);
+            }
+        }
+    }
+
+    // Validate phone pair if present (required on final submit)
+    $areaCode = normalize_area_code($_POST['area_code'] ?? '');
+    $phoneDig = normalize_phone_digits($_POST['phone_number'] ?? '');
+    $phoneTouched = (trim((string)($_POST['area_code'] ?? '')) !== '' || trim((string)($_POST['phone_number'] ?? '')) !== '');
+
+    if ($isFinal === 1 || $phoneTouched) {
+        if (!is_valid_phone_pair($areaCode, $phoneDig)) {
+            $fieldErrors['phone_number'] = 'Please enter a valid phone number.';
+        } else {
+            $_POST['area_code'] = $areaCode;
+            $_POST['phone_number'] = $phoneDig;
+        }
+    }
+
+    // Emergency phone (optional, but if provided must be valid)
+    $eArea = normalize_area_code($_POST['emergency_area_code'] ?? '');
+    $eDig  = normalize_phone_digits($_POST['emergency_phone_number'] ?? '');
+    $eTouched = (trim((string)($_POST['emergency_area_code'] ?? '')) !== '' || trim((string)($_POST['emergency_phone_number'] ?? '')) !== '');
+    if ($isFinal === 1 || $eTouched) {
+        if ($eTouched && !is_valid_phone_pair($eArea, $eDig)) {
+            $fieldErrors['emergency_phone_number'] = 'Please enter a valid emergency phone number.';
+        } elseif ($eTouched) {
+            $_POST['emergency_area_code'] = $eArea;
+            $_POST['emergency_phone_number'] = $eDig;
+        }
+    }
+
+    if (!empty($fieldErrors)) {
+        json_error('Please correct the highlighted fields and try again.', $fieldErrors, 400);
+    }
+
 
     try {
 
@@ -594,6 +761,26 @@ if (!$appId) {
    ✅ $appId IS NOW FINAL & SAFE
 =============================== */
 
+/* ===============================
+   UNIQUE APPLICANT EMAIL (blocks duplicate profiles)
+   Run once $appId is known; rollback before json_error.
+=============================== */
+$applicantEmailNorm = isset($_POST['email']) ? strtolower(trim((string)$_POST['email'])) : '';
+$postStep = isset($_POST['step']) ? (int)$_POST['step'] : -1;
+if (
+    $applicantEmailNorm !== ''
+    && filter_var($applicantEmailNorm, FILTER_VALIDATE_EMAIL)
+    && ($postStep >= 1 || $isFinal === 1)
+    && pcvc_applicant_email_taken($conn, $applicantEmailNorm, $appId)
+) {
+    $conn->rollback();
+    json_error(
+        'This email is already used for another application. Please use a different email or contact us if you need to continue an existing application.',
+        ['email' => 'This email is already registered with an application.'],
+        409
+    );
+}
+
 
 /* ===============================
    CREATE USER ID AFTER STEP 1
@@ -649,7 +836,7 @@ $allowed = [
     /* ===============================
        DESTINATION & FINANCE
     =============================== */
-    'destination','other_destination',
+    'destination',
     'destination_loan','other_destination_loan',
     'paying_tuition_fees',
     'paying_cost_living',
@@ -827,17 +1014,6 @@ $stmt->bind_param(
 
             $stmt->close();
         }
-
-/* ===============================
-   STUDENT PORTAL ACCOUNT (AUTO)
-   - create/link account once email exists
-=============================== */
-try {
-    pcvc_student_portal_ensure_account_for_application($conn, (int)$appId);
-} catch (Throwable $e) {
-    // Do not block application submission if portal account creation fails.
-    debug_log('STUDENT PORTAL ACCOUNT AUTO-CREATE FAILED', $e->getMessage());
-}
 
 /* ===============================
    COMMIT SUCCESS

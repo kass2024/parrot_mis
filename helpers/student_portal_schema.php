@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Student portal schema helper (idempotent).
- * Creates only NEW portal tables in the existing mis_parrot DB.
+ * Creates only NEW portal tables in the existing DB.
  *
  * This does NOT modify existing `student_applications` rows/columns.
  */
@@ -75,9 +75,7 @@ function pcvc_student_portal_ensure_schema(mysqli $conn): void
 
     // If table existed before this change, ensure doc_type column exists.
     if (!$hasColumn('student_portal_uploads', 'doc_type')) {
-        // Older MySQL may not support IF NOT EXISTS on ADD COLUMN, so we check first.
         if (!$conn->query("ALTER TABLE student_portal_uploads ADD COLUMN doc_type VARCHAR(64) NULL AFTER student_account_id")) {
-            // If this fails due to duplicate column, ignore; otherwise throw.
             if (stripos((string)$conn->error, 'Duplicate column') === false) {
                 throw new RuntimeException('Failed adding doc_type to student_portal_uploads: ' . $conn->error);
             }

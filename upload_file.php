@@ -12,7 +12,6 @@ declare(strict_types=1);
 ob_start();
 session_start();
 header('Content-Type: application/json');
-require_once __DIR__ . '/helpers/env_bootstrap.php';
 require_once __DIR__ . '/db.php';
 // =========================================
 // SESSION VALIDATION (MUST BE FIRST)
@@ -52,11 +51,21 @@ if (!$appId) {
     exit;
 }
 
+require_once __DIR__ . '/helpers/load_env.php';
+pcvc_load_dotenv(__DIR__);
 
 // =========================================
-// CONFIG
+// CONFIG (never commit API keys — use .env OPENAI_API_KEY)
 // =========================================
-$API_KEY  = pcvc_env('OPENAI_API_KEY');
+$API_KEY = trim((string) (getenv('OPENAI_API_KEY') ?: ''));
+if ($API_KEY === '') {
+    echo json_encode([
+        'status'  => 'error',
+        'message' => 'Document verification is not configured. Set OPENAI_API_KEY in .env on the server.'
+    ]);
+    exit;
+}
+
 $LOG_FILE = __DIR__ . '/upload_debug.log';
 $TEMP_DIR = __DIR__ . '/temp/';
 $UPLOAD_DIR = __DIR__ . '/uploads/';
@@ -333,14 +342,12 @@ if ($fileId || $isImage || $isScannedPdf) {
 
         $userPrompt =
             "Determine whether this document is a genuine Curriculum Vitae (CV) or Resume. "
-          . "A CV/resume can be simple and may NOT contain stamps/signatures (it is often self-authored). "
-          . "ACCEPT if it looks like a CV/resume and contains multiple typical sections such as: "
-          . "name/contact details, education, skills, experience (optional), projects, internships, "
-          . "certifications, languages, publications, references, or a professional summary. "
-          . "Do NOT require employment history; fresh graduates may only list education + skills + projects. "
-          . "REJECT if it is clearly a different document type (passport/ID, transcript, diploma/certificate, "
-          . "recommendation letter, personal statement/motivation letter, bank/payment receipt, or English test certificate). "
-          . "If uncertain but it plausibly matches CV/resume structure, prefer valid=true. "
+          . "ACCEPT ONLY documents that clearly list employment history, job titles, "
+          . "professional experience, internships, skills, or work responsibilities "
+          . "in a standard CV or resume format. "
+          . "REJECT English proficiency certificates, academic confirmation letters, "
+          . "transcripts, diplomas, recommendation letters, passports, or personal statements. "
+          . "If the document does not clearly look like a CV or resume, set valid=false. "
           . $nameInstruction;
 
     } else {
