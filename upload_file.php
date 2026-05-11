@@ -54,6 +54,14 @@ if (!$appId) {
 require_once __DIR__ . '/helpers/load_env.php';
 pcvc_load_dotenv(__DIR__);
 
+$ENV_PATH = __DIR__ . '/.env';
+$LOG_FILE = __DIR__ . '/upload_debug.log';
+$TEMP_DIR = __DIR__ . '/temp/';
+$UPLOAD_DIR = __DIR__ . '/uploads/';
+$MODEL = 'gpt-4.1-mini';
+foreach ([$TEMP_DIR, $UPLOAD_DIR] as $dir)
+    if (!is_dir($dir)) mkdir($dir, 0755, true);
+
 // =========================================
 // CONFIG (never commit API keys — use .env OPENAI_API_KEY)
 // =========================================
@@ -61,16 +69,24 @@ $API_KEY = trim((string) (getenv('OPENAI_API_KEY') ?: ''));
 if ($API_KEY === '') {
     echo json_encode([
         'status'  => 'error',
-        'message' => 'Document verification is not configured. Set OPENAI_API_KEY in .env on the server.'
+        'message' => 'Document verification is not configured. Set OPENAI_API_KEY in .env on the server.',
+        'debug'   => [
+            'api_key_status' => 'missing',
+            'env_path' => $ENV_PATH,
+            'log_file' => $LOG_FILE,
+            'model' => $MODEL
+        ]
     ]);
     exit;
 }
 
-$LOG_FILE = __DIR__ . '/upload_debug.log';
-$TEMP_DIR = __DIR__ . '/temp/';
-$UPLOAD_DIR = __DIR__ . '/uploads/';
-foreach ([$TEMP_DIR, $UPLOAD_DIR] as $dir)
-    if (!is_dir($dir)) mkdir($dir, 0755, true);
+function appendDebugStage(array &$debug, string $stage, string $detail): void {
+    $debug['stages'][] = [
+        'stage' => $stage,
+        'detail' => $detail,
+        'time' => date('H:i:s')
+    ];
+}
 
 // =========================================
 // BASIC VALIDATION
@@ -84,6 +100,7 @@ $field = $_POST['field'] ?? 'unknown';
 $firstName = trim($_POST['first_name'] ?? '');
 $lastName  = trim($_POST['last_name'] ?? '');
 $fullName  = trim("$firstName $lastName");
+$lang = (($_POST['lang'] ?? 'en') === 'fr') ? 'fr' : 'en';
 
 // =========================================
 // EXPECTED DOCUMENT TYPE
@@ -100,6 +117,21 @@ $expectedTypes = [
     'payment_proof'          => 'payment receipt or transaction proof'
 ];
 $expectedType = $expectedTypes[$field] ?? 'academic or identification document';
+$debug = [
+    'api_key_status' => 'configured',
+    'env_path' => $ENV_PATH,
+    'log_file' => $LOG_FILE,
+    'model' => $MODEL,
+    'field' => $field,
+    'expected_type' => $expectedType,
+    'file_name' => $_FILES['file']['name'] ?? '',
+    'mime' => '',
+    'processing_mode' => '',
+    'detected_type' => '',
+    'confidence' => null,
+    'stages' => []
+];
+appendDebugStage($debug, 'prepare', 'Draft found and upload accepted.');
 
 // =========================================
 // SAVE TEMP FILE LOCALLY
@@ -107,10 +139,16 @@ $expectedType = $expectedTypes[$field] ?? 'academic or identification document';
 $fileName = time().'_'.preg_replace('/[^A-Za-z0-9.\-_]/','_',$_FILES['file']['name']);
 $tmpPath  = $TEMP_DIR.$fileName;
 if (!move_uploaded_file($_FILES['file']['tmp_name'],$tmpPath))
-    exit(json_encode(['status'=>'error','message'=>'Cannot save uploaded file']));
+    exit(json_encode([
+        'status'=>'error',
+        'message'=>'Cannot save uploaded file',
+        'debug' => $debug
+    ]));
+appendDebugStage($debug, 'prepare', 'Temporary file saved on server.');
 
 $mime = mime_content_type($tmpPath) ?: 'application/octet-stream';
 $ext  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
+$debug['mime'] = $mime;
 // Detect scanned PDF (no text layer)
 $isPdf = ($mime === 'application/pdf');
 $isScannedPdf = false;
@@ -147,6 +185,197 @@ function scannedPdfToImages(string $pdfPath, string $outDir): array {
     return $images;
 }
 
+function normalizeAutofillText(?string $value): string {
+    $value = trim((string)$value);
+    $value = preg_replace('/\s+/u', ' ', $value);
+    return trim((string)$value);
+}
+
+function normalizeAutofillDate(?string $value): string {
+    $value = normalizeAutofillText($value);
+    if ($value === '') {
+        return '';
+    }
+
+    $ts = strtotime($value);
+    if ($ts === false) {
+        return '';
+    }
+
+    $date = date('Y-m-d', $ts);
+    if ($date < '1900-01-01' || $date > date('Y-m-d', strtotime('+1 day'))) {
+        return '';
+    }
+
+    return $date;
+}
+
+function normalizeAutofillGender(?string $value, string $lang = 'en'): string {
+    $value = strtolower(normalizeAutofillText($value));
+    if ($value === '') {
+        return '';
+    }
+
+    if (in_array($value, ['male', 'man', 'm', 'homme', 'masculin'], true)) {
+        return $lang === 'fr' ? 'Homme' : 'Male';
+    }
+
+    if (in_array($value, ['female', 'woman', 'f', 'femme', 'feminin'], true)) {
+        return $lang === 'fr' ? 'Femme' : 'Female';
+    }
+
+    return '';
+}
+
+function normalizeAutofillLanguage(?string $value, string $lang = 'en'): string {
+    $value = strtolower(normalizeAutofillText($value));
+    if ($value === '') {
+        return '';
+    }
+
+    $english = ['english', 'anglais'];
+    $french = ['french', 'francais', 'français'];
+    $other = ['other', 'autre'];
+
+    if (in_array($value, $english, true)) {
+        return $lang === 'fr' ? 'Anglais' : 'English';
+    }
+
+    if (in_array($value, $french, true)) {
+        return $lang === 'fr' ? 'Français' : 'French';
+    }
+
+    if (in_array($value, $other, true)) {
+        return $lang === 'fr' ? 'Autre' : 'Other';
+    }
+
+    return '';
+}
+
+function normalizeAutofillEmail(?string $value): string {
+    $value = strtolower(normalizeAutofillText($value));
+    if ($value === '' || !filter_var($value, FILTER_VALIDATE_EMAIL)) {
+        return '';
+    }
+
+    [$local] = explode('@', $value, 2);
+    $genericLocals = [
+        'info', 'contact', 'admin', 'office', 'admission', 'admissions',
+        'apply', 'application', 'support', 'help', 'registrar', 'enquiry',
+        'enquiries', 'inquiry', 'hello'
+    ];
+
+    return in_array($local, $genericLocals, true) ? '' : $value;
+}
+
+function normalizeAutofillPhone(?string $value): array {
+    $value = normalizeAutofillText($value);
+    if ($value === '') {
+        return ['area_code' => '', 'phone_number' => ''];
+    }
+
+    $hasPlus = str_starts_with($value, '+');
+    $digits = preg_replace('/\D+/', '', $value);
+    if ($digits === null || $digits === '') {
+        return ['area_code' => '', 'phone_number' => ''];
+    }
+
+    if ($hasPlus && preg_match('/^\+(\d{1,4})/', $value, $m)) {
+        $areaDigits = $m[1];
+        $phoneDigits = substr($digits, strlen($areaDigits));
+        if ($phoneDigits !== false && $phoneDigits !== '') {
+            return [
+                'area_code' => '+' . $areaDigits,
+                'phone_number' => $phoneDigits
+            ];
+        }
+    }
+
+    return ['area_code' => '', 'phone_number' => ''];
+}
+
+function buildAutofillFields(array $fields, string $lang = 'en'): array {
+    $normalized = [];
+
+    $stringFields = [
+        'first_name',
+        'last_name',
+        'email',
+        'passport_number',
+        'student_national_id',
+        'country_of_birth',
+        'city_of_birth',
+        'nationality',
+        'second_nationality',
+        'address_line1',
+        'address_line2',
+        'city',
+        'state_province',
+        'postal_code',
+        'previous_institution_name',
+        'previous_institution_city',
+        'previous_institution_province',
+        'previous_institution_country',
+        'previous_institution_post_code',
+        'language_of_instruction',
+        'father_first_name',
+        'father_last_name',
+        'mother_first_name',
+        'mother_last_name'
+    ];
+
+    foreach ($stringFields as $name) {
+        $value = normalizeAutofillText($fields[$name] ?? '');
+        if ($value !== '') {
+            $normalized[$name] = $value;
+        }
+    }
+
+    if (!empty($normalized['email'])) {
+        $normalized['email'] = normalizeAutofillEmail($normalized['email']);
+        if ($normalized['email'] === '') {
+            unset($normalized['email']);
+        }
+    }
+
+    if (!empty($fields['gender'])) {
+        $gender = normalizeAutofillGender((string)$fields['gender'], $lang);
+        if ($gender !== '') {
+            $normalized['gender'] = $gender;
+        }
+    }
+
+    if (!empty($fields['language_of_instruction'])) {
+        $language = normalizeAutofillLanguage((string)$fields['language_of_instruction'], $lang);
+        if ($language !== '') {
+            $normalized['language_of_instruction'] = $language;
+        }
+    }
+
+    foreach (['dob', 'previous_study_start', 'previous_study_graduation'] as $dateField) {
+        $date = normalizeAutofillDate($fields[$dateField] ?? '');
+        if ($date !== '') {
+            $normalized[$dateField] = $date;
+        }
+    }
+
+    if (!empty($normalized['passport_number'])) {
+        $normalized['passport_number'] = strtoupper(preg_replace('/\s+/', '', $normalized['passport_number']));
+    }
+
+    if (!empty($normalized['student_national_id'])) {
+        $normalized['student_national_id'] = strtoupper($normalized['student_national_id']);
+    }
+
+    $phone = normalizeAutofillPhone($fields['phone_international'] ?? '');
+    if ($phone['area_code'] !== '' && $phone['phone_number'] !== '') {
+        $normalized['area_code'] = $phone['area_code'];
+        $normalized['phone_number'] = $phone['phone_number'];
+    }
+
+    return $normalized;
+}
+
 // =========================================
 // STEP 1️⃣  PREPARE BASED ON TYPE
 // =========================================
@@ -157,6 +386,8 @@ $isScannedPdfImages = [];
 
 
 if ($isImage) {
+    $debug['processing_mode'] = 'image_ocr';
+    appendDebugStage($debug, 'extract', 'Image detected, preparing inline OCR payload.');
     // ---------- IMAGE HANDLING ----------
     $info = @getimagesize($tmpPath);
     if (!$info) exit(json_encode(['status'=>'error','message'=>'Unreadable or unsupported image file']));
@@ -192,6 +423,8 @@ if ($isImage) {
 }
 
 elseif ($ext === 'docx') {
+    $debug['processing_mode'] = 'docx_text_extract';
+    appendDebugStage($debug, 'extract', 'DOCX detected, extracting text for AI.');
     // ---------- DOCX → PDF ----------
     $zip = new ZipArchive;
     if ($zip->open($tmpPath) === TRUE) {
@@ -235,6 +468,7 @@ elseif ($ext === 'docx') {
 }
 
 elseif ($isPdf && $isScannedPdf) {
+    $debug['processing_mode'] = 'scanned_pdf_ocr';
     // ---------- SCANNED PDF (PREPARE FOR OCR IN STEP 2) ----------
 
     // Convert PDF pages to images
@@ -248,8 +482,11 @@ elseif ($isPdf && $isScannedPdf) {
         "\n🧠 Scanned PDF prepared for OCR (" . count($isScannedPdfImages) . " pages): $fileName\n",
         FILE_APPEND
     );
+    appendDebugStage($debug, 'extract', 'Scanned PDF converted to images for OCR.');
 }
  else {
+    $debug['processing_mode'] = 'text_pdf_file_upload';
+    appendDebugStage($debug, 'extract', 'Text PDF detected, uploading file to OpenAI.');
     // ---------- NORMAL TEXT PDF ----------
 
     $ch = curl_init('https://api.openai.com/v1/files');
@@ -315,12 +552,44 @@ Return ONLY JSON in this format:
   "confidence": 0.0-1.0,
   "summary": "1–3 short sentences summarizing the document",
   "name_detected": "string",
-  "name_match": true or false
+  "name_match": true or false,
+  "fields": {
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "phone_international": "",
+    "dob": "",
+    "gender": "",
+    "passport_number": "",
+    "student_national_id": "",
+    "country_of_birth": "",
+    "city_of_birth": "",
+    "nationality": "",
+    "second_nationality": "",
+    "address_line1": "",
+    "address_line2": "",
+    "city": "",
+    "state_province": "",
+    "postal_code": "",
+    "previous_institution_name": "",
+    "previous_institution_city": "",
+    "previous_institution_province": "",
+    "previous_institution_country": "",
+    "previous_institution_post_code": "",
+    "previous_study_start": "",
+    "previous_study_graduation": "",
+    "language_of_instruction": "",
+    "father_first_name": "",
+    "father_last_name": "",
+    "mother_first_name": "",
+    "mother_last_name": ""
+  }
 }
 PROMPT;
 
 
 if ($fileId || $isImage || $isScannedPdf) {
+    appendDebugStage($debug, 'ai', 'Preparing AI request payload.');
 
     $nameInstruction = $fullName
         ? " Detect the main full name appearing in the document. Compare it to '{$fullName}'. "
@@ -336,6 +605,7 @@ if ($fileId || $isImage || $isScannedPdf) {
             "Determine whether this document can serve as valid English proficiency proof. "
           . "Accept both official test certificates and academic certificates or letters "
           . "explicitly confirming that the language of instruction was English. "
+          . "Also extract any clearly visible applicant personal details into the fields object. "
           . $nameInstruction;
 
     } elseif ($field === 'cv_resume') {
@@ -348,6 +618,10 @@ if ($fileId || $isImage || $isScannedPdf) {
           . "REJECT English proficiency certificates, academic confirmation letters, "
           . "transcripts, diplomas, recommendation letters, passports, or personal statements. "
           . "If the document does not clearly look like a CV or resume, set valid=false. "
+          . "Also extract any clearly visible applicant personal details into the fields object. "
+          . "Prioritize the applicant contact block first: email, phone, address, city, nationality, and education history. "
+          . "If the phone is shown locally but the country is explicit elsewhere in the same CV, convert it to a full international number in phone_international. "
+          . "Ignore placeholder, sample, recruiter, school, or company contact details unless they clearly belong to the applicant. "
           . $nameInstruction;
 
     } else {
@@ -356,6 +630,7 @@ if ($fileId || $isImage || $isScannedPdf) {
             "Verify whether this document is a valid {$expectedType}. "
           . "Analyze content, structure, formatting, consistency, stamps, and signatures. "
           . "Do NOT require online or external verification. "
+          . "Also extract any clearly visible applicant personal details into the fields object. "
           . $nameInstruction;
     }
 
@@ -422,13 +697,14 @@ function callResponsesApi(array $payload, string $key, int $max=3, int $delay=80
 }
 
 $payload = [
-  "model" => "gpt-4.1-mini",
+  "model" => $MODEL,
   "input" => [
     ["role" => "system", "content" => [["type" => "input_text", "text" => $systemPrompt]]],
     ["role" => "user", "content" => $content]
   ],
   "text" => ["format" => ["type" => "json_object"]]
 ];
+appendDebugStage($debug, 'ai', 'Sending request to OpenAI Responses API.');
 $data = callResponsesApi($payload, $API_KEY);
 
 // =========================================
@@ -439,12 +715,32 @@ file_put_contents(
   "\n=== ".date('Y-m-d H:i:s')." ===\nField:$field\nApplicant:$fullName\nFile:$fileName\nResponse:\n".json_encode($data,JSON_PRETTY_PRINT)."\n",
   FILE_APPEND
 );
-if (isset($data['error'])) exit(json_encode(['status'=>'error','message'=>$data['error']['message']]));
+if (isset($data['error'])) {
+    appendDebugStage($debug, 'ai', 'OpenAI request failed: ' . ($data['error']['message'] ?? 'unknown error'));
+    exit(json_encode([
+        'status'=>'error',
+        'message'=>$data['error']['message'],
+        'debug' => $debug
+    ]));
+}
+appendDebugStage($debug, 'ai', 'OpenAI response received.');
 
 $aiText = $data['output'][0]['content'][0]['text'] ?? '';
 $ai = json_decode($aiText, true);
 if (!$ai || !isset($ai['valid']))
-    exit(json_encode(['status'=>'error','message'=>'Invalid AI response','debug'=>substr($aiText ?: json_encode($data),0,400)]));
+    exit(json_encode([
+        'status'=>'error',
+        'message'=>'Invalid AI response',
+        'debug'=>array_merge($debug, [
+            'response_preview' => substr($aiText ?: json_encode($data),0,400)
+        ])
+    ]));
+appendDebugStage($debug, 'parse', 'AI JSON parsed successfully.');
+
+$autofillFields = buildAutofillFields((array)($ai['fields'] ?? []), $lang);
+$debug['detected_type'] = $ai['detected_type'] ?? '';
+$debug['confidence'] = $ai['confidence'] ?? null;
+appendDebugStage($debug, 'parse', 'Autofill fields prepared: ' . count($autofillFields));
 
 // =========================================
 // STEP 5️⃣ FINAL DECISION + SAVE (SAFE)
@@ -490,7 +786,8 @@ elseif ($ai['valid'] === true) {
         echo json_encode([
             'status'  => 'error',
             'message' =>
-                "⚠️ Name mismatch: found '{$ai['name_detected']}', expected '{$fullName}'."
+                "⚠️ Name mismatch: found '{$ai['name_detected']}', expected '{$fullName}'.",
+            'debug' => $debug
         ], JSON_UNESCAPED_UNICODE);
         exit;
     }
@@ -507,10 +804,12 @@ if ($shouldSave && $appId && in_array($field, $allowedFileFields, true)) {
     if (!rename($tmpPath, $UPLOAD_DIR . $fileName)) {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'Failed to finalize uploaded file'
+            'message' => 'Failed to finalize uploaded file',
+            'debug' => $debug
         ]);
         exit;
     }
+    appendDebugStage($debug, 'save', 'Attachment saved to application draft.');
 
     $filePath = 'uploads/' . $fileName;
 
@@ -564,6 +863,8 @@ if ($shouldSave && $appId && in_array($field, $allowedFileFields, true)) {
         'summary'       => $ai['summary'] ?? '',
         'name_detected' => $ai['name_detected'] ?? '',
         'name_match'    => $ai['name_match'] ?? null,
+        'autofill_fields' => $autofillFields,
+        'debug'         => $debug,
         'message'       =>
             "✅ Verified as {$ai['detected_type']} "
           . "(expected {$expectedType}). "
@@ -580,7 +881,8 @@ unlink($tmpPath);
 
 echo json_encode([
     'status'  => 'error',
-    'message' => "❌ Not a valid {$expectedType}"
+    'message' => "❌ Not a valid {$expectedType}",
+    'debug' => $debug
 ], JSON_UNESCAPED_UNICODE);
 exit;
 

@@ -8,6 +8,47 @@ if (!empty($_GET['id']) && is_string($_GET['id'])) {
 }
 $_SESSION['user_id'] ??= 'user_' . bin2hex(random_bytes(6));
 
+/* =========================================================
+   SMART RETRIEVAL: if the user landed here via ?id=<user_id>
+   and a matching student_applications row exists, expose its
+   numeric application id so the page can auto-prefill via JS.
+========================================================= */
+$studentPrefillAppId = 0;
+$studentPrefillUserId = '';
+$studentPrefillEmail = '';
+$studentPrefillFirstName = '';
+
+if (!empty($_GET['id']) && is_string($_GET['id'])) {
+    $lookupUserId = preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['id']);
+    if ($lookupUserId !== '') {
+        $dbPathTry = __DIR__ . '/db.php';
+        if (file_exists($dbPathTry)) {
+            require_once $dbPathTry;
+            if (isset($conn) && $conn instanceof mysqli) {
+                if ($lookupStmt = $conn->prepare(
+                    "SELECT id, user_id, email, first_name
+                       FROM student_applications
+                      WHERE user_id = ?
+                      ORDER BY id DESC
+                      LIMIT 1"
+                )) {
+                    $lookupStmt->bind_param('s', $lookupUserId);
+                    if ($lookupStmt->execute()) {
+                        $lookupRes = $lookupStmt->get_result();
+                        if ($lookupRow = $lookupRes->fetch_assoc()) {
+                            $studentPrefillAppId    = (int)$lookupRow['id'];
+                            $studentPrefillUserId   = (string)$lookupRow['user_id'];
+                            $studentPrefillEmail    = (string)($lookupRow['email'] ?? '');
+                            $studentPrefillFirstName = (string)($lookupRow['first_name'] ?? '');
+                        }
+                    }
+                    $lookupStmt->close();
+                }
+            }
+        }
+    }
+}
+
 // Language detection and setting
 $lang = $_GET['lang'] ?? $_COOKIE['app_lang'] ?? 'en';
 if (in_array($lang, ['en', 'fr'])) {
@@ -57,6 +98,28 @@ $text = [
         // Step 2
         'step2_title' => 'Personal Information',
         'step2_desc' => 'Enter details exactly as shown on your passport.',
+        'smart_autofill_title' => 'Smart AI autofill',
+        'smart_autofill_desc' => 'After choosing your study choice, upload passport, CV, transcripts, degree, birth certificate, or other supporting documents. AI will extract student details and route each recognized file into the existing attachment fields automatically.',
+        'smart_autofill_button' => 'Autofill from documents',
+        'smart_autofill_formats' => 'Supported formats: PDF, DOCX, JPG, JPEG, PNG, WEBP',
+        'smart_autofill_hint' => 'Best results: upload passport, CV, and your latest academic documents together.',
+        'smart_autofill_gate' => 'Choose at least one study program first. Then upload all documents for autofill.',
+        'smart_autofill_ready' => 'Study choice selected. You can now upload all documents for autofill.',
+        'smart_autofill_processing' => 'Analyzing your documents and extracting student details…',
+        'smart_autofill_uploading' => 'Applying extracted details and attaching the recognized documents…',
+        'smart_autofill_success' => 'Autofill complete. Please review the fields before continuing.',
+        'smart_autofill_partial' => 'Autofill finished with some warnings. Please review the notes below.',
+        'smart_autofill_error' => 'Autofill failed. Please try again with clearer documents.',
+        'smart_autofill_need_draft' => 'Please save your draft first so uploaded documents can be attached to this application.',
+        'smart_autofill_results_title' => 'Recognized documents',
+        'smart_autofill_warnings_title' => 'Warnings',
+        'smart_autofill_existing_note' => 'These files are not stored in a new place. They are routed into the existing document attachment fields below.',
+        'smart_autofill_stage_draft' => 'Creating draft application',
+        'smart_autofill_stage_batch' => 'Analyzing all documents',
+        'smart_autofill_stage_fill' => 'Applying extracted details',
+        'smart_autofill_stage_route' => 'Routing files to existing fields',
+        'smart_autofill_stage_save' => 'Saving extracted form data',
+        'smart_autofill_debug_title' => 'Batch debug details',
         'first_name' => 'First Name',
         'last_name' => 'Last Name',
         'email' => 'Email',
@@ -167,6 +230,14 @@ $text = [
         'drop_statement' => 'Drop document here',
         'multiple_files' => 'Multiple files allowed',
         'single_file' => 'Single file',
+        'doc_progress_title' => 'AI extraction progress',
+        'doc_debug_title' => 'Debug details',
+        'doc_stage_prepare' => 'Preparing upload',
+        'doc_stage_upload' => 'Uploading document',
+        'doc_stage_extract' => 'Extracting text',
+        'doc_stage_ai' => 'Running AI analysis',
+        'doc_stage_parse' => 'Reading extracted details',
+        'doc_stage_save' => 'Saving attachment',
         'referral_title' => 'How did you know us?',
         'referral_help' => 'This helps us assign the correct consultant to your application.',
         'referral_options' => [
@@ -224,6 +295,28 @@ $text = [
         // Step 2
         'step2_title' => 'Informations Personnelles',
         'step2_desc' => 'Entrez les détails exactement comme indiqué sur votre passeport.',
+        'smart_autofill_title' => 'Remplissage intelligent par IA',
+        'smart_autofill_desc' => 'Après avoir choisi vos études, téléchargez le passeport, le CV, les relevés, le diplôme, le certificat de naissance ou d\'autres documents utiles. L\'IA extrait les informations de l\'étudiant puis route chaque fichier reconnu vers les champs de pièces jointes existants.',
+        'smart_autofill_button' => 'Remplir depuis les documents',
+        'smart_autofill_formats' => 'Formats supportés : PDF, DOCX, JPG, JPEG, PNG, WEBP',
+        'smart_autofill_hint' => 'Meilleurs résultats : téléchargez ensemble le passeport, le CV et les derniers documents académiques.',
+        'smart_autofill_gate' => 'Choisissez d abord au moins un programme d etudes. Ensuite, telechargez tous les documents pour le remplissage automatique.',
+        'smart_autofill_ready' => 'Choix d etudes selectionne. Vous pouvez maintenant telecharger tous les documents pour le remplissage automatique.',
+        'smart_autofill_processing' => 'Analyse des documents et extraction des informations de l\'étudiant…',
+        'smart_autofill_uploading' => 'Application des données extraites et rattachement des documents reconnus…',
+        'smart_autofill_success' => 'Remplissage terminé. Vérifiez les champs avant de continuer.',
+        'smart_autofill_partial' => 'Le remplissage est terminé avec quelques avertissements. Veuillez vérifier les notes ci-dessous.',
+        'smart_autofill_error' => 'Le remplissage a échoué. Réessayez avec des documents plus clairs.',
+        'smart_autofill_need_draft' => 'Veuillez d\'abord enregistrer le brouillon afin que les documents soient rattachés à cette demande.',
+        'smart_autofill_results_title' => 'Documents reconnus',
+        'smart_autofill_warnings_title' => 'Avertissements',
+        'smart_autofill_existing_note' => 'Ces fichiers ne sont pas stockés dans un nouvel endroit. Ils sont routés vers les champs de pièces jointes existants ci-dessous.',
+        'smart_autofill_stage_draft' => 'Creation du brouillon',
+        'smart_autofill_stage_batch' => 'Analyse de tous les documents',
+        'smart_autofill_stage_fill' => 'Application des details extraits',
+        'smart_autofill_stage_route' => 'Routage vers les champs existants',
+        'smart_autofill_stage_save' => 'Enregistrement des donnees du formulaire',
+        'smart_autofill_debug_title' => 'Details de debug du lot',
         'first_name' => 'Prénom',
         'last_name' => 'Nom',
         'email' => 'Email',
@@ -334,6 +427,14 @@ $text = [
         'drop_statement' => 'Déposez le document ici',
         'multiple_files' => 'Plusieurs fichiers autorisés',
         'single_file' => 'Fichier unique',
+        'doc_progress_title' => 'Progression de l extraction IA',
+        'doc_debug_title' => 'Details de debug',
+        'doc_stage_prepare' => 'Preparation du telechargement',
+        'doc_stage_upload' => 'Telechargement du document',
+        'doc_stage_extract' => 'Extraction du texte',
+        'doc_stage_ai' => 'Analyse IA en cours',
+        'doc_stage_parse' => 'Lecture des details extraits',
+        'doc_stage_save' => 'Enregistrement de la piece jointe',
         'referral_title' => 'Comment nous avez-vous connus?',
         'referral_help' => 'Cela nous aide à attribuer le bon consultant à votre demande.',
         'referral_options' => [
@@ -739,6 +840,89 @@ body {
 /* Show percentage when progress starts */
 .upload-progress.active .upload-bar span {
   opacity: 1;
+}
+
+.doc-progress-panel {
+  display: none;
+  margin-top: 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.doc-progress-panel.active {
+  display: block;
+}
+
+.doc-stage-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.doc-stage-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.doc-stage-item strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.doc-stage-item.is-active {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, .15);
+}
+
+.doc-stage-item.is-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.doc-stage-item.is-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.doc-debug-wrap {
+  margin-top: 14px;
+}
+
+.doc-debug-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.doc-debug-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 9px 11px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 12px;
+}
+
+.doc-debug-list span:first-child {
+  font-weight: 700;
+  color: #334155;
 }
 /* =====================================================
    UI DEPTH, CONTAINERS & VISUAL HIERARCHY (PRODUCTION)
@@ -1376,6 +1560,97 @@ body {
     cursor: not-allowed;
 }
 
+.smart-autofill-card {
+  border: 1px solid #c7d2fe;
+  border-radius: 18px;
+  padding: 1.15rem 1.25rem;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef2ff 100%);
+  box-shadow: 0 12px 28px rgba(79, 70, 229, 0.08);
+}
+
+.smart-autofill-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+}
+
+.smart-autofill-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.smart-autofill-results li {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+
+.smart-autofill-results strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+}
+
+.smart-autofill-results small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.smart-autofill-stage-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.smart-autofill-stage-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.smart-autofill-stage-item strong {
+  display: block;
+  color: #0f172a;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.smart-autofill-stage-item.is-active {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, .15);
+}
+
+.smart-autofill-stage-item.is-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.smart-autofill-stage-item.is-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 /* =====================================================
    DOCUMENT DROPZONE (STEP 7)
 ===================================================== */
@@ -1496,9 +1771,33 @@ class="list-group mt-2 d-none"></div>
   <span></span>
 </div>
 
-<form id="applicationForm" enctype="multipart/form-data">
+<?php if ($studentPrefillAppId > 0): ?>
+<div class="alert alert-info" role="status" style="border-left:4px solid #6366f1;background:#eef2ff;color:#1e3a8a;border-radius:8px;padding:14px 18px;margin-bottom:18px;">
+  <strong>
+    <?= $lang === 'fr' ? 'Reprise de votre demande' : 'Resuming your application' ?>
+  </strong>
+  <?php if ($studentPrefillFirstName !== ''): ?>
+    &mdash;
+    <?= $lang === 'fr'
+        ? 'Bonjour ' . htmlspecialchars($studentPrefillFirstName) . ', vos informations sont en cours de chargement.'
+        : 'Hi ' . htmlspecialchars($studentPrefillFirstName) . ', your saved details are being loaded.' ?>
+  <?php else: ?>
+    &mdash;
+    <?= $lang === 'fr'
+        ? 'Vos informations enregistrées sont en cours de chargement. Continuez les étapes jusqu’à la soumission.'
+        : 'Your saved details are being loaded. Continue through the steps until final submission.' ?>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<form
+  id="applicationForm"
+  enctype="multipart/form-data"
+  data-resume-app-id="<?= (int)$studentPrefillAppId ?>"
+  data-resume-user-id="<?= htmlspecialchars($studentPrefillUserId) ?>"
+>
 <input type="hidden" name="user_id" value="<?=htmlspecialchars($_SESSION['user_id'])?>">
-<input type="hidden" name="application_id" id="application_id">
+<input type="hidden" name="application_id" id="application_id" value="<?= (int)$studentPrefillAppId ?: '' ?>">
 
 <!-- =====================================================
  STEP 1 : STUDY SELECTION (WITH DOCUMENT CHECKLIST)
@@ -1712,6 +2011,57 @@ class="list-group mt-2 d-none"></div>
         <p class="form-text mt-2 mb-0 small"><?php echo $t['step1_cart_help']; ?></p>
       </aside>
 
+      <div class="smart-autofill-card mt-4">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+          <div>
+            <span class="smart-autofill-pill">AI</span>
+            <h6 class="fw-semibold mt-2 mb-2"><?php echo htmlspecialchars($t['smart_autofill_title'], ENT_QUOTES, 'UTF-8'); ?></h6>
+            <p class="text-muted small mb-2"><?php echo htmlspecialchars($t['smart_autofill_desc'], ENT_QUOTES, 'UTF-8'); ?></p>
+            <div class="form-text"><?php echo htmlspecialchars($t['smart_autofill_existing_note'], ENT_QUOTES, 'UTF-8'); ?></div>
+          </div>
+
+          <div class="text-lg-end">
+            <button type="button" class="btn btn-primary px-4" id="smartAutofillTrigger" disabled>
+              <?php echo htmlspecialchars($t['smart_autofill_button'], ENT_QUOTES, 'UTF-8'); ?>
+            </button>
+            <input
+              type="file"
+              id="smartAutofillInput"
+              class="d-none"
+              multiple
+              accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
+            >
+            <div id="smartAutofillHelp" class="form-text mt-2">
+              <?php echo htmlspecialchars($t['smart_autofill_gate'], ENT_QUOTES, 'UTF-8'); ?><br>
+              <?php echo htmlspecialchars($t['smart_autofill_formats'], ENT_QUOTES, 'UTF-8'); ?><br>
+              <?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+          </div>
+        </div>
+
+        <div id="smartAutofillStatus" class="alert d-none mt-3 mb-0" role="status" aria-live="polite"></div>
+
+        <div id="smartAutofillProgressWrap" class="upload-progress mt-3">
+          <div class="upload-bar">
+            <span id="smartAutofillProgressText">0%</span>
+          </div>
+        </div>
+
+        <div id="smartAutofillPanels" class="mt-3 d-none">
+          <div class="small fw-semibold text-body-secondary mb-2">
+            <?php echo htmlspecialchars($t['smart_autofill_results_title'], ENT_QUOTES, 'UTF-8'); ?>
+          </div>
+          <ul id="smartAutofillResults" class="smart-autofill-results"></ul>
+
+          <div id="smartAutofillWarningsWrap" class="mt-3 d-none">
+            <div class="small fw-semibold text-body-secondary mb-2">
+              <?php echo htmlspecialchars($t['smart_autofill_warnings_title'], ENT_QUOTES, 'UTF-8'); ?>
+            </div>
+            <ul id="smartAutofillWarnings" class="smart-autofill-results"></ul>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -1818,11 +2168,13 @@ class="list-group mt-2 d-none"></div>
     <input
       type="email"
       class="form-control"
+      id="applicant_email"
       name="email"
       required
       maxlength="100"
       placeholder="<?php echo $t['email']; ?>"
     >
+    <div class="invalid-feedback" id="applicantEmailFeedback"></div>
   </div>
 
   <!-- PHONE -->
@@ -2665,11 +3017,26 @@ class="list-group mt-2 d-none"></div>
     </div>
 
     <!-- ================= AI VALIDATION ================= -->
-    <div id="docValidationStatus" class="mt-4 small text-muted"></div>
+    <div id="docProgressPanel" class="doc-progress-panel">
+      <div class="small fw-semibold text-body mb-2">
+        <?php echo htmlspecialchars($t['doc_progress_title'], ENT_QUOTES, 'UTF-8'); ?>
+      </div>
 
-    <div id="docProgressWrap" class="upload-progress mt-3">
-      <div class="upload-bar">
-        <span id="docProgressText">0%</span>
+      <div id="docValidationStatus" class="small text-muted"></div>
+
+      <div id="docProgressWrap" class="upload-progress mt-3">
+        <div class="upload-bar">
+          <span id="docProgressText">0%</span>
+        </div>
+      </div>
+
+      <div id="docStageList" class="doc-stage-list"></div>
+
+      <div id="docDebugWrap" class="doc-debug-wrap d-none">
+        <div class="small fw-semibold text-body mb-2">
+          <?php echo htmlspecialchars($t['doc_debug_title'], ENT_QUOTES, 'UTF-8'); ?>
+        </div>
+        <ul id="docDebugList" class="doc-debug-list"></ul>
       </div>
     </div>
 
@@ -2811,6 +3178,20 @@ class="list-group mt-2 d-none"></div>
     </div>
   </div>
 </div>
+<div class="modal fade" id="applicationSuccessModal" tabindex="-1" aria-labelledby="applicationSuccessModalLabel" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-semibold text-success" id="applicationSuccessModalLabel">Application Submitted</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body pt-2 application-success-body text-body small"></div>
+      <div class="modal-footer border-0 pt-0">
+        <button type="button" class="btn btn-success px-4" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
 </div>
 </div>
 </div>
@@ -2871,46 +3252,168 @@ window.uploadStatus = window.uploadStatus || {};
    Single global progress bar controller
 ===================================================== */
 function createProgressController() {
+  const panel  = document.getElementById("docProgressPanel");
   const wrap   = document.getElementById("docProgressWrap");
   const bar    = wrap.querySelector(".upload-bar");
   const text   = document.getElementById("docProgressText");
   const status = document.getElementById("docValidationStatus");
+  const stageList = document.getElementById("docStageList");
+  const debugWrap = document.getElementById("docDebugWrap");
+  const debugList = document.getElementById("docDebugList");
+  const stageMeta = [
+    { id: "prepare", label: <?php echo json_encode($t['doc_stage_prepare'], JSON_UNESCAPED_UNICODE); ?> },
+    { id: "upload", label: <?php echo json_encode($t['doc_stage_upload'], JSON_UNESCAPED_UNICODE); ?> },
+    { id: "extract", label: <?php echo json_encode($t['doc_stage_extract'], JSON_UNESCAPED_UNICODE); ?> },
+    { id: "ai", label: <?php echo json_encode($t['doc_stage_ai'], JSON_UNESCAPED_UNICODE); ?> },
+    { id: "parse", label: <?php echo json_encode($t['doc_stage_parse'], JSON_UNESCAPED_UNICODE); ?> },
+    { id: "save", label: <?php echo json_encode($t['doc_stage_save'], JSON_UNESCAPED_UNICODE); ?> }
+  ];
+  let currentStage = "prepare";
+  let errorStage = "";
+
+  function renderStages(activeStage = currentStage, failedStage = errorStage) {
+    if (!stageList) return;
+
+    const activeIndex = stageMeta.findIndex(stage => stage.id === activeStage);
+    const failedIndex = stageMeta.findIndex(stage => stage.id === failedStage);
+
+    stageList.innerHTML = "";
+
+    stageMeta.forEach((stage, index) => {
+      const item = document.createElement("div");
+      item.className = "doc-stage-item";
+
+      if (failedIndex >= 0 && index === failedIndex) {
+        item.classList.add("is-error");
+      } else if (activeIndex >= 0 && index < activeIndex) {
+        item.classList.add("is-done");
+      } else if (stage.id === activeStage && failedIndex < 0) {
+        item.classList.add("is-active");
+      }
+
+      const title = document.createElement("strong");
+      title.textContent = stage.label;
+      item.appendChild(title);
+
+      const state = document.createElement("span");
+      if (failedIndex >= 0 && index === failedIndex) {
+        state.textContent = "Error";
+      } else if (activeIndex >= 0 && index < activeIndex) {
+        state.textContent = "Done";
+      } else if (stage.id === activeStage && failedIndex < 0) {
+        state.textContent = "In progress";
+      } else {
+        state.textContent = "Pending";
+      }
+      item.appendChild(state);
+
+      stageList.appendChild(item);
+    });
+  }
+
+  function renderDebug(debug) {
+    if (!debugWrap || !debugList) return;
+
+    const rows = [];
+    if (debug && typeof debug === "object") {
+      if (debug.file_name) rows.push(["File", debug.file_name]);
+      if (debug.mime) rows.push(["Mime", debug.mime]);
+      if (debug.processing_mode) rows.push(["Mode", debug.processing_mode]);
+      if (debug.expected_type) rows.push(["Expected", debug.expected_type]);
+      if (debug.detected_type) rows.push(["Detected", debug.detected_type]);
+      if (debug.confidence != null && debug.confidence !== "") rows.push(["Confidence", String(debug.confidence)]);
+      if (debug.model) rows.push(["AI model", debug.model]);
+      if (debug.api_key_status) rows.push(["API key", debug.api_key_status]);
+      if (debug.env_path) rows.push(["Env file", debug.env_path]);
+      if (debug.log_file) rows.push(["Debug log", debug.log_file]);
+      if (Array.isArray(debug.stages) && debug.stages.length) {
+        rows.push([
+          "Server stages",
+          debug.stages.map(stage => `${stage.stage}: ${stage.detail}`).join(" | ")
+        ]);
+      }
+    }
+
+    debugList.innerHTML = "";
+
+    if (!rows.length) {
+      debugWrap.classList.add("d-none");
+      return;
+    }
+
+    rows.forEach(([label, value]) => {
+      const li = document.createElement("li");
+      const left = document.createElement("span");
+      const right = document.createElement("span");
+      left.textContent = label;
+      right.textContent = value;
+      li.appendChild(left);
+      li.appendChild(right);
+      debugList.appendChild(li);
+    });
+
+    debugWrap.classList.remove("d-none");
+  }
 
   /* ---------- Reset UI ---------- */
+  if (panel) panel.classList.add("active");
   bar.style.background = "";
   bar.style.width = "0%";
   text.textContent = "0%";
   status.textContent = "";
+  currentStage = "prepare";
+  errorStage = "";
+  renderStages();
+  renderDebug(null);
 
   wrap.style.display = "block";
   wrap.classList.add("active");
 
   return {
-    set(percent, label) {
+    set(percent, label, stageId = null) {
       percent = Math.max(0, Math.min(100, percent));
       bar.style.width = percent + "%";
       text.textContent = percent + "%";
       if (label) status.textContent = label;
+      if (stageId) {
+        currentStage = stageId;
+        errorStage = "";
+        renderStages();
+      }
     },
 
-    success(message) {
+    success(message, debug = null) {
       bar.style.width = "100%";
       text.textContent = "100%";
       status.textContent = message || "Document validated successfully";
+      currentStage = "save";
+      errorStage = "";
+      renderStages();
+      renderDebug(debug);
     },
 
-    error(message) {
+    error(message, debug = null, stageId = null) {
       bar.style.width = "100%";
       bar.style.background = "#dc3545";
       text.textContent = "!";
       status.textContent = message || "Upload failed";
+      errorStage = stageId || currentStage || "save";
+      renderStages(currentStage, errorStage);
+      renderDebug(debug);
     },
 
     hide(delay = 1200) {
       setTimeout(() => {
         wrap.classList.remove("active");
-        wrap.style.display = "none";
+        if (!debugWrap || debugWrap.classList.contains("d-none")) {
+          wrap.style.display = "none";
+          if (panel) panel.classList.remove("active");
+        }
       }, delay);
+    },
+
+    renderDebug(debug) {
+      renderDebug(debug);
     }
   };
 }
@@ -2929,9 +3432,13 @@ document.querySelectorAll(".doc-dropzone").forEach(zone => {
   /* ---------- Render selected files ---------- */
   function renderFiles(files) {
     list.innerHTML = "";
-    [...files].forEach(file => {
+    const fileNames = multiple
+      ? [...new Set([...(window.uploadStatus[field] || []), ...[...files].map(file => file.name)])]
+      : [...files].map(file => file.name);
+
+    fileNames.forEach(name => {
       const li = document.createElement("li");
-      li.textContent = file.name;
+      li.textContent = name;
       list.appendChild(li);
     });
   }
@@ -3018,8 +3525,23 @@ function uploadSingleFile(field, file) {
     const list  = zone?.querySelector('.dz-files');
     const isMulti = input?.hasAttribute("multiple");
 
+    function renderUploadedFileChip(name) {
+      if (!list) return;
+
+      if (!isMulti) {
+        list.innerHTML = "";
+      }
+
+      const exists = [...list.children].some(li => li.textContent === name);
+      if (exists) return;
+
+      const li = document.createElement("li");
+      li.textContent = name;
+      list.appendChild(li);
+    }
+
     const progress = createProgressController();
-    progress.set(5, "Preparing document…");
+    progress.set(5, "Preparing document…", "prepare");
 
     /* ===============================
        BUILD FORM DATA
@@ -3035,6 +3557,7 @@ function uploadSingleFile(field, file) {
       "last_name",
       document.querySelector('[name="last_name"]')?.value || ""
     );
+    formData.append("lang", document.documentElement.lang || "en");
 
     /* ===============================
        INIT REQUEST
@@ -3050,14 +3573,14 @@ function uploadSingleFile(field, file) {
     xhr.upload.onprogress = e => {
       if (!e.lengthComputable) return;
       const percent = Math.round((e.loaded / e.total) * 60);
-      progress.set(percent, `Uploading ${file.name}…`);
+      progress.set(percent, `Uploading ${file.name}…`, "upload");
     };
 
     /* ===============================
        UPLOAD COMPLETE → START AI UI
     =============================== */
     xhr.upload.onload = () => {
-      progress.set(62, "Upload complete. Validating document…");
+      progress.set(62, "Upload complete. Extracting document text…", "extract");
       validationTimer = startValidationSimulation(progress);
     };
 
@@ -3066,7 +3589,10 @@ function uploadSingleFile(field, file) {
     =============================== */
     xhr.onerror = () => {
       clearInterval(validationTimer);
-      progress.error("Network error during upload");
+      progress.error("Network error during upload", {
+        file_name: file.name,
+        api_key_status: "unknown"
+      }, "upload");
       cleanupFailedFile();
       reject();
     };
@@ -3074,11 +3600,15 @@ function uploadSingleFile(field, file) {
     /* ===============================
        SERVER RESPONSE
     =============================== */
-    xhr.onload = () => {
+    xhr.onload = async () => {
       clearInterval(validationTimer);
 
       if (xhr.status !== 200) {
-        progress.error("Server error during validation");
+        let serverDebug = null;
+        try {
+          serverDebug = JSON.parse(xhr.responseText || "{}")?.debug || null;
+        } catch (err) {}
+        progress.error("Server error during validation", serverDebug, "save");
         cleanupFailedFile();
         reject();
         return;
@@ -3088,7 +3618,9 @@ function uploadSingleFile(field, file) {
       try {
         response = JSON.parse(xhr.responseText);
       } catch {
-        progress.error("Invalid server response");
+        progress.error("Invalid server response", {
+          file_name: file.name
+        }, "parse");
         cleanupFailedFile();
         reject();
         return;
@@ -3098,18 +3630,53 @@ function uploadSingleFile(field, file) {
          SUCCESS
       =============================== */
       if (response.status === "success") {
-
-        progress.success(response.message || "Document validated");
+        if (!isMulti) {
+          window.uploadStatus[field] = [];
+        }
+        renderUploadedFileChip(file.name);
         window.uploadStatus[field].push(file.name);
+        let draftSaveWarning = "";
+        if (response.autofill_fields && typeof window.applyAutofillFields === "function") {
+          window.applyAutofillFields(response.autofill_fields);
+          if (typeof window.persistAutofillDraftData === "function") {
+            try {
+              await window.persistAutofillDraftData(
+                window.currentApplicationId ||
+                  document.querySelector('[name="application_id"]')?.value ||
+                  0,
+                response.autofill_fields
+              );
+            } catch (err) {
+              draftSaveWarning =
+                err && err.message
+                  ? err.message
+                  : "Draft auto-save needs another try.";
+            }
+          }
+        }
+        if (input) {
+          input.classList.add("is-valid");
+          if (!isMulti) {
+            input.disabled = true;
+          } else {
+            input.value = "";
+          }
+        }
+        progress.success(
+          draftSaveWarning
+            ? `${response.message || "Document validated"} ${draftSaveWarning}`
+            : (response.message || "Document validated"),
+          response.debug || null
+        );
         progress.hide();
-        resolve();
+        resolve(response);
         return;
       }
 
       /* ===============================
          ❌ VALIDATION FAILED
       =============================== */
-      progress.error(response.message || "Document validation failed");
+      progress.error(response.message || "Document validation failed", response.debug || null, "save");
       cleanupFailedFile();
       reject();
     };
@@ -3157,27 +3724,361 @@ function uploadSingleFile(field, file) {
 ===================================================== */
 function startValidationSimulation(progress) {
   let percent = 62;
-
-  const labels = [
-    "Extracting document text…",
-    "Analyzing format & structure…",
-    "Verifying identity consistency…",
-    "Checking authenticity markers…",
-    "Final validation…"
+  const stages = [
+    { id: "extract", label: "Extracting document text…", cap: 72 },
+    { id: "ai", label: "Sending document to AI analysis…", cap: 84 },
+    { id: "parse", label: "Parsing extracted applicant details…", cap: 92 },
+    { id: "save", label: "Saving attachment and autofill data…", cap: 98 }
   ];
-
   let i = 0;
 
   return setInterval(() => {
     if (percent >= 98) return;
     percent += Math.random() * 4;
+    const stage = stages[Math.min(i, stages.length - 1)];
     progress.set(
       Math.min(98, Math.round(percent)),
-      labels[i % labels.length]
+      stage.label,
+      stage.id
     );
-    i++;
+    if (percent >= stage.cap && i < stages.length - 1) {
+      i++;
+    }
   }, 700);
 }
+
+(function () {
+  const trigger = document.getElementById("smartAutofillTrigger");
+  const input = document.getElementById("smartAutofillInput");
+  const statusEl = document.getElementById("smartAutofillStatus");
+  const progressWrap = document.getElementById("smartAutofillProgressWrap");
+  const progressBar = progressWrap?.querySelector(".upload-bar");
+  const progressText = document.getElementById("smartAutofillProgressText");
+  const helpEl = document.getElementById("smartAutofillHelp");
+  const studyChoicesWrap = document.getElementById("studyChoices");
+  const regionsSelect = document.getElementById("regions");
+  const panelsEl = document.getElementById("smartAutofillPanels");
+  const resultsEl = document.getElementById("smartAutofillResults");
+  const warningsWrapEl = document.getElementById("smartAutofillWarningsWrap");
+  const warningsEl = document.getElementById("smartAutofillWarnings");
+
+  if (
+    !trigger || !input || !statusEl || !progressWrap || !progressBar || !progressText ||
+    !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl
+  ) {
+    return;
+  }
+
+  const texts = {
+    processing: <?php echo json_encode($t['smart_autofill_processing'], JSON_UNESCAPED_UNICODE); ?>,
+    uploading: <?php echo json_encode($t['smart_autofill_uploading'], JSON_UNESCAPED_UNICODE); ?>,
+    success: <?php echo json_encode($t['smart_autofill_success'], JSON_UNESCAPED_UNICODE); ?>,
+    partial: <?php echo json_encode($t['smart_autofill_partial'], JSON_UNESCAPED_UNICODE); ?>,
+    error: <?php echo json_encode($t['smart_autofill_error'], JSON_UNESCAPED_UNICODE); ?>,
+    needDraft: <?php echo json_encode($t['smart_autofill_need_draft'], JSON_UNESCAPED_UNICODE); ?>,
+    gate: <?php echo json_encode($t['smart_autofill_gate'], JSON_UNESCAPED_UNICODE); ?>,
+    ready: <?php echo json_encode($t['smart_autofill_ready'], JSON_UNESCAPED_UNICODE); ?>
+  };
+
+  function resetVisuals() {
+    progressWrap.style.display = "none";
+    progressWrap.classList.remove("active");
+    progressBar.style.width = "0%";
+    progressBar.style.background = "";
+    progressText.textContent = "0%";
+    statusEl.textContent = "";
+    statusEl.className = "alert d-none mt-3 mb-0";
+    resultsEl.innerHTML = "";
+    warningsEl.innerHTML = "";
+    panelsEl.classList.add("d-none");
+    warningsWrapEl.classList.add("d-none");
+  }
+
+  function setStatus(kind, message) {
+    statusEl.className = "alert mt-3 mb-0";
+    if (kind === "success") {
+      statusEl.classList.add("alert-success");
+    } else if (kind === "warning") {
+      statusEl.classList.add("alert-warning");
+    } else if (kind === "danger") {
+      statusEl.classList.add("alert-danger");
+    } else {
+      statusEl.classList.add("alert-info");
+    }
+    statusEl.textContent = message;
+    statusEl.classList.remove("d-none");
+  }
+
+  function setProgress(percent, message, kind = "info") {
+    progressWrap.style.display = "block";
+    progressWrap.classList.add("active");
+    progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+    progressBar.style.background = kind === "danger" ? "#dc3545" : "";
+    progressText.textContent = `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+    setStatus(kind, message);
+  }
+
+  function renderPanels(documents, warnings) {
+    resultsEl.innerHTML = "";
+    warningsEl.innerHTML = "";
+
+    if (Array.isArray(documents) && documents.length) {
+      documents.forEach(doc => {
+        const li = document.createElement("li");
+        const title = document.createElement("strong");
+        const detail = document.createElement("small");
+        title.textContent = `${doc.original_name} -> ${doc.field_label || doc.field || "Unmatched"}`;
+        detail.textContent = doc.summary || "";
+        li.appendChild(title);
+        if (detail.textContent) li.appendChild(detail);
+        resultsEl.appendChild(li);
+      });
+      panelsEl.classList.remove("d-none");
+    }
+
+    if (Array.isArray(warnings) && warnings.length) {
+      warnings.forEach(message => {
+        const li = document.createElement("li");
+        const title = document.createElement("strong");
+        title.textContent = "Warning";
+        li.appendChild(title);
+        if (message) {
+          const detail = document.createElement("small");
+          detail.textContent = message;
+          li.appendChild(detail);
+        }
+        warningsEl.appendChild(li);
+      });
+      warningsWrapEl.classList.remove("d-none");
+      panelsEl.classList.remove("d-none");
+    }
+  }
+
+  function hasSelectedPrograms() {
+    let hasPrograms = false;
+
+    document.querySelectorAll(".study-choice .program").forEach(programEl => {
+      const values = window.jQuery ? $(programEl).val() : programEl.value;
+      const ids = Array.isArray(values) ? values : values ? [values] : [];
+      if (ids.length && ids.some(id => id && String(id).trim() !== "")) {
+        hasPrograms = true;
+      }
+    });
+
+    return hasPrograms;
+  }
+
+  function updateSmartAutofillAvailability() {
+    const ready = hasSelectedPrograms();
+    trigger.disabled = !ready;
+    if (helpEl) {
+      helpEl.innerHTML = `${ready ? texts.ready : texts.gate}<br><?php echo htmlspecialchars($t['smart_autofill_formats'], ENT_QUOTES, 'UTF-8'); ?><br><?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?>`;
+    }
+  }
+
+  async function ensureDraftExists() {
+    if (window.currentApplicationId) {
+      return window.currentApplicationId;
+    }
+
+    const fd = new FormData();
+    const res = await fetch("save_application.php", {
+      method: "POST",
+      body: fd
+    });
+
+    let data = null;
+    try {
+      data = await res.json();
+    } catch (err) {
+      throw new Error(texts.needDraft);
+    }
+
+    if (!res.ok || !data || data.status !== "success" || !data.application_id) {
+      throw new Error(data?.message || texts.needDraft);
+    }
+
+    if (typeof syncApplicationIdToForm === "function") {
+      syncApplicationIdToForm(data.application_id);
+    } else {
+      window.currentApplicationId = data.application_id;
+      const hiddenIdField = document.querySelector('input[name="application_id"]');
+      if (hiddenIdField) hiddenIdField.value = data.application_id;
+    }
+
+    return data.application_id;
+  }
+
+  function buildUploadQueue(documents) {
+    const multiFieldSet = new Set(["degree_transcripts", "recommendation_letters"]);
+    const grouped = new Map();
+    const warnings = [];
+    const queue = [];
+
+    (Array.isArray(documents) ? documents : []).forEach(doc => {
+      if (!doc || !doc.field) return;
+      if (!grouped.has(doc.field)) grouped.set(doc.field, []);
+      grouped.get(doc.field).push(doc);
+    });
+
+    for (const [field, docs] of grouped.entries()) {
+      const ranked = [...docs].sort(
+        (a, b) => Number(b?.confidence || 0) - Number(a?.confidence || 0)
+      );
+
+      const selected = multiFieldSet.has(field) ? ranked : ranked.slice(0, 1);
+      const skipped = multiFieldSet.has(field) ? [] : ranked.slice(1);
+
+      skipped.forEach(doc => {
+        warnings.push(`Skipped ${doc.original_name} because another file was a stronger match for ${doc.field_label || field}.`);
+      });
+
+      selected.forEach(doc => queue.push(doc));
+    }
+
+    return { queue, warnings };
+  }
+
+  trigger.addEventListener("click", () => input.click());
+
+  input.addEventListener("change", async () => {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+
+    trigger.disabled = true;
+    input.disabled = true;
+    resetVisuals();
+
+    try {
+      setProgress(8, "Creating draft application...");
+      const applicationId = await ensureDraftExists();
+
+      setProgress(25, texts.processing);
+      const formData = new FormData();
+      files.forEach(file => formData.append("documents[]", file));
+      formData.append("application_id", applicationId);
+      formData.append("lang", document.documentElement.lang || "en");
+
+      const analysisResponse = await fetch("student_ai_autofill.php", {
+        method: "POST",
+        body: formData
+      });
+
+      let analysisData = null;
+      try {
+        analysisData = await analysisResponse.json();
+      } catch (err) {
+        throw new Error(texts.error);
+      }
+
+      if (!analysisResponse.ok || !analysisData || analysisData.status !== "success") {
+        throw new Error(analysisData?.message || texts.error);
+      }
+
+      setProgress(50, texts.uploading);
+      if (analysisData.fields && typeof window.applyAutofillFields === "function") {
+        window.applyAutofillFields(analysisData.fields);
+      }
+
+      const { queue, warnings: queueWarnings } = buildUploadQueue(analysisData.documents || []);
+      const warnings = [...(analysisData.warnings || []), ...queueWarnings];
+      let attachFailures = 0;
+
+      let completed = 0;
+      for (const doc of queue) {
+        const file = files[Number(doc.client_index)];
+        if (!file) {
+          warnings.push(`Original file missing for ${doc.original_name}.`);
+          continue;
+        }
+
+        const progress = 55 + Math.round((completed / Math.max(queue.length, 1)) * 35);
+        setProgress(
+          progress,
+          `Routing ${doc.original_name} to ${doc.field_label || doc.field}...`
+        );
+
+        try {
+          await uploadSingleFile(doc.field, file);
+        } catch (err) {
+          attachFailures++;
+          warnings.push(`Failed to attach ${doc.original_name} to ${doc.field_label || doc.field}.`);
+        }
+        completed++;
+      }
+
+      setProgress(95, "Saving extracted form data...");
+      try {
+        if (typeof window.persistAutofillDraftData === "function") {
+          await window.persistAutofillDraftData(applicationId, analysisData.fields || {});
+        }
+      } catch (err) {
+        warnings.push(err && err.message ? err.message : "Autofilled form values were applied, but saving the draft needs another try.");
+      }
+
+      renderPanels(analysisData.documents || [], warnings);
+
+      if (attachFailures > 0) {
+        setProgress(100, "Some documents could not be attached, so the application was kept as a draft.", "warning");
+        return;
+      }
+
+      const missingRequired =
+        typeof window.getMissingRequiredUploads === "function"
+          ? window.getMissingRequiredUploads()
+          : [];
+
+      if (missingRequired.length) {
+        warnings.push(`Final submission skipped because required documents are still missing: ${missingRequired.join(", ")}.`);
+        renderPanels(analysisData.documents || [], warnings);
+        setProgress(100, "Draft saved. Final submission needs the required documents.", "warning");
+        return;
+      }
+
+      setProgress(98, "Submitting application, sending email, and creating student portal access...");
+      const submitted = await submitForm({
+        autoAssignDefaultAgent: true,
+        successTitle: "Application Submitted",
+        successMessage:
+          "Application submitted successfully. A student submission email and default student portal access have been sent. Any later updates can be done from retrieval or the student portal."
+      });
+      if (!submitted) {
+        setProgress(100, "Final submission failed. The extracted application remains saved as a draft.", "warning");
+        return;
+      }
+      setProgress(100, texts.success, "success");
+    } catch (err) {
+      progressWrap.style.display = "block";
+      progressWrap.classList.add("active");
+      progressBar.style.width = "100%";
+      progressBar.style.background = "#dc3545";
+      progressText.textContent = "!";
+      setStatus("danger", err && err.message ? err.message : texts.error);
+      if (typeof showApplicationSaveError === "function" && err && err.message) {
+        showApplicationSaveError(err.message);
+      }
+    } finally {
+      trigger.disabled = false;
+      input.disabled = false;
+      input.value = "";
+      updateSmartAutofillAvailability();
+    }
+  });
+
+  if (studyChoicesWrap) {
+    studyChoicesWrap.addEventListener("change", () => setTimeout(updateSmartAutofillAvailability, 50));
+    new MutationObserver(() => setTimeout(updateSmartAutofillAvailability, 50)).observe(
+      studyChoicesWrap,
+      { childList: true, subtree: true }
+    );
+  }
+
+  if (regionsSelect && window.jQuery) {
+    $(regionsSelect).on("change", () => setTimeout(updateSmartAutofillAvailability, 50));
+  }
+
+  setTimeout(updateSmartAutofillAvailability, 300);
+})();
 </script>
 
 <script>
@@ -4602,6 +5503,60 @@ ELEMENTS
 const searchBox  = document.getElementById("resume_email_search");
 const resultsBox = document.getElementById("resumeResults");
 
+/* =====================================================================
+   AUTO-RESUME ON PAGE LOAD
+   If the form is rendered with data-resume-app-id="<id>" (set by PHP
+   when the visitor lands here via ?id=<user_id> and we found a matching
+   student_applications row), automatically prefill the form by calling
+   the same loader path used by the email-search box.
+===================================================================== */
+const _appForm = document.getElementById("applicationForm");
+const _resumeAppId  = _appForm ? parseInt(_appForm.dataset.resumeAppId  || "0", 10) : 0;
+const _resumeUserId = _appForm ? (_appForm.dataset.resumeUserId || "")           : "";
+
+async function autoResumeFromUrl(){
+  if(!_appForm) return;
+  if(!_resumeAppId && !_resumeUserId) return;
+  try{
+    const url = _resumeAppId
+      ? `${API_LOAD}?id=${encodeURIComponent(_resumeAppId)}`
+      : `${API_LOAD}?user_id=${encodeURIComponent(_resumeUserId)}`;
+    const response = await fetch(url);
+    if(!response.ok) return;
+    const data = await response.json();
+    if(data.status !== "success") return;
+
+    const resolvedAppId = data.id || _resumeAppId;
+    if (typeof syncApplicationIdToForm === "function") {
+      syncApplicationIdToForm(resolvedAppId);
+    } else {
+      window.currentApplicationId = resolvedAppId;
+      const hiddenIdField = document.querySelector('input[name="application_id"]');
+      if(hiddenIdField) hiddenIdField.value = resolvedAppId;
+    }
+
+    populateForm(data.application);
+    restoreStudySelections(data.study_choices);
+
+    if(searchBox && data.application && data.application.email){
+      searchBox.value = data.application.email;
+    }
+  }
+  catch(err){
+    console.error("Auto-resume failed:", err);
+  }
+}
+
+/* Defer to next tick so all init scripts (Select2, countries, etc.) have
+   bound their change handlers before we fire change events. */
+if(_resumeAppId || _resumeUserId){
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", ()=>setTimeout(autoResumeFromUrl, 500));
+  } else {
+    setTimeout(autoResumeFromUrl, 500);
+  }
+}
+
 if(!searchBox || !resultsBox) return;
 
 /* ======================================================
@@ -4766,11 +5721,15 @@ throw new Error("Invalid response");
 
 /* restore autosave ID */
 
+if (typeof syncApplicationIdToForm === "function") {
+syncApplicationIdToForm(data.id);
+} else {
 window.currentApplicationId = data.id;
 
 const hiddenIdField = document.querySelector('input[name="application_id"]');
 if(hiddenIdField){
     hiddenIdField.value = data.id;
+}
 }
 
 /* populate form fields */
@@ -4855,6 +5814,14 @@ input.value = value ?? "";
 });
 
 });
+
+if (typeof window.restoreUploadedDocuments === "function") {
+window.restoreUploadedDocuments(data);
+}
+
+if (typeof window.restorePhoneInputsFromData === "function") {
+window.restorePhoneInputsFromData(data);
+}
 
 }
 

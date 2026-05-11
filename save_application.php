@@ -54,6 +54,7 @@ function trigger_async_email(int $applicationId): void
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/mailer.php';
 require_once __DIR__ . '/helpers/student_portal_accounts.php';
+require_once __DIR__ . '/helpers/study_choices.php';
 require_once __DIR__ . '/helpers/urls.php';
 require_once __DIR__ . '/includes/company_branding.php';
 function debug_log(string $label, $data = null): void
@@ -255,6 +256,36 @@ $userId = $_SESSION['user_id'] ?? null; // may be null before step 1
 
 
 $action = $_GET['action'] ?? null;
+
+/* =====================================================
+   EMAIL AVAILABILITY CHECK
+===================================================== */
+if ($action === 'check_email') {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $email = strtolower(trim((string)($_GET['email'] ?? '')));
+    $excludeApplicationId = (int)($_GET['application_id'] ?? 0);
+
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        echo json_encode([
+            'status' => 'success',
+            'exists' => false,
+            'message' => ''
+        ]);
+        exit;
+    }
+
+    $exists = pcvc_applicant_email_taken($conn, $email, $excludeApplicationId);
+
+    echo json_encode([
+        'status' => 'success',
+        'exists' => $exists,
+        'message' => $exists
+            ? 'This email is already registered with an existing application.'
+            : ''
+    ]);
+    exit;
+}
 
 /* =====================================================
    LOAD META (REGIONS)
@@ -638,6 +669,7 @@ if (!$conn->begin_transaction()) {
 
 $sessionId = session_id();
 $appId     = null;
+$storedEmailNorm = '';
 
 /* ===============================
    1️⃣ PRIORITY: USE application_id
@@ -761,16 +793,38 @@ if (!$appId) {
    ✅ $appId IS NOW FINAL & SAFE
 =============================== */
 
+$stmt = $conn->prepare("
+    SELECT LOWER(TRIM(COALESCE(email, '')))
+    FROM student_applications
+    WHERE id = ?
+    LIMIT 1
+");
+if ($stmt) {
+    $stmt->bind_param("i", $appId);
+    $stmt->execute();
+    $stmt->bind_result($storedEmailNormResult);
+    if ($stmt->fetch() && is_string($storedEmailNormResult)) {
+        $storedEmailNorm = $storedEmailNormResult;
+    }
+    $stmt->close();
+}
+
 /* ===============================
    UNIQUE APPLICANT EMAIL (blocks duplicate profiles)
    Run once $appId is known; rollback before json_error.
 =============================== */
 $applicantEmailNorm = isset($_POST['email']) ? strtolower(trim((string)$_POST['email'])) : '';
 $postStep = isset($_POST['step']) ? (int)$_POST['step'] : -1;
+$isPersonalInfoStep = ($postStep === 1);
+$emailChangedForCurrentApplication = (
+    $applicantEmailNorm !== ''
+    && filter_var($applicantEmailNorm, FILTER_VALIDATE_EMAIL)
+    && $applicantEmailNorm !== $storedEmailNorm
+);
 if (
     $applicantEmailNorm !== ''
     && filter_var($applicantEmailNorm, FILTER_VALIDATE_EMAIL)
-    && ($postStep >= 1 || $isFinal === 1)
+    && ($isPersonalInfoStep || ($isFinal === 1 && $emailChangedForCurrentApplication))
     && pcvc_applicant_email_taken($conn, $applicantEmailNorm, $appId)
 ) {
     $conn->rollback();
@@ -957,12 +1011,15 @@ $allowed = [
            SAVE STUDY CHOICES (CRITICAL)
         =============================== */
         if (!empty($_POST['study_choices'])) {
+            pcvc_ensure_study_choice_schema($conn);
 
             $choices = json_decode($_POST['study_choices'], true);
             
             if (!is_array($choices)) {
                 throw new Exception('study_choices JSON invalid');
             }
+
+            $choices = pcvc_normalize_study_choices($choices);
 
             // Clear old
             $stmt = $conn->prepare(

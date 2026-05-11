@@ -1,12 +1,111 @@
 <?php
 /**
- * Smart retrieval: verify user_id exists for a service card and return the URL to continue.
+ * Smart retrieval:
+ *   - default: verify a user_id exists for a service card and return a redirect URL
+ *   - action=search: search a service's table by name / email and return matching user_ids
  */
 header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/db.php';
 
+$action = isset($_GET['action']) ? trim((string)$_GET['action']) : (isset($_POST['action']) ? trim((string)$_POST['action']) : '');
 $card   = isset($_POST['card']) ? trim((string)$_POST['card']) : (isset($_GET['card']) ? trim((string)$_GET['card']) : '');
+
+$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical'];
+if (!in_array($card, $allowedCards, true)) {
+    echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);
+    exit;
+}
+
+// Per-card search configuration (table + columns).
+$cardSearchConfig = [
+    'credit'       => ['table' => 'credit_transfer_applications', 'order' => 'submitted_at DESC, id DESC', 'has_submitted_at' => true],
+    'scholarships' => ['table' => 'master_loan_applications',     'order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'i20'          => ['table' => 'form_20_applications',         'order' => 'created_at DESC',             'has_submitted_at' => false, 'created_col' => 'created_at', 'no_id' => true],
+    'admissions'   => ['table' => 'student_applications',         'order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'visa'         => ['table' => 'form_17_applications',         'order' => 'submitted_at DESC',           'has_submitted_at' => true,  'no_id' => true],
+    'jobs'         => ['table' => 'job_applications',             'order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'medical'      => ['table' => 'canada_medical_exams_requests','order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
+];
+
+if ($action === 'search') {
+    $q = isset($_GET['q']) ? trim((string)$_GET['q']) : '';
+    if ($q === '' || mb_strlen($q) < 2) {
+        echo json_encode(['status' => 'success', 'results' => []]);
+        exit;
+    }
+    if (mb_strlen($q) > 120) {
+        $q = mb_substr($q, 0, 120);
+    }
+
+    $cfg = $cardSearchConfig[$card] ?? null;
+    if (!$cfg) {
+        echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);
+        exit;
+    }
+
+    $table = $cfg['table'];
+    $dateCol = !empty($cfg['has_submitted_at']) ? 'submitted_at' : ($cfg['created_col'] ?? 'created_at');
+
+    // Only return rows with a real user_id (others can't be retrieved).
+    $sql = "SELECT user_id, first_name, last_name, email, $dateCol AS submitted_at
+              FROM $table
+             WHERE user_id IS NOT NULL AND user_id <> ''
+               AND (
+                LOWER(CONCAT_WS(' ', first_name, COALESCE(middle_name, ''), last_name)) LIKE LOWER(?)
+                OR LOWER(first_name) LIKE LOWER(?)
+                OR LOWER(last_name)  LIKE LOWER(?)
+                OR LOWER(email)      LIKE LOWER(?)
+                OR LOWER(user_id)    LIKE LOWER(?)
+             )
+             ORDER BY $dateCol DESC
+             LIMIT 10";
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        // Some tables don't have middle_name. Retry without that piece.
+        $sql2 = "SELECT user_id, first_name, last_name, email, $dateCol AS submitted_at
+                   FROM $table
+                  WHERE user_id IS NOT NULL AND user_id <> ''
+                    AND (
+                     LOWER(CONCAT_WS(' ', first_name, last_name)) LIKE LOWER(?)
+                     OR LOWER(first_name) LIKE LOWER(?)
+                     OR LOWER(last_name)  LIKE LOWER(?)
+                     OR LOWER(email)      LIKE LOWER(?)
+                     OR LOWER(user_id)    LIKE LOWER(?)
+                  )
+                  ORDER BY $dateCol DESC
+                  LIMIT 10";
+        $stmt = $conn->prepare($sql2);
+    }
+
+    if (!$stmt) {
+        echo json_encode(['status' => 'error', 'message' => 'Search unavailable.']);
+        exit;
+    }
+
+    $like = '%' . $q . '%';
+    $stmt->bind_param('sssss', $like, $like, $like, $like, $like);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    $rows = [];
+    if ($res) {
+        while ($r = $res->fetch_assoc()) {
+            $name = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+            $rows[] = [
+                'user_id'      => (string)($r['user_id'] ?? ''),
+                'name'         => $name,
+                'email'        => (string)($r['email'] ?? ''),
+                'submitted_at' => $r['submitted_at'] ? date('Y-m-d', strtotime((string)$r['submitted_at'])) : '',
+            ];
+        }
+    }
+    $stmt->close();
+
+    echo json_encode(['status' => 'success', 'results' => $rows]);
+    exit;
+}
+
 $userId = isset($_POST['user_id']) ? trim((string)$_POST['user_id']) : (isset($_GET['user_id']) ? trim((string)$_GET['user_id']) : '');
 
 if ($userId === '' || strlen($userId) > 160) {
@@ -16,12 +115,6 @@ if ($userId === '' || strlen($userId) > 160) {
 
 if (!preg_match('/^[a-zA-Z0-9_\-\.]+$/', $userId)) {
     echo json_encode(['status' => 'error', 'message' => 'Invalid user ID format.']);
-    exit;
-}
-
-$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical'];
-if (!in_array($card, $allowedCards, true)) {
-    echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);
     exit;
 }
 

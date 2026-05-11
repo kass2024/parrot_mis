@@ -17,6 +17,18 @@ const REQUIRED_UPLOADS = [
   "cv_resume",
 ];
 
+const DOCUMENT_UPLOAD_FIELDS = [
+  "degree_transcripts",
+  "high_school_degree",
+  "valid_passport",
+  "recommendation_letters",
+  "personal_statement",
+  "cv_resume",
+  "english_certificate",
+  "birth_certificate",
+  "payment_proof",
+];
+
 // upload validation state (field => response)
 
 
@@ -66,6 +78,199 @@ function showApplicationSaveError(message, options = {}) {
   inst.show();
 }
 
+function showApplicationSuccessPrompt(message, options = {}) {
+  const msg = typeof message === "string" && message.trim() !== "" ? message.trim() : "Application submitted successfully.";
+  const modalEl = document.getElementById("applicationSuccessModal");
+  if (!modalEl || typeof bootstrap === "undefined" || !bootstrap.Modal) {
+    window.alert(msg);
+    return Promise.resolve();
+  }
+
+  const titleEl = modalEl.querySelector(".modal-title");
+  const bodyEl = modalEl.querySelector(".application-success-body");
+  const defaultTitle = titleEl ? titleEl.textContent.trim() : "";
+  if (titleEl && options.title) titleEl.textContent = options.title;
+  if (bodyEl) bodyEl.textContent = msg;
+
+  return new Promise(resolve => {
+    const inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modalEl.addEventListener(
+      "hidden.bs.modal",
+      function resetTitle() {
+        if (titleEl && defaultTitle) titleEl.textContent = defaultTitle;
+        modalEl.removeEventListener("hidden.bs.modal", resetTitle);
+        resolve();
+      },
+      { once: true }
+    );
+    inst.show();
+  });
+}
+
+function resetApplicationDraftState() {
+  currentApplicationId = null;
+  window.currentApplicationId = null;
+  const hid = document.querySelector('input[name="application_id"]');
+  if (hid) hid.value = "";
+}
+
+function getApplicantEmailInput() {
+  return form?.querySelector('input[name="email"]') || null;
+}
+
+function setApplicantEmailError(message = "") {
+  const emailInput = getApplicantEmailInput();
+  if (!emailInput) return;
+
+  const feedback = document.getElementById("applicantEmailFeedback");
+  emailInput.classList.add("is-invalid");
+  emailInput.setCustomValidity(message || "Please use a different email address.");
+  emailInput.title = message || "Please use a different email address.";
+  if (feedback) {
+    feedback.textContent = message || "Please use a different email address.";
+  }
+}
+
+function clearApplicantEmailError() {
+  const emailInput = getApplicantEmailInput();
+  if (!emailInput) return;
+
+  const feedback = document.getElementById("applicantEmailFeedback");
+  emailInput.setCustomValidity("");
+  emailInput.title = "";
+
+  if (feedback) {
+    feedback.textContent = "";
+  }
+
+  if (!emailInput.value.trim()) {
+    emailInput.classList.remove("is-invalid");
+  }
+}
+
+function buildApplicationFormData(options = {}) {
+  const fd = new FormData(form);
+  fd.set("study_choices", JSON.stringify(collectStudyChoices()));
+
+  if (options.includeStep !== false) {
+    fd.set("step", String(options.stepValue ?? step));
+  }
+
+  if (options.final === true) {
+    fd.set("final", "1");
+  } else {
+    fd.delete("final");
+  }
+
+  if (currentApplicationId) {
+    fd.set("application_id", String(currentApplicationId));
+  }
+
+  return fd;
+}
+
+async function checkApplicantEmailAvailability(options = {}) {
+  const emailInput = getApplicantEmailInput();
+  if (!emailInput) return true;
+
+  const email = emailInput.value.trim().toLowerCase();
+  if (email === "") {
+    clearApplicantEmailError();
+    return true;
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return true;
+  }
+
+  const applicationId =
+    currentApplicationId ||
+    Number(form?.querySelector('input[name="application_id"]')?.value || 0) ||
+    0;
+
+  const url = new URL("save_application.php", window.location.href);
+  url.searchParams.set("action", "check_email");
+  url.searchParams.set("email", email);
+  if (applicationId) {
+    url.searchParams.set("application_id", String(applicationId));
+  }
+
+  let data = null;
+  try {
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    data = await res.json();
+  } catch (err) {
+    if (options.notify) {
+      showApplicationSaveError("Unable to verify the email address right now. Please try again.");
+    }
+    return false;
+  }
+
+  if (data?.exists) {
+    const message =
+      data.message ||
+      "This email is already registered with an existing application.";
+    setApplicantEmailError(message);
+    if (options.notify) {
+      showApplicationSaveError(message, { title: "Email Already Exists" });
+    }
+    return false;
+  }
+
+  clearApplicantEmailError();
+  return true;
+}
+
+async function ensureDefaultSubmissionAgent() {
+  const first = document.getElementById("agent_first_name");
+  const last = document.getElementById("agent_last_name");
+  const email = document.getElementById("agent_email");
+  const referral = document.getElementById("referral_source");
+  const agentSection = document.getElementById("agentSection");
+
+  if (!first || !last || !email) {
+    throw new Error("Agent information section is missing.");
+  }
+
+  if (first.value.trim() && last.value.trim() && email.value.trim()) {
+    return true;
+  }
+
+  try {
+    const res = await fetch("getDefaultOnlineAgent.php", {
+      cache: "no-store"
+    });
+    const agent = await res.json();
+
+    if (!agent || !agent.email) {
+      throw new Error("No default agent available.");
+    }
+
+    if (referral) {
+      referral.value = "online";
+    }
+
+    first.value = agent.first_name || "";
+    last.value = agent.last_name || "";
+    email.value = agent.email || "";
+
+    if (agentSection) {
+      agentSection.style.display = "none";
+    }
+
+    return true;
+  } catch (err) {
+    throw new Error("Failed to auto-assign the default online agent for final submission.");
+  }
+}
+
+function getMissingRequiredUploads() {
+  return REQUIRED_UPLOADS.filter(
+    field => !window.uploadStatus[field] || window.uploadStatus[field].length === 0
+  );
+}
+
 function syncApplicationIdToForm(id) {
   if (id == null || id === "") return;
   const n = Number(id);
@@ -75,6 +280,253 @@ function syncApplicationIdToForm(id) {
   const hid = document.querySelector('input[name="application_id"]');
   if (hid) hid.value = String(n);
 }
+
+const existingApplicationId = form?.querySelector('input[name="application_id"]')?.value;
+if (existingApplicationId) {
+  syncApplicationIdToForm(existingApplicationId);
+}
+
+function escapeFieldName(name) {
+  if (window.CSS && typeof window.CSS.escape === "function") {
+    return window.CSS.escape(name);
+  }
+  return String(name).replace(/["\\]/g, "\\$&");
+}
+
+function basename(path) {
+  return String(path || "").split(/[\\/]/).pop() || "";
+}
+
+function humanizeStoredFileName(path) {
+  const base = decodeURIComponent(basename(path));
+  return base.replace(/^\d+_/, "") || base;
+}
+
+function parseStoredDocumentValue(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value !== "string") return [];
+
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : [];
+    } catch (err) {
+      console.warn("Failed to parse stored documents:", err);
+    }
+  }
+
+  return [trimmed];
+}
+
+function renderStoredUploadedFiles(field, files) {
+  const zone = document.querySelector(`.doc-dropzone[data-field="${field}"]`);
+  if (!zone) return;
+
+  const input = zone.querySelector('input[type="file"]');
+  const list = zone.querySelector(".dz-files");
+  const isMulti = Boolean(input && input.hasAttribute("multiple"));
+  const normalized = (files || [])
+    .map(humanizeStoredFileName)
+    .filter(Boolean);
+
+  if (list) {
+    list.innerHTML = "";
+    normalized.forEach(name => {
+      const li = document.createElement("li");
+      li.textContent = name;
+      list.appendChild(li);
+    });
+  }
+
+  window.uploadStatus[field] = [...normalized];
+
+  if (!input) return;
+
+  if (!normalized.length) {
+    if (!isMulti) {
+      input.disabled = false;
+    }
+    input.classList.remove("is-valid");
+    input.value = "";
+    return;
+  }
+
+  input.classList.add("is-valid");
+  if (!isMulti) {
+    input.disabled = true;
+  }
+}
+
+function restoreUploadedDocuments(data) {
+  DOCUMENT_UPLOAD_FIELDS.forEach(field => {
+    renderStoredUploadedFiles(field, parseStoredDocumentValue(data?.[field]));
+  });
+}
+
+function setPhoneWidgetValue(inputId, areaCode, phoneDigits) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const cleanArea = String(areaCode || "").trim();
+  const cleanDigits = String(phoneDigits || "").replace(/\D+/g, "");
+
+  if (!cleanArea || !cleanDigits) {
+    input.value = "";
+    input.classList.remove("is-valid");
+    return;
+  }
+
+  const fullNumber =
+    (cleanArea.startsWith("+") ? cleanArea : `+${cleanArea}`) + cleanDigits;
+
+  const iti = window.intlTelInputGlobals?.getInstance(input);
+  if (iti && typeof iti.setNumber === "function") {
+    try {
+      iti.setNumber(fullNumber);
+    } catch (err) {
+      input.value = fullNumber;
+    }
+  } else {
+    input.value = fullNumber;
+  }
+}
+
+function restorePhoneInputsFromData(data) {
+  if (!data || typeof data !== "object") return;
+
+  setPhoneWidgetValue("intl_phone", data.area_code, data.phone_number);
+  setPhoneWidgetValue(
+    "emergency_phone",
+    data.emergency_area_code,
+    data.emergency_phone_number
+  );
+}
+
+function setFieldValueByName(name, value) {
+  if (value == null || value === "") return;
+
+  const selector = `[name="${escapeFieldName(name)}"]`;
+  const elements = form.querySelectorAll(selector);
+  if (!elements.length) return;
+
+  elements.forEach(input => {
+    if (input.type === "file") return;
+
+    if (input.type === "radio") {
+      input.checked = String(input.value) === String(value);
+      return;
+    }
+
+    if (input.type === "checkbox") {
+      input.checked = Boolean(value);
+      return;
+    }
+
+    if (input.tagName === "SELECT") {
+      const wanted = String(value);
+      const exact = [...input.options].find(
+        option => String(option.value) === wanted
+      );
+      const byText = [...input.options].find(
+        option => option.text.trim().toLowerCase() === wanted.trim().toLowerCase()
+      );
+
+      if (exact) {
+        input.value = exact.value;
+      } else if (byText) {
+        input.value = byText.value;
+      } else {
+        input.value = wanted;
+      }
+
+      if (window.jQuery && $(input).hasClass("select2-hidden-accessible")) {
+        $(input).trigger("change");
+      } else {
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+      return;
+    }
+
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function applyAutofillFields(fields) {
+  if (!fields || typeof fields !== "object") return;
+
+  Object.entries(fields).forEach(([name, value]) => {
+    setFieldValueByName(name, value);
+  });
+
+  restorePhoneInputsFromData({
+    area_code: form.querySelector('[name="area_code"]')?.value || fields.area_code,
+    phone_number:
+      form.querySelector('[name="phone_number"]')?.value || fields.phone_number,
+    emergency_area_code:
+      form.querySelector('[name="emergency_area_code"]')?.value ||
+      fields.emergency_area_code,
+    emergency_phone_number:
+      form.querySelector('[name="emergency_phone_number"]')?.value ||
+      fields.emergency_phone_number,
+  });
+}
+
+async function persistAutofillDraftData(applicationId, fields) {
+  const resolvedId = Number(
+    applicationId ||
+      window.currentApplicationId ||
+      form.querySelector('[name="application_id"]')?.value ||
+      0
+  );
+
+  if (!resolvedId) {
+    throw new Error("Missing application id for autofill draft save.");
+  }
+
+  const studyChoices =
+    typeof collectStudyChoices === "function" ? collectStudyChoices() : [];
+
+  const response = await fetch("save_autofill_draft.php", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      application_id: resolvedId,
+      fields: fields || {},
+      study_choices: studyChoices
+    })
+  });
+
+  let data = null;
+  try {
+    data = await response.json();
+  } catch (err) {
+    throw new Error("Failed to save extracted draft data.");
+  }
+
+  if (!response.ok || !data || data.status !== "success") {
+    throw new Error(data?.message || data?.debug || "Failed to save extracted draft data.");
+  }
+
+  if (typeof syncApplicationIdToForm === "function" && data.application_id) {
+    syncApplicationIdToForm(data.application_id);
+  }
+
+  return data;
+}
+
+window.restoreUploadedDocuments = restoreUploadedDocuments;
+window.restorePhoneInputsFromData = restorePhoneInputsFromData;
+window.applyAutofillFields = applyAutofillFields;
+window.persistAutofillDraftData = persistAutofillDraftData;
+window.showApplicationSuccessPrompt = showApplicationSuccessPrompt;
+window.getMissingRequiredUploads = getMissingRequiredUploads;
 
 function showStep(index) {
   steps.forEach(s => s.classList.remove("active"));
@@ -875,7 +1327,11 @@ function applyServerFieldErrors(fields) {
     const el = form.querySelector(`[name="${CSS.escape(name)}"]`);
     if (el) {
       el.classList.add("is-invalid");
-      el.title = String(fields[name]);
+      const message = String(fields[name]);
+      el.title = message;
+      if (name === "email") {
+        setApplicantEmailError(message);
+      }
       if (!first) first = el;
     }
   });
@@ -887,23 +1343,21 @@ function applyServerFieldErrors(fields) {
 ===================================================== */
 async function saveStep() {
   try {
-    const choices = collectStudyChoices();
-
     /* =============================
        CLIENT DEBUG
     ============================== */
     console.group("SAVE STEP DEBUG");
     console.log("Current step:", step);
-    console.log("Study choices array:", choices);
+    console.log("Study choices array:", collectStudyChoices());
 
-   const fd = new FormData(form);
-fd.append("step", step);
-fd.append("study_choices", JSON.stringify(choices));
+    if (step === 1) {
+      const emailAvailable = await checkApplicantEmailAvailability({ notify: true });
+      if (!emailAvailable) {
+        throw new Error("This email is already registered with an existing application.");
+      }
+    }
 
-/* ✅ ATTACH APPLICATION ID */
-if (currentApplicationId) {
-  fd.append("application_id", currentApplicationId);
-}
+   const fd = buildApplicationFormData({ includeStep: true, stepValue: step });
 
     console.log("FormData entries:");
     for (const [k, v] of fd.entries()) {
@@ -969,18 +1423,13 @@ return true;
 /* =====================================================
    FINAL SUBMIT (UNCHANGED)
 ===================================================== */
-async function submitForm() {
+async function submitForm(options = {}) {
   try {
-   const fd = new FormData(form);
-fd.append("final", "1");
-fd.append("study_choices", JSON.stringify(collectStudyChoices()));
+    if (options.autoAssignDefaultAgent) {
+      await ensureDefaultSubmissionAgent();
+    }
 
-/* ✅ ATTACH APPLICATION ID */
-if (currentApplicationId) {
-  fd.append("application_id", currentApplicationId);
-}
-
-
+    const fd = buildApplicationFormData({ includeStep: true, stepValue: step, final: true });
     const res = await fetch(API, { method: "POST", body: fd });
     const rawText = await res.text();
     let data;
@@ -988,26 +1437,35 @@ if (currentApplicationId) {
       data = JSON.parse(rawText);
     } catch {
       showApplicationSaveError("Submission error. Please try again.");
-      return;
+      return false;
     }
-
     if (data.status === "success") {
-  alert("Application submitted successfully");
+      if (data.application_id) {
+        syncApplicationIdToForm(data.application_id);
+      }
 
-  /* ✅ RESET STATE FOR NEXT PERSON */
-  currentApplicationId = null;
-  window.currentApplicationId = null;
-  const hid = document.querySelector('input[name="application_id"]');
-  if (hid) hid.value = "";
+      await showApplicationSuccessPrompt(
+        options.successMessage ||
+          "Application submitted successfully. A submission email and student portal access have been sent to the student email address. Any later updates can be handled from retrieval or the student portal.",
+        {
+          title: options.successTitle || "Application Submitted"
+        }
+      );
 
-  location.reload();
-}
- else {
+      resetApplicationDraftState();
+
+      if (options.reloadOnSuccess !== false) {
+        location.reload();
+      }
+      return true;
+    } else {
       applyServerFieldErrors(data.fields);
       showApplicationSaveError(getErrorMessage({ message: data.message || data.debug }, "Submission failed"));
+      return false;
     }
   } catch (err) {
     showApplicationSaveError(getErrorMessage(err, "Submission error. Please try again."));
+    return false;
   }
 }
 
@@ -1016,11 +1474,7 @@ if (currentApplicationId) {
    REQUIRED UPLOAD VALIDATION (UNCHANGED)
 ===================================================== */
 function validateRequiredUploads() {
-  const missing = REQUIRED_UPLOADS.filter(
-    field =>
-      !window.uploadStatus[field] ||
-      window.uploadStatus[field].length === 0
-  );
+  const missing = getMissingRequiredUploads();
 
   if (missing.length) {
     alert(
@@ -1032,6 +1486,20 @@ function validateRequiredUploads() {
 
   return true;
 }
+
+(function setupApplicantEmailCheck() {
+  const emailInput = getApplicantEmailInput();
+  if (!emailInput) return;
+
+  emailInput.addEventListener("input", () => {
+    clearApplicantEmailError();
+  });
+
+  emailInput.addEventListener("blur", () => {
+    checkApplicantEmailAvailability({ notify: false }).catch(() => {});
+  });
+})();
+
 /* =====================================================
    REQUIRED AGENT VALIDATION (FINAL STEP ONLY)
 ===================================================== */

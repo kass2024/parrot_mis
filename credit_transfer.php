@@ -960,17 +960,17 @@ if (!is_array($certChecked)) {
 </div>
 
 <div class="form-container">
-  <?php if ($creditApplicationComplete && $creditPrefillRow): ?>
-  <div class="credit-resume-banner credit-resume-banner--complete" role="status">
-    <?php echo $current_lang === 'fr'
-      ? 'Cette demande semble déjà complète (tous les documents sont enregistrés). Pour une nouvelle demande, utilisez « Postuler » depuis l’accueil.'
-      : 'This application looks complete (all documents are on file). For a new application, use Apply Now from the home page.'; ?>
-  </div>
-  <?php elseif ($creditResumeStep === 2 && $creditPrefillRow): ?>
+  <?php if ($creditPrefillRow): ?>
   <div class="credit-resume-banner" role="status">
-    <?php echo $current_lang === 'fr'
-      ? 'Reprise de la demande : vos informations personnelles sont chargées. Complétez l’étape académique et les documents manquants.'
-      : 'Resuming your application: your personal details are loaded. Complete academic information and any missing documents.'; ?>
+    <?php if ($creditApplicationComplete): ?>
+      <?php echo $current_lang === 'fr'
+        ? 'Demande récupérée. Tous les documents sont enregistrés — vous pouvez ajuster vos informations ou téléverser de nouvelles versions, puis soumettre à nouveau.'
+        : 'Application retrieved. All documents are on file — you may update your information or upload new versions, then resubmit.'; ?>
+    <?php else: ?>
+      <?php echo $current_lang === 'fr'
+        ? 'Reprise de la demande : vos informations sont chargées. Continuez les étapes jusqu’à la soumission.'
+        : 'Resuming your application: your details are loaded. Continue through the steps until final submission.'; ?>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
   <!-- STEP INDICATOR -->
@@ -1788,14 +1788,6 @@ document.getElementById('creditForm').addEventListener('submit', async function(
 document.addEventListener('DOMContentLoaded', () => {
   const creditForm = document.getElementById('creditForm');
   const resumeStep = creditForm ? parseInt(creditForm.getAttribute('data-resume-step') || '1', 10) : 1;
-  const appComplete = creditForm && creditForm.getAttribute('data-app-complete') === '1';
-
-  if (appComplete) {
-    const submitBtn = document.getElementById('submitButton');
-    if (submitBtn) submitBtn.disabled = true;
-    const step1Btn = document.querySelector('button[onclick*="step1"]');
-    if (step1Btn) step1Btn.disabled = true;
-  }
 
   const universitySelect = document.getElementById('university');
   universitySelect.addEventListener('change', function(e) {
@@ -1804,7 +1796,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   setupFileUploadHandlers();
 
-  if (resumeStep === 2 && !appComplete) {
+  if (resumeStep === 2) {
     if (universitySelect.value) {
       populatePrograms(universitySelect.value);
       const pp = document.getElementById('proposed_program');

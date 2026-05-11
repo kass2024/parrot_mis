@@ -9,6 +9,35 @@ header('Content-Type: application/json; charset=utf-8');
 ========================================= */
 
 $id = intval($_GET['id'] ?? 0);
+$userIdParam = isset($_GET['user_id']) ? trim((string)$_GET['user_id']) : '';
+
+/* Allow lookup either by numeric application id or by user_id. */
+if ($userIdParam !== '') {
+    $userIdParam = preg_replace('/[^a-zA-Z0-9_\-]/', '', $userIdParam);
+    if ($userIdParam === '') {
+        echo json_encode(["status" => "error", "message" => "Invalid user_id"]);
+        exit;
+    }
+
+    $lookup = $conn->prepare(
+        "SELECT id FROM student_applications WHERE user_id = ? ORDER BY id DESC LIMIT 1"
+    );
+    $lookup->bind_param("s", $userIdParam);
+    $lookup->execute();
+    $lookupRes = $lookup->get_result();
+    $lookupRow = $lookupRes->fetch_assoc();
+    $lookup->close();
+
+    if (!$lookupRow) {
+        echo json_encode([
+            "status" => "error",
+            "message" => "No application found for this user_id"
+        ]);
+        exit;
+    }
+
+    $id = (int)$lookupRow['id'];
+}
 
 if ($id <= 0) {
     echo json_encode([
@@ -113,6 +142,7 @@ $stmt->close();
 
 echo json_encode([
     "status" => "success",
+    "id" => $id,
     "application" => $application,
     "study_choices" => $study_choices
 ]);

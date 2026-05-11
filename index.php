@@ -189,16 +189,25 @@ $index_translations = [
         // Card Translations
         'card_apply' => 'Apply Now',
         'card_copy' => 'Copy Link',
-        'card_continue' => 'Continue application',
-        'card_continue_hint' => 'Have a user ID? Continue your saved application.',
-        'resume_modal_title' => 'Continue where you left off',
-        'resume_modal_sub' => 'Enter the application user ID from your confirmation (for credit transfer it looks like credit-1749906159-3206).',
+        'card_continue' => 'Retrieve Application',
+        'card_continue_hint' => 'Have a user ID? Retrieve your saved application.',
+        'resume_modal_title_tpl' => 'Retrieve your {service} application',
+        'resume_modal_sub_tpl' => 'Enter the user ID from your confirmation (example: {example}) — or search by your name / email below.',
         'resume_label' => 'Application user ID',
-        'resume_submit' => 'Continue',
+        'resume_submit' => 'Retrieve',
         'resume_cancel' => 'Cancel',
         'resume_loading' => 'Checking…',
         'resume_error_generic' => 'Something went wrong. Please try again.',
         'resume_error_empty' => 'Please enter your application user ID.',
+        'resume_search_label' => 'Search by name or email',
+        'resume_search_placeholder' => 'Type at least 2 characters…',
+        'resume_search_hint_tpl' => 'Searching {service} applications. Click a result to use that user ID, or copy it.',
+        'resume_search_empty' => 'No matching applications.',
+        'resume_search_short' => 'Type a longer search.',
+        'resume_search_searching' => 'Searching…',
+        'resume_copy' => 'Copy',
+        'resume_copy_done' => 'Copied!',
+        'resume_use' => 'Use',
         
         // Card 1: Study & Work Abroad
         'card1_title' => 'Study & Work Abroad',
@@ -440,16 +449,25 @@ $index_translations = [
         // Card Translations
         'card_apply' => 'Postuler maintenant',
         'card_copy' => 'Copier le lien',
-        'card_continue' => 'Reprendre la demande',
-        'card_continue_hint' => 'Vous avez un identifiant ? Reprenez votre demande enregistrée.',
-        'resume_modal_title' => 'Reprendre votre demande',
-        'resume_modal_sub' => 'Saisissez l’identifiant utilisateur de votre confirmation (ex. credit-1749906159-3206 pour le transfert de crédits).',
+        'card_continue' => 'Récupérer la demande',
+        'card_continue_hint' => 'Vous avez un identifiant ? Récupérez votre demande enregistrée.',
+        'resume_modal_title_tpl' => 'Récupérer votre demande de {service}',
+        'resume_modal_sub_tpl' => 'Saisissez l’identifiant utilisateur de votre confirmation (exemple : {example}) — ou recherchez par nom / email ci-dessous.',
         'resume_label' => 'Identifiant utilisateur',
-        'resume_submit' => 'Continuer',
+        'resume_submit' => 'Récupérer',
         'resume_cancel' => 'Annuler',
         'resume_loading' => 'Vérification…',
         'resume_error_generic' => 'Une erreur s’est produite. Réessayez.',
         'resume_error_empty' => 'Veuillez saisir votre identifiant utilisateur.',
+        'resume_search_label' => 'Rechercher par nom ou email',
+        'resume_search_placeholder' => 'Tapez au moins 2 caractères…',
+        'resume_search_hint_tpl' => 'Recherche dans les demandes {service}. Cliquez sur un résultat pour utiliser cet identifiant ou copiez-le.',
+        'resume_search_empty' => 'Aucune demande correspondante.',
+        'resume_search_short' => 'Tapez une recherche plus longue.',
+        'resume_search_searching' => 'Recherche…',
+        'resume_copy' => 'Copier',
+        'resume_copy_done' => 'Copié !',
+        'resume_use' => 'Utiliser',
         
         // Card 1: Study & Work Abroad
         'card1_title' => 'Étudier & Travailler à l\'Étranger',
@@ -531,6 +549,52 @@ function it($key) {
     global $index_translations, $current_lang;
     return isset($index_translations[$current_lang][$key]) ? $index_translations[$current_lang][$key] : $key;
 }
+
+// Per-card retrieval metadata (table + placeholder + example) consumed by the Retrieve Application modal.
+$cardRetrievalMeta = [
+    'admissions' => [
+        'service'     => $current_lang === 'fr' ? 'Études & Travail à l\'étranger' : 'Study & Work Abroad',
+        'table_label' => 'student_applications',
+        'placeholder' => 'user_…',
+        'example'     => 'user_1b69091a796e',
+    ],
+    'scholarships' => [
+        'service'     => $current_lang === 'fr' ? 'Bourses & Prêts' : 'Scholarships & Loans',
+        'table_label' => 'master_loan_applications',
+        'placeholder' => 'user-…',
+        'example'     => 'user-1774818151982-9364',
+    ],
+    'i20' => [
+        'service'     => $current_lang === 'fr' ? 'Demande I-20' : 'I-20 Application',
+        'table_label' => 'form_20_applications',
+        'placeholder' => 'user-…',
+        'example'     => 'user-1776097077117-7158',
+    ],
+    'credit' => [
+        'service'     => $current_lang === 'fr' ? 'Transfert de Crédits' : 'Credit Transfer',
+        'table_label' => 'credit_transfer_applications',
+        'placeholder' => 'credit-…',
+        'example'     => 'credit-1749906159-3206',
+    ],
+    'visa' => [
+        'service'     => $current_lang === 'fr' ? 'Demande de Visa' : 'Visa Application',
+        'table_label' => 'form_17_applications',
+        'placeholder' => 'user-…',
+        'example'     => 'user-1767198710165-1742',
+    ],
+    'jobs' => [
+        'service'     => $current_lang === 'fr' ? 'Postuler à un Emploi' : 'Apply for Job',
+        'table_label' => 'job_applications',
+        'placeholder' => 'user-…',
+        'example'     => 'user-1774799070299-1688',
+    ],
+    'medical' => [
+        'service'     => $current_lang === 'fr' ? 'Examens Médicaux Canada' : 'Canada Medical Exams',
+        'table_label' => 'canada_medical_exams_requests',
+        'placeholder' => 'MED_…',
+        'example'     => 'MED_69daa0c4de4a2_1775935684',
+    ],
+];
 
 // Define cards with translation keys
 $cards = [
@@ -1336,6 +1400,58 @@ include 'header.php';
   font-size: 1rem; margin-bottom: 10px;
 }
 .resume-modal__error { color: #b91c1c; font-size: 0.88rem; min-height: 1.25em; margin: 0 0 12px; }
+.resume-modal__hint { font-size: 0.8rem; color: var(--lp-muted); margin: -4px 0 8px; }
+.resume-modal__table {
+  font-size: 0.75rem; color: var(--lp-muted); margin: -8px 0 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.resume-modal__table strong { color: var(--lp-green); font-weight: 700; }
+.resume-modal__divider {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--lp-muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 10px 0 12px;
+}
+.resume-modal__divider::before,
+.resume-modal__divider::after {
+  content: ""; flex: 1; height: 1px; background: #e2e8f0;
+}
+.resume-search-results {
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 12px;
+  display: none; background: #fff;
+}
+.resume-search-results.is-active { display: block; }
+.resume-search-results__item {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px; border-bottom: 1px solid #f1f5f9;
+}
+.resume-search-results__item:last-child { border-bottom: none; }
+.resume-search-results__main { flex: 1; min-width: 0; }
+.resume-search-results__name { font-weight: 600; color: var(--lp-text); font-size: 0.95rem; }
+.resume-search-results__meta {
+  font-size: 0.8rem; color: var(--lp-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-top: 1px;
+}
+.resume-search-results__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8rem; color: var(--lp-green); margin-top: 4px; word-break: break-all;
+  background: #f0f6f1; padding: 2px 6px; border-radius: 6px; display: inline-block;
+}
+.resume-search-results__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.resume-search-results__btn {
+  border: 1px solid #e2e8f0; background: #fff; color: var(--lp-text);
+  padding: 6px 10px; font-size: 0.78rem; border-radius: 8px; cursor: pointer; font-weight: 600;
+}
+.resume-search-results__btn:hover { background: #f8fafc; border-color: var(--lp-green); color: var(--lp-green); }
+.resume-search-results__btn--primary {
+  background: linear-gradient(135deg, var(--lp-green), var(--lp-blue));
+  color: #fff; border-color: transparent;
+}
+.resume-search-results__btn--primary:hover { color: #fff; }
+.resume-search-results__empty {
+  padding: 14px; text-align: center; color: var(--lp-muted); font-size: 0.88rem;
+}
 .resume-modal__actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
 .resume-modal__actions button {
   padding: 10px 18px; border-radius: 10px; font-weight: 600; cursor: pointer; border: none; font-family: inherit;
@@ -1696,7 +1812,7 @@ include 'header.php';
           <?php echo htmlspecialchars(it('card_copy')); ?>
         </button>
         <button type="button" class="card-button resume-button" title="<?php echo htmlspecialchars(it('card_continue_hint')); ?>">
-          <i class="fas fa-folder-open"></i>
+          <i class="fas fa-search"></i>
           <?php echo htmlspecialchars(it('card_continue')); ?>
         </button>
       </div>
@@ -1708,10 +1824,20 @@ include 'header.php';
 <div id="resumeApplicationModal" class="resume-modal" aria-hidden="true">
   <div class="resume-modal__backdrop" id="resumeModalBackdrop"></div>
   <div class="resume-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="resumeModalTitle">
-    <h3 id="resumeModalTitle"><?php echo htmlspecialchars(it('resume_modal_title')); ?></h3>
-    <p><?php echo htmlspecialchars(it('resume_modal_sub')); ?></p>
+    <h3 id="resumeModalTitle"></h3>
+    <p id="resumeModalSub"></p>
+    <p class="resume-modal__table" id="resumeModalTable"></p>
+
     <label for="resumeUserIdInput"><?php echo htmlspecialchars(it('resume_label')); ?></label>
-    <input type="text" id="resumeUserIdInput" name="resume_user_id" autocomplete="off" placeholder="credit-…" />
+    <input type="text" id="resumeUserIdInput" name="resume_user_id" autocomplete="off" placeholder="" />
+
+    <div class="resume-modal__divider"><span>or</span></div>
+
+    <label for="resumeNameSearchInput"><?php echo htmlspecialchars(it('resume_search_label')); ?></label>
+    <input type="text" id="resumeNameSearchInput" name="resume_name_search" autocomplete="off" placeholder="<?php echo htmlspecialchars(it('resume_search_placeholder')); ?>" />
+    <p class="resume-modal__hint" id="resumeModalHint"></p>
+    <div id="resumeSearchResults" class="resume-search-results" role="listbox" aria-live="polite"></div>
+
     <p class="resume-modal__error" id="resumeModalError" aria-live="polite"></p>
     <div class="resume-modal__actions">
       <button type="button" id="resumeModalCancel"><?php echo htmlspecialchars(it('resume_cancel')); ?></button>
@@ -2147,19 +2273,73 @@ include 'header.php';
     });
   });
 
-  // Continue application (smart retrieval by user_id)
+  // Retrieve application (smart retrieval by user_id, plus name/email search)
+  const RESUME_TXT = {
+    empty:     <?php echo json_encode(it('resume_error_empty')); ?>,
+    generic:   <?php echo json_encode(it('resume_error_generic')); ?>,
+    loading:   <?php echo json_encode(it('resume_loading')); ?>,
+    short:     <?php echo json_encode(it('resume_search_short')); ?>,
+    searching: <?php echo json_encode(it('resume_search_searching')); ?>,
+    empty_res: <?php echo json_encode(it('resume_search_empty')); ?>,
+    copy:      <?php echo json_encode(it('resume_copy')); ?>,
+    copy_done: <?php echo json_encode(it('resume_copy_done')); ?>,
+    use:       <?php echo json_encode(it('resume_use')); ?>,
+    title_tpl: <?php echo json_encode(it('resume_modal_title_tpl')); ?>,
+    sub_tpl:   <?php echo json_encode(it('resume_modal_sub_tpl')); ?>,
+    hint_tpl:  <?php echo json_encode(it('resume_search_hint_tpl')); ?>,
+    table_lbl: <?php echo json_encode($current_lang === 'fr' ? 'Source : table {table}' : 'Source: table {table}'); ?>
+  };
+  const RESUME_CARD_META = <?php echo json_encode($cardRetrievalMeta, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE); ?>;
+
+  function fillTemplate(tpl, vars) {
+    return String(tpl || '').replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null) ? String(vars[k]) : m);
+  }
+
   let resumeCardType = null;
+  let resumeSearchTimer = null;
+  let resumeSearchAbort = null;
   const resumeModal = document.getElementById('resumeApplicationModal');
   const resumeUserIdInput = document.getElementById('resumeUserIdInput');
+  const resumeNameInput = document.getElementById('resumeNameSearchInput');
+  const resumeSearchResults = document.getElementById('resumeSearchResults');
   const resumeModalError = document.getElementById('resumeModalError');
   const resumeModalSubmit = document.getElementById('resumeModalSubmit');
   const resumeModalCancel = document.getElementById('resumeModalCancel');
   const resumeModalBackdrop = document.getElementById('resumeModalBackdrop');
+  const resumeModalTitle = document.getElementById('resumeModalTitle');
+  const resumeModalSub = document.getElementById('resumeModalSub');
+  const resumeModalTable = document.getElementById('resumeModalTable');
+  const resumeModalHint = document.getElementById('resumeModalHint');
+
+  function clearResumeResults() {
+    resumeSearchResults.innerHTML = '';
+    resumeSearchResults.classList.remove('is-active');
+  }
+
+  function applyResumeCardMeta(cardType) {
+    const meta = RESUME_CARD_META[cardType] || { service: cardType, table_label: '', placeholder: '', example: '' };
+    resumeModalTitle.textContent = fillTemplate(RESUME_TXT.title_tpl, { service: meta.service });
+    resumeModalSub.textContent = fillTemplate(RESUME_TXT.sub_tpl, { service: meta.service, example: meta.example });
+    resumeModalHint.textContent = fillTemplate(RESUME_TXT.hint_tpl, { service: meta.service });
+    if (meta.table_label) {
+      const tplParts = String(RESUME_TXT.table_lbl).split('{table}');
+      resumeModalTable.innerHTML =
+        escapeHtml(tplParts[0] || '') +
+        '<strong>' + escapeHtml(meta.table_label) + '</strong>' +
+        escapeHtml(tplParts[1] || '');
+    } else {
+      resumeModalTable.textContent = '';
+    }
+    resumeUserIdInput.placeholder = meta.placeholder || '';
+  }
 
   function openResumeModal(cardType) {
     resumeCardType = cardType;
     resumeModalError.textContent = '';
     resumeUserIdInput.value = '';
+    resumeNameInput.value = '';
+    clearResumeResults();
+    applyResumeCardMeta(cardType);
     resumeModal.classList.add('is-open');
     resumeModal.setAttribute('aria-hidden', 'false');
     setTimeout(() => resumeUserIdInput.focus(), 50);
@@ -2169,6 +2349,8 @@ include 'header.php';
     resumeModal.classList.remove('is-open');
     resumeModal.setAttribute('aria-hidden', 'true');
     resumeCardType = null;
+    if (resumeSearchAbort) { resumeSearchAbort.abort(); resumeSearchAbort = null; }
+    if (resumeSearchTimer) { clearTimeout(resumeSearchTimer); resumeSearchTimer = null; }
   }
 
   document.querySelectorAll('.resume-button').forEach(btn => {
@@ -2183,15 +2365,14 @@ include 'header.php';
   resumeModalCancel.addEventListener('click', closeResumeModal);
   resumeModalBackdrop.addEventListener('click', closeResumeModal);
 
-  resumeModalSubmit.addEventListener('click', async function() {
-    const uid = resumeUserIdInput.value.trim();
+  async function submitResume(uid) {
     if (!uid) {
-      resumeModalError.textContent = <?php echo json_encode(it('resume_error_empty')); ?>;
+      resumeModalError.textContent = RESUME_TXT.empty;
       return;
     }
     if (!resumeCardType) return;
     resumeModalSubmit.disabled = true;
-    resumeModalError.textContent = <?php echo json_encode(it('resume_loading')); ?>;
+    resumeModalError.textContent = RESUME_TXT.loading;
     try {
       const fd = new FormData();
       fd.append('card', resumeCardType);
@@ -2202,11 +2383,121 @@ include 'header.php';
         window.location.href = data.redirect_url;
         return;
       }
-      resumeModalError.textContent = (data && data.message) ? data.message : <?php echo json_encode(it('resume_error_generic')); ?>;
+      resumeModalError.textContent = (data && data.message) ? data.message : RESUME_TXT.generic;
     } catch (err) {
-      resumeModalError.textContent = <?php echo json_encode(it('resume_error_generic')); ?>;
+      resumeModalError.textContent = RESUME_TXT.generic;
     } finally {
       resumeModalSubmit.disabled = false;
+    }
+  }
+
+  resumeModalSubmit.addEventListener('click', () => {
+    submitResume(resumeUserIdInput.value.trim());
+  });
+  resumeUserIdInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); submitResume(resumeUserIdInput.value.trim()); }
+  });
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderResumeResults(items) {
+    if (!items || items.length === 0) {
+      resumeSearchResults.innerHTML = '<div class="resume-search-results__empty">' + escapeHtml(RESUME_TXT.empty_res) + '</div>';
+      resumeSearchResults.classList.add('is-active');
+      return;
+    }
+    const html = items.map((it) => {
+      const name = (it.name || '').trim() || '(no name)';
+      const meta = [it.email, it.submitted_at].filter(Boolean).join(' • ');
+      return (
+        '<div class="resume-search-results__item">' +
+          '<div class="resume-search-results__main">' +
+            '<div class="resume-search-results__name">' + escapeHtml(name) + '</div>' +
+            (meta ? '<div class="resume-search-results__meta">' + escapeHtml(meta) + '</div>' : '') +
+            '<div class="resume-search-results__id">' + escapeHtml(it.user_id || '') + '</div>' +
+          '</div>' +
+          '<div class="resume-search-results__actions">' +
+            '<button type="button" class="resume-search-results__btn" data-act="copy" data-uid="' + escapeHtml(it.user_id || '') + '">' +
+              '<i class="fas fa-copy"></i> ' + escapeHtml(RESUME_TXT.copy) +
+            '</button>' +
+            '<button type="button" class="resume-search-results__btn resume-search-results__btn--primary" data-act="use" data-uid="' + escapeHtml(it.user_id || '') + '">' +
+              '<i class="fas fa-arrow-right"></i> ' + escapeHtml(RESUME_TXT.use) +
+            '</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+    resumeSearchResults.innerHTML = html;
+    resumeSearchResults.classList.add('is-active');
+  }
+
+  async function runResumeSearch(q) {
+    if (!resumeCardType) return;
+    if (q.length < 2) {
+      resumeSearchResults.innerHTML = '<div class="resume-search-results__empty">' + escapeHtml(RESUME_TXT.short) + '</div>';
+      resumeSearchResults.classList.add('is-active');
+      return;
+    }
+    if (resumeSearchAbort) resumeSearchAbort.abort();
+    resumeSearchAbort = new AbortController();
+    resumeSearchResults.innerHTML = '<div class="resume-search-results__empty">' + escapeHtml(RESUME_TXT.searching) + '</div>';
+    resumeSearchResults.classList.add('is-active');
+    try {
+      const params = new URLSearchParams({ action: 'search', card: resumeCardType, q: q });
+      const r = await fetch('card_retrieve.php?' + params.toString(), { signal: resumeSearchAbort.signal });
+      const data = await r.json();
+      if (data && data.status === 'success') {
+        renderResumeResults(data.results || []);
+      } else {
+        resumeSearchResults.innerHTML = '<div class="resume-search-results__empty">' + escapeHtml((data && data.message) || RESUME_TXT.generic) + '</div>';
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      resumeSearchResults.innerHTML = '<div class="resume-search-results__empty">' + escapeHtml(RESUME_TXT.generic) + '</div>';
+    }
+  }
+
+  resumeNameInput.addEventListener('input', function() {
+    const v = this.value.trim();
+    if (resumeSearchTimer) clearTimeout(resumeSearchTimer);
+    if (v.length === 0) { clearResumeResults(); return; }
+    resumeSearchTimer = setTimeout(() => runResumeSearch(v), 250);
+  });
+
+  resumeSearchResults.addEventListener('click', async function(e) {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const uid = btn.getAttribute('data-uid') || '';
+    const act = btn.getAttribute('data-act');
+    if (!uid) return;
+    if (act === 'use') {
+      resumeUserIdInput.value = uid;
+      submitResume(uid);
+      return;
+    }
+    if (act === 'copy') {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(uid);
+        } else {
+          const ta = document.createElement('textarea');
+          ta.value = uid;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+        }
+        const original = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i> ' + escapeHtml(RESUME_TXT.copy_done);
+        resumeUserIdInput.value = uid;
+        setTimeout(() => { btn.innerHTML = original; }, 1600);
+      } catch (err) {
+        // ignore
+      }
     }
   });
 
