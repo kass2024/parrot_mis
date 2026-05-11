@@ -3,16 +3,41 @@ session_start();
 require_once __DIR__ . '/includes/brand_logo.php';
 $parrotBrandLogoHref = parrot_brand_logo_href(__DIR__);
 
+// ✅ Resolve application user_id before header (used for DB prefill)
+$userId = $_GET['id'] ?? ($_SESSION['credit_user_id'] ?? ('credit-' . time() . '-' . rand(1000, 9999)));
+$_SESSION['credit_user_id'] = $userId;
+
+require_once __DIR__ . '/db.php';
+$creditPrefillRow = null;
+$creditResumeStep = 1;
+$creditApplicationComplete = false;
+$pfStmt = $conn->prepare('SELECT * FROM credit_transfer_applications WHERE user_id = ? LIMIT 1');
+if ($pfStmt) {
+    $pfStmt->bind_param('s', $userId);
+    $pfStmt->execute();
+    $pfRes = $pfStmt->get_result();
+    if ($pfRes && ($r = $pfRes->fetch_assoc())) {
+        $creditPrefillRow = $r;
+        $filesOk = !empty(trim((string)($r['current_degree'] ?? '')))
+            && !empty(trim((string)($r['current_transcripts'] ?? '')))
+            && !empty(trim((string)($r['passport_or_id'] ?? '')))
+            && !empty(trim((string)($r['academic_cv'] ?? '')))
+            && !empty(trim((string)($r['payment_proof'] ?? '')));
+        $creditApplicationComplete = $filesOk;
+        $step1Done = !empty(trim((string)($r['email'] ?? '')))
+            && !empty(trim((string)($r['first_name'] ?? '')))
+            && !empty(trim((string)($r['last_name'] ?? '')));
+        if ($step1Done && !$filesOk) {
+            $creditResumeStep = 2;
+        }
+    }
+    $pfStmt->close();
+}
+
 // ============================================
 // INCLUDE HEADER FOR LANGUAGE SWITCHING LOGIC
 // ============================================
 include 'header.php';
-
-// ✅ Use the ID from the URL if available
-$userId = $_GET['id'] ?? ($_SESSION['credit_user_id'] ?? ('credit-' . time() . '-' . rand(1000, 9999)));
-
-// ✅ Keep tracking it in session
-$_SESSION['credit_user_id'] = $userId;
 
 // ============================================
 // TRANSLATIONS FOR CREDIT TRANSFER PAGE
@@ -225,6 +250,16 @@ function ct($key) {
     global $credit_translations, $current_lang;
     return isset($credit_translations[$current_lang][$key]) ? $credit_translations[$current_lang][$key] : $key;
 }
+
+$pf = $creditPrefillRow ?? [];
+$eduChecked = json_decode($pf['education_levels'] ?? '[]', true);
+if (!is_array($eduChecked)) {
+    $eduChecked = [];
+}
+$certChecked = json_decode($pf['certification_levels'] ?? '[]', true);
+if (!is_array($certChecked)) {
+    $certChecked = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="<?php echo $current_lang; ?>">
@@ -328,6 +363,22 @@ function ct($key) {
       width: 100%;
       height: 5px;
       background: linear-gradient(90deg, var(--navy-blue), var(--gold));
+    }
+
+    .credit-resume-banner {
+      background: #e8f4ea;
+      border: 1px solid var(--navy-blue);
+      color: #2f5a26;
+      padding: 14px 18px;
+      border-radius: 12px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .credit-resume-banner--complete {
+      background: #fff8e6;
+      border-color: #c4a000;
+      color: #5c4a00;
     }
 
     /* ===== STEP INDICATOR ===== */
@@ -909,6 +960,19 @@ function ct($key) {
 </div>
 
 <div class="form-container">
+  <?php if ($creditApplicationComplete && $creditPrefillRow): ?>
+  <div class="credit-resume-banner credit-resume-banner--complete" role="status">
+    <?php echo $current_lang === 'fr'
+      ? 'Cette demande semble déjà complète (tous les documents sont enregistrés). Pour une nouvelle demande, utilisez « Postuler » depuis l’accueil.'
+      : 'This application looks complete (all documents are on file). For a new application, use Apply Now from the home page.'; ?>
+  </div>
+  <?php elseif ($creditResumeStep === 2 && $creditPrefillRow): ?>
+  <div class="credit-resume-banner" role="status">
+    <?php echo $current_lang === 'fr'
+      ? 'Reprise de la demande : vos informations personnelles sont chargées. Complétez l’étape académique et les documents manquants.'
+      : 'Resuming your application: your personal details are loaded. Complete academic information and any missing documents.'; ?>
+  </div>
+  <?php endif; ?>
   <!-- STEP INDICATOR -->
   <div class="step-indicator">
     <div class="step active" id="stepIndicator1">
@@ -921,7 +985,7 @@ function ct($key) {
     </div>
   </div>
 
-  <form id="creditForm" enctype="multipart/form-data" data-save="save_credit_transfer.php">
+  <form id="creditForm" enctype="multipart/form-data" data-save="save_credit_transfer.php" data-resume-step="<?= (int)$creditResumeStep ?>" data-app-complete="<?= $creditApplicationComplete ? '1' : '0' ?>">
     <input type="hidden" name="user_id" value="<?= htmlspecialchars($userId) ?>">
 
     <!-- STEP 1: Personal Info -->
@@ -936,15 +1000,15 @@ function ct($key) {
           <label class="required"><?php echo ct('student_name'); ?></label>
           <div class="inline-inputs">
             <div>
-              <input type="text" name="first_name" placeholder="<?php echo ct('first_name'); ?>" required>
+              <input type="text" name="first_name" placeholder="<?php echo ct('first_name'); ?>" required value="<?= htmlspecialchars($pf['first_name'] ?? '') ?>">
               <div class="hint"><?php echo ct('legal_first_name'); ?></div>
             </div>
             <div>
-              <input type="text" name="middle_name" placeholder="<?php echo ct('middle_name'); ?>">
+              <input type="text" name="middle_name" placeholder="<?php echo ct('middle_name'); ?>" value="<?= htmlspecialchars($pf['middle_name'] ?? '') ?>">
               <div class="hint"><?php echo $current_lang === 'fr' ? 'Optionnel' : 'Optional'; ?></div>
             </div>
             <div>
-              <input type="text" name="last_name" placeholder="<?php echo ct('last_name'); ?>" required>
+              <input type="text" name="last_name" placeholder="<?php echo ct('last_name'); ?>" required value="<?= htmlspecialchars($pf['last_name'] ?? '') ?>">
               <div class="hint"><?php echo ct('family_name'); ?></div>
             </div>
           </div>
@@ -956,14 +1020,16 @@ function ct($key) {
             <select name="birth_month" required>
               <option value=""><?php echo $current_lang === 'fr' ? 'Mois' : 'Month'; ?></option>
               <?php foreach (range(1, 12) as $m): ?>
-                <option value="<?= sprintf('%02d', $m) ?>"><?= date('F', mktime(0, 0, 0, $m, 1)) ?></option>
+                <?php $bm = sprintf('%02d', $m); ?>
+                <option value="<?= $bm ?>"<?= (isset($pf['birth_month']) && (string)$pf['birth_month'] === $bm) ? ' selected' : '' ?>><?= date('F', mktime(0, 0, 0, $m, 1)) ?></option>
               <?php endforeach; ?>
             </select>
             
             <select name="birth_day" required>
               <option value=""><?php echo $current_lang === 'fr' ? 'Jour' : 'Day'; ?></option>
               <?php foreach (range(1, 31) as $d): ?>
-                <option value="<?= sprintf('%02d', $d) ?>"><?= $d ?></option>
+                <?php $bd = sprintf('%02d', $d); ?>
+                <option value="<?= $bd ?>"<?= (isset($pf['birth_day']) && (string)$pf['birth_day'] === $bd) ? ' selected' : '' ?>><?= $d ?></option>
               <?php endforeach; ?>
             </select>
             
@@ -971,7 +1037,7 @@ function ct($key) {
               <option value=""><?php echo $current_lang === 'fr' ? 'Année' : 'Year'; ?></option>
               <?php $currentYear = date('Y'); ?>
               <?php foreach (range($currentYear, $currentYear - 80) as $y): ?>
-                <option value="<?= $y ?>"><?= $y ?></option>
+                <option value="<?= $y ?>"<?= (isset($pf['birth_year']) && (string)$pf['birth_year'] === (string)$y) ? ' selected' : '' ?>><?= $y ?></option>
               <?php endforeach; ?>
             </select>
           </div>
@@ -980,42 +1046,42 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('gender'); ?></label>
           <select name="gender" required>
-            <option value="" disabled selected><?php echo $current_lang === 'fr' ? 'Sélectionner le Genre' : 'Select Gender'; ?></option>
-            <option value="Male"><?php echo ct('gender_male'); ?></option>
-            <option value="Female"><?php echo ct('gender_female'); ?></option>
-            <option value="Other"><?php echo ct('gender_other'); ?></option>
+            <option value="" disabled<?= empty($pf['gender']) ? ' selected' : '' ?>><?php echo $current_lang === 'fr' ? 'Sélectionner le Genre' : 'Select Gender'; ?></option>
+            <option value="Male"<?= (($pf['gender'] ?? '') === 'Male') ? ' selected' : '' ?>><?php echo ct('gender_male'); ?></option>
+            <option value="Female"<?= (($pf['gender'] ?? '') === 'Female') ? ' selected' : '' ?>><?php echo ct('gender_female'); ?></option>
+            <option value="Other"<?= (($pf['gender'] ?? '') === 'Other') ? ' selected' : '' ?>><?php echo ct('gender_other'); ?></option>
           </select>
         </div>
 
         <div class="form-group">
           <label><?php echo ct('contact_address'); ?></label>
-          <input type="text" name="street_address" placeholder="<?php echo ct('street_address'); ?>">
-          <input type="text" name="address_line_2" placeholder="<?php echo ct('address_line_2'); ?>" class="mt-3">
+          <input type="text" name="street_address" placeholder="<?php echo ct('street_address'); ?>" value="<?= htmlspecialchars($pf['street_address'] ?? '') ?>">
+          <input type="text" name="address_line_2" placeholder="<?php echo ct('address_line_2'); ?>" class="mt-3" value="<?= htmlspecialchars($pf['address_line_2'] ?? '') ?>">
           <div class="inline-inputs mt-3">
-            <input type="text" name="city" placeholder="<?php echo ct('city'); ?>">
-            <input type="text" name="state" placeholder="<?php echo ct('state'); ?>">
-            <input type="text" name="postal_code" placeholder="<?php echo ct('postal_code'); ?>">
+            <input type="text" name="city" placeholder="<?php echo ct('city'); ?>" value="<?= htmlspecialchars($pf['city'] ?? '') ?>">
+            <input type="text" name="state" placeholder="<?php echo ct('state'); ?>" value="<?= htmlspecialchars($pf['state'] ?? '') ?>">
+            <input type="text" name="postal_code" placeholder="<?php echo ct('postal_code'); ?>" value="<?= htmlspecialchars($pf['postal_code'] ?? '') ?>">
           </div>
         </div>
 
         <div class="form-group">
           <label class="required"><?php echo ct('email_address'); ?></label>
-          <input type="email" name="email" placeholder="your.email@example.com" required>
+          <input type="email" name="email" placeholder="your.email@example.com" required value="<?= htmlspecialchars($pf['email'] ?? '') ?>">
           <div class="hint"><?php echo ct('email_hint'); ?></div>
         </div>
 
         <div class="form-group">
           <label><?php echo ct('contact_numbers'); ?></label>
           <div class="inline-inputs">
-            <input type="text" name="mobile_number" placeholder="<?php echo ct('mobile_number'); ?>">
-            <input type="text" name="phone_number" placeholder="<?php echo ct('phone_number'); ?>">
-            <input type="text" name="work_number" placeholder="<?php echo ct('work_number'); ?>">
+            <input type="text" name="mobile_number" placeholder="<?php echo ct('mobile_number'); ?>" value="<?= htmlspecialchars($pf['mobile_number'] ?? '') ?>">
+            <input type="text" name="phone_number" placeholder="<?php echo ct('phone_number'); ?>" value="<?= htmlspecialchars($pf['phone_number'] ?? '') ?>">
+            <input type="text" name="work_number" placeholder="<?php echo ct('work_number'); ?>" value="<?= htmlspecialchars($pf['work_number'] ?? '') ?>">
           </div>
         </div>
 
         <div class="form-group">
           <label><?php echo ct('current_company'); ?></label>
-          <input type="text" name="company" placeholder="<?php echo $current_lang === 'fr' ? 'Nom de l\'Entreprise (Optionnel)' : 'Company Name (Optional)'; ?>">
+          <input type="text" name="company" placeholder="<?php echo $current_lang === 'fr' ? 'Nom de l\'Entreprise (Optionnel)' : 'Company Name (Optional)'; ?>" value="<?= htmlspecialchars($pf['company'] ?? '') ?>">
         </div>
       </div>
 
@@ -1038,14 +1104,14 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('current_education_level'); ?></label>
           <div class="checkbox-grid">
-            <label><input type="checkbox" name="edu_level[]" value="High School Certificate"> <?php echo ct('edu_high_school'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Ordinary Diploma of 2 years"> <?php echo ct('edu_ordinary_diploma'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Advanced Diploma of 3 years"> <?php echo ct('edu_advanced_diploma'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Bachelor without Degree"> <?php echo ct('edu_bachelor_no_degree'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Bachelor with Lower Division"> <?php echo ct('edu_bachelor_lower'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Bachelor with Upper Division"> <?php echo ct('edu_bachelor_upper'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Masters with Lower Division"> <?php echo ct('edu_masters_lower'); ?></label>
-            <label><input type="checkbox" name="edu_level[]" value="Masters with Upper Division"> <?php echo ct('edu_masters_upper'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="High School Certificate"<?= in_array('High School Certificate', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_high_school'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Ordinary Diploma of 2 years"<?= in_array('Ordinary Diploma of 2 years', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_ordinary_diploma'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Advanced Diploma of 3 years"<?= in_array('Advanced Diploma of 3 years', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_advanced_diploma'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Bachelor without Degree"<?= in_array('Bachelor without Degree', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_bachelor_no_degree'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Bachelor with Lower Division"<?= in_array('Bachelor with Lower Division', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_bachelor_lower'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Bachelor with Upper Division"<?= in_array('Bachelor with Upper Division', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_bachelor_upper'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Masters with Lower Division"<?= in_array('Masters with Lower Division', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_masters_lower'); ?></label>
+            <label><input type="checkbox" name="edu_level[]" value="Masters with Upper Division"<?= in_array('Masters with Upper Division', $eduChecked, true) ? ' checked' : '' ?>> <?php echo ct('edu_masters_upper'); ?></label>
           </div>
           <div class="hint"><?php echo ct('education_hint'); ?></div>
         </div>
@@ -1053,30 +1119,31 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('desired_certification'); ?></label>
           <div class="checkbox-grid">
-            <label><input type="checkbox" name="cert_level[]" value="Bachelor"> <?php echo ct('cert_bachelor'); ?></label>
-            <label><input type="checkbox" name="cert_level[]" value="Masters"> <?php echo ct('cert_masters'); ?></label>
-            <label><input type="checkbox" name="cert_level[]" value="PhD"> <?php echo ct('cert_phd'); ?></label>
+            <label><input type="checkbox" name="cert_level[]" value="Bachelor"<?= in_array('Bachelor', $certChecked, true) ? ' checked' : '' ?>> <?php echo ct('cert_bachelor'); ?></label>
+            <label><input type="checkbox" name="cert_level[]" value="Masters"<?= in_array('Masters', $certChecked, true) ? ' checked' : '' ?>> <?php echo ct('cert_masters'); ?></label>
+            <label><input type="checkbox" name="cert_level[]" value="PhD"<?= in_array('PhD', $certChecked, true) ? ' checked' : '' ?>> <?php echo ct('cert_phd'); ?></label>
           </div>
         </div>
 
+        <?php $uniSel = $pf['university'] ?? ''; ?>
         <div class="form-group">
           <label class="required"><?php echo ct('current_program'); ?></label>
-          <input type="text" name="current_program" placeholder="<?php echo $current_lang === 'fr' ? 'ex. Bachelor of Business Administration' : 'e.g., Bachelor of Business Administration'; ?>" required>
+          <input type="text" name="current_program" placeholder="<?php echo $current_lang === 'fr' ? 'ex. Bachelor of Business Administration' : 'e.g., Bachelor of Business Administration'; ?>" required value="<?= htmlspecialchars($pf['current_program'] ?? '') ?>">
         </div>
 
         <div class="form-group">
           <label class="required"><?php echo ct('select_university'); ?></label>
           <select name="university" id="university" required>
-            <option value="" disabled selected><?php echo $current_lang === 'fr' ? 'Choisissez votre université' : 'Choose your university'; ?></option>
-            <option value="UPAFA">Université Africaine Franco-Arabe (UPAFA)</option>
-            <option value="DPHU">Distant Production house University (DPHU)</option>
-            <option value="IST">Institut Supérieur de Burkina Faso (IST)</option>
+            <option value="" disabled<?= $uniSel === '' ? ' selected' : '' ?>><?php echo $current_lang === 'fr' ? 'Choisissez votre université' : 'Choose your university'; ?></option>
+            <option value="UPAFA"<?= $uniSel === 'UPAFA' ? ' selected' : '' ?>>Université Africaine Franco-Arabe (UPAFA)</option>
+            <option value="DPHU"<?= $uniSel === 'DPHU' ? ' selected' : '' ?>>Distant Production house University (DPHU)</option>
+            <option value="IST"<?= $uniSel === 'IST' ? ' selected' : '' ?>>Institut Supérieur de Burkina Faso (IST)</option>
           </select>
         </div>
 
         <div class="form-group">
           <label class="required"><?php echo ct('proposed_program'); ?></label>
-          <input type="text" name="proposed_program" id="proposed_program" list="programOptions" placeholder="<?php echo $current_lang === 'fr' ? 'Commencez à taper pour rechercher des programmes...' : 'Start typing to search programs...'; ?>" required autocomplete="off">
+          <input type="text" name="proposed_program" id="proposed_program" list="programOptions" placeholder="<?php echo $current_lang === 'fr' ? 'Commencez à taper pour rechercher des programmes...' : 'Start typing to search programs...'; ?>" required autocomplete="off" value="<?= htmlspecialchars($pf['proposed_program'] ?? '') ?>">
           <datalist id="programOptions"></datalist>
           <div class="hint">
             <i class="fas fa-lightbulb"></i> <?php echo ct('program_hint'); ?>
@@ -1089,18 +1156,25 @@ function ct($key) {
         </div>
 
         <!-- FIXED FILE UPLOAD COMPONENTS -->
+        <?php
+        $hasDeg = !empty(trim((string)($pf['current_degree'] ?? '')));
+        $hasTr = !empty(trim((string)($pf['current_transcripts'] ?? '')));
+        $hasPass = !empty(trim((string)($pf['passport_or_id'] ?? '')));
+        $hasCv = !empty(trim((string)($pf['academic_cv'] ?? '')));
+        $hasPay = !empty(trim((string)($pf['payment_proof'] ?? '')));
+        ?>
         <div class="form-group">
           <label class="required"><?php echo ct('degree_certificate'); ?></label>
           <div class="file-upload-container">
-            <div class="file-upload-wrapper" id="degreeUploadWrapper">
-              <input type="file" name="current_degree" id="current_degree" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
+            <div class="file-upload-wrapper<?= $hasDeg ? ' has-file' : '' ?>" id="degreeUploadWrapper">
+              <input type="file" name="current_degree" id="current_degree" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"<?= $hasDeg ? '' : ' required' ?> data-server-file="<?= $hasDeg ? '1' : '0' ?>">
               <div class="upload-icon">
                 <i class="fas fa-file-certificate"></i>
               </div>
               <div class="upload-text"><?php echo ct('click_to_upload'); ?> <?php echo ct('degree_certificate'); ?></div>
               <div class="upload-hint"><?php echo ct('max_10mb'); ?></div>
               <div class="drag-drop-hint"><?php echo ct('or_drag_drop'); ?></div>
-              <div class="file-preview" id="degreePreview"></div>
+              <div class="file-preview" id="degreePreview"<?= $hasDeg ? ' style="display:block"' : '' ?>><?php if ($hasDeg): ?><i class="fas fa-check-circle"></i> <a href="<?= htmlspecialchars($pf['current_degree']) ?>" target="_blank" rel="noopener"><?php echo $current_lang === 'fr' ? 'Document déjà enregistré' : 'Document already on file'; ?></a><?php endif; ?></div>
             </div>
             <div class="file-requirements"><?php echo ct('accepted_formats'); ?></div>
           </div>
@@ -1109,15 +1183,15 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('academic_transcripts'); ?></label>
           <div class="file-upload-container">
-            <div class="file-upload-wrapper" id="transcriptUploadWrapper">
-              <input type="file" name="current_transcripts" id="current_transcripts" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
+            <div class="file-upload-wrapper<?= $hasTr ? ' has-file' : '' ?>" id="transcriptUploadWrapper">
+              <input type="file" name="current_transcripts" id="current_transcripts" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"<?= $hasTr ? '' : ' required' ?> data-server-file="<?= $hasTr ? '1' : '0' ?>">
               <div class="upload-icon">
                 <i class="fas fa-file-alt"></i>
               </div>
               <div class="upload-text"><?php echo ct('click_to_upload'); ?> <?php echo ct('academic_transcripts'); ?></div>
               <div class="upload-hint"><?php echo ct('max_10mb'); ?></div>
               <div class="drag-drop-hint"><?php echo ct('or_drag_drop'); ?></div>
-              <div class="file-preview" id="transcriptPreview"></div>
+              <div class="file-preview" id="transcriptPreview"<?= $hasTr ? ' style="display:block"' : '' ?>><?php if ($hasTr): ?><i class="fas fa-check-circle"></i> <a href="<?= htmlspecialchars($pf['current_transcripts']) ?>" target="_blank" rel="noopener"><?php echo $current_lang === 'fr' ? 'Document déjà enregistré' : 'Document already on file'; ?></a><?php endif; ?></div>
             </div>
             <div class="file-requirements"><?php echo ct('accepted_formats'); ?></div>
           </div>
@@ -1126,15 +1200,15 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('passport_id'); ?></label>
           <div class="file-upload-container">
-            <div class="file-upload-wrapper" id="passportUploadWrapper">
-              <input type="file" name="passport_or_id" id="passport_or_id" accept=".pdf,.jpg,.jpeg,.png" required>
+            <div class="file-upload-wrapper<?= $hasPass ? ' has-file' : '' ?>" id="passportUploadWrapper">
+              <input type="file" name="passport_or_id" id="passport_or_id" accept=".pdf,.jpg,.jpeg,.png"<?= $hasPass ? '' : ' required' ?> data-server-file="<?= $hasPass ? '1' : '0' ?>">
               <div class="upload-icon">
                 <i class="fas fa-id-card"></i>
               </div>
               <div class="upload-text"><?php echo ct('click_to_upload'); ?> <?php echo $current_lang === 'fr' ? 'Document d\'identité' : 'ID Document'; ?></div>
               <div class="upload-hint"><?php echo ct('max_10mb'); ?></div>
               <div class="drag-drop-hint"><?php echo ct('or_drag_drop'); ?></div>
-              <div class="file-preview" id="passportPreview"></div>
+              <div class="file-preview" id="passportPreview"<?= $hasPass ? ' style="display:block"' : '' ?>><?php if ($hasPass): ?><i class="fas fa-check-circle"></i> <a href="<?= htmlspecialchars($pf['passport_or_id']) ?>" target="_blank" rel="noopener"><?php echo $current_lang === 'fr' ? 'Document déjà enregistré' : 'Document already on file'; ?></a><?php endif; ?></div>
             </div>
             <div class="file-requirements"><?php echo $current_lang === 'fr' ? 'Accepté : .pdf, .jpg, .jpeg, .png' : 'Accepted: .pdf, .jpg, .jpeg, .png'; ?></div>
           </div>
@@ -1143,15 +1217,15 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('academic_cv'); ?></label>
           <div class="file-upload-container">
-            <div class="file-upload-wrapper" id="cvUploadWrapper">
-              <input type="file" name="academic_cv" id="academic_cv" accept=".pdf,.doc,.docx" required>
+            <div class="file-upload-wrapper<?= $hasCv ? ' has-file' : '' ?>" id="cvUploadWrapper">
+              <input type="file" name="academic_cv" id="academic_cv" accept=".pdf,.doc,.docx"<?= $hasCv ? '' : ' required' ?> data-server-file="<?= $hasCv ? '1' : '0' ?>">
               <div class="upload-icon">
                 <i class="fas fa-file-contract"></i>
               </div>
               <div class="upload-text"><?php echo ct('click_to_upload'); ?> <?php echo ct('academic_cv'); ?></div>
               <div class="upload-hint"><?php echo ct('max_10mb'); ?></div>
               <div class="drag-drop-hint"><?php echo ct('or_drag_drop'); ?></div>
-              <div class="file-preview" id="cvPreview"></div>
+              <div class="file-preview" id="cvPreview"<?= $hasCv ? ' style="display:block"' : '' ?>><?php if ($hasCv): ?><i class="fas fa-check-circle"></i> <a href="<?= htmlspecialchars($pf['academic_cv']) ?>" target="_blank" rel="noopener"><?php echo $current_lang === 'fr' ? 'Document déjà enregistré' : 'Document already on file'; ?></a><?php endif; ?></div>
             </div>
             <div class="file-requirements"><?php echo $current_lang === 'fr' ? 'Accepté : .pdf, .doc, .docx' : 'Accepted: .pdf, .doc, .docx'; ?></div>
           </div>
@@ -1160,15 +1234,15 @@ function ct($key) {
         <div class="form-group">
           <label class="required"><?php echo ct('payment_proof'); ?></label>
           <div class="file-upload-container">
-            <div class="file-upload-wrapper" id="paymentUploadWrapper">
-              <input type="file" name="payment_proof" id="payment_proof" accept=".pdf,.jpg,.jpeg,.png" required>
+            <div class="file-upload-wrapper<?= $hasPay ? ' has-file' : '' ?>" id="paymentUploadWrapper">
+              <input type="file" name="payment_proof" id="payment_proof" accept=".pdf,.jpg,.jpeg,.png"<?= $hasPay ? '' : ' required' ?> data-server-file="<?= $hasPay ? '1' : '0' ?>">
               <div class="upload-icon">
                 <i class="fas fa-receipt"></i>
               </div>
               <div class="upload-text"><?php echo ct('click_to_upload'); ?> <?php echo ct('payment_proof'); ?></div>
               <div class="upload-hint"><?php echo ct('max_10mb'); ?></div>
               <div class="drag-drop-hint"><?php echo ct('or_drag_drop'); ?></div>
-              <div class="file-preview" id="paymentPreview"></div>
+              <div class="file-preview" id="paymentPreview"<?= $hasPay ? ' style="display:block"' : '' ?>><?php if ($hasPay): ?><i class="fas fa-check-circle"></i> <a href="<?= htmlspecialchars($pf['payment_proof']) ?>" target="_blank" rel="noopener"><?php echo $current_lang === 'fr' ? 'Document déjà enregistré' : 'Document already on file'; ?></a><?php endif; ?></div>
             </div>
             <div class="file-requirements"><?php echo $current_lang === 'fr' ? 'Accepté : .pdf, .jpg, .jpeg, .png' : 'Accepted: .pdf, .jpg, .jpeg, .png'; ?></div>
           </div>
@@ -1176,7 +1250,7 @@ function ct($key) {
 
         <div class="form-group">
           <label><?php echo ct('additional_comments'); ?></label>
-          <textarea name="comments" placeholder="<?php echo $current_lang === 'fr' ? 'Toute information supplémentaire que vous souhaitez partager avec le comité d\'admission...' : 'Any additional information you\'d like to share with the admissions committee...'; ?>"></textarea>
+          <textarea name="comments" placeholder="<?php echo $current_lang === 'fr' ? 'Toute information supplémentaire que vous souhaitez partager avec le comité d\'admission...' : 'Any additional information you\'d like to share with the admissions committee...'; ?>"><?= htmlspecialchars($pf['comments'] ?? '') ?></textarea>
           <div class="hint"><?php echo ct('comments_hint'); ?></div>
         </div>
       </div>
@@ -1541,7 +1615,10 @@ function validateStep2() {
   
   requiredFiles.forEach(fieldName => {
     const input = document.getElementById(fieldName);
-    if (!input || !input.files || input.files.length === 0) {
+    if (!input) return;
+    const hasServer = input.getAttribute('data-server-file') === '1';
+    if (hasServer) return;
+    if (!input.files || input.files.length === 0) {
       missingFiles.push(fieldName.replace(/_/g, ' '));
     }
   });
@@ -1551,9 +1628,10 @@ function validateStep2() {
     return false;
   }
   
-  // Validate file sizes
+  // Validate file sizes (only for newly selected files)
   for (const fieldName of requiredFiles) {
     const input = document.getElementById(fieldName);
+    if (!input || !input.files || input.files.length === 0) continue;
     if (input.files[0].size > 10 * 1024 * 1024) {
       alert(`<?php echo $current_lang === 'fr' ? 'Fichier trop volumineux :' : 'File too large:' ?> ${fieldName.replace(/_/g, ' ')}\n<?php echo $current_lang === 'fr' ? 'La taille maximale des fichiers est de 10MB' : 'Maximum file size is 10MB' ?>`);
       return false;
@@ -1708,23 +1786,38 @@ document.getElementById('creditForm').addEventListener('submit', async function(
 
 /* ===== INITIALIZATION ===== */
 document.addEventListener('DOMContentLoaded', () => {
-  // Initialize step
-  showStep(1);
-  
-  // Setup university program listener
-  document.getElementById('university').addEventListener('change', function(e) {
+  const creditForm = document.getElementById('creditForm');
+  const resumeStep = creditForm ? parseInt(creditForm.getAttribute('data-resume-step') || '1', 10) : 1;
+  const appComplete = creditForm && creditForm.getAttribute('data-app-complete') === '1';
+
+  if (appComplete) {
+    const submitBtn = document.getElementById('submitButton');
+    if (submitBtn) submitBtn.disabled = true;
+    const step1Btn = document.querySelector('button[onclick*="step1"]');
+    if (step1Btn) step1Btn.disabled = true;
+  }
+
+  const universitySelect = document.getElementById('university');
+  universitySelect.addEventListener('change', function(e) {
     populatePrograms(e.target.value);
   });
-  
-  // Setup file upload handlers - CRITICAL FIX
+
   setupFileUploadHandlers();
-  
-  // Auto-populate programs if university is pre-selected
-  const universitySelect = document.getElementById('university');
-  if (universitySelect.value) {
-    populatePrograms(universitySelect.value);
+
+  if (resumeStep === 2 && !appComplete) {
+    if (universitySelect.value) {
+      populatePrograms(universitySelect.value);
+      const pp = document.getElementById('proposed_program');
+      if (pp) pp.value = <?= json_encode($pf['proposed_program'] ?? '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE) ?>;
+    }
+    showStep(2);
+  } else {
+    showStep(1);
+    if (universitySelect.value) {
+      populatePrograms(universitySelect.value);
+    }
   }
-  
+
   console.log('Form initialized with file upload handlers ready.');
 });
 </script>

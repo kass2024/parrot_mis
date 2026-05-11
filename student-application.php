@@ -1,5 +1,11 @@
 <?php
 session_start();
+if (!empty($_GET['id']) && is_string($_GET['id'])) {
+    $rid = preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['id']);
+    if ($rid !== '') {
+        $_SESSION['user_id'] = $rid;
+    }
+}
 $_SESSION['user_id'] ??= 'user_' . bin2hex(random_bytes(6));
 
 // Language detection and setting

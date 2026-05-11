@@ -189,6 +189,16 @@ $index_translations = [
         // Card Translations
         'card_apply' => 'Apply Now',
         'card_copy' => 'Copy Link',
+        'card_continue' => 'Continue application',
+        'card_continue_hint' => 'Have a user ID? Continue your saved application.',
+        'resume_modal_title' => 'Continue where you left off',
+        'resume_modal_sub' => 'Enter the application user ID from your confirmation (for credit transfer it looks like credit-1749906159-3206).',
+        'resume_label' => 'Application user ID',
+        'resume_submit' => 'Continue',
+        'resume_cancel' => 'Cancel',
+        'resume_loading' => 'Checking…',
+        'resume_error_generic' => 'Something went wrong. Please try again.',
+        'resume_error_empty' => 'Please enter your application user ID.',
         
         // Card 1: Study & Work Abroad
         'card1_title' => 'Study & Work Abroad',
@@ -430,6 +440,16 @@ $index_translations = [
         // Card Translations
         'card_apply' => 'Postuler maintenant',
         'card_copy' => 'Copier le lien',
+        'card_continue' => 'Reprendre la demande',
+        'card_continue_hint' => 'Vous avez un identifiant ? Reprenez votre demande enregistrée.',
+        'resume_modal_title' => 'Reprendre votre demande',
+        'resume_modal_sub' => 'Saisissez l’identifiant utilisateur de votre confirmation (ex. credit-1749906159-3206 pour le transfert de crédits).',
+        'resume_label' => 'Identifiant utilisateur',
+        'resume_submit' => 'Continuer',
+        'resume_cancel' => 'Annuler',
+        'resume_loading' => 'Vérification…',
+        'resume_error_generic' => 'Une erreur s’est produite. Réessayez.',
+        'resume_error_empty' => 'Veuillez saisir votre identifiant utilisateur.',
         
         // Card 1: Study & Work Abroad
         'card1_title' => 'Étudier & Travailler à l\'Étranger',
@@ -1274,9 +1294,9 @@ include 'header.php';
 }
 .card-features li:last-child { border-bottom: none; }
 .card-features li::before { content: "✓"; position: absolute; left: 0; color: var(--lp-red); font-weight: 800; }
-.card-actions { display: flex; gap: 12px; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .card-button {
-  flex: 1; padding: 14px 18px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer;
+  flex: 1 1 160px; padding: 14px 18px; border-radius: 10px; border: none; font-weight: 600; cursor: pointer;
   font-size: 0.95rem; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: inherit;
   transition: transform 0.2s, box-shadow 0.2s;
 }
@@ -1287,6 +1307,43 @@ include 'header.php';
 .apply-button:hover { transform: translateY(-2px); }
 .copy-button { background: #fff; color: var(--lp-green); border: 2px solid #e2e8f0; }
 .copy-button:hover { background: #f8fafc; border-color: var(--lp-green); }
+.resume-button {
+  flex: 1 1 100%;
+  background: #fff;
+  color: var(--lp-blue);
+  border: 2px solid var(--lp-blue);
+}
+.resume-button:hover { background: #f0f6ff; transform: translateY(-2px); }
+
+.resume-modal {
+  position: fixed; inset: 0; z-index: 20000;
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.resume-modal.is-open { display: flex; }
+.resume-modal__backdrop {
+  position: absolute; inset: 0; background: rgba(15, 23, 42, 0.55);
+}
+.resume-modal__dialog {
+  position: relative; z-index: 1; width: 100%; max-width: 440px;
+  background: #fff; border-radius: 16px; padding: 24px 22px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+}
+.resume-modal__dialog h3 { margin: 0 0 8px; font-size: 1.2rem; color: var(--lp-green); }
+.resume-modal__dialog p { margin: 0 0 16px; font-size: 0.9rem; color: var(--lp-muted); line-height: 1.5; }
+.resume-modal__dialog label { display: block; font-weight: 600; margin-bottom: 6px; color: var(--lp-text); font-size: 0.9rem; }
+.resume-modal__dialog input[type="text"] {
+  width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #e2e8f0;
+  font-size: 1rem; margin-bottom: 10px;
+}
+.resume-modal__error { color: #b91c1c; font-size: 0.88rem; min-height: 1.25em; margin: 0 0 12px; }
+.resume-modal__actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.resume-modal__actions button {
+  padding: 10px 18px; border-radius: 10px; font-weight: 600; cursor: pointer; border: none; font-family: inherit;
+}
+#resumeModalCancel { background: #f1f5f9; color: var(--lp-text); }
+#resumeModalSubmit {
+  background: linear-gradient(135deg, var(--lp-green), var(--lp-blue)); color: #fff;
+}
 
 .direct-card-header {
   display: none; background: linear-gradient(135deg, var(--lp-green), #163c22);
@@ -1638,11 +1695,30 @@ include 'header.php';
           <i class="fas fa-link"></i>
           <?php echo htmlspecialchars(it('card_copy')); ?>
         </button>
+        <button type="button" class="card-button resume-button" title="<?php echo htmlspecialchars(it('card_continue_hint')); ?>">
+          <i class="fas fa-folder-open"></i>
+          <?php echo htmlspecialchars(it('card_continue')); ?>
+        </button>
       </div>
     </div>
     <?php endforeach; ?>
   </div>
 </section>
+
+<div id="resumeApplicationModal" class="resume-modal" aria-hidden="true">
+  <div class="resume-modal__backdrop" id="resumeModalBackdrop"></div>
+  <div class="resume-modal__dialog" role="dialog" aria-modal="true" aria-labelledby="resumeModalTitle">
+    <h3 id="resumeModalTitle"><?php echo htmlspecialchars(it('resume_modal_title')); ?></h3>
+    <p><?php echo htmlspecialchars(it('resume_modal_sub')); ?></p>
+    <label for="resumeUserIdInput"><?php echo htmlspecialchars(it('resume_label')); ?></label>
+    <input type="text" id="resumeUserIdInput" name="resume_user_id" autocomplete="off" placeholder="credit-…" />
+    <p class="resume-modal__error" id="resumeModalError" aria-live="polite"></p>
+    <div class="resume-modal__actions">
+      <button type="button" id="resumeModalCancel"><?php echo htmlspecialchars(it('resume_cancel')); ?></button>
+      <button type="button" id="resumeModalSubmit"><?php echo htmlspecialchars(it('resume_submit')); ?></button>
+    </div>
+  </div>
+</div>
 
 <!-- Partner universities -->
 <section class="universities-section section-padding">
@@ -2069,6 +2145,75 @@ include 'header.php';
         showNotification(`Link copied for: ${cardTitle}`);
       });
     });
+  });
+
+  // Continue application (smart retrieval by user_id)
+  let resumeCardType = null;
+  const resumeModal = document.getElementById('resumeApplicationModal');
+  const resumeUserIdInput = document.getElementById('resumeUserIdInput');
+  const resumeModalError = document.getElementById('resumeModalError');
+  const resumeModalSubmit = document.getElementById('resumeModalSubmit');
+  const resumeModalCancel = document.getElementById('resumeModalCancel');
+  const resumeModalBackdrop = document.getElementById('resumeModalBackdrop');
+
+  function openResumeModal(cardType) {
+    resumeCardType = cardType;
+    resumeModalError.textContent = '';
+    resumeUserIdInput.value = '';
+    resumeModal.classList.add('is-open');
+    resumeModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => resumeUserIdInput.focus(), 50);
+  }
+
+  function closeResumeModal() {
+    resumeModal.classList.remove('is-open');
+    resumeModal.setAttribute('aria-hidden', 'true');
+    resumeCardType = null;
+  }
+
+  document.querySelectorAll('.resume-button').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      const card = this.closest('.service-card');
+      if (!card) return;
+      openResumeModal(card.dataset.card);
+    });
+  });
+
+  resumeModalCancel.addEventListener('click', closeResumeModal);
+  resumeModalBackdrop.addEventListener('click', closeResumeModal);
+
+  resumeModalSubmit.addEventListener('click', async function() {
+    const uid = resumeUserIdInput.value.trim();
+    if (!uid) {
+      resumeModalError.textContent = <?php echo json_encode(it('resume_error_empty')); ?>;
+      return;
+    }
+    if (!resumeCardType) return;
+    resumeModalSubmit.disabled = true;
+    resumeModalError.textContent = <?php echo json_encode(it('resume_loading')); ?>;
+    try {
+      const fd = new FormData();
+      fd.append('card', resumeCardType);
+      fd.append('user_id', uid);
+      const r = await fetch('card_retrieve.php', { method: 'POST', body: fd });
+      const data = await r.json();
+      if (data.status === 'success' && data.redirect_url) {
+        window.location.href = data.redirect_url;
+        return;
+      }
+      resumeModalError.textContent = (data && data.message) ? data.message : <?php echo json_encode(it('resume_error_generic')); ?>;
+    } catch (err) {
+      resumeModalError.textContent = <?php echo json_encode(it('resume_error_generic')); ?>;
+    } finally {
+      resumeModalSubmit.disabled = false;
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && resumeModal && resumeModal.classList.contains('is-open')) {
+      closeResumeModal();
+    }
   });
 
   // Additional CTA buttons

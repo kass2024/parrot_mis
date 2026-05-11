@@ -47,9 +47,9 @@ $paramTypes = '';
 
 if ($searchTerm !== '') {
     $like = '%' . $searchTerm . '%';
-    $whereParts[] = '(ja.first_name LIKE ? OR ja.last_name LIKE ? OR ja.email LIKE ?)';
-    array_push($params, $like, $like, $like);
-    $paramTypes .= 'sss';
+    $whereParts[] = '(ja.first_name LIKE ? OR ja.last_name LIKE ? OR ja.email LIKE ? OR ja.user_id = ?)';
+    array_push($params, $like, $like, $like, $searchTerm);
+    $paramTypes .= 'ssss';
 }
 if ($jobProcessFilterActive) {
     $whereParts[] = 'ja.process_status = ?';

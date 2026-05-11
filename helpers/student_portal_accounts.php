@@ -6,7 +6,7 @@ require_once __DIR__ . '/student_portal_schema.php';
 /**
  * Default password requested for auto-created accounts.
  */
-const PCVC_STUDENT_DEFAULT_PASSWORD = 'Xander@2026';
+const PCVC_STUDENT_DEFAULT_PASSWORD = 'Parrot@2026';
 
 function pcvc_student_email_norm(string $email): string
 {

@@ -155,16 +155,27 @@ if ($step === 'step2') {
   $cv         = uploadFile('academic_cv');
   $payment    = uploadFile('payment_proof');
 
-  // ✅ CRITICAL FIX: Check required files are uploaded
+  // Existing file paths (resume without re-uploading)
+  $existingRow = null;
+  $exStmt = $conn->prepare('SELECT current_degree, current_transcripts, passport_or_id, academic_cv, payment_proof FROM credit_transfer_applications WHERE user_id = ? LIMIT 1');
+  if ($exStmt) {
+    $exStmt->bind_param('s', $userId);
+    $exStmt->execute();
+    $existingRow = $exStmt->get_result()->fetch_assoc();
+    $exStmt->close();
+  }
+
   $requiredFiles = ['current_degree', 'current_transcripts', 'passport_or_id', 'academic_cv', 'payment_proof'];
   $fileErrors = [];
-  
+
   foreach ($requiredFiles as $fileField) {
-    if (!isset($_FILES[$fileField]) || $_FILES[$fileField]['error'] === UPLOAD_ERR_NO_FILE) {
+    $hasUpload = isset($_FILES[$fileField]) && $_FILES[$fileField]['error'] === UPLOAD_ERR_OK;
+    $hasExisting = $existingRow && !empty(trim((string)($existingRow[$fileField] ?? '')));
+    if (!$hasUpload && !$hasExisting) {
       $fileErrors[] = ucfirst(str_replace('_', ' ', $fileField)) . ' is required';
     }
   }
-  
+
   if (!empty($fileErrors)) {
     echo json_encode(['status' => 'error', 'message' => implode(', ', $fileErrors)]);
     $conn->close();
