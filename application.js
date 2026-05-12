@@ -1430,6 +1430,9 @@ async function submitForm(options = {}) {
     }
 
     const fd = buildApplicationFormData({ includeStep: true, stepValue: step, final: true });
+    if (options.identityOnlySubmit) {
+      fd.set("smart_identity_submit", "1");
+    }
     const res = await fetch(API, { method: "POST", body: fd });
     const rawText = await res.text();
     let data;

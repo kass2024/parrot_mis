@@ -74,7 +74,54 @@ function debug_log(string $label, $data = null): void
     file_put_contents($logFile, $msg . PHP_EOL, FILE_APPEND | LOCK_EX);
 }
 
-function pcvc_send_student_portal_access_email(string $email, string $studentName = ''): void
+function pcvc_get_application_study_choice_summaries(mysqli $conn, int $applicationId): array
+{
+    if ($applicationId <= 0) {
+        return [];
+    }
+
+    $stmt = $conn->prepare("
+        SELECT
+            r.name AS region_name,
+            u.name AS university_name,
+            pl.name AS level_name,
+            p.program_name
+        FROM application_study_choices sc
+        JOIN regions r ON r.id = sc.region_id
+        JOIN universities u ON u.id = sc.university_id
+        JOIN program_levels pl ON pl.id = sc.program_level_id
+        JOIN programs p ON p.id = sc.program_id
+        WHERE sc.application_id = ?
+        ORDER BY sc.id ASC
+    ");
+
+    if (!$stmt) {
+        return [];
+    }
+
+    $stmt->bind_param("i", $applicationId);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $choices = [];
+    while ($row = $res->fetch_assoc()) {
+        $parts = array_filter([
+            trim((string)($row['program_name'] ?? '')),
+            trim((string)($row['level_name'] ?? '')),
+            trim((string)($row['university_name'] ?? '')),
+            trim((string)($row['region_name'] ?? ''))
+        ], static fn($value) => $value !== '');
+
+        if ($parts) {
+            $choices[] = implode(' - ', $parts);
+        }
+    }
+
+    $stmt->close();
+    return $choices;
+}
+
+function pcvc_send_student_portal_access_email(string $email, string $studentName = '', int $applicationId = 0): void
 {
     $email = strtolower(trim($email));
     if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) return;
@@ -92,6 +139,15 @@ function pcvc_send_student_portal_access_email(string $email, string $studentNam
         debug_log('PORTAL ACCOUNT ENSURE FAILED', $e->getMessage());
     }
 
+    $studyChoices = [];
+    try {
+        if (isset($conn) && $conn instanceof mysqli) {
+            $studyChoices = pcvc_get_application_study_choice_summaries($conn, $applicationId);
+        }
+    } catch (Throwable $e) {
+        debug_log('PORTAL ACCESS STUDY CHOICES LOAD FAILED', $e->getMessage());
+    }
+
     // Build login link (prefill email)
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
@@ -100,11 +156,34 @@ function pcvc_send_student_portal_access_email(string $email, string $studentNam
 
     $defaultPw = PCVC_STUDENT_DEFAULT_PASSWORD;
     $subject = 'Your Student Portal Access – ' . PCVC_COMPANY_DISPLAY_NAME;
+    $studyChoicesHtml = '';
+    $studyChoicesText = '';
+    if ($studyChoices) {
+        $itemsHtml = '';
+        foreach ($studyChoices as $choice) {
+            $itemsHtml .= '<li style="margin:0 0 6px 0"><strong>' . htmlspecialchars($choice, ENT_QUOTES, 'UTF-8') . '</strong></li>';
+        }
+        $studyChoicesHtml = '
+        <div style="margin:18px 0 14px 0;padding:14px 16px;border:1px solid #dbeafe;border-radius:12px;background:#f8fbff">
+          <p style="margin:0 0 10px 0;font-weight:700;color:#0f172a">Your study choices</p>
+          <ul style="margin:0;padding-left:18px;color:#1f2937">
+            ' . $itemsHtml . '
+          </ul>
+        </div>';
+
+        $studyChoicesText = "Study choices:\n";
+        foreach ($studyChoices as $choice) {
+            $studyChoicesText .= "- {$choice}\n";
+        }
+        $studyChoicesText .= "\n";
+    }
+
     $body = "
       <div style=\"font-family:Arial,sans-serif;line-height:1.6;color:#111\">
         <h2 style=\"margin:0 0 12px 0\">Student Portal Access</h2>
         <p>Hello <strong>" . htmlspecialchars($studentName, ENT_QUOTES, 'UTF-8') . "</strong>,</p>
-        <p>Thank you for submitting your application. Your student portal is ready — you can track your application status and upload required materials securely.</p>
+        <p>Thank you for submitting your application. The Admissions Department has prepared your student portal so you can track your application status and upload required materials securely.</p>
+        " . $studyChoicesHtml . "
         <p style=\"margin:16px 0\">
           <a href=\"" . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . "\" style=\"
             display:inline-block;background:#3661B9;color:#fff;text-decoration:none;
@@ -118,15 +197,18 @@ function pcvc_send_student_portal_access_email(string $email, string $studentNam
         </ul>
         <p>If the button doesn’t work, copy/paste this link:</p>
         <p><a href=\"" . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . "\">" . htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8') . "</a></p>
-        <p style=\"margin-top:18px\">Thank you,<br>" . htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') . "</p>
+        <p style=\"margin-top:18px\">Thank you,<br>Admissions Department<br>" . htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') . "</p>
       </div>
     ";
 
     $mail = app_mailer();
+    $mail->setFrom(PCVC_COMPANY_SUPPORT_EMAIL, PCVC_COMPANY_DISPLAY_NAME . ' - Admission Department');
+    $mail->clearReplyTos();
+    $mail->addReplyTo(PCVC_COMPANY_SUPPORT_EMAIL, PCVC_COMPANY_DISPLAY_NAME . ' - Admission Department');
     $mail->addAddress($email, $studentName);
     $mail->Subject = $subject;
     $mail->Body = $body;
-    $mail->AltBody = "Student Portal Access\n\nLogin: {$loginUrl}\nEmail: {$email}\nPassword: {$defaultPw}\n";
+    $mail->AltBody = "Student Portal Access\n\nHello {$studentName},\n\nThe Admissions Department has prepared your student portal for your application.\n\n{$studyChoicesText}Login: {$loginUrl}\nEmail: {$email}\nPassword: {$defaultPw}\n\nThank you,\nAdmissions Department\n" . PCVC_COMPANY_DISPLAY_NAME . "\n";
     $mail->send();
 }
 
@@ -572,6 +654,41 @@ if ($action === 'study_search') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
  debug_log('POST REQUEST RECEIVED', $_POST);
     $isFinal = isset($_POST['final']) ? 1 : 0;
+    $smartIdentitySubmit = (
+        $isFinal === 1
+        && isset($_POST['smart_identity_submit'])
+        && (string)$_POST['smart_identity_submit'] === '1'
+    );
+
+    $identityOnlySubmitAllowed = false;
+    if ($smartIdentitySubmit && !empty($_POST['application_id'])) {
+        $identityAppId = (int)$_POST['application_id'];
+        $identityFirst = trim((string)($_POST['first_name'] ?? ''));
+        $identityLast = trim((string)($_POST['last_name'] ?? ''));
+
+        if ($identityAppId > 0 && looks_like_human_name($identityFirst) && looks_like_human_name($identityLast)) {
+            $stmt = $conn->prepare("
+                SELECT valid_passport, cv_resume
+                FROM student_applications
+                WHERE id = ?
+                LIMIT 1
+            ");
+
+            if ($stmt) {
+                $stmt->bind_param("i", $identityAppId);
+                $stmt->execute();
+                $stmt->bind_result($storedPassport, $storedCv);
+                if ($stmt->fetch()) {
+                    $identityOnlySubmitAllowed = (
+                        trim((string)$storedPassport) !== ''
+                        || trim((string)$storedCv) !== ''
+                    );
+                }
+                $stmt->close();
+            }
+        }
+    }
+
     /* ===============================
    FINAL SUBMIT – AGENT REQUIRED
 =============================== */
@@ -597,9 +714,10 @@ if ($isFinal === 1) {
     =============================== */
     $fieldErrors = [];
 
-    // Validate email if present (required on final submit)
+    // Validate email if present (required on final submit unless identity-only smart submit is allowed)
     $email = isset($_POST['email']) ? trim((string)$_POST['email']) : '';
-    if ($isFinal === 1 || $email !== '') {
+    $emailRequired = ($isFinal === 1 && !$identityOnlySubmitAllowed);
+    if ($emailRequired || $email !== '') {
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $fieldErrors['email'] = 'Please enter a valid email address.';
         }
@@ -617,12 +735,13 @@ if ($isFinal === 1) {
         }
     }
 
-    // Validate phone pair if present (required on final submit)
+    // Validate phone pair if present (required on final submit unless identity-only smart submit is allowed)
     $areaCode = normalize_area_code($_POST['area_code'] ?? '');
     $phoneDig = normalize_phone_digits($_POST['phone_number'] ?? '');
     $phoneTouched = (trim((string)($_POST['area_code'] ?? '')) !== '' || trim((string)($_POST['phone_number'] ?? '')) !== '');
 
-    if ($isFinal === 1 || $phoneTouched) {
+    $phoneRequired = ($isFinal === 1 && !$identityOnlySubmitAllowed);
+    if ($phoneRequired || $phoneTouched) {
         if (!is_valid_phone_pair($areaCode, $phoneDig)) {
             $fieldErrors['phone_number'] = 'Please enter a valid phone number.';
         } else {
@@ -1108,7 +1227,7 @@ if ($isFinal === 1) {
     try {
         $studentEmail = isset($_POST['email']) ? (string)$_POST['email'] : '';
         $studentName = trim((string)($_POST['first_name'] ?? '') . ' ' . (string)($_POST['last_name'] ?? ''));
-        pcvc_send_student_portal_access_email($studentEmail, $studentName);
+        pcvc_send_student_portal_access_email($studentEmail, $studentName, $appId);
         debug_log('PORTAL ACCESS EMAIL SENT', ['email' => $studentEmail, 'appId' => $appId]);
     } catch (Throwable $e) {
         debug_log('PORTAL ACCESS EMAIL FAILED', $e->getMessage());

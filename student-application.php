@@ -100,25 +100,32 @@ $text = [
         'step2_desc' => 'Enter details exactly as shown on your passport.',
         'smart_autofill_title' => 'Smart AI autofill',
         'smart_autofill_desc' => 'After choosing your study choice, upload passport, CV, transcripts, degree, birth certificate, or other supporting documents. AI will extract student details and route each recognized file into the existing attachment fields automatically.',
-        'smart_autofill_button' => 'Autofill from documents',
+        'smart_autofill_button' => 'Add documents',
+        'smart_autofill_start_button' => 'Start analysis',
         'smart_autofill_formats' => 'Supported formats: PDF, DOCX, JPG, JPEG, PNG, WEBP',
         'smart_autofill_hint' => 'Best results: upload passport, CV, and your latest academic documents together.',
-        'smart_autofill_gate' => 'Choose at least one study program first. Then upload all documents for autofill.',
-        'smart_autofill_ready' => 'Study choice selected. You can now upload all documents for autofill.',
+        'smart_autofill_gate' => 'Choose at least one study program first. Then add the documents you want to analyze.',
+        'smart_autofill_ready' => 'Study choice selected. Add one document now, then add more later before starting the analysis manually.',
         'smart_autofill_processing' => 'Analyzing your documents and extracting student details…',
         'smart_autofill_uploading' => 'Applying extracted details and attaching the recognized documents…',
         'smart_autofill_success' => 'Autofill complete. Please review the fields before continuing.',
         'smart_autofill_partial' => 'Autofill finished with some warnings. Please review the notes below.',
         'smart_autofill_error' => 'Autofill failed. Please try again with clearer documents.',
         'smart_autofill_need_draft' => 'Please save your draft first so uploaded documents can be attached to this application.',
+        'smart_autofill_queue_title' => 'Queued documents',
+        'smart_autofill_queue_empty' => 'No documents selected yet. Add one or more files, then start the analysis when you are ready.',
+        'smart_autofill_queue_ready' => 'Documents are queued. Click Start analysis when you are ready to continue until final submission.',
+        'smart_autofill_queue_count' => 'document(s) ready for analysis',
         'smart_autofill_results_title' => 'Recognized documents',
         'smart_autofill_warnings_title' => 'Warnings',
         'smart_autofill_existing_note' => 'These files are not stored in a new place. They are routed into the existing document attachment fields below.',
+        'smart_autofill_stage_queue' => 'Documents queued',
         'smart_autofill_stage_draft' => 'Creating draft application',
         'smart_autofill_stage_batch' => 'Analyzing all documents',
         'smart_autofill_stage_fill' => 'Applying extracted details',
         'smart_autofill_stage_route' => 'Routing files to existing fields',
         'smart_autofill_stage_save' => 'Saving extracted form data',
+        'smart_autofill_stage_submit' => 'Submitting application',
         'smart_autofill_debug_title' => 'Batch debug details',
         'first_name' => 'First Name',
         'last_name' => 'Last Name',
@@ -297,25 +304,32 @@ $text = [
         'step2_desc' => 'Entrez les détails exactement comme indiqué sur votre passeport.',
         'smart_autofill_title' => 'Remplissage intelligent par IA',
         'smart_autofill_desc' => 'Après avoir choisi vos études, téléchargez le passeport, le CV, les relevés, le diplôme, le certificat de naissance ou d\'autres documents utiles. L\'IA extrait les informations de l\'étudiant puis route chaque fichier reconnu vers les champs de pièces jointes existants.',
-        'smart_autofill_button' => 'Remplir depuis les documents',
+        'smart_autofill_button' => 'Ajouter des documents',
+        'smart_autofill_start_button' => 'Lancer l analyse',
         'smart_autofill_formats' => 'Formats supportés : PDF, DOCX, JPG, JPEG, PNG, WEBP',
         'smart_autofill_hint' => 'Meilleurs résultats : téléchargez ensemble le passeport, le CV et les derniers documents académiques.',
-        'smart_autofill_gate' => 'Choisissez d abord au moins un programme d etudes. Ensuite, telechargez tous les documents pour le remplissage automatique.',
-        'smart_autofill_ready' => 'Choix d etudes selectionne. Vous pouvez maintenant telecharger tous les documents pour le remplissage automatique.',
+        'smart_autofill_gate' => 'Choisissez d abord au moins un programme d etudes. Ensuite, ajoutez les documents a analyser.',
+        'smart_autofill_ready' => 'Choix d etudes selectionne. Ajoutez un document maintenant puis d autres plus tard avant de lancer l analyse manuellement.',
         'smart_autofill_processing' => 'Analyse des documents et extraction des informations de l\'étudiant…',
         'smart_autofill_uploading' => 'Application des données extraites et rattachement des documents reconnus…',
         'smart_autofill_success' => 'Remplissage terminé. Vérifiez les champs avant de continuer.',
         'smart_autofill_partial' => 'Le remplissage est terminé avec quelques avertissements. Veuillez vérifier les notes ci-dessous.',
         'smart_autofill_error' => 'Le remplissage a échoué. Réessayez avec des documents plus clairs.',
         'smart_autofill_need_draft' => 'Veuillez d\'abord enregistrer le brouillon afin que les documents soient rattachés à cette demande.',
+        'smart_autofill_queue_title' => 'Documents en attente',
+        'smart_autofill_queue_empty' => 'Aucun document selectionne pour le moment. Ajoutez un ou plusieurs fichiers puis lancez l analyse quand vous etes pret.',
+        'smart_autofill_queue_ready' => 'Les documents sont en attente. Cliquez sur Lancer l analyse quand vous etes pret a aller jusqu a la soumission finale.',
+        'smart_autofill_queue_count' => 'document(s) pret(s) pour l analyse',
         'smart_autofill_results_title' => 'Documents reconnus',
         'smart_autofill_warnings_title' => 'Avertissements',
         'smart_autofill_existing_note' => 'Ces fichiers ne sont pas stockés dans un nouvel endroit. Ils sont routés vers les champs de pièces jointes existants ci-dessous.',
+        'smart_autofill_stage_queue' => 'Documents en attente',
         'smart_autofill_stage_draft' => 'Creation du brouillon',
         'smart_autofill_stage_batch' => 'Analyse de tous les documents',
         'smart_autofill_stage_fill' => 'Application des details extraits',
         'smart_autofill_stage_route' => 'Routage vers les champs existants',
         'smart_autofill_stage_save' => 'Enregistrement des donnees du formulaire',
+        'smart_autofill_stage_submit' => 'Soumission de la demande',
         'smart_autofill_debug_title' => 'Details de debug du lot',
         'first_name' => 'Prénom',
         'last_name' => 'Nom',
@@ -1568,6 +1582,13 @@ body {
   box-shadow: 0 12px 28px rgba(79, 70, 229, 0.08);
 }
 
+.smart-autofill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .smart-autofill-pill {
   display: inline-flex;
   align-items: center;
@@ -1580,6 +1601,214 @@ body {
   font-weight: 700;
   letter-spacing: .03em;
   text-transform: uppercase;
+}
+
+.smart-autofill-queue {
+  display: none;
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.smart-autofill-queue.is-visible {
+  display: block;
+}
+
+.smart-autofill-queue-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.smart-autofill-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.smart-autofill-queue-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.smart-autofill-remove {
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.smart-autofill-remove:hover {
+  color: #991b1b;
+}
+
+.smart-autofill-progress-panel {
+  display: none;
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.smart-autofill-progress-panel.active {
+  display: flex;
+}
+
+.smart-autofill-orb {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  flex-shrink: 0;
+}
+
+.smart-autofill-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #2563eb, #60a5fa, #8b5cf6, #2563eb);
+  animation: smartAutofillSpin 1.2s linear infinite;
+}
+
+.smart-autofill-orb-ring::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: #f8fbff;
+}
+
+.smart-autofill-orb-core {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e3a8a;
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
+}
+
+.smart-autofill-progress-panel.is-success .smart-autofill-orb-ring,
+.smart-autofill-progress-panel.is-warning .smart-autofill-orb-ring,
+.smart-autofill-progress-panel.is-danger .smart-autofill-orb-ring {
+  animation: none;
+}
+
+.smart-autofill-progress-panel.is-success .smart-autofill-orb-ring {
+  background: conic-gradient(from 0deg, #16a34a, #86efac, #16a34a);
+}
+
+.smart-autofill-progress-panel.is-warning .smart-autofill-orb-ring {
+  background: conic-gradient(from 0deg, #d97706, #fcd34d, #d97706);
+}
+
+.smart-autofill-progress-panel.is-danger .smart-autofill-orb-ring {
+  background: conic-gradient(from 0deg, #dc2626, #fca5a5, #dc2626);
+}
+
+.smart-autofill-progress-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.smart-autofill-progress-copy strong {
+  display: block;
+  font-size: 15px;
+  color: #0f172a;
+}
+
+.smart-autofill-progress-copy small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.smart-autofill-stage-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.smart-autofill-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.smart-autofill-stage-pill::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+
+.smart-autofill-stage-pill.is-active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.smart-autofill-stage-pill.is-active::before {
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+.smart-autofill-stage-pill.is-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.smart-autofill-stage-pill.is-done::before {
+  background: #16a34a;
+}
+
+.smart-autofill-stage-pill.is-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
+.smart-autofill-stage-pill.is-error::before {
+  background: #dc2626;
+}
+
+@keyframes smartAutofillSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .smart-autofill-results {
@@ -2021,9 +2250,14 @@ class="list-group mt-2 d-none"></div>
           </div>
 
           <div class="text-lg-end">
-            <button type="button" class="btn btn-primary px-4" id="smartAutofillTrigger" disabled>
-              <?php echo htmlspecialchars($t['smart_autofill_button'], ENT_QUOTES, 'UTF-8'); ?>
-            </button>
+            <div class="smart-autofill-actions">
+              <button type="button" class="btn btn-outline-primary px-4" id="smartAutofillTrigger" disabled>
+                <?php echo htmlspecialchars($t['smart_autofill_button'], ENT_QUOTES, 'UTF-8'); ?>
+              </button>
+              <button type="button" class="btn btn-primary px-4" id="smartAutofillStart" disabled>
+                <?php echo htmlspecialchars($t['smart_autofill_start_button'], ENT_QUOTES, 'UTF-8'); ?>
+              </button>
+            </div>
             <input
               type="file"
               id="smartAutofillInput"
@@ -2041,9 +2275,21 @@ class="list-group mt-2 d-none"></div>
 
         <div id="smartAutofillStatus" class="alert d-none mt-3 mb-0" role="status" aria-live="polite"></div>
 
-        <div id="smartAutofillProgressWrap" class="upload-progress mt-3">
-          <div class="upload-bar">
-            <span id="smartAutofillProgressText">0%</span>
+        <div id="smartAutofillQueueWrap" class="smart-autofill-queue">
+          <div class="small fw-semibold text-body-secondary"><?php echo htmlspecialchars($t['smart_autofill_queue_title'], ENT_QUOTES, 'UTF-8'); ?></div>
+          <div id="smartAutofillQueueHint" class="form-text mt-1"><?php echo htmlspecialchars($t['smart_autofill_queue_empty'], ENT_QUOTES, 'UTF-8'); ?></div>
+          <ul id="smartAutofillQueue" class="smart-autofill-queue-list"></ul>
+        </div>
+
+        <div id="smartAutofillProgressWrap" class="smart-autofill-progress-panel">
+          <div class="smart-autofill-orb">
+            <div class="smart-autofill-orb-ring"></div>
+            <div class="smart-autofill-orb-core" id="smartAutofillProgressText">Ready</div>
+          </div>
+          <div class="smart-autofill-progress-copy">
+            <strong id="smartAutofillProgressLabel"><?php echo htmlspecialchars($t['smart_autofill_processing'], ENT_QUOTES, 'UTF-8'); ?></strong>
+            <small id="smartAutofillProgressSubtext"><?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?></small>
+            <div id="smartAutofillStagePills" class="smart-autofill-stage-pills"></div>
           </div>
         </div>
 
@@ -3749,11 +3995,17 @@ function startValidationSimulation(progress) {
 
 (function () {
   const trigger = document.getElementById("smartAutofillTrigger");
+  const startButton = document.getElementById("smartAutofillStart");
   const input = document.getElementById("smartAutofillInput");
   const statusEl = document.getElementById("smartAutofillStatus");
+  const queueWrap = document.getElementById("smartAutofillQueueWrap");
+  const queueHint = document.getElementById("smartAutofillQueueHint");
+  const queueEl = document.getElementById("smartAutofillQueue");
   const progressWrap = document.getElementById("smartAutofillProgressWrap");
-  const progressBar = progressWrap?.querySelector(".upload-bar");
   const progressText = document.getElementById("smartAutofillProgressText");
+  const progressLabel = document.getElementById("smartAutofillProgressLabel");
+  const progressSubtext = document.getElementById("smartAutofillProgressSubtext");
+  const stagePillsEl = document.getElementById("smartAutofillStagePills");
   const helpEl = document.getElementById("smartAutofillHelp");
   const studyChoicesWrap = document.getElementById("studyChoices");
   const regionsSelect = document.getElementById("regions");
@@ -3763,7 +4015,8 @@ function startValidationSimulation(progress) {
   const warningsEl = document.getElementById("smartAutofillWarnings");
 
   if (
-    !trigger || !input || !statusEl || !progressWrap || !progressBar || !progressText ||
+    !trigger || !startButton || !input || !statusEl || !queueWrap || !queueHint || !queueEl ||
+    !progressWrap || !progressText || !progressLabel || !progressSubtext || !stagePillsEl ||
     !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl
   ) {
     return;
@@ -3777,21 +4030,44 @@ function startValidationSimulation(progress) {
     error: <?php echo json_encode($t['smart_autofill_error'], JSON_UNESCAPED_UNICODE); ?>,
     needDraft: <?php echo json_encode($t['smart_autofill_need_draft'], JSON_UNESCAPED_UNICODE); ?>,
     gate: <?php echo json_encode($t['smart_autofill_gate'], JSON_UNESCAPED_UNICODE); ?>,
-    ready: <?php echo json_encode($t['smart_autofill_ready'], JSON_UNESCAPED_UNICODE); ?>
+    ready: <?php echo json_encode($t['smart_autofill_ready'], JSON_UNESCAPED_UNICODE); ?>,
+    queueEmpty: <?php echo json_encode($t['smart_autofill_queue_empty'], JSON_UNESCAPED_UNICODE); ?>,
+    queueReady: <?php echo json_encode($t['smart_autofill_queue_ready'], JSON_UNESCAPED_UNICODE); ?>,
+    queueCount: <?php echo json_encode($t['smart_autofill_queue_count'], JSON_UNESCAPED_UNICODE); ?>,
+    submitDone: "Application submitted successfully. Any missing details can be edited later from retrieval or the student portal.",
+    draftOnly: "Draft saved. No strong personal identity details were found yet, so the application was not submitted.",
+    submitAttempt: "Submitting application, sending email, and creating student portal access..."
   };
 
-  function resetVisuals() {
-    progressWrap.style.display = "none";
-    progressWrap.classList.remove("active");
-    progressBar.style.width = "0%";
-    progressBar.style.background = "";
-    progressText.textContent = "0%";
-    statusEl.textContent = "";
-    statusEl.className = "alert d-none mt-3 mb-0";
+  const stageMeta = [
+    { id: "queue", label: <?php echo json_encode($t['smart_autofill_stage_queue'], JSON_UNESCAPED_UNICODE); ?>, short: "Queue" },
+    { id: "draft", label: <?php echo json_encode($t['smart_autofill_stage_draft'], JSON_UNESCAPED_UNICODE); ?>, short: "Draft" },
+    { id: "batch", label: <?php echo json_encode($t['smart_autofill_stage_batch'], JSON_UNESCAPED_UNICODE); ?>, short: "AI" },
+    { id: "route", label: <?php echo json_encode($t['smart_autofill_stage_route'], JSON_UNESCAPED_UNICODE); ?>, short: "Route" },
+    { id: "save", label: <?php echo json_encode($t['smart_autofill_stage_save'], JSON_UNESCAPED_UNICODE); ?>, short: "Save" },
+    { id: "submit", label: <?php echo json_encode($t['smart_autofill_stage_submit'], JSON_UNESCAPED_UNICODE); ?>, short: "Send" }
+  ];
+
+  const pendingFiles = [];
+  let isProcessing = false;
+
+  function fileKey(file) {
+    return [file.name, file.size, file.lastModified].join("::");
+  }
+
+  function clearPanels() {
     resultsEl.innerHTML = "";
     warningsEl.innerHTML = "";
     panelsEl.classList.add("d-none");
     warningsWrapEl.classList.add("d-none");
+  }
+
+  function resetProgress() {
+    progressWrap.className = "smart-autofill-progress-panel";
+    progressText.textContent = "Ready";
+    progressLabel.textContent = texts.processing;
+    progressSubtext.textContent = <?php echo json_encode($t['smart_autofill_hint'], JSON_UNESCAPED_UNICODE); ?>;
+    stagePillsEl.innerHTML = "";
   }
 
   function setStatus(kind, message) {
@@ -3809,12 +4085,50 @@ function startValidationSimulation(progress) {
     statusEl.classList.remove("d-none");
   }
 
-  function setProgress(percent, message, kind = "info") {
-    progressWrap.style.display = "block";
-    progressWrap.classList.add("active");
-    progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
-    progressBar.style.background = kind === "danger" ? "#dc3545" : "";
-    progressText.textContent = `${Math.max(0, Math.min(100, Math.round(percent)))}%`;
+  function renderStagePills(activeId, kind = "info") {
+    stagePillsEl.innerHTML = "";
+    const activeIndex = stageMeta.findIndex(stage => stage.id === activeId);
+
+    stageMeta.forEach((stage, index) => {
+      const pill = document.createElement("span");
+      pill.className = "smart-autofill-stage-pill";
+      pill.textContent = stage.label;
+
+      if (activeIndex > -1 && index < activeIndex) {
+        pill.classList.add("is-done");
+      } else if (stage.id === activeId) {
+        pill.classList.add(kind === "danger" ? "is-error" : "is-active");
+      }
+
+      if (kind === "success" && activeIndex > -1 && index <= activeIndex) {
+        pill.classList.remove("is-active");
+        pill.classList.add("is-done");
+      }
+
+      if (kind === "warning" && stage.id === activeId) {
+        pill.classList.remove("is-active");
+        pill.classList.add("is-error");
+      }
+
+      stagePillsEl.appendChild(pill);
+    });
+  }
+
+  function setStage(stageId, message, kind = "info", subtext = "") {
+    progressWrap.className = "smart-autofill-progress-panel active";
+    if (kind === "success") {
+      progressWrap.classList.add("is-success");
+    } else if (kind === "warning") {
+      progressWrap.classList.add("is-warning");
+    } else if (kind === "danger") {
+      progressWrap.classList.add("is-danger");
+    }
+
+    const stage = stageMeta.find(item => item.id === stageId);
+    progressText.textContent = stage?.short || "AI";
+    progressLabel.textContent = message;
+    progressSubtext.textContent = subtext || stage?.label || "";
+    renderStagePills(stageId, kind);
     setStatus(kind, message);
   }
 
@@ -3868,12 +4182,57 @@ function startValidationSimulation(progress) {
     return hasPrograms;
   }
 
+  function hasCoreApplicantInfo(fields) {
+    const values = fields || {};
+    return [
+      values.first_name,
+      values.last_name,
+      values.email,
+      values.passport_number,
+      values.student_national_id,
+      values.phone_number
+    ].some(value => String(value || "").trim() !== "");
+  }
+
+  function renderQueue() {
+    queueWrap.classList.add("is-visible");
+    queueEl.innerHTML = "";
+
+    if (!pendingFiles.length) {
+      queueHint.textContent = texts.queueEmpty;
+    } else {
+      queueHint.textContent = `${pendingFiles.length} ${texts.queueCount}. ${texts.queueReady}`;
+      pendingFiles.forEach(file => {
+        const li = document.createElement("li");
+        li.className = "smart-autofill-queue-item";
+
+        const name = document.createElement("span");
+        name.className = "smart-autofill-queue-name";
+        name.textContent = file.name;
+
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "smart-autofill-remove";
+        remove.setAttribute("aria-label", `Remove ${file.name}`);
+        remove.dataset.fileKey = fileKey(file);
+        remove.textContent = "×";
+        remove.disabled = isProcessing;
+
+        li.appendChild(name);
+        li.appendChild(remove);
+        queueEl.appendChild(li);
+      });
+    }
+  }
+
   function updateSmartAutofillAvailability() {
     const ready = hasSelectedPrograms();
-    trigger.disabled = !ready;
+    trigger.disabled = !ready || isProcessing;
+    startButton.disabled = !ready || isProcessing || !pendingFiles.length;
     if (helpEl) {
       helpEl.innerHTML = `${ready ? texts.ready : texts.gate}<br><?php echo htmlspecialchars($t['smart_autofill_formats'], ENT_QUOTES, 'UTF-8'); ?><br><?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?>`;
     }
+    renderQueue();
   }
 
   async function ensureDraftExists() {
@@ -3939,21 +4298,61 @@ function startValidationSimulation(progress) {
     return { queue, warnings };
   }
 
+  function addPendingFiles(files) {
+    const knownKeys = new Set(pendingFiles.map(fileKey));
+    files.forEach(file => {
+      if (!file || knownKeys.has(fileKey(file))) return;
+      pendingFiles.push(file);
+      knownKeys.add(fileKey(file));
+    });
+  }
+
+  function clearPendingFiles() {
+    pendingFiles.length = 0;
+    renderQueue();
+    updateSmartAutofillAvailability();
+  }
+
   trigger.addEventListener("click", () => input.click());
 
-  input.addEventListener("change", async () => {
+  queueEl.addEventListener("click", event => {
+    const removeBtn = event.target.closest(".smart-autofill-remove");
+    if (!removeBtn || isProcessing) return;
+
+    const targetKey = removeBtn.dataset.fileKey;
+    const nextFiles = pendingFiles.filter(file => fileKey(file) !== targetKey);
+    pendingFiles.length = 0;
+    nextFiles.forEach(file => pendingFiles.push(file));
+    renderQueue();
+    updateSmartAutofillAvailability();
+  });
+
+  input.addEventListener("change", () => {
     const files = Array.from(input.files || []);
+    input.value = "";
     if (!files.length) return;
 
-    trigger.disabled = true;
-    input.disabled = true;
-    resetVisuals();
+    addPendingFiles(files);
+    clearPanels();
+    resetProgress();
+    setStatus("info", texts.queueReady);
+    setStage("queue", texts.queueReady, "info", `${pendingFiles.length} ${texts.queueCount}`);
+    updateSmartAutofillAvailability();
+  });
+
+  startButton.addEventListener("click", async () => {
+    if (!pendingFiles.length || isProcessing) return;
+
+    isProcessing = true;
+    clearPanels();
+    updateSmartAutofillAvailability();
 
     try {
-      setProgress(8, "Creating draft application...");
+      setStage("draft", <?php echo json_encode($t['smart_autofill_stage_draft'], JSON_UNESCAPED_UNICODE); ?>, "info", "Preparing your application draft for document routing.");
       const applicationId = await ensureDraftExists();
 
-      setProgress(25, texts.processing);
+      setStage("batch", texts.processing, "info", "Reading each selected document and extracting applicant details.");
+      const files = [...pendingFiles];
       const formData = new FormData();
       files.forEach(file => formData.append("documents[]", file));
       formData.append("application_id", applicationId);
@@ -3975,7 +4374,6 @@ function startValidationSimulation(progress) {
         throw new Error(analysisData?.message || texts.error);
       }
 
-      setProgress(50, texts.uploading);
       if (analysisData.fields && typeof window.applyAutofillFields === "function") {
         window.applyAutofillFields(analysisData.fields);
       }
@@ -3984,6 +4382,7 @@ function startValidationSimulation(progress) {
       const warnings = [...(analysisData.warnings || []), ...queueWarnings];
       let attachFailures = 0;
 
+      setStage("route", texts.uploading, "info", "Routing recognized documents into the existing attachment fields.");
       let completed = 0;
       for (const doc of queue) {
         const file = files[Number(doc.client_index)];
@@ -3992,10 +4391,11 @@ function startValidationSimulation(progress) {
           continue;
         }
 
-        const progress = 55 + Math.round((completed / Math.max(queue.length, 1)) * 35);
-        setProgress(
-          progress,
-          `Routing ${doc.original_name} to ${doc.field_label || doc.field}...`
+        setStage(
+          "route",
+          `Routing ${doc.original_name} to ${doc.field_label || doc.field}...`,
+          "info",
+          `${completed + 1} of ${Math.max(queue.length, 1)} attachment routes in progress.`
         );
 
         try {
@@ -4007,7 +4407,7 @@ function startValidationSimulation(progress) {
         completed++;
       }
 
-      setProgress(95, "Saving extracted form data...");
+      setStage("save", <?php echo json_encode($t['smart_autofill_stage_save'], JSON_UNESCAPED_UNICODE); ?>, "info", "Saving extracted student details and current study choices.");
       try {
         if (typeof window.persistAutofillDraftData === "function") {
           await window.persistAutofillDraftData(applicationId, analysisData.fields || {});
@@ -4017,50 +4417,40 @@ function startValidationSimulation(progress) {
       }
 
       renderPanels(analysisData.documents || [], warnings);
+      clearPendingFiles();
+
+      if (!hasCoreApplicantInfo(analysisData.fields || {})) {
+        setStage("save", texts.draftOnly, "warning", "You can add more documents later and run the analysis again.");
+        return;
+      }
 
       if (attachFailures > 0) {
-        setProgress(100, "Some documents could not be attached, so the application was kept as a draft.", "warning");
-        return;
-      }
-
-      const missingRequired =
-        typeof window.getMissingRequiredUploads === "function"
-          ? window.getMissingRequiredUploads()
-          : [];
-
-      if (missingRequired.length) {
-        warnings.push(`Final submission skipped because required documents are still missing: ${missingRequired.join(", ")}.`);
+        warnings.push("Some documents could not be attached, but the application will still continue to final submission with the details already extracted.");
         renderPanels(analysisData.documents || [], warnings);
-        setProgress(100, "Draft saved. Final submission needs the required documents.", "warning");
-        return;
       }
 
-      setProgress(98, "Submitting application, sending email, and creating student portal access...");
+      setStage("submit", texts.submitAttempt, "info", "Continuing automatically to the final submission even if only one identity document was provided.");
       const submitted = await submitForm({
         autoAssignDefaultAgent: true,
+        identityOnlySubmit: true,
         successTitle: "Application Submitted",
         successMessage:
-          "Application submitted successfully. A student submission email and default student portal access have been sent. Any later updates can be done from retrieval or the student portal."
+          "Application submitted successfully. If a student email was available, the email and portal access were sent. You can edit any missing details later from retrieval or the student portal."
       });
+
       if (!submitted) {
-        setProgress(100, "Final submission failed. The extracted application remains saved as a draft.", "warning");
+        setStage("submit", "Final submission failed. The extracted application remains saved as a draft.", "warning", "The saved draft and attached documents are still available for later editing.");
         return;
       }
-      setProgress(100, texts.success, "success");
+
+      setStage("submit", texts.success, "success", texts.submitDone);
     } catch (err) {
-      progressWrap.style.display = "block";
-      progressWrap.classList.add("active");
-      progressBar.style.width = "100%";
-      progressBar.style.background = "#dc3545";
-      progressText.textContent = "!";
-      setStatus("danger", err && err.message ? err.message : texts.error);
+      setStage("batch", err && err.message ? err.message : texts.error, "danger", "The queued documents were kept so you can adjust them and try again.");
       if (typeof showApplicationSaveError === "function" && err && err.message) {
         showApplicationSaveError(err.message);
       }
     } finally {
-      trigger.disabled = false;
-      input.disabled = false;
-      input.value = "";
+      isProcessing = false;
       updateSmartAutofillAvailability();
     }
   });
@@ -4077,6 +4467,9 @@ function startValidationSimulation(progress) {
     $(regionsSelect).on("change", () => setTimeout(updateSmartAutofillAvailability, 50));
   }
 
+  clearPanels();
+  resetProgress();
+  renderQueue();
   setTimeout(updateSmartAutofillAvailability, 300);
 })();
 </script>

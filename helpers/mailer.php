@@ -21,7 +21,7 @@ function app_mailer(): PHPMailer
     $password = getenv('SMTP_PASSWORD') ?: 'Petero@1981';
     $port = (int)(getenv('SMTP_PORT') ?: 465);
     $fromEmail = getenv('SMTP_FROM_EMAIL') ?: $username;
-    $fromName = getenv('SMTP_FROM_NAME') ?: 'Visa Consultant Canada – Finance';
+    $fromName = getenv('SMTP_FROM_NAME') ?: 'Visa Consultant Canada – Admission Department';
 
     $mail->Host = $host;
     $mail->SMTPAuth = true;
