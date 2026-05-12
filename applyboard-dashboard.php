@@ -326,9 +326,9 @@ function applyboard_sort_columns(array $fields): array
     );
 
     $order = [];
-    // Keep SQL ordering aligned with the newest visible record:
-    // prefer actual timestamps first, then numeric identifiers as tie-breakers.
-    foreach ([$updatedCol, $createdCol, $registrationCol, $idCol, $studentIdCol] as $col) {
+    // Match the ApplyBoard / DB list view: start from the last DB record first.
+    // In this table the real primary record order is Student ID descending.
+    foreach ([$studentIdCol, $idCol, $updatedCol, $createdCol, $registrationCol] as $col) {
         if ($col && !in_array($col, $order, true)) {
             $order[] = $col;
         }
@@ -598,9 +598,7 @@ if (!$tableMissing) {
     $rows = applyboard_attach_sort_metadata($rows, $createdCol, $idCol, $updCol, $regCol, $studentIdCol);
     $stats['student_records'] = count($rows);
     $rows = applyboard_explode_application_rows($rows, $fields);
-    if (count($rows) > 1) {
-        usort($rows, 'applyboard_compare_rows_latest_first');
-    }
+    // Keep the SQL/DB order as loaded so the dashboard starts with the last DB record.
     $stats['total'] = count($rows);
 }
 
