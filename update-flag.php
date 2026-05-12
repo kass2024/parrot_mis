@@ -31,6 +31,7 @@ $allowed_tables = [
 $allowed_flags = [
     'incomplete_app',
     'submitted',
+    'sent_to_platform',
     'app_paid',
     'admit',
     'i20_sent',
@@ -75,6 +76,11 @@ if (
     !in_array($flag, $allowed_flags, true)
 ) {
     xander_update_flag_respond($wantJson, false, 'invalid');
+}
+
+$flagColumnCheck = $conn->query("SHOW COLUMNS FROM `$table` LIKE '" . $conn->real_escape_string($flag) . "'");
+if (!$flagColumnCheck || $flagColumnCheck->num_rows === 0) {
+    xander_update_flag_respond($wantJson, false, 'missing_column');
 }
 
 xander_ensure_rejection_reason_column($conn, $table);

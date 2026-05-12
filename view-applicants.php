@@ -16,7 +16,7 @@ $flag = $_GET['flag'] ?? null;
 
 // Allowed flags
 $validFlags = [
-    'incomplete_app', 'submitted', 'admit', 'i20_sent', 'sevis_paid',
+    'incomplete_app', 'submitted', 'sent_to_platform', 'admit', 'i20_sent', 'sevis_paid',
     'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start'
 ];
 

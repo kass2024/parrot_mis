@@ -23,6 +23,7 @@ if ($id <= 0 || !in_array($table, $allowed_tables, true)) {
 $flags = [
   'incomplete_app' => ['Incomplete App', 'light'],
   'submitted'      => ['Submitted', 'secondary'],
+  'sent_to_platform' => ['Sent to Platform', 'primary'],
   'app_paid'       => ['App Paid', 'success'],   // ✅ FIXED
   'admit'          => ['Admit', 'primary'],
   'i20_sent'       => ['I-20 Sent', 'info'],

@@ -970,11 +970,15 @@ if (!$documents && !$mergedFields) {
 }
 
 add_stage($debug, 'save', 'Batch analysis completed successfully.');
+$uploadToken = bin2hex(random_bytes(16));
+$_SESSION['smart_autofill_batch_upload_token'] = $uploadToken;
+$_SESSION['smart_autofill_batch_upload_token_expires'] = time() + 900;
 json_exit([
     'status' => 'success',
     'message' => 'Documents analyzed successfully.',
     'fields' => $mergedFields,
     'documents' => $documents,
     'warnings' => $warnings,
+    'upload_token' => $uploadToken,
     'debug' => $debug
 ]);

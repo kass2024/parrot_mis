@@ -13,8 +13,23 @@ use Dompdf\Dompdf;
 
 // Status categories
 $status_fields = [
-    'incomplete_app', 'submitted', 'admit', 'i20_sent', 'sevis_paid',
+    'incomplete_app', 'submitted', 'sent_to_platform', 'admit', 'i20_sent', 'sevis_paid',
     'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start'
+];
+$status_priority = [
+    'deny',
+    'enrolled',
+    'visa_approved',
+    'visa_scheduled',
+    'sevis_paid',
+    'i20_sent',
+    'admit',
+    'app_paid',
+    'sent_to_platform',
+    'submitted',
+    'addn_doc',
+    'incomplete_app',
+    'app_start'
 ];
 
 // Fetch applicants grouped by status
@@ -25,12 +40,14 @@ $result = $conn->query($query);
 $applicants = [];
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        foreach ($status_fields as $status) {
+        foreach ($status_priority as $status) {
             if (!empty($row[$status]) && $row[$status] == 1) {
                 $row['status'] = $status;
-                $applicants[$status][] = $row;
                 break;
             }
+        }
+        if (!empty($row['status'])) {
+            $applicants[$row['status']][] = $row;
         }
     }
 } else {

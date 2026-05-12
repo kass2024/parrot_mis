@@ -29,6 +29,18 @@ if ($adminPk > 0) {
 }
 $canDeleteApplication = xander_is_superadmin_role($dbRole) || xander_is_superadmin_role($sessionRole);
 
+function pcvc_table_has_column(mysqli $conn, string $table, string $column): bool
+{
+    $table = preg_replace('/[^a-zA-Z0-9_]/', '', $table);
+    $column = preg_replace('/[^a-zA-Z0-9_]/', '', $column);
+    if ($table === '' || $column === '') {
+        return false;
+    }
+
+    $r = $conn->query("SHOW COLUMNS FROM `$table` LIKE '$column'");
+    return $r && $r->num_rows > 0;
+}
+
 // Handle new record submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new'])) {
     // ... (your existing POST handling code remains the same)
@@ -36,6 +48,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new'])) {
 
 // Fetch data from ALL sources properly with country names
 $all_applicants = [];
+$studentSentToPlatformSelect = pcvc_table_has_column($conn, 'student_applications', 'sent_to_platform')
+    ? 'sa.sent_to_platform'
+    : '0 AS sent_to_platform';
+$maltaSentToPlatformSelect = pcvc_table_has_column($conn, 'malta_applications', 'sent_to_platform')
+    ? 'ma.sent_to_platform'
+    : '0 AS sent_to_platform';
+$turkeySentToPlatformSelect = pcvc_table_has_column($conn, 'turkey_applications', 'sent_to_platform')
+    ? 'ta.sent_to_platform'
+    : '0 AS sent_to_platform';
 
 // 1. Fetch from student_applications with country name join
 $query1 = $conn->query("
@@ -50,7 +71,12 @@ $query1 = $conn->query("
         COALESCE(c.name, sa.nationality) as nationality,
         sa.city,
         sa.address_line1,
-        COALESCE(sa.masters_program, sa.bachelor_program, sa.phd_program) as masters_program,
+        COALESCE(
+            NULLIF(TRIM(study_choice_summary.study_choice_programs), ''),
+            NULLIF(TRIM(COALESCE(sa.masters_program, sa.bachelor_program, sa.phd_program)), ''),
+            ''
+        ) as masters_program,
+        COALESCE(NULLIF(TRIM(study_choice_summary.study_choice_universities), ''), '') as university_name,
         sa.destination,
         sa.application_date,
         sa.created_at,
@@ -58,6 +84,7 @@ $query1 = $conn->query("
         sa.application_remarks,
         sa.incomplete_app,
         sa.submitted,
+        {$studentSentToPlatformSelect},
         sa.app_paid,
         sa.admit,
         sa.i20_sent,
@@ -72,6 +99,17 @@ $query1 = $conn->query("
     LEFT JOIN countries c 
         ON sa.nationality = c.id 
         OR sa.nationality = c.name
+    LEFT JOIN (
+        SELECT
+            sc.application_id,
+            GROUP_CONCAT(DISTINCT NULLIF(TRIM(u.name), '') ORDER BY u.name SEPARATOR ', ') AS study_choice_universities,
+            GROUP_CONCAT(DISTINCT NULLIF(TRIM(p.program_name), '') ORDER BY p.program_name SEPARATOR ', ') AS study_choice_programs
+        FROM application_study_choices sc
+        LEFT JOIN universities u ON u.id = sc.university_id
+        LEFT JOIN programs p ON p.id = sc.program_id
+        GROUP BY sc.application_id
+    ) AS study_choice_summary
+        ON study_choice_summary.application_id = sa.id
     ORDER BY 
         sa.visa_approved DESC,
         sa.admit DESC,
@@ -106,12 +144,14 @@ try {
                 ma.birth_place AS city,
                 ma.address AS address_line1,
                 ma.degree_program AS masters_program,
+                '' AS university_name,
                 'Malta' AS destination,
                 ma.created_at AS application_date,
                 ma.application_id,
                 ma.application_remarks,
                 ma.incomplete_app,
                 ma.submitted,
+                {$maltaSentToPlatformSelect},
                 ma.app_paid,
                 ma.admit,
                 ma.i20_sent,
@@ -160,12 +200,14 @@ try {
                 ta.city,
                 ta.address AS address_line1,
                 NULL AS masters_program,
+                '' AS university_name,
                 'Turkey' AS destination,
                 ta.submitted_at AS application_date,
                 ta.application_id,
                 ta.application_remarks,
                 ta.incomplete_app,
                 ta.submitted,
+                {$turkeySentToPlatformSelect},
                 ta.app_paid,
                 ta.admit,
                 ta.i20_sent,
@@ -510,6 +552,20 @@ if ($uq) {
       background: rgba(242, 166, 90, 0.08);
     }
 
+    .col-university,
+    .col-program {
+      min-width: 180px;
+      width: 200px;
+      max-width: 220px;
+    }
+
+    .table td.col-university,
+    .table td.col-program {
+      white-space: normal;
+      word-break: break-word;
+      line-height: 1.35;
+    }
+
     .btn-delete-app {
       display: inline-flex;
       align-items: center;
@@ -664,6 +720,7 @@ if ($uq) {
     /* Status colors */
     .status-incomplete_app { color: #212529; }
     .status-submitted { color: #6c757d; }
+    .status-sent_to_platform { color: #7c3aed; }
     .status-app_paid { color: var(--success); }
     .status-admit { color: var(--deep-navy); }
     .status-i20_sent { color: var(--info); }
@@ -774,6 +831,13 @@ if ($uq) {
       .status-column {
         min-width: 140px;
       }
+
+      .col-university,
+      .col-program {
+        min-width: 150px;
+        width: 160px;
+        max-width: 170px;
+      }
     }
 
     /* ===== SCROLLBAR STYLING ===== */
@@ -883,7 +947,7 @@ if ($uq) {
 
   <!-- Search Bar -->
   <div class="search-container">
-    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search Name, Email, Program, Destination...">
+    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search Name, Email, University, Program, Destination...">
     <span class="search-icon">🔍</span>
   </div>
 
@@ -896,7 +960,7 @@ if ($uq) {
         <thead class="text-center">
           <tr>
             <th>#</th><th>Name</th><th>Email</th><th>Phone</th><th>Gender</th><th>DOB</th>
-            <th>Nationality</th><th>City</th><th>Address</th><th>Program</th><th>Destination</th>
+            <th>Nationality</th><th>City</th><th>Address</th><th class="col-university">University</th><th class="col-program">Program</th><th>Destination</th>
             <th>Applied On</th><th>Status</th><th>App ID</th><th>Remarks</th>
             <th class="col-actions">Actions</th>
           </tr>
@@ -907,6 +971,7 @@ if ($uq) {
           $statusOptions = [
             'incomplete_app' => 'Incomplete App',
             'submitted' => 'Submitted',
+            'sent_to_platform' => 'Sent to Platform',
             'app_paid' => 'App Paid',
             'admit' => 'Admit',
             'i20_sent' => 'I-20 Sent',
@@ -918,15 +983,30 @@ if ($uq) {
             'deny' => 'Rejected',
             'app_start' => 'App Start'
           ];
+          $statusDisplayPriority = [
+            'deny',
+            'enrolled',
+            'visa_approved',
+            'visa_scheduled',
+            'sevis_paid',
+            'i20_sent',
+            'admit',
+            'app_paid',
+            'sent_to_platform',
+            'submitted',
+            'addn_doc',
+            'incomplete_app',
+            'app_start'
+          ];
           
           foreach ($all_applicants as $s): 
             // Find current status
             $currentStatus = null;
             $currentStatusText = 'Select Status';
-            foreach ($statusOptions as $key => $label) {
+            foreach ($statusDisplayPriority as $key) {
               if (!empty($s[$key]) && $s[$key] == 1) {
                 $currentStatus = $key;
-                $currentStatusText = $label;
+                $currentStatusText = $statusOptions[$key] ?? 'Select Status';
                 break;
               }
             }
@@ -995,11 +1075,20 @@ if ($uq) {
               <?= htmlspecialchars($s['address_line1'] ?? '') ?>
             </td>
 
-            <!-- Master's Program -->
-            <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>"
-                data-field="<?= $s['source'] === 'malta_applications' ? 'degree_program' : 'masters_program' ?>">
-              <?= htmlspecialchars($s['masters_program'] ?? '') ?>
+            <!-- University -->
+            <td class="col-university">
+              <?= htmlspecialchars((string)($s['university_name'] ?? '')) ?>
             </td>
+
+            <!-- Program -->
+            <?php if (($s['source'] ?? '') === 'student_applications'): ?>
+              <td class="col-program"><?= htmlspecialchars((string)($s['masters_program'] ?? '')) ?></td>
+            <?php else: ?>
+              <td contenteditable="true" class="editable-cell col-program" data-id="<?= (int)$s['id'] ?>"
+                  data-field="<?= htmlspecialchars($s['source'] === 'malta_applications' ? 'degree_program' : 'masters_program', ENT_QUOTES, 'UTF-8') ?>">
+                <?= htmlspecialchars((string)($s['masters_program'] ?? '')) ?>
+              </td>
+            <?php endif; ?>
 
             <!-- Destination -->
             <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>" data-field="destination">
@@ -1740,6 +1829,8 @@ $(function() {
           var errMsg = data && data.error ? data.error : 'unknown';
           if (errMsg === 'rejection_reason_required') {
             errMsg = 'A rejection reason is required when sending email or WhatsApp.';
+          } else if (errMsg === 'missing_column') {
+            errMsg = 'The database column for this status is missing. Run the ALTER TABLE command first.';
           }
           alert('Failed to update status: ' + errMsg);
           return;

@@ -3746,9 +3746,14 @@ if (!multiple) {
    SINGLE FILE UPLOAD (CORE LOGIC)
    One file → one request → safe progress
 ===================================================== */
-function uploadSingleFile(field, file) {
+function uploadSingleFile(field, file, options = {}) {
 
   return new Promise((resolve, reject) => {
+    const skipAiValidation = options.skipAiValidation === true;
+    const smartAutofillBatchToken =
+      typeof options.smartAutofillBatchToken === "string"
+        ? options.smartAutofillBatchToken
+        : "";
 
     /* ===============================
        SAFETY: TRACK PER FIELD
@@ -3804,6 +3809,10 @@ function uploadSingleFile(field, file) {
       document.querySelector('[name="last_name"]')?.value || ""
     );
     formData.append("lang", document.documentElement.lang || "en");
+    if (skipAiValidation && smartAutofillBatchToken) {
+      formData.append("skip_ai_validation", "1");
+      formData.append("smart_autofill_batch_token", smartAutofillBatchToken);
+    }
 
     /* ===============================
        INIT REQUEST
@@ -3826,6 +3835,11 @@ function uploadSingleFile(field, file) {
        UPLOAD COMPLETE → START AI UI
     =============================== */
     xhr.upload.onload = () => {
+      if (skipAiValidation && smartAutofillBatchToken) {
+        progress.set(80, "Upload complete. Saving classified document…", "save");
+        return;
+      }
+
       progress.set(62, "Upload complete. Extracting document text…", "extract");
       validationTimer = startValidationSimulation(progress);
     };
@@ -4298,6 +4312,45 @@ function startValidationSimulation(progress) {
     return { queue, warnings };
   }
 
+  async function routeQueuedDocuments(queue, files, options = {}) {
+    const warnings = [];
+    let attachFailures = 0;
+    let nextIndex = 0;
+    const concurrency = Math.max(
+      1,
+      Math.min(Number(options.concurrency) || 1, 3, queue.length || 1)
+    );
+
+    async function worker() {
+      while (nextIndex < queue.length) {
+        const currentIndex = nextIndex++;
+        const doc = queue[currentIndex];
+        const file = files[Number(doc?.client_index)];
+
+        if (!file) {
+          warnings.push(`Original file missing for ${doc?.original_name || "document"}.`);
+          continue;
+        }
+
+        try {
+          await uploadSingleFile(doc.field, file, {
+            skipAiValidation: Boolean(options.smartAutofillBatchToken),
+            smartAutofillBatchToken: options.smartAutofillBatchToken || ""
+          });
+        } catch (err) {
+          attachFailures++;
+          warnings.push(`Failed to attach ${doc.original_name} to ${doc.field_label || doc.field}.`);
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: concurrency }, () => worker())
+    );
+
+    return { attachFailures, warnings };
+  }
+
   function addPendingFiles(files) {
     const knownKeys = new Set(pendingFiles.map(fileKey));
     files.forEach(file => {
@@ -4380,32 +4433,24 @@ function startValidationSimulation(progress) {
 
       const { queue, warnings: queueWarnings } = buildUploadQueue(analysisData.documents || []);
       const warnings = [...(analysisData.warnings || []), ...queueWarnings];
-      let attachFailures = 0;
+      const batchUploadToken = typeof analysisData.upload_token === "string"
+        ? analysisData.upload_token
+        : "";
 
-      setStage("route", texts.uploading, "info", "Routing recognized documents into the existing attachment fields.");
-      let completed = 0;
-      for (const doc of queue) {
-        const file = files[Number(doc.client_index)];
-        if (!file) {
-          warnings.push(`Original file missing for ${doc.original_name}.`);
-          continue;
-        }
-
-        setStage(
-          "route",
-          `Routing ${doc.original_name} to ${doc.field_label || doc.field}...`,
-          "info",
-          `${completed + 1} of ${Math.max(queue.length, 1)} attachment routes in progress.`
-        );
-
-        try {
-          await uploadSingleFile(doc.field, file);
-        } catch (err) {
-          attachFailures++;
-          warnings.push(`Failed to attach ${doc.original_name} to ${doc.field_label || doc.field}.`);
-        }
-        completed++;
-      }
+      setStage(
+        "route",
+        texts.uploading,
+        "info",
+        batchUploadToken
+          ? "Saving recognized documents directly into the existing attachment fields."
+          : "Routing recognized documents into the existing attachment fields."
+      );
+      const routeResult = await routeQueuedDocuments(queue, files, {
+        concurrency: batchUploadToken ? 3 : 2,
+        smartAutofillBatchToken: batchUploadToken
+      });
+      warnings.push(...routeResult.warnings);
+      const attachFailures = routeResult.attachFailures;
 
       setStage("save", <?php echo json_encode($t['smart_autofill_stage_save'], JSON_UNESCAPED_UNICODE); ?>, "info", "Saving extracted student details and current study choices.");
       try {

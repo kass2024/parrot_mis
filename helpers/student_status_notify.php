@@ -9,6 +9,7 @@
  * {STATUS LABEL} for each saved flag (DB column set to 1):
  *   incomplete_app → Incomplete App
  *   submitted → Submitted
+ *   sent_to_platform → Sent to Platform
  *   app_paid → App Paid
  *   admit → Admit
  *   i20_sent → I-20 Sent
@@ -50,6 +51,7 @@ function xander_student_status_flag_labels(): array
     return [
         'incomplete_app' => 'Incomplete App',
         'submitted' => 'Submitted',
+        'sent_to_platform' => 'Sent to Platform',
         'app_paid' => 'App Paid',
         'admit' => 'Admit',
         'i20_sent' => 'I-20 Sent',

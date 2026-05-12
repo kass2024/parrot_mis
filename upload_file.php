@@ -88,6 +88,89 @@ function appendDebugStage(array &$debug, string $stage, string $detail): void {
     ];
 }
 
+function allowedAttachmentFields(): array {
+    return [
+        'degree_transcripts',
+        'high_school_degree',
+        'valid_passport',
+        'recommendation_letters',
+        'personal_statement',
+        'cv_resume',
+        'english_certificate',
+        'birth_certificate',
+        'payment_proof'
+    ];
+}
+
+function multiAttachmentFields(): array {
+    return [
+        'degree_transcripts',
+        'recommendation_letters'
+    ];
+}
+
+function saveAttachmentToDraft(
+    mysqli $conn,
+    int $appId,
+    string $field,
+    string $tmpPath,
+    string $uploadDir,
+    string $fileName
+): string {
+    if (!is_dir($uploadDir) && !mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+        throw new RuntimeException('Upload directory is not available.');
+    }
+
+    $finalPath = $uploadDir . $fileName;
+    if (!rename($tmpPath, $finalPath)) {
+        throw new RuntimeException('Failed to finalize uploaded file');
+    }
+
+    $filePath = 'uploads/' . $fileName;
+    $multiFileFields = multiAttachmentFields();
+
+    if (in_array($field, $multiFileFields, true)) {
+        $stmt = $conn->prepare("SELECT {$field} FROM student_applications WHERE id = ?");
+        if (!$stmt) {
+            throw new RuntimeException('Failed to load existing attachments.');
+        }
+        $stmt->bind_param('i', $appId);
+        $stmt->execute();
+        $stmt->bind_result($existing);
+        $stmt->fetch();
+        $stmt->close();
+
+        $files = [];
+        if (!empty($existing)) {
+            $decoded = json_decode($existing, true);
+            if (is_array($decoded)) {
+                $files = $decoded;
+            }
+        }
+
+        $files[] = $filePath;
+        $json = json_encode($files, JSON_UNESCAPED_UNICODE);
+
+        $stmt = $conn->prepare("UPDATE student_applications SET {$field} = ? WHERE id = ?");
+        if (!$stmt) {
+            throw new RuntimeException('Failed to save attachment.');
+        }
+        $stmt->bind_param('si', $json, $appId);
+        $stmt->execute();
+        $stmt->close();
+    } else {
+        $stmt = $conn->prepare("UPDATE student_applications SET {$field} = ? WHERE id = ?");
+        if (!$stmt) {
+            throw new RuntimeException('Failed to save attachment.');
+        }
+        $stmt->bind_param('si', $filePath, $appId);
+        $stmt->execute();
+        $stmt->close();
+    }
+
+    return $filePath;
+}
+
 // =========================================
 // BASIC VALIDATION
 // =========================================
@@ -132,6 +215,7 @@ $debug = [
     'stages' => []
 ];
 appendDebugStage($debug, 'prepare', 'Draft found and upload accepted.');
+$allowedFileFields = allowedAttachmentFields();
 
 // =========================================
 // SAVE TEMP FILE LOCALLY
@@ -145,6 +229,51 @@ if (!move_uploaded_file($_FILES['file']['tmp_name'],$tmpPath))
         'debug' => $debug
     ]));
 appendDebugStage($debug, 'prepare', 'Temporary file saved on server.');
+
+$skipAiValidation = ($_POST['skip_ai_validation'] ?? '') === '1';
+$batchUploadToken = trim((string)($_POST['smart_autofill_batch_token'] ?? ''));
+$sessionBatchToken = trim((string)($_SESSION['smart_autofill_batch_upload_token'] ?? ''));
+$sessionBatchExpiry = (int)($_SESSION['smart_autofill_batch_upload_token_expires'] ?? 0);
+$trustedBatchUpload = $skipAiValidation
+    && $batchUploadToken !== ''
+    && $sessionBatchToken !== ''
+    && $sessionBatchExpiry >= time()
+    && hash_equals($sessionBatchToken, $batchUploadToken);
+
+if ($trustedBatchUpload) {
+    if (!in_array($field, $allowedFileFields, true)) {
+        @unlink($tmpPath);
+        exit(json_encode([
+            'status' => 'error',
+            'message' => 'Unsupported attachment field for batch save.',
+            'debug' => $debug
+        ], JSON_UNESCAPED_UNICODE));
+    }
+
+    try {
+        $filePath = saveAttachmentToDraft($conn, (int)$appId, $field, $tmpPath, $UPLOAD_DIR, $fileName);
+        appendDebugStage($debug, 'save', 'Attachment saved from smart autofill batch without re-running AI validation.');
+        echo json_encode([
+            'status' => 'success',
+            'file_path' => $filePath,
+            'confidence' => null,
+            'summary' => '',
+            'name_detected' => '',
+            'name_match' => null,
+            'autofill_fields' => [],
+            'debug' => $debug,
+            'message' => 'Document attached from smart autofill batch.'
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    } catch (Throwable $e) {
+        @unlink($tmpPath);
+        exit(json_encode([
+            'status' => 'error',
+            'message' => $e->getMessage(),
+            'debug' => $debug
+        ], JSON_UNESCAPED_UNICODE));
+    }
+}
 
 $mime = mime_content_type($tmpPath) ?: 'application/octet-stream';
 $ext  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
@@ -746,24 +875,8 @@ appendDebugStage($debug, 'parse', 'Autofill fields prepared: ' . count($autofill
 // STEP 5️⃣ FINAL DECISION + SAVE (SAFE)
 // =========================================
 
-// Whitelisted document fields only
-$allowedFileFields = [
-    'degree_transcripts',
-    'high_school_degree',
-    'valid_passport',
-    'recommendation_letters',
-    'personal_statement',
-    'cv_resume',
-    'english_certificate',
-    'birth_certificate',
-    'payment_proof'
-];
-
 // Fields that allow MULTIPLE files
-$multiFileFields = [
-    'degree_transcripts',
-    'recommendation_letters'
-];
+$multiFileFields = multiAttachmentFields();
 
 // -----------------------------------------
 // 1️⃣ Decide if document is allowed to save
@@ -799,61 +912,17 @@ elseif ($ai['valid'] === true) {
 // 2️⃣ Save ONLY if allowed
 // -----------------------------------------
 if ($shouldSave && $appId && in_array($field, $allowedFileFields, true)) {
-
-    // Move file from temp → uploads
-    if (!rename($tmpPath, $UPLOAD_DIR . $fileName)) {
+    try {
+        $filePath = saveAttachmentToDraft($conn, (int)$appId, $field, $tmpPath, $UPLOAD_DIR, $fileName);
+    } catch (Throwable $e) {
         echo json_encode([
             'status'  => 'error',
-            'message' => 'Failed to finalize uploaded file',
+            'message' => $e->getMessage(),
             'debug' => $debug
         ]);
         exit;
     }
     appendDebugStage($debug, 'save', 'Attachment saved to application draft.');
-
-    $filePath = 'uploads/' . $fileName;
-
-    // ---------- MULTI-FILE FIELD ----------
-    if (in_array($field, $multiFileFields, true)) {
-
-        $stmt = $conn->prepare(
-            "SELECT {$field} FROM student_applications WHERE id = ?"
-        );
-        $stmt->bind_param('i', $appId);
-        $stmt->execute();
-        $stmt->bind_result($existing);
-        $stmt->fetch();
-        $stmt->close();
-
-        $files = [];
-        if (!empty($existing)) {
-            $decoded = json_decode($existing, true);
-            if (is_array($decoded)) {
-                $files = $decoded;
-            }
-        }
-
-        $files[] = $filePath;
-        $json = json_encode($files, JSON_UNESCAPED_UNICODE);
-
-        $stmt = $conn->prepare(
-            "UPDATE student_applications SET {$field} = ? WHERE id = ?"
-        );
-        $stmt->bind_param('si', $json, $appId);
-        $stmt->execute();
-        $stmt->close();
-
-    }
-    // ---------- SINGLE-FILE FIELD ----------
-    else {
-
-        $stmt = $conn->prepare(
-            "UPDATE student_applications SET {$field} = ? WHERE id = ?"
-        );
-        $stmt->bind_param('si', $filePath, $appId);
-        $stmt->execute();
-        $stmt->close();
-    }
 
     // ✅ SUCCESS RESPONSE
     echo json_encode([
