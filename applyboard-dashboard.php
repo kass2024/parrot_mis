@@ -171,6 +171,245 @@ function applyboard_row_year_for_filter(array $r, ?string $regCol, ?string $updC
     return '';
 }
 
+function applyboard_normalize_column_name(string $name): string
+{
+    $normalized = preg_replace('/[^a-z0-9]+/', '_', strtolower(trim($name)));
+    return trim((string) ($normalized ?? strtolower(trim($name))), '_');
+}
+
+/**
+ * @param array<string, bool> $fields
+ * @param list<string> $candidates
+ * @param list<string> $substrings
+ */
+function applyboard_pick_flexible_col(array $fields, array $candidates, array $substrings = []): ?string
+{
+    $exact = applyboard_pick_col($fields, $candidates);
+    if ($exact) {
+        return $exact;
+    }
+
+    $normalizedCandidates = [];
+    foreach ($candidates as $candidate) {
+        $normalizedCandidates[applyboard_normalize_column_name($candidate)] = true;
+    }
+    foreach (array_keys($fields) as $col) {
+        if (!empty($normalizedCandidates[applyboard_normalize_column_name($col)])) {
+            return $col;
+        }
+    }
+
+    foreach ($substrings as $needle) {
+        $normalizedNeedle = applyboard_normalize_column_name($needle);
+        if ($normalizedNeedle === '') {
+            continue;
+        }
+        foreach (array_keys($fields) as $col) {
+            if (str_contains(applyboard_normalize_column_name($col), $normalizedNeedle)) {
+                return $col;
+            }
+        }
+    }
+
+    return null;
+}
+
+function applyboard_parse_sort_timestamp(mixed $value): ?int
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return null;
+    }
+
+    if (preg_match('/^\d{10,13}$/', $raw)) {
+        $ts = (int) $raw;
+        if (strlen($raw) === 13) {
+            $ts = (int) floor($ts / 1000);
+        }
+        if ($ts > 946684800 && $ts < 4102444800) {
+            return $ts;
+        }
+    }
+
+    $normalized = str_replace(['/', '.'], '-', $raw);
+    $ts = strtotime($normalized);
+    if ($ts !== false) {
+        return $ts;
+    }
+
+    $ts = strtotime($raw);
+    return $ts !== false ? $ts : null;
+}
+
+function applyboard_parse_sort_numeric_id(mixed $value): ?string
+{
+    if ($value === null) {
+        return null;
+    }
+
+    $raw = trim((string) $value);
+    if ($raw === '') {
+        return null;
+    }
+
+    if (preg_match('/^-?\d+(?:\.\d+)?$/', $raw)) {
+        $raw = preg_replace('/\..*$/', '', $raw) ?? $raw;
+        $raw = ltrim($raw, '+-');
+    } else {
+        $raw = preg_replace('/\D+/', '', $raw) ?? '';
+        if ($raw === '') {
+            return null;
+        }
+    }
+
+    $raw = ltrim($raw, '0');
+    return $raw === '' ? '0' : $raw;
+}
+
+function applyboard_compare_sort_numeric_id(?string $a, ?string $b): int
+{
+    if ($a === $b) {
+        return 0;
+    }
+    if ($a === null) {
+        return -1;
+    }
+    if ($b === null) {
+        return 1;
+    }
+
+    $lenCmp = strlen($a) <=> strlen($b);
+    if ($lenCmp !== 0) {
+        return $lenCmp;
+    }
+
+    return strcmp($a, $b);
+}
+
+/**
+ * @param array<string, bool> $fields
+ * @return array{
+ *   created:?string,
+ *   id:?string,
+ *   updated:?string,
+ *   registration:?string,
+ *   student_id:?string,
+ *   order:list<string>
+ * }
+ */
+function applyboard_sort_columns(array $fields): array
+{
+    $createdCol = applyboard_pick_flexible_col(
+        $fields,
+        ['created_at', 'createdAt', 'created_on', 'created date', 'date_created', 'creation_date'],
+        ['created_at', 'created_on', 'date_created', 'creation', 'created']
+    );
+    $idCol = applyboard_pick_flexible_col($fields, ['id', 'ID']);
+    $updatedCol = applyboard_pick_flexible_col(
+        $fields,
+        ['updated_at', 'updatedAt', 'updated_on', 'modified_at', 'last_updated'],
+        ['updated_at', 'updated_on', 'last_updated', 'updated', 'modified']
+    );
+    $registrationCol = applyboard_pick_flexible_col(
+        $fields,
+        ['Registration Date', 'registration_date', 'registered_at', 'registered_on'],
+        ['registration_date', 'registration', 'registered', 'reg_date']
+    );
+    $studentIdCol = applyboard_pick_flexible_col(
+        $fields,
+        ['Student ID', 'student_id', 'studentid'],
+        ['student_id', 'student id']
+    );
+
+    $order = [];
+    // Keep SQL ordering aligned with the newest visible record:
+    // prefer actual timestamps first, then numeric identifiers as tie-breakers.
+    foreach ([$updatedCol, $createdCol, $registrationCol, $idCol, $studentIdCol] as $col) {
+        if ($col && !in_array($col, $order, true)) {
+            $order[] = $col;
+        }
+    }
+
+    return [
+        'created' => $createdCol,
+        'id' => $idCol,
+        'updated' => $updatedCol,
+        'registration' => $registrationCol,
+        'student_id' => $studentIdCol,
+        'order' => $order,
+    ];
+}
+
+/**
+ * @param list<array<string,mixed>> $rows
+ * @return list<array<string,mixed>>
+ */
+function applyboard_attach_sort_metadata(
+    array $rows,
+    ?string $createdCol,
+    ?string $idCol,
+    ?string $updatedCol,
+    ?string $regCol,
+    ?string $studentIdCol
+): array {
+    foreach ($rows as $idx => &$row) {
+        $createdTs = $createdCol ? applyboard_parse_sort_timestamp($row[$createdCol] ?? null) : null;
+        $updatedTs = $updatedCol ? applyboard_parse_sort_timestamp($row[$updatedCol] ?? null) : null;
+        $regTs = $regCol ? applyboard_parse_sort_timestamp($row[$regCol] ?? null) : null;
+        $latestTs = null;
+        foreach ([$updatedTs, $createdTs, $regTs] as $ts) {
+            if ($ts !== null && ($latestTs === null || $ts > $latestTs)) {
+                $latestTs = $ts;
+            }
+        }
+
+        $row['__sort_latest_ts'] = $latestTs;
+        $row['__sort_created_ts'] = $createdTs;
+        $row['__sort_id_num'] = $idCol ? applyboard_parse_sort_numeric_id($row[$idCol] ?? null) : null;
+        $row['__sort_updated_ts'] = $updatedTs;
+        $row['__sort_reg_ts'] = $regTs;
+        $row['__sort_student_id_num'] = $studentIdCol ? applyboard_parse_sort_numeric_id($row[$studentIdCol] ?? null) : null;
+        $row['__sort_source_pos'] = $idx;
+    }
+    unset($row);
+
+    return $rows;
+}
+
+/** @param array<string,mixed> $a @param array<string,mixed> $b */
+function applyboard_compare_rows_latest_first(array $a, array $b): int
+{
+    foreach (['__sort_latest_ts', '__sort_updated_ts', '__sort_created_ts', '__sort_reg_ts', '__sort_id_num', '__sort_student_id_num'] as $key) {
+        if ($key === '__sort_id_num' || $key === '__sort_student_id_num') {
+            $cmp = applyboard_compare_sort_numeric_id(
+                isset($b[$key]) ? (is_string($b[$key]) ? $b[$key] : (string) $b[$key]) : null,
+                isset($a[$key]) ? (is_string($a[$key]) ? $a[$key] : (string) $a[$key]) : null
+            );
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            continue;
+        }
+
+        $aVal = isset($a[$key]) && $a[$key] !== null ? (int) $a[$key] : -1;
+        $bVal = isset($b[$key]) && $b[$key] !== null ? (int) $b[$key] : -1;
+        if ($aVal !== $bVal) {
+            return $bVal <=> $aVal;
+        }
+    }
+
+    $srcCmp = ((int) ($a['__sort_source_pos'] ?? PHP_INT_MAX)) <=> ((int) ($b['__sort_source_pos'] ?? PHP_INT_MAX));
+    if ($srcCmp !== 0) {
+        return $srcCmp;
+    }
+
+    return ((int) ($a['__app_index'] ?? 1)) <=> ((int) ($b['__app_index'] ?? 1));
+}
+
 /** @param array<mixed> $a */
 function applyboard_is_list_array(array $a): bool
 {
@@ -323,24 +562,29 @@ $destCol = applyboard_pick_col($fields, ['Destination/Country', 'destination_cou
 $univCol = applyboard_pick_col($fields, ['Target University', 'target_university']);
 $statusCol = applyboard_pick_col($fields, ['Status App', 'status_app'])
     ?: applyboard_column_by_name_substrings($fields, ['status', 'application status']);
-$regCol = applyboard_pick_col($fields, ['Registration Date', 'registration_date'])
-    ?: applyboard_column_by_name_substrings($fields, ['registration', 'registered', 'reg_date']);
-$updCol = applyboard_pick_col($fields, ['updated_at']);
-$orderCol = applyboard_pick_col($fields, ['updated_at', 'Student ID', 'student_id'])
-    ?: applyboard_column_by_name_substrings($fields, ['updated_at', 'updated']);
+$sortCols = applyboard_sort_columns($fields);
+$createdCol = $sortCols['created'];
+$idCol = $sortCols['id'];
+$updCol = $sortCols['updated'];
+$regCol = $sortCols['registration'];
+$studentIdCol = $sortCols['student_id'];
+$orderCols = $sortCols['order'];
 
 $rows = [];
 $stats = ['total' => 0, 'student_records' => 0, 'by_dest' => []];
 
-if (!$tableMissing && $orderCol) {
-    $escOrder = '`' . str_replace('`', '``', $orderCol) . '`';
-    $sql = "SELECT * FROM `$table` ORDER BY $escOrder DESC LIMIT 8000";
+if (!$tableMissing && $orderCols !== []) {
+    $sqlOrderParts = [];
+    foreach ($orderCols as $orderCol) {
+        $sqlOrderParts[] = '`' . str_replace('`', '``', $orderCol) . '` DESC';
+    }
+    $sql = "SELECT * FROM `$table` ORDER BY " . implode(', ', $sqlOrderParts) . " LIMIT 8000";
     if ($res = $conn->query($sql)) {
         while ($r = $res->fetch_assoc()) {
             $rows[] = $r;
         }
     }
-} elseif (!$tableMissing && !$orderCol) {
+} elseif (!$tableMissing) {
     // Table exists but no known sort column — still load rows.
     $sql = "SELECT * FROM `$table` LIMIT 8000";
     if ($res = $conn->query($sql)) {
@@ -351,8 +595,12 @@ if (!$tableMissing && $orderCol) {
 }
 
 if (!$tableMissing) {
+    $rows = applyboard_attach_sort_metadata($rows, $createdCol, $idCol, $updCol, $regCol, $studentIdCol);
     $stats['student_records'] = count($rows);
     $rows = applyboard_explode_application_rows($rows, $fields);
+    if (count($rows) > 1) {
+        usort($rows, 'applyboard_compare_rows_latest_first');
+    }
     $stats['total'] = count($rows);
 }
 
@@ -988,13 +1236,14 @@ $pageTitle = 'ApplyBoard Applications';
                 ?>
                     <?php
                     $destVal = $destCol ? trim((string) ($r[$destCol] ?? '')) : '';
-                    $hay = strtolower(implode(' ', array_map('strval', $r)));
+                    $hay = strtolower(implode(' ', array_map(
+                        static fn (string $col): string => (string) ($r[$col] ?? ''),
+                        array_keys($fields)
+                    )));
                     $regYear = applyboard_row_year_for_filter($r, $regCol, $updCol);
                     $statusVal = ($statusCol !== null) ? trim((string) ($r[$statusCol] ?? '')) : '';
                     $univVal = $univCol ? trim((string) ($r[$univCol] ?? '')) : '';
-                    $idCol = applyboard_pick_col($fields, ['Student ID', 'student_id'])
-                        ?: applyboard_column_by_name_substrings($fields, ['student id', 'student_id', 'student']);
-                    $studentId = $idCol ? trim((string) ($r[$idCol] ?? '')) : '';
+                    $studentId = $studentIdCol ? trim((string) ($r[$studentIdCol] ?? '')) : '';
                     $appIndex = (int) ($r['__app_index'] ?? 1);
                     $appOf = (int) ($r['__app_of'] ?? 1);
                     ?>
