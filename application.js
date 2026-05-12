@@ -779,6 +779,15 @@ function initAddUniversitySelect2() {
     minimumResultsForSearch: 0,
     dropdownParent: $(document.body)
   });
+
+  function syncAddUniversityButton() {
+    if (!btnAddUniversity) return;
+    const currentValue = $el.val();
+    btnAddUniversity.disabled = addUniversitySelect.disabled || !currentValue;
+  }
+
+  $el.off("change.addUniversityButton").on("change.addUniversityButton", syncAddUniversityButton);
+  syncAddUniversityButton();
 }
 
 /* =====================================================
@@ -945,11 +954,30 @@ if (countrySelects.length) {
 ===================================================== */
 function getExistingUniversityIds() {
   const ids = new Set();
-  document.querySelectorAll("#studyChoices .study-choice .university").forEach(sel => {
-    const id = Number(sel.value);
+  document.querySelectorAll("#studyChoices .study-choice").forEach(block => {
+    const id = Number(
+      block.dataset.universityId ||
+      block.querySelector(".university")?.value
+    );
     if (id) ids.add(id);
   });
   return ids;
+}
+
+function hasStudyCard(regionId, universityId) {
+  const targetRegionId = String(regionId || "");
+  const targetUniversityId = String(universityId || "");
+  if (!targetRegionId || !targetUniversityId) return false;
+
+  return [...document.querySelectorAll("#studyChoices .study-choice")].some(block => {
+    const blockRegionId = String(
+      block.dataset.regionId || block.querySelector(".region-id")?.value || ""
+    );
+    const blockUniversityId = String(
+      block.dataset.universityId || block.querySelector(".university")?.value || ""
+    );
+    return blockRegionId === targetRegionId && blockUniversityId === targetUniversityId;
+  });
 }
 
 function destroySelect2IfAny($el) {
@@ -1007,6 +1035,10 @@ async function refreshAddUniversitySelect() {
 
   addUniversitySelect.innerHTML = "";
   addUniversitySelect.add(new Option(ph, ""));
+  addUniversitySelect.disabled = true;
+  if (btnAddUniversity) {
+    btnAddUniversity.disabled = true;
+  }
 
   const regionIds = $("#regions").val() || [];
   if (!regionIds.length) {
@@ -1016,6 +1048,7 @@ async function refreshAddUniversitySelect() {
 
   const existing = getExistingUniversityIds();
   const seenUni = new Set();
+  let totalAvailable = 0;
 
   for (const rid of regionIds) {
     let universities = [];
@@ -1028,26 +1061,64 @@ async function refreshAddUniversitySelect() {
     }
     if (!Array.isArray(universities)) continue;
 
+    const regionName =
+      $('#regions option[value="' + rid + '"]').text().trim() ||
+      `Region ${rid}`;
+    const regionGroup = document.createElement("optgroup");
+    regionGroup.label = regionName;
+    let regionCount = 0;
+
     universities.forEach(u => {
       const uid = Number(u.id);
       if (!uid || existing.has(uid) || seenUni.has(uid)) return;
       seenUni.add(uid);
-      const opt = new Option(u.name, String(uid));
+      const label = regionIds.length > 1
+        ? `${u.name} — ${regionName}`
+        : u.name;
+      const opt = new Option(label, String(uid));
       opt.dataset.regionId = String(rid);
-      addUniversitySelect.add(opt);
+      opt.dataset.universityName = u.name;
+      regionGroup.appendChild(opt);
+      regionCount++;
     });
+
+    if (regionCount > 0) {
+      addUniversitySelect.appendChild(regionGroup);
+      totalAvailable += regionCount;
+    }
+  }
+
+  if (!totalAvailable) {
+    const none = new Option("All universities from the selected regions are already added.", "");
+    none.disabled = true;
+    addUniversitySelect.add(none);
+  }
+
+  addUniversitySelect.disabled = totalAvailable === 0;
+  if (btnAddUniversity) {
+    btnAddUniversity.disabled = totalAvailable === 0;
   }
 
   initAddUniversitySelect2();
 }
 
-function appendLevelProgramRow(levelRowsWrap, university) {
+function appendLevelProgramRow(levelRowsWrap, university, options = {}) {
   if (!studyLevelRowTemplate) return;
 
   const row = studyLevelRowTemplate.content.cloneNode(true).firstElementChild;
   const levelSelect = row.querySelector(".level");
   const programSelect = row.querySelector(".program");
   const btnRemoveRow = row.querySelector(".btn-remove-row");
+  const presetLevelId = options.levelId ? String(options.levelId) : "";
+  const presetLevelName = options.levelName ? String(options.levelName) : "";
+  let pendingPresetPrograms = Array.isArray(options.programs)
+    ? options.programs
+        .map(program => ({
+          id: String(program?.id ?? ""),
+          name: String(program?.name ?? "")
+        }))
+        .filter(program => program.id !== "")
+    : [];
 
   levelSelect.innerHTML = "";
   levelSelect.add(new Option("Select level", ""));
@@ -1110,6 +1181,21 @@ function appendLevelProgramRow(levelRowsWrap, university) {
             programSelect.add(new Option(p.program_name, p.id));
           });
 
+          const restorePrograms = pendingPresetPrograms.slice();
+          pendingPresetPrograms = [];
+          if (restorePrograms.length) {
+            const existingProgramIds = new Set(
+              [...programSelect.options].map(option => String(option.value))
+            );
+            restorePrograms.forEach(program => {
+              if (!existingProgramIds.has(program.id)) {
+                programSelect.add(
+                  new Option(program.name || `Program ${program.id}`, program.id)
+                );
+              }
+            });
+          }
+
           programSelect.disabled = false;
 
           $(programSelect).select2({
@@ -1121,6 +1207,12 @@ function appendLevelProgramRow(levelRowsWrap, university) {
             minimumResultsForSearch: 0,
             dropdownParent: $(document.body)
           });
+
+          if (restorePrograms.length) {
+            $(programSelect)
+              .val(restorePrograms.map(program => program.id))
+              .trigger("change");
+          }
         } catch (err) {
           console.error("Failed to load programs", err);
           programSelect.innerHTML = "";
@@ -1130,6 +1222,18 @@ function appendLevelProgramRow(levelRowsWrap, university) {
 
         if (window.buildStudyCart) window.buildStudyCart();
       });
+
+      if (presetLevelId) {
+        const hasPresetLevel = [...levelSelect.options].some(
+          option => String(option.value) === presetLevelId
+        );
+        if (!hasPresetLevel) {
+          levelSelect.add(
+            new Option(presetLevelName || `Level ${presetLevelId}`, presetLevelId)
+          );
+        }
+        $(levelSelect).val(presetLevelId).trigger("change");
+      }
     })
     .catch(err => console.error("Failed to load program levels", err));
 
@@ -1142,10 +1246,22 @@ function appendLevelProgramRow(levelRowsWrap, university) {
   });
 
   levelRowsWrap.appendChild(row);
+  return row;
 }
 
-function createUniversityStudyCard(regionId, university) {
+function createUniversityStudyCard(regionId, university, options = {}) {
   if (!studyTemplate || !studyLevelRowTemplate) return;
+  if (hasStudyCard(regionId, university.id)) {
+    return [...document.querySelectorAll("#studyChoices .study-choice")].find(block => {
+      const blockRegionId = String(
+        block.dataset.regionId || block.querySelector(".region-id")?.value || ""
+      );
+      const blockUniversityId = String(
+        block.dataset.universityId || block.querySelector(".university")?.value || ""
+      );
+      return blockRegionId === String(regionId) && blockUniversityId === String(university.id);
+    });
+  }
 
   const block = studyTemplate.content.cloneNode(true).firstElementChild;
 
@@ -1156,6 +1272,8 @@ function createUniversityStudyCard(regionId, university) {
   const btnAddLevel = block.querySelector(".btn-add-level");
   const removeUniBtn = block.querySelector(".btn-remove-uni");
 
+  block.dataset.regionId = String(regionId);
+  block.dataset.universityId = String(university.id);
   regionInput.value = regionId;
   regionBadge.textContent =
     $('#regions option[value="' + regionId + '"]').text();
@@ -1186,15 +1304,25 @@ function createUniversityStudyCard(regionId, university) {
 
   studyChoicesWrap.appendChild(block);
 
-  appendLevelProgramRow(levelRowsWrap, university);
+  if (options.autoAppendInitialRow !== false) {
+    appendLevelProgramRow(levelRowsWrap, university);
+  }
 
   refreshAddUniversitySelect();
   updateStudyEmptyMessage();
+  return block;
 }
 
 if (regionsSelect && studyChoicesWrap && studyTemplate) {
   $("#regions").on("change", async function () {
+    const selectedRegionIds = new Set(($("#regions").val() || []).map(String));
     [...studyChoicesWrap.children].forEach(child => {
+      const childRegionId = String(
+        child.dataset.regionId || child.querySelector(".region-id")?.value || ""
+      );
+      if (selectedRegionIds.has(childRegionId)) {
+        return;
+      }
       teardownStudyCard(child);
       child.remove();
     });
@@ -1222,7 +1350,9 @@ if (btnAddUniversity && addUniversitySelect) {
     }
     const university = {
       id: Number(val),
-      name: $opt.text()
+      name:
+        (optEl && optEl.dataset && optEl.dataset.universityName) ||
+        $opt.text()
     };
 
     if (!regionId || !university.id) return;

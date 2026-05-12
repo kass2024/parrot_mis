@@ -1463,12 +1463,31 @@ body {
   border-bottom: 1px solid #f1f5f9;
   padding-bottom: 0.75rem;
 }
+.study-uni-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.study-uni-body .form-label,
+.study-level-row-card .form-label {
+  font-weight: 600;
+  color: #334155;
+}
 .study-uni-header .btn-remove-uni {
   min-height: 2.25rem;
   margin-left: auto;
   text-align: right;
   white-space: normal;
   max-width: 100%;
+}
+.study-uni-body .select2-container,
+.study-level-row-card .select2-container {
+  width: 100% !important;
+}
+.study-uni-body .select2-container .select2-selection--single,
+.study-level-row-card .select2-container .select2-selection--single,
+.study-level-row-card .select2-container .select2-selection--multiple {
+  min-height: 2.75rem;
 }
 .study-level-rows {
   display: flex;
@@ -1529,6 +1548,27 @@ body {
 }
 
 @media (max-width: 575px) {
+  #studyAddUniversityPanel .row {
+    --bs-gutter-y: 0.9rem;
+  }
+  .study-uni-header {
+    align-items: stretch;
+  }
+  .study-uni-header .btn-remove-uni {
+    width: 100%;
+    margin-left: 0;
+    text-align: center;
+    justify-content: center;
+  }
+  .study-uni-body {
+    gap: 0.85rem;
+  }
+  .study-level-row-card {
+    padding: 0.9rem 0.85rem;
+  }
+  .study-level-row-card .row {
+    --bs-gutter-y: 0.85rem;
+  }
   .study-selection .form-text {
     font-size: 0.8rem;
   }
@@ -6272,88 +6312,118 @@ function restoreStudySelections(choices){
 if(!Array.isArray(choices) || !choices.length) return;
 
 const regionSelect = $("#regions");
+const studyChoicesWrap = document.getElementById("studyChoices");
 
-/* clear previous */
+if(!regionSelect.length || !studyChoicesWrap) return;
 
-regionSelect.val(null).trigger("change");
+[...studyChoicesWrap.children].forEach(child=>{
+if(typeof teardownStudyCard === "function") teardownStudyCard(child);
+child.remove();
+});
+
+const regionMap = new Map();
+const universityMap = new Map();
 
 choices.forEach(choice=>{
+const regionId = String(choice.region_id ?? "");
+const universityId = String(choice.university_id ?? "");
+if(!regionId || !universityId) return;
 
-/* restore region */
-
-const regionOption = new Option(
-choice.region_name,
-choice.region_id,
-true,
-true
-);
-
-regionSelect.append(regionOption).trigger("change");
-
-/* restore university */
-
-setTimeout(()=>{
-
-const universitySelect = document.querySelector(".university:last-child");
-
-if(universitySelect){
-
-const opt = new Option(
-choice.university_name,
-choice.university_id,
-true,
-true
-);
-
-$(universitySelect).append(opt).trigger("change");
-
+const regionName = String(choice.region_name ?? "").trim();
+if(!regionMap.has(regionId)){
+regionMap.set(regionId, regionName);
 }
 
-/* restore level */
-
-setTimeout(()=>{
-
-const levelSelect = document.querySelector(".level:last-child");
-
-if(levelSelect){
-
-const opt = new Option(
-choice.level_name,
-choice.program_level_id,
-true,
-true
-);
-
-$(levelSelect).append(opt).trigger("change");
-
-}
-
-/* restore program */
-
-setTimeout(()=>{
-
-const programSelect = document.querySelector(".program:last-child");
-
-if(programSelect){
-
-const opt = new Option(
-choice.program_name,
-choice.program_id,
-true,
-true
-);
-
-$(programSelect).append(opt).trigger("change");
-
-}
-
-},400);
-
-},300);
-
-},300);
-
+const uniKey = `${regionId}|${universityId}`;
+if(!universityMap.has(uniKey)){
+universityMap.set(uniKey,{
+regionId,
+regionName,
+universityId,
+universityName: String(choice.university_name ?? "").trim(),
+levels: new Map()
 });
+}
+
+const entry = universityMap.get(uniKey);
+const levelId = String(choice.program_level_id ?? "");
+const programId = String(choice.program_id ?? "");
+
+if(!levelId) return;
+
+if(!entry.levels.has(levelId)){
+entry.levels.set(levelId,{
+levelId,
+levelName: String(choice.level_name ?? "").trim(),
+programs: []
+});
+}
+
+if(programId){
+const levelEntry = entry.levels.get(levelId);
+if(!levelEntry.programs.some(program => String(program.id) === programId)){
+levelEntry.programs.push({
+id: programId,
+name: String(choice.program_name ?? "").trim()
+});
+}
+}
+});
+
+const regionIds = [];
+regionMap.forEach((regionName, regionId)=>{
+let option = regionSelect.find(`option[value="${regionId}"]`).get(0);
+if(!option){
+option = new Option(regionName || `Region ${regionId}`, regionId, false, false);
+regionSelect.append(option);
+} else if(regionName) {
+option.text = regionName;
+}
+regionIds.push(regionId);
+});
+
+regionSelect.val(regionIds).trigger("change");
+
+if(typeof createUniversityStudyCard !== "function" || typeof appendLevelProgramRow !== "function"){
+return;
+}
+
+universityMap.forEach(entry=>{
+const university = {
+id: Number(entry.universityId),
+name: entry.universityName || "University"
+};
+
+const card = createUniversityStudyCard(entry.regionId, university, {
+autoAppendInitialRow: false
+});
+
+const levelRowsWrap = card?.querySelector(".study-level-rows");
+if(!levelRowsWrap) return;
+
+if(!entry.levels.size){
+appendLevelProgramRow(levelRowsWrap, university);
+return;
+}
+
+entry.levels.forEach(levelEntry=>{
+appendLevelProgramRow(levelRowsWrap, university, {
+levelId: levelEntry.levelId,
+levelName: levelEntry.levelName,
+programs: levelEntry.programs
+});
+});
+});
+
+if(typeof window.refreshAddUniversitySelect === "function"){
+Promise.resolve(window.refreshAddUniversitySelect()).catch(console.error);
+}
+
+if(typeof window.updateStudyEmptyMessage === "function"){
+window.updateStudyEmptyMessage();
+}
+
+if(window.buildStudyCart) window.buildStudyCart();
 
 }
 
