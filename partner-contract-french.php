@@ -211,6 +211,8 @@ body {
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 12.2pt;
   line-height: 1.75;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
 }
 
 @media (max-width: 768px) {

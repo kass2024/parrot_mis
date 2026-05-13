@@ -166,14 +166,89 @@ body {
   font-family: "Georgia", "Times New Roman", serif;
   font-size: 12.2pt;
   line-height: 1.75;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* =====================================================
-   RESPONSIVE PADDING
+   RESPONSIVE LAYOUT (TABLET & PHONE)
 ===================================================== */
+.contract-page,
+.contract-section {
+  box-sizing: border-box;
+}
+
 @media (max-width: 768px) {
+  body {
+    padding: 24px 12px;
+  }
+
   .contract-page {
-    padding: 40px 28px;
+    padding: 32px 16px;
+    max-width: 100%;
+    overflow-x: hidden;
+    font-size: 11.2pt;
+    line-height: 1.65;
+  }
+
+  .contract-page h1 {
+    font-size: clamp(15pt, 4.5vw, 21pt);
+    line-height: 1.25;
+    letter-spacing: 0.04em;
+  }
+
+  .contract-page h3 {
+    font-size: 13pt;
+    margin-top: 24pt;
+  }
+
+  .contract-section {
+    padding: 0 16px;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .package-label {
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: flex-start;
+    line-height: 1.35;
+  }
+
+  .package-details {
+    padding-left: 8px;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .signature-canvas {
+    max-width: 100%;
+    height: 120px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 16px 8px;
+  }
+
+  .contract-page {
+    padding: 22px 12px;
+    font-size: 10.5pt;
+    border-radius: 8px;
+  }
+
+  .contract-page h1 {
+    font-size: 13pt;
+  }
+
+  .contract-section {
+    padding: 0 10px;
+  }
+
+  .package-details {
+    font-size: 10.5pt;
+    padding-left: 4px;
   }
 }
 
@@ -261,12 +336,6 @@ body {
   max-width: 900px;
   margin: 0 auto;
   padding: 0 72px;
-}
-
-@media (max-width: 768px) {
-  .contract-section {
-    padding: 0 28px;
-  }
 }
 
 /* =====================================================
@@ -780,8 +849,7 @@ button {
     </label>
     <div id="p74" class="package-details">
       ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
-      ➤ Loan Approval Fees (payable after visa approval): CAD 1,550<br>
-      ➤ Service Fees (payable after visa approval): CAD 1,500<br>
+      ➤ Service Fees (payable after visa approval): CAD 3,050<br>
       <strong>🔥 Total Package: CAD 3,500</strong><br>
       <em>Note: Canadian institutions may require a tuition deposit ranging from CAD 1,500 to CAD 5,000, payable directly by the Student.</em>
     </div>

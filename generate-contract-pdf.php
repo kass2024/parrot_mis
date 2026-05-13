@@ -68,8 +68,7 @@ function getPackageDetails(string $code): array
             'title' => '7.4 Study in Canada (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
-                'After Loan Approval: CAD 1,550',
-                'After Visa Approval: CAD 1,500',
+                'After Visa Approval: CAD 3,050',
                 'Note: Tuition deposit CAD 1,500–5,000 payable directly by the Student',
             ],
             'total' => 'CAD 3,500',
