@@ -5,8 +5,62 @@ require_once __DIR__ . '/../helpers/datetime_utc.php';
 require_once "../helpers/response.php";
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../includes/company_branding.php';
+require_once __DIR__ . '/../helpers/application_filters.php';
 
 $action = $_GET['action'] ?? '';
+
+/**
+ * ======================================================
+ * FILTER OPTIONS (staff list + status labels for dashboards)
+ * ======================================================
+ */
+if ($action === 'filter_options') {
+    $staff = [];
+    $res = $conn->query("
+        SELECT
+            id,
+            first_name,
+            last_name,
+            COALESCE(
+                NULLIF(TRIM(full_name), ''),
+                TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')))
+            ) AS display_name
+        FROM admins
+        WHERE LOWER(TRIM(COALESCE(role, ''))) = 'staff'
+        ORDER BY last_name ASC, first_name ASC, id ASC
+    ");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id < 1) {
+                continue;
+            }
+            $label = trim((string) ($row['display_name'] ?? ''));
+            if ($label === '') {
+                $label = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
+            }
+            $staff[] = [
+                'id' => $id,
+                'label' => $label !== '' ? $label : ('Staff #' . $id),
+            ];
+        }
+    }
+
+    $statuses = [];
+    $labels = pcvc_application_status_labels();
+    foreach (pcvc_application_status_priority() as $key) {
+        $statuses[] = [
+            'value' => $key,
+            'label' => $labels[$key] ?? $key,
+        ];
+    }
+
+    jsonResponse([
+        'staff' => $staff,
+        'statuses' => $statuses,
+    ]);
+    exit;
+}
 
 /**
  * ======================================================
@@ -182,6 +236,12 @@ if ($action === 'delete' && $_SERVER['REQUEST_METHOD'] === 'POST') {
  */
 if ($action === 'list') {
 
+    $hasAssignedCol = false;
+    $chkAssignCol = $conn->query("SHOW COLUMNS FROM student_applications LIKE 'assigned_to_admin_id'");
+    if ($chkAssignCol && $chkAssignCol->num_rows > 0) {
+        $hasAssignedCol = true;
+    }
+
     $where  = [];
 $types  = "";
 $values = [];
@@ -230,6 +290,28 @@ if (!empty($_GET['program_level_id'])) {
     $values[] = (int)$_GET['program_level_id'];
 }
 
+if ($hasAssignedCol && isset($_GET['assigned_to']) && (string)$_GET['assigned_to'] !== '') {
+    $ato = trim((string)$_GET['assigned_to']);
+    if ($ato === '-1') {
+        $where[] = 'sa.assigned_to_admin_id IS NULL';
+    } else {
+        $aid = (int)$ato;
+        if ($aid > 0) {
+            $where[] = 'sa.assigned_to_admin_id = ?';
+            $types .= 'i';
+            $values[] = $aid;
+        }
+    }
+}
+
+$allowedEffStatuses = pcvc_application_status_priority();
+if (!empty($_GET['application_status']) && in_array((string)$_GET['application_status'], $allowedEffStatuses, true)) {
+    $effExpr = pcvc_sql_case_effective_status('sa');
+    $where[] = '(' . $effExpr . ') = ?';
+    $types .= 's';
+    $values[] = (string)$_GET['application_status'];
+}
+
     /* ======================================================
        REQUIRE AT LEAST ONE UPLOADED DOCUMENT
        (HIDE EMPTY APPLICATIONS FROM SIDEBAR)
@@ -246,12 +328,6 @@ if (!empty($_GET['program_level_id'])) {
         OR sa.payment_proof IS NOT NULL
     )";
 
-    $hasAssignedCol = false;
-    $chkAssign = $conn->query("SHOW COLUMNS FROM student_applications LIKE 'assigned_to_admin_id'");
-    if ($chkAssign && $chkAssign->num_rows > 0) {
-        $hasAssignedCol = true;
-    }
-
     $assignedSelectSql = $hasAssignedCol
         ? "MAX(COALESCE(
             NULLIF(TRIM(assign_ast.full_name), ''),
@@ -264,6 +340,8 @@ if (!empty($_GET['program_level_id'])) {
 "
         : "";
 
+    $maxEffSql = pcvc_sql_max_effective_status('sa');
+
 $sql = "
     SELECT DISTINCT
         sa.id,
@@ -275,6 +353,7 @@ $sql = "
         sa.created_at,
         sa.is_read,
         {$assignedSelectSql},
+        {$maxEffSql} AS effective_status,
 
     -- aggregated sidebar info (ONE row per application)
 GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ' · ') AS universities,
@@ -343,6 +422,9 @@ $data = array_map(function ($r) {
             "created_at" => pcvc_mysql_utc_to_iso8601_z($r["created_at"] ?? null) ?? ($r["created_at"] ?? null),
             "is_read"    => (bool)$r["is_read"],
             "assigned_display" => $assignDisplay,
+            "effective_status" => isset($r["effective_status"]) && $r["effective_status"] !== null && $r["effective_status"] !== ''
+                ? (string)$r["effective_status"]
+                : null,
         ]
     ];
 }, $rows);

@@ -24,6 +24,9 @@ const aiPanelEl = document.getElementById("aiDecisionPanel");
 
 
 const searchInput = document.getElementById("searchInput");
+const filterAssignedStaff = document.getElementById("filterAssignedStaff");
+const filterAppStatus = document.getElementById("filterAppStatus");
+const filterClearBtn = document.getElementById("filterClearBtn");
 const filterRegion = document.getElementById("filterRegion");
 const filterUniversity = document.getElementById("filterUniversity");
 const filterLevel = document.getElementById("filterLevel");
@@ -35,7 +38,7 @@ const filterLevel = document.getElementById("filterLevel");
  */
 document.addEventListener("DOMContentLoaded", () => {
     startTimeAgoTicker();
-    loadStudents();
+    loadFilterOptions().finally(() => loadStudents());
 });
 
 /**
@@ -47,6 +50,70 @@ searchInput?.addEventListener("input", debounce(loadStudents, 300));
 filterRegion?.addEventListener("change", loadStudents);
 filterUniversity?.addEventListener("change", loadStudents);
 filterLevel?.addEventListener("change", loadStudents);
+filterAssignedStaff?.addEventListener("change", () => loadStudents());
+filterAppStatus?.addEventListener("change", () => loadStudents());
+filterClearBtn?.addEventListener("click", () => {
+    if (filterAssignedStaff) filterAssignedStaff.value = "";
+    if (filterAppStatus) filterAppStatus.value = "";
+    loadStudents();
+});
+
+/**
+ * =====================================================
+ * FILTER OPTIONS (staff + status labels)
+ * =====================================================
+ */
+async function loadFilterOptions() {
+    window.pcvcStatusLabels = {};
+    try {
+        const res = await fetch(projectApiPath("api/applications.php?action=filter_options"), {
+            cache: "no-store"
+        });
+        const json = await res.json();
+        if (!json?.success || !json?.data) return;
+
+        const staff = Array.isArray(json.data.staff) ? json.data.staff : [];
+        const statuses = Array.isArray(json.data.statuses) ? json.data.statuses : [];
+
+        statuses.forEach((s) => {
+            if (s?.value) window.pcvcStatusLabels[s.value] = s.label || s.value;
+        });
+
+        if (filterAppStatus) {
+            const keep = filterAppStatus.value;
+            filterAppStatus.innerHTML = '<option value="">All statuses</option>';
+            statuses.forEach((s) => {
+                if (!s?.value) return;
+                const opt = document.createElement("option");
+                opt.value = s.value;
+                opt.textContent = s.label || s.value;
+                filterAppStatus.appendChild(opt);
+            });
+            if (keep && [...filterAppStatus.options].some((o) => o.value === keep)) {
+                filterAppStatus.value = keep;
+            }
+        }
+
+        if (filterAssignedStaff) {
+            const keepStaff = filterAssignedStaff.value;
+            filterAssignedStaff.innerHTML =
+                '<option value="">All staff</option><option value="-1">Unassigned</option>';
+            staff.forEach((row) => {
+                const id = row?.id;
+                if (!id) return;
+                const opt = document.createElement("option");
+                opt.value = String(id);
+                opt.textContent = row.label || `Staff #${id}`;
+                filterAssignedStaff.appendChild(opt);
+            });
+            if (keepStaff && [...filterAssignedStaff.options].some((o) => o.value === keepStaff)) {
+                filterAssignedStaff.value = keepStaff;
+            }
+        }
+    } catch (e) {
+        console.warn("loadFilterOptions:", e);
+    }
+}
 
 /**
  * =====================================================
@@ -61,6 +128,12 @@ function loadStudents() {
         university_id: filterUniversity?.value || "",
         program_level_id: filterLevel?.value || ""
     });
+    if (filterAssignedStaff?.value) {
+        params.set("assigned_to", filterAssignedStaff.value);
+    }
+    if (filterAppStatus?.value) {
+        params.set("application_status", filterAppStatus.value);
+    }
 
     studentListEl.innerHTML =
         `<li class="p-4 text-sm text-gray-400">Loading...</li>`;
@@ -135,6 +208,15 @@ const studyLine = [
         </div>
     `;
 
+    const effKey = meta.effective_status || "";
+    const effLabel =
+        effKey && window.pcvcStatusLabels && window.pcvcStatusLabels[effKey]
+            ? window.pcvcStatusLabels[effKey]
+            : effKey;
+    const statusLine = effLabel
+        ? `<div class="mt-0.5 text-[11px] text-slate-700"><span class="text-slate-500 font-medium">Status:</span> ${escapeHTML(String(effLabel))}</div>`
+        : "";
+
     li.innerHTML = `
         <div class="min-w-0">
             <div class="font-semibold text-sm whitespace-normal break-words">
@@ -156,6 +238,7 @@ const studyLine = [
 
             ${timeDisplay}
             ${assignedLine}
+            ${statusLine}
         </div>
 
         ${Number(meta.is_read) === 0 ? unreadDot() : ""}

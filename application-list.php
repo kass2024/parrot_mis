@@ -296,6 +296,20 @@ th {
 
         </div>
 
+        <div class="px-4 pb-3 space-y-2 border-b border-slate-200 bg-slate-50/80">
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Track by assignee &amp; status</div>
+            <select id="filterAssignedStaff" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white">
+                <option value="">All staff</option>
+                <option value="-1">Unassigned</option>
+            </select>
+            <select id="filterAppStatus" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white">
+                <option value="">All statuses</option>
+            </select>
+            <div class="flex gap-2">
+                <button type="button" id="filterClearBtn" class="flex-1 px-2 py-1.5 text-xs font-medium rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100">Clear filters</button>
+            </div>
+        </div>
+
         <ul
             id="studentList"
             class="flex-1 overflow-y-auto scrollbar divide-y text-sm bg-white"

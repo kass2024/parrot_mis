@@ -4,6 +4,7 @@ ini_set('log_errors', 1);
 error_reporting(E_ALL);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
+require_once __DIR__ . '/helpers/application_filters.php';
 session_start();
 require_once __DIR__ . '/helpers/role.php';
 
@@ -66,7 +67,8 @@ $assignStaffSelect = $hasAssignedToCol
     ? ',
         assign_staff.first_name AS assigned_staff_first,
         assign_staff.last_name AS assigned_staff_last,
-        assign_staff.full_name AS assigned_staff_full_name'
+        assign_staff.full_name AS assigned_staff_full_name,
+        sa.assigned_to_admin_id'
     : '';
 
 // 1. Fetch from student_applications with country name join
@@ -256,6 +258,57 @@ $all_applicants = array_filter($all_applicants, function($app) {
 usort($all_applicants, function($a, $b) {
     return ($b['id'] ?? 0) - ($a['id'] ?? 0);
 });
+
+// ---------- Smart filters: assigned staff + pipeline status ----------
+$filterStaffRaw = isset($_GET['filter_staff']) ? trim((string)$_GET['filter_staff']) : '';
+$filterStatusRaw = isset($_GET['filter_status']) ? trim((string)$_GET['filter_status']) : '';
+
+if ($filterStaffRaw !== '' || $filterStatusRaw !== '') {
+    $allowedStatusKeys = pcvc_application_status_priority();
+    $all_applicants = array_values(array_filter($all_applicants, static function ($s) use ($filterStaffRaw, $filterStatusRaw, $allowedStatusKeys) {
+        if ($filterStaffRaw !== '') {
+            $fid = (int)$filterStaffRaw;
+            if ($fid === -1) {
+                if (($s['source'] ?? '') !== 'student_applications') {
+                    return false;
+                }
+                if ((int)($s['assigned_to_admin_id'] ?? 0) !== 0) {
+                    return false;
+                }
+            } elseif ($fid > 0) {
+                if (($s['source'] ?? '') !== 'student_applications') {
+                    return false;
+                }
+                if ((int)($s['assigned_to_admin_id'] ?? 0) !== $fid) {
+                    return false;
+                }
+            }
+        }
+        if ($filterStatusRaw !== '') {
+            if (!in_array($filterStatusRaw, $allowedStatusKeys, true)) {
+                return true;
+            }
+            $eff = pcvc_application_effective_status($s);
+            if ($eff !== $filterStatusRaw) {
+                return false;
+            }
+        }
+        return true;
+    }));
+}
+
+$staffFilterOptions = [];
+if ($sfRes = @$conn->query("
+    SELECT id, first_name, last_name,
+           COALESCE(NULLIF(TRIM(full_name),''), TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,'')))) AS dn
+    FROM admins
+    WHERE LOWER(TRIM(COALESCE(role,''))) = 'staff'
+    ORDER BY last_name ASC, first_name ASC, id ASC
+")) {
+    while ($sf = $sfRes->fetch_assoc()) {
+        $staffFilterOptions[] = $sf;
+    }
+}
 
 $universities_for_admission = [];
 $uq = @$conn->query('SELECT id, name FROM universities ORDER BY name ASC');
@@ -960,9 +1013,48 @@ if ($uq) {
 
   <!-- Search Bar -->
   <div class="search-container">
-    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search Name, Email, University, Program, Destination...">
+    <input type="text" id="searchInput" class="search-box" placeholder="🔍 Smart search: name, email, phone, university, program, destination, assigned staff, status, app ID, remarks, source…">
     <span class="search-icon">🔍</span>
   </div>
+
+  <!-- Smart filters -->
+  <form method="get" action="students-manage.php" class="smart-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;padding:12px 14px;background:var(--white);border:1px solid rgba(1,47,107,0.12);border-radius:12px;box-shadow:0 2px 8px rgba(1,47,107,0.06);">
+    <div style="flex:1;min-width:200px;">
+      <label for="filter_staff" class="form-label small mb-1 fw-semibold text-secondary">Assigned staff</label>
+      <select name="filter_staff" id="filter_staff" class="form-select form-select-sm rounded-3">
+        <option value="">All assignments</option>
+        <option value="-1" <?= isset($_GET['filter_staff']) && (string)$_GET['filter_staff'] === '-1' ? 'selected' : '' ?>>Unassigned (<?= htmlspecialchars(PCVC_DEFAULT_ASSIGNED_PERSON_LABEL, ENT_QUOTES, 'UTF-8') ?>)</option>
+        <?php foreach ($staffFilterOptions as $st): ?>
+          <?php
+            $sid = (int)($st['id'] ?? 0);
+            if ($sid < 1) {
+                continue;
+            }
+            $slabel = trim((string)($st['dn'] ?? ''));
+            if ($slabel === '') {
+                $slabel = trim((string)($st['first_name'] ?? '') . ' ' . (string)($st['last_name'] ?? ''));
+            }
+            $sel = isset($_GET['filter_staff']) && (string)$_GET['filter_staff'] === (string)$sid ? ' selected' : '';
+          ?>
+          <option value="<?= $sid ?>"<?= $sel ?>><?= htmlspecialchars($slabel !== '' ? $slabel : ('Staff #' . $sid), ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div style="flex:1;min-width:200px;">
+      <label for="filter_status" class="form-label small mb-1 fw-semibold text-secondary">Pipeline status</label>
+      <select name="filter_status" id="filter_status" class="form-select form-select-sm rounded-3">
+        <option value="">All statuses</option>
+        <?php foreach (pcvc_application_status_priority() as $sk): ?>
+          <?php $sl = pcvc_application_status_labels()[$sk] ?? $sk; ?>
+          <option value="<?= htmlspecialchars($sk, ENT_QUOTES, 'UTF-8') ?>" <?= isset($_GET['filter_status']) && (string)$_GET['filter_status'] === $sk ? 'selected' : '' ?>><?= htmlspecialchars($sl, ENT_QUOTES, 'UTF-8') ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="d-flex gap-2 pb-1">
+      <button type="submit" class="btn btn-sm btn-primary rounded-3 px-3">Apply</button>
+      <a href="students-manage.php" class="btn btn-sm btn-outline-secondary rounded-3 px-3">Clear</a>
+    </div>
+  </form>
 
   <!-- Table: inner scroll area so horizontal scrollbar stays at bottom of visible panel -->
   <div class="table-container">
@@ -1029,8 +1121,55 @@ if ($uq) {
             if (!empty($s['area_code']) && !empty($s['phone_number']) && strpos($phone, $s['area_code']) === false) {
                 $phone = $s['area_code'] . ' ' . $s['phone_number'];
             }
+
+            $assignDisplay = PCVC_DEFAULT_ASSIGNED_PERSON_LABEL;
+            if (($s['source'] ?? '') === 'student_applications') {
+                $nmParts = array_filter([
+                    trim((string)($s['assigned_staff_first'] ?? '')),
+                    trim((string)($s['assigned_staff_last'] ?? '')),
+                ], static fn($x) => $x !== '');
+                $nm = $nmParts ? implode(' ', $nmParts) : '';
+                if ($nm === '') {
+                    $nm = trim((string)($s['assigned_staff_full_name'] ?? ''));
+                }
+                if ($nm !== '') {
+                    $assignDisplay = $nm;
+                }
+            }
+
+            $searchParts = [
+                (string)($s['first_name'] ?? ''),
+                (string)($s['last_name'] ?? ''),
+                (string)($s['email'] ?? ''),
+                $phone,
+                preg_replace('/\D+/', '', (string)$phone),
+                (string)($s['gender'] ?? ''),
+                (string)($s['dob'] ?? ''),
+                (string)($s['nationality'] ?? ''),
+                (string)($s['city'] ?? ''),
+                (string)($s['address_line1'] ?? ''),
+                (string)($s['university_name'] ?? ''),
+                (string)($s['masters_program'] ?? ''),
+                (string)($s['destination'] ?? ''),
+                (string)($s['application_date'] ?? ''),
+                (string)($s['application_id'] ?? ''),
+                (string)($s['application_remarks'] ?? ''),
+                (string)($s['source'] ?? ''),
+                str_replace('_', ' ', (string)($s['source'] ?? '')),
+                $assignDisplay,
+                PCVC_DEFAULT_ASSIGNED_PERSON_LABEL,
+                (string)$currentStatusText,
+                (string)($currentStatus ?? ''),
+            ];
+            foreach ($statusOptions as $sk => $sl) {
+                $searchParts[] = $sk;
+                $searchParts[] = $sl;
+                $searchParts[] = str_replace('_', ' ', $sk);
+            }
+            $searchHaystack = strtolower(trim(preg_replace('/\s+/u', ' ', implode(' ', $searchParts))));
+            $searchHaystackAttr = htmlspecialchars($searchHaystack, ENT_QUOTES, 'UTF-8');
           ?>
-          <tr data-row-id="<?= $s['id'] ?>" data-source="<?= $s['source'] ?>">
+          <tr data-row-id="<?= $s['id'] ?>" data-source="<?= $s['source'] ?>" data-search="<?= $searchHaystackAttr ?>">
             <td><?= $counter++ ?></td>
 
             <!-- Name (first + last) + report-like time under name -->
@@ -1047,22 +1186,6 @@ if ($uq) {
                 <div class="application-time js-app-time"
                      data-dt="<?= htmlspecialchars($dtForNameTime, ENT_QUOTES, 'UTF-8') ?>"
                      style="display:none;font-size:12px;font-weight:600"></div>
-                <?php
-                  $assignDisplay = PCVC_DEFAULT_ASSIGNED_PERSON_LABEL;
-                  if (($s['source'] ?? '') === 'student_applications') {
-                    $nmParts = array_filter([
-                      trim((string)($s['assigned_staff_first'] ?? '')),
-                      trim((string)($s['assigned_staff_last'] ?? '')),
-                    ], static fn($x) => $x !== '');
-                    $nm = $nmParts ? implode(' ', $nmParts) : '';
-                    if ($nm === '') {
-                      $nm = trim((string)($s['assigned_staff_full_name'] ?? ''));
-                    }
-                    if ($nm !== '') {
-                      $assignDisplay = $nm;
-                    }
-                  }
-                ?>
                 <div class="assigned-person-subline" style="font-size:11px;color:#475569;margin-top:3px;line-height:1.35;text-align:center">
                   <span style="color:#64748b;font-weight:600">Assigned:</span>
                   <?= htmlspecialchars($assignDisplay, ENT_QUOTES, 'UTF-8') ?>
@@ -1591,13 +1714,47 @@ $(function() {
     updateAdmissionRemoveButtons();
   });
 
-  // SEARCH
-  $('#searchInput').on('keyup', function(){
-    const value = $(this).val().toLowerCase();
-    $('#applicantTable tbody tr').filter(function(){
-      $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+  // Smart search: token AND-match over data-search (full row index) + fallback text
+  let smartSearchTimer = null;
+  function pcvcNormalizeSearchStr(str) {
+    if (!str) return '';
+    try {
+      return str
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '');
+    } catch (e) {
+      return str.toLowerCase();
+    }
+  }
+  function pcvcSmartApplicantSearch(query) {
+    const q = (query || '').trim();
+    const rows = document.querySelectorAll('#applicantTable tbody tr');
+    if (!q) {
+      rows.forEach(function (row) { row.style.display = ''; });
+      return;
+    }
+    const norm = pcvcNormalizeSearchStr(q);
+    const tokens = norm.split(/[^a-z0-9]+/i).filter(function (t) { return t.length > 0; });
+    rows.forEach(function (row) {
+      let hay = row.getAttribute('data-search') || '';
+      if (!hay) {
+        hay = pcvcNormalizeSearchStr(row.textContent || '');
+      } else {
+        hay = pcvcNormalizeSearchStr(hay);
+      }
+      const ok = tokens.every(function (t) { return hay.indexOf(t) !== -1; });
+      row.style.display = ok ? '' : 'none';
     });
+  }
+  $('#searchInput').off('keyup.smartsearch input.smartsearch').on('keyup.smartsearch input.smartsearch', function () {
+    const self = this;
+    clearTimeout(smartSearchTimer);
+    smartSearchTimer = setTimeout(function () {
+      pcvcSmartApplicantSearch($(self).val());
+    }, 120);
   });
+  pcvcSmartApplicantSearch(document.getElementById('searchInput')?.value || '');
 
   // DELETE APPLICATION (Superadmin · api/applications.php?action=delete — main student_applications only)
   $(document).on('click', '.btn-delete-app', function (e) {
@@ -2314,18 +2471,6 @@ function finishPaymentProgress(success = true) {
   }, 2000);
 }
 
-// Duplicate search script for compatibility
-document.getElementById("searchInput").addEventListener("keyup", function() {
-  const value = this.value.toLowerCase();
-  const rows = document.querySelectorAll("#applicantTable tbody tr");
-
-  rows.forEach(row => {
-    const rowText = row.textContent.toLowerCase();
-    row.style.display = rowText.includes(value) ? "" : "none";
-  });
-});
-
-// Handle escape key to close dropdowns
 $(document).on('keydown', function(e) {
   if (e.key === 'Escape') {
     $('.status-dropdown-menu').hide();
