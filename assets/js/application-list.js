@@ -31,6 +31,11 @@ const filterRegion = document.getElementById("filterRegion");
 const filterUniversity = document.getElementById("filterUniversity");
 const filterLevel = document.getElementById("filterLevel");
 
+/** Currently selected application numeric id (student_applications.id) for inline edits */
+let currentViewApplicationId = null;
+let studyChoiceRegionsLoaded = false;
+let studyChoiceAddFormWired = false;
+
 /**
  * =====================================================
  * INITIAL LOAD
@@ -39,6 +44,7 @@ const filterLevel = document.getElementById("filterLevel");
 document.addEventListener("DOMContentLoaded", () => {
     startTimeAgoTicker();
     loadFilterOptions().finally(() => loadStudents());
+    wireStudyChoiceAddFormOnce();
 });
 
 /**
@@ -495,6 +501,8 @@ function loadApplication(id, listItem) {
 
             if (!res?.success || !res.data) {
                 alert("Failed to load application details");
+                currentViewApplicationId = null;
+                document.getElementById("studyChoiceAddPanel")?.classList.add("hidden");
                 return;
             }
 
@@ -518,7 +526,8 @@ if (jobsCreated > 0) {
         () => {
             // optional: redirect to jobs page
             window.location.href = "admin-jobs.php";
-        }
+        },
+        "Jobs created"
     );
 }
 
@@ -619,6 +628,13 @@ function renderApplication(data, applicationNumericId) {
     renderAgent(agent);
 
     renderDeleteControls(applicationNumericId, canDelete);
+
+    currentViewApplicationId = applicationNumericId;
+    const scPanel = document.getElementById("studyChoiceAddPanel");
+    if (scPanel) {
+        scPanel.classList.remove("hidden");
+        void prepareStudyChoiceAddForm();
+    }
 }
 
 /**
@@ -1184,14 +1200,447 @@ function documentCard(path, label) {
 
     return div;
 }
-/* 👇👇👇 PASTE HERE — EXACTLY HERE 👇👇👇 */
+/**
+ * =====================================================
+ * ADD STUDY CHOICE (Student Application Report)
+ * Select2 searchable dropdowns + cascading loads
+ * =====================================================
+ */
+function studyChoiceAddStudyDropdownParent() {
+    if (typeof window.jQuery !== "function") return null;
+    /* Body = dropdown stacks above sticky journey sidebar (avoids clipping / wrong z-index in grid) */
+    return window.jQuery(document.body);
+}
+
+function destroyStudyChoiceSelect2IfAny(el) {
+    if (!el || typeof window.jQuery !== "function" || !window.jQuery.fn.select2) return;
+    const $el = window.jQuery(el);
+    if ($el.length && $el.hasClass("select2-hidden-accessible")) {
+        $el.select2("destroy");
+    }
+}
+
+function mountStudyChoiceSelect2(el, opts) {
+    const options = opts || {};
+    if (!el || typeof window.jQuery !== "function" || !window.jQuery.fn.select2) return;
+    const $el = window.jQuery(el);
+    if ($el.hasClass("select2-hidden-accessible")) {
+        $el.select2("destroy");
+    }
+    $el.prop("disabled", !!options.disabled);
+    const $par = studyChoiceAddStudyDropdownParent();
+    $el.select2({
+        theme: "bootstrap-5",
+        width: "100%",
+        placeholder: options.placeholder || "Select…",
+        allowClear: true,
+        minimumResultsForSearch: 0,
+        dropdownParent: $par && $par.length ? $par : window.jQuery(document.body)
+    });
+}
+
+function addStudySelectValue(id) {
+    const el = document.getElementById(id);
+    if (!el) return "";
+    if (
+        typeof window.jQuery === "function" &&
+        window.jQuery(el).hasClass("select2-hidden-accessible")
+    ) {
+        const v = window.jQuery(el).val();
+        return v === null || v === undefined ? "" : String(v);
+    }
+    return el.value || "";
+}
+
+function bindStudyChoiceCascadeEvents() {
+    if (typeof window.jQuery !== "function") return;
+    const $ = window.jQuery;
+    $("#addStudyRegion")
+        .off("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy")
+        .on("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy", function () {
+            const el = this;
+            clearTimeout(bindStudyChoiceCascadeEvents._tRegion);
+            bindStudyChoiceCascadeEvents._tRegion = setTimeout(() => {
+                onAddStudyRegionChange.call(el);
+            }, 0);
+        });
+    $("#addStudyUniversity")
+        .off("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy")
+        .on("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy", function () {
+            const el = this;
+            clearTimeout(bindStudyChoiceCascadeEvents._tUni);
+            bindStudyChoiceCascadeEvents._tUni = setTimeout(() => {
+                onAddStudyUniversityChange.call(el);
+            }, 0);
+        });
+    $("#addStudyLevel")
+        .off("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy")
+        .on("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy", function () {
+            const el = this;
+            clearTimeout(bindStudyChoiceCascadeEvents._tLev);
+            bindStudyChoiceCascadeEvents._tLev = setTimeout(() => {
+                onAddStudyLevelChange.call(el);
+            }, 0);
+        });
+    $("#addStudyProgram")
+        .off("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy")
+        .on("change.pcvcStudy select2:select.pcvcStudy select2:clear.pcvcStudy", function () {
+            updateAddStudyChoiceButtonState();
+        });
+}
+
+function wireStudyChoiceAddFormOnce() {
+    if (studyChoiceAddFormWired) return;
+    studyChoiceAddFormWired = true;
+
+    document.getElementById("btnAddStudyChoice")?.addEventListener("click", submitAddStudyChoice);
+    bindStudyChoiceCascadeEvents();
+}
+
+function resetStudyChoiceAddSelects() {
+    const region = document.getElementById("addStudyRegion");
+    const uni = document.getElementById("addStudyUniversity");
+    const lev = document.getElementById("addStudyLevel");
+    const prog = document.getElementById("addStudyProgram");
+    const status = document.getElementById("studyChoiceAddStatus");
+
+    [region, uni, lev, prog].forEach((el) => destroyStudyChoiceSelect2IfAny(el));
+
+    if (region) region.value = "";
+    if (uni) {
+        uni.innerHTML = '<option value="">Select region first</option>';
+        uni.disabled = true;
+    }
+    if (lev) {
+        lev.innerHTML = '<option value="">Select university</option>';
+        lev.disabled = true;
+    }
+    if (prog) {
+        prog.innerHTML = '<option value="">Select level</option>';
+        prog.disabled = true;
+    }
+    if (status) status.textContent = "";
+
+    if (region) {
+        mountStudyChoiceSelect2(region, {
+            placeholder: "Search or select region…",
+            disabled: false
+        });
+    }
+    if (uni) {
+        mountStudyChoiceSelect2(uni, {
+            placeholder: "Search university…",
+            disabled: true
+        });
+    }
+    if (lev) {
+        mountStudyChoiceSelect2(lev, {
+            placeholder: "Search level…",
+            disabled: true
+        });
+    }
+    if (prog) {
+        mountStudyChoiceSelect2(prog, {
+            placeholder: "Search program…",
+            disabled: true
+        });
+    }
+
+    bindStudyChoiceCascadeEvents();
+    updateAddStudyChoiceButtonState();
+}
+
+function updateAddStudyChoiceButtonState() {
+    const btn = document.getElementById("btnAddStudyChoice");
+    if (!btn) return;
+    const ok =
+        currentViewApplicationId &&
+        addStudySelectValue("addStudyRegion") &&
+        addStudySelectValue("addStudyUniversity") &&
+        addStudySelectValue("addStudyLevel") &&
+        addStudySelectValue("addStudyProgram");
+    btn.disabled = !ok;
+}
+
+async function loadStudyChoiceRegions() {
+    const sel = document.getElementById("addStudyRegion");
+    if (!sel) return;
+
+    if (studyChoiceRegionsLoaded) return;
+
+    destroyStudyChoiceSelect2IfAny(sel);
+    sel.innerHTML = '<option value="">Loading…</option>';
+    try {
+        const r = await fetch(projectApiPath("save_application.php?action=load_meta"), {
+            credentials: "same-origin"
+        });
+        const data = await r.json();
+        const regions = Array.isArray(data.regions) ? data.regions : [];
+        destroyStudyChoiceSelect2IfAny(sel);
+        sel.innerHTML = '<option value="">Select region</option>';
+        regions.forEach((row) => {
+            const o = document.createElement("option");
+            o.value = String(row.id);
+            o.textContent = row.name || `Region #${row.id}`;
+            sel.appendChild(o);
+        });
+        studyChoiceRegionsLoaded = true;
+    } catch (e) {
+        console.error("loadStudyChoiceRegions:", e);
+        destroyStudyChoiceSelect2IfAny(sel);
+        sel.innerHTML = '<option value="">Failed to load regions</option>';
+    }
+}
+
+async function prepareStudyChoiceAddForm() {
+    await loadStudyChoiceRegions();
+    resetStudyChoiceAddSelects();
+}
+
+async function onAddStudyRegionChange() {
+    const regionId = this.value;
+    const uni = document.getElementById("addStudyUniversity");
+    const lev = document.getElementById("addStudyLevel");
+    const prog = document.getElementById("addStudyProgram");
+    if (!uni || !lev || !prog) return;
+
+    [uni, lev, prog].forEach((el) => destroyStudyChoiceSelect2IfAny(el));
+
+    lev.innerHTML = '<option value="">Select university</option>';
+    lev.disabled = true;
+    prog.innerHTML = '<option value="">Select level</option>';
+    prog.disabled = true;
+
+    if (!regionId) {
+        uni.innerHTML = '<option value="">Select region first</option>';
+        uni.disabled = true;
+        mountStudyChoiceSelect2(uni, { placeholder: "Search university…", disabled: true });
+        mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: true });
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+        updateAddStudyChoiceButtonState();
+        return;
+    }
+
+    uni.innerHTML = '<option value="">Loading…</option>';
+    uni.disabled = true;
+    mountStudyChoiceSelect2(uni, { placeholder: "Loading universities…", disabled: true });
+    mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: true });
+    mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+
+    try {
+        const r = await fetch(
+            projectApiPath(
+                `save_application.php?action=universities&region_id=${encodeURIComponent(regionId)}`
+            ),
+            { credentials: "same-origin" }
+        );
+        const rows = await r.json();
+        destroyStudyChoiceSelect2IfAny(uni);
+        uni.innerHTML = '<option value="">Select university</option>';
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const o = document.createElement("option");
+            o.value = String(row.id);
+            o.textContent = row.name || `University #${row.id}`;
+            uni.appendChild(o);
+        });
+        uni.disabled = false;
+        mountStudyChoiceSelect2(uni, { placeholder: "Search university…", disabled: false });
+        mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: true });
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+    } catch (e) {
+        console.error(e);
+        destroyStudyChoiceSelect2IfAny(uni);
+        uni.innerHTML = '<option value="">Load failed</option>';
+        uni.disabled = true;
+        mountStudyChoiceSelect2(uni, { placeholder: "Search university…", disabled: true });
+        mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: true });
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+    }
+    updateAddStudyChoiceButtonState();
+}
+
+async function onAddStudyUniversityChange() {
+    const uid = this.value;
+    const lev = document.getElementById("addStudyLevel");
+    const prog = document.getElementById("addStudyProgram");
+    if (!lev || !prog) return;
+
+    [lev, prog].forEach((el) => destroyStudyChoiceSelect2IfAny(el));
+
+    prog.innerHTML = '<option value="">Select level</option>';
+    prog.disabled = true;
+
+    if (!uid) {
+        lev.innerHTML = '<option value="">Select university</option>';
+        lev.disabled = true;
+        mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: true });
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+        updateAddStudyChoiceButtonState();
+        return;
+    }
+
+    lev.innerHTML = '<option value="">Loading…</option>';
+    lev.disabled = true;
+    mountStudyChoiceSelect2(lev, { placeholder: "Loading levels…", disabled: true });
+    mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+
+    try {
+        const r = await fetch(
+            projectApiPath(
+                `save_application.php?action=program_levels&university_id=${encodeURIComponent(uid)}`
+            ),
+            { credentials: "same-origin" }
+        );
+        const rows = await r.json();
+        destroyStudyChoiceSelect2IfAny(lev);
+        lev.innerHTML = '<option value="">Select level</option>';
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const o = document.createElement("option");
+            o.value = String(row.id);
+            const abbr = row.abbreviation ? String(row.abbreviation) : "";
+            const nm = row.name ? String(row.name) : "";
+            o.textContent = abbr && nm ? `${abbr} — ${nm}` : nm || abbr || `Level #${row.id}`;
+            lev.appendChild(o);
+        });
+        lev.disabled = false;
+        mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: false });
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+    } catch (e) {
+        console.error(e);
+        destroyStudyChoiceSelect2IfAny(lev);
+        lev.innerHTML = '<option value="">Load failed</option>';
+        lev.disabled = true;
+        mountStudyChoiceSelect2(lev, { placeholder: "Search level…", disabled: true });
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+    }
+    updateAddStudyChoiceButtonState();
+}
+
+async function onAddStudyLevelChange() {
+    const uid = addStudySelectValue("addStudyUniversity");
+    const levelId = this.value;
+    const prog = document.getElementById("addStudyProgram");
+    if (!prog) return;
+
+    destroyStudyChoiceSelect2IfAny(prog);
+
+    if (!uid || !levelId) {
+        prog.innerHTML = '<option value="">Select level first</option>';
+        prog.disabled = true;
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+        updateAddStudyChoiceButtonState();
+        return;
+    }
+
+    prog.innerHTML = '<option value="">Loading…</option>';
+    prog.disabled = true;
+    mountStudyChoiceSelect2(prog, { placeholder: "Loading programs…", disabled: true });
+
+    try {
+        const r = await fetch(
+            projectApiPath(
+                `save_application.php?action=programs&university_id=${encodeURIComponent(
+                    uid
+                )}&program_level_id=${encodeURIComponent(levelId)}`
+            ),
+            { credentials: "same-origin" }
+        );
+        const rows = await r.json();
+        destroyStudyChoiceSelect2IfAny(prog);
+        prog.innerHTML = '<option value="">Select program</option>';
+        (Array.isArray(rows) ? rows : []).forEach((row) => {
+            const o = document.createElement("option");
+            o.value = String(row.id);
+            o.textContent = row.program_name || `Program #${row.id}`;
+            prog.appendChild(o);
+        });
+        prog.disabled = false;
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: false });
+    } catch (e) {
+        console.error(e);
+        destroyStudyChoiceSelect2IfAny(prog);
+        prog.innerHTML = '<option value="">Load failed</option>';
+        prog.disabled = true;
+        mountStudyChoiceSelect2(prog, { placeholder: "Search program…", disabled: true });
+    }
+    updateAddStudyChoiceButtonState();
+}
+
+async function submitAddStudyChoice() {
+    if (!currentViewApplicationId) return;
+
+    const fd = new FormData();
+    fd.append("application_id", String(currentViewApplicationId));
+    fd.append("region_id", addStudySelectValue("addStudyRegion"));
+    fd.append("university_id", addStudySelectValue("addStudyUniversity"));
+    fd.append("program_level_id", addStudySelectValue("addStudyLevel"));
+    fd.append("program_id", addStudySelectValue("addStudyProgram"));
+
+    const btn = document.getElementById("btnAddStudyChoice");
+    const status = document.getElementById("studyChoiceAddStatus");
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = "Saving…";
+
+    try {
+        const res = await fetch(projectApiPath("api/applications.php?action=add_study_choice"), {
+            method: "POST",
+            body: fd,
+            credentials: "same-origin"
+        });
+        const json = await res.json();
+        if (!json.success) {
+            if (status) status.textContent = json.message || "Could not save.";
+            alert(json.message || "Could not add study choice.");
+            updateAddStudyChoiceButtonState();
+            return;
+        }
+
+        const d = json.data || {};
+        renderStudyChoices(Array.isArray(d.study_choices) ? d.study_choices : []);
+        loadStudents();
+
+        if (d.duplicate) {
+            if (status) status.textContent = d.message || "Already listed.";
+            showToast(d.message || "This choice is already on the application.", undefined, "Study choices");
+        } else {
+            let msg = d.message || "Study choice added.";
+            if (d.jobs_created > 0) {
+                msg += ` ${d.jobs_created} job(s) created.`;
+                showToast(msg, () => {
+                    window.location.href = "admin-jobs.php";
+                }, "Study choices");
+            } else {
+                showToast(
+                    msg +
+                        (d.student_notified
+                            ? " Student notified by email."
+                            : " Student email not sent (missing or invalid address)."),
+                    undefined,
+                    "Study choices"
+                );
+            }
+            if (status) {
+                status.textContent = d.student_notified
+                    ? "Saved and student notified."
+                    : "Saved. Email not sent (check student email).";
+            }
+        }
+
+        resetStudyChoiceAddSelects();
+    } catch (e) {
+        console.error(e);
+        if (status) status.textContent = "Network error.";
+    } finally {
+        updateAddStudyChoiceButtonState();
+    }
+}
 
 /**
  * =====================================================
  * TOAST NOTIFICATION (CLICKABLE)
  * =====================================================
  */
-function showToast(message, onClick) {
+function showToast(message, onClick, title) {
     let container = document.getElementById("toastContainer");
 
     if (!container) {
@@ -1206,9 +1655,14 @@ function showToast(message, onClick) {
     toast.className =
         "bg-green-600 text-white px-4 py-3 rounded shadow cursor-pointer hover:bg-green-700 transition";
 
+    const heading =
+        typeof title === "string" && title.trim() !== ""
+            ? title.trim()
+            : "Jobs Created";
+
     toast.innerHTML = `
-        <div class="text-sm font-semibold">Jobs Created</div>
-        <div class="text-xs">${message}</div>
+        <div class="text-sm font-semibold">${escapeHTML(String(heading ?? ""))}</div>
+        <div class="text-xs">${escapeHTML(String(message ?? ""))}</div>
     `;
 
     toast.onclick = () => {

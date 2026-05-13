@@ -40,8 +40,56 @@ $appRoot = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')),
     <script src="https://cdn.tailwindcss.com"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
+    <!-- Select2 (searchable dropdowns — study choice add panel) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+
     <!-- ================= CUSTOM STYLES ================= -->
    <style>
+
+        /* One scroll for the app shell: no body scrollbar next to <main> / list */
+        html {
+            height: 100%;
+        }
+        body {
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        /* Study choice add form — Select2, full width per column */
+        #studyChoiceAddInner .select2-container {
+            width: 100% !important;
+            max-width: 100%;
+        }
+        #studyChoiceAddInner .select2-container--bootstrap-5 .select2-selection {
+            min-height: 2.75rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.5rem;
+            border-color: rgb(226 232 240);
+            background: #fff;
+        }
+        #studyChoiceAddInner .select2-container--bootstrap-5.select2-container--focus .select2-selection,
+        #studyChoiceAddInner .select2-container--bootstrap-5.select2-container--open .select2-selection {
+            border-color: rgb(99 102 241);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        #studyChoiceAddInner .select2-container--bootstrap-5 .select2-selection__placeholder {
+            color: rgb(148 163 184);
+        }
+        #studyChoiceAddInner .select2-container--bootstrap-5 .select2-dropdown {
+            border-radius: 0.5rem;
+            border-color: rgb(226 232 240);
+            box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.18);
+        }
+        #studyChoiceAddInner .select2-results__option--highlighted {
+            background-color: rgb(79 70 229) !important;
+        }
+
+        /* Open Select2 list above sticky Application Journey column */
+        .select2-container--open {
+            z-index: 1100 !important;
+        }
 
 /* =====================================================
    GLOBAL FOUNDATION
@@ -196,6 +244,7 @@ aside p {
     border-radius: 1.25rem;
     border: 1px solid var(--border-muted);
     box-shadow: 0 16px 40px rgba(0,0,0,.12);
+    max-width: 100%;
 }
 
 /* Journey status badge */
@@ -275,10 +324,10 @@ th {
 </head>
 
 <body class="bg-slate-100 text-slate-800">
-<div class="flex h-screen overflow-hidden">
+<div class="flex h-screen min-h-0 overflow-hidden">
 
     <!-- ================= SIDEBAR ================= -->
-    <aside class="w-96 flex flex-col border-r border-slate-800">
+    <aside class="w-96 flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-slate-800">
         <div class="px-6 py-5 border-b">
             <h2 class="text-lg font-bold">Applications</h2>
             <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') ?> · All student submissions</p>
@@ -317,11 +366,12 @@ th {
     </aside>
 
     <!-- ================= MAIN CONTENT ================= -->
-    <main class="flex-1 overflow-y-auto bg-slate-50 p-8">
-        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <main class="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden bg-slate-50 p-8">
+        <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
 
             <!-- ================= LEFT COLUMN ================= -->
-            <div class="lg:col-span-2 space-y-6">
+            <!-- min-w-0: grid children default to min-width:auto; Select2/containers can spill into col 3 and sit UNDER the journey panel -->
+            <div class="lg:col-span-2 space-y-6 min-w-0">
 
                 <!-- EMPTY STATE -->
                 <div
@@ -465,6 +515,67 @@ th {
                                 <tbody id="studyChoicesTable"></tbody>
                             </table>
                         </div>
+
+                        <div
+                            id="studyChoiceAddPanel"
+                            class="mt-6 hidden border-t border-slate-200 pt-6"
+                            aria-labelledby="studyChoiceAddHeading"
+                        >
+                            <div
+                                id="studyChoiceAddInner"
+                                class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+                            >
+                                <div class="mb-4">
+                                    <h4 id="studyChoiceAddHeading" class="text-sm font-semibold text-slate-900">
+                                        Add another study choice
+                                    </h4>
+                                    <p class="mt-1 text-sm text-slate-600 leading-snug">
+                                        Choose region, then university, level, and program. Open any field and type to search.
+                                        Saving emails the student; duplicate combinations are ignored.
+                                    </p>
+                                </div>
+
+                                <!-- Two rows of two: avoids one overcrowded line and truncated placeholders -->
+                                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <label class="block min-w-0">
+                                        <span class="mb-1.5 block text-xs font-medium text-slate-700">Region</span>
+                                        <select id="addStudyRegion" class="pcvc-add-study-select w-full max-w-full text-sm text-slate-900" title="Regions">
+                                            <option value="">Loading…</option>
+                                        </select>
+                                    </label>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1.5 block text-xs font-medium text-slate-700">University</span>
+                                        <select id="addStudyUniversity" class="pcvc-add-study-select w-full max-w-full text-sm text-slate-900" disabled title="Universities">
+                                            <option value="">Select region first</option>
+                                        </select>
+                                    </label>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1.5 block text-xs font-medium text-slate-700">Level</span>
+                                        <select id="addStudyLevel" class="pcvc-add-study-select w-full max-w-full text-sm text-slate-900" disabled title="Level">
+                                            <option value="">Select university</option>
+                                        </select>
+                                    </label>
+                                    <label class="block min-w-0">
+                                        <span class="mb-1.5 block text-xs font-medium text-slate-700">Program</span>
+                                        <select id="addStudyProgram" class="pcvc-add-study-select w-full max-w-full text-sm text-slate-900" disabled title="Program">
+                                            <option value="">Select level</option>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div class="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <p id="studyChoiceAddStatus" class="text-xs text-slate-500 min-h-[1.25rem] sm:flex-1 sm:min-w-0" role="status"></p>
+                                    <button
+                                        type="button"
+                                        id="btnAddStudyChoice"
+                                        class="w-full shrink-0 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[14rem]"
+                                        disabled
+                                    >
+                                        Add &amp; notify student
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </section>
 
                     <!-- DOCUMENTS -->
@@ -485,7 +596,7 @@ th {
            <!-- ================= RIGHT COLUMN: APPLICATION JOURNEY ================= -->
 <aside
     id="applicationTracking"
-    class="hidden lg:block sticky top-8 p-6 h-fit"
+    class="hidden lg:block lg:col-span-1 min-w-0 sticky top-8 self-start p-6 h-fit"
 >
 
     <!-- Header -->
@@ -553,6 +664,8 @@ th {
 window.APP_ROOT = <?= json_encode($appRoot, JSON_UNESCAPED_SLASHES) ?>;
 window.CAN_DELETE_APPLICATION = <?= json_encode($canDeleteApplication) ?>;
 </script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="assets/js/application-list.js?v=<?= (int) @filemtime(__DIR__ . '/assets/js/application-list.js') ?>"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@ require_once "../helpers/response.php";
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 require_once __DIR__ . '/../helpers/application_filters.php';
+require_once __DIR__ . '/../helpers/study_choice_admin_actions.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -58,6 +59,96 @@ if ($action === 'filter_options') {
     jsonResponse([
         'staff' => $staff,
         'statuses' => $statuses,
+    ]);
+    exit;
+}
+
+/**
+ * ======================================================
+ * ADD STUDY CHOICE (staff/admin — append row + optional jobs + student email)
+ * ======================================================
+ */
+if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $applicationId = (int) ($_POST['application_id'] ?? 0);
+    $regionId = (int) ($_POST['region_id'] ?? 0);
+    $universityId = (int) ($_POST['university_id'] ?? 0);
+    $levelId = (int) ($_POST['program_level_id'] ?? 0);
+    $programId = (int) ($_POST['program_id'] ?? 0);
+
+    if ($applicationId <= 0) {
+        jsonResponse('Invalid application id', false, 400);
+    }
+
+    $stmt = $conn->prepare('SELECT id FROM student_applications WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stmt->bind_param('i', $applicationId);
+    $stmt->execute();
+    $exists = (bool) $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$exists) {
+        jsonResponse('Application not found', false, 404);
+    }
+
+    $relErr = pcvc_validate_study_choice_relations($conn, $regionId, $universityId, $levelId, $programId);
+    if ($relErr !== null) {
+        jsonResponse($relErr, false, 422);
+    }
+
+    $ins = pcvc_try_insert_application_study_choice(
+        $conn,
+        $applicationId,
+        $regionId,
+        $universityId,
+        $levelId,
+        $programId
+    );
+
+    if (!$ins['inserted'] && !$ins['duplicate']) {
+        $msg = isset($ins['error']) && $ins['error'] !== ''
+            ? $ins['error']
+            : 'Could not save study choice.';
+        jsonResponse($msg, false, 500);
+    }
+
+    $jobsCreated = 0;
+    $notified = false;
+
+    if ($ins['inserted']) {
+        $jobsCreated = pcvc_ensure_auto_jobs_for_university($conn, $applicationId, $universityId);
+        $notified = pcvc_notify_student_study_choice_added(
+            $conn,
+            $applicationId,
+            $regionId,
+            $universityId,
+            $levelId,
+            $programId
+        );
+    }
+
+    $studyChoices = pcvc_fetch_study_choices_for_admin_view($conn, $applicationId);
+
+    jsonResponse([
+        'study_choices' => $studyChoices,
+        'jobs_created' => $jobsCreated,
+        'duplicate' => (bool) $ins['duplicate'],
+        'student_notified' => $notified,
+        'message' => $ins['duplicate']
+            ? 'This study choice is already listed for this application.'
+            : ($ins['inserted'] ? 'Study choice added.' : ''),
     ]);
     exit;
 }
