@@ -90,6 +90,8 @@ $text = [
         'step1_level' => 'Program level',
         'step1_program' => 'Programs',
         'step1_remove' => 'Remove',
+        'step1_agent_panel_title' => 'Referral & consultant',
+        'step1_agent_panel_desc' => 'Tell us how you heard about us. If a member of our team referred you, select them here before uploading documents for Smart AI autofill.',
         'doc_prepare_title' => 'Documents to Prepare Before Starting',
         'doc_prepare_desc' => 'To ensure a smooth application process, please have the following documents available. You will be asked to upload them during the application steps.',
         'doc_formats' => 'Supported formats: PDF, JPG, PNG',
@@ -251,11 +253,11 @@ $text = [
             ['text' => 'Online / Website / Social Media', 'value' => 'online'],
             ['text' => 'Through an Agent', 'value' => 'agent']
         ],
-        'agent_search_placeholder' => 'Search agent by name or email',
+        'agent_search_placeholder' => 'Search by name, email, username, or role',
         'agent_first' => 'First Name',
         'agent_last' => 'Last Name',
         'agent_email' => 'Email',
-        'agent_help' => 'Start typing to search and select a registered agent.',
+        'agent_help' => 'Start typing to search all registered staff (every role). Pick a row to lock in their details.',
         'comments_placeholder' => 'Additional comments, explanations, or missing document notes',
         'required' => 'Required',
         'save_error_title' => 'Unable to save this step',
@@ -294,6 +296,8 @@ $text = [
         'step1_level' => 'Niveau du programme',
         'step1_program' => 'Programmes',
         'step1_remove' => 'Supprimer',
+        'step1_agent_panel_title' => 'Parrainage et consultant',
+        'step1_agent_panel_desc' => 'Indiquez comment vous nous avez connus. Si un membre de notre équipe vous a orienté, sélectionnez-le ici avant de télécharger des documents pour le remplissage automatique IA.',
         'doc_prepare_title' => 'Documents à Préparer Avant de Commencer',
         'doc_prepare_desc' => 'Pour assurer un processus de demande fluide, veuillez avoir les documents suivants disponibles. Ils vous seront demandés lors des étapes de la demande.',
         'doc_formats' => 'Formats supportés : PDF, JPG, PNG',
@@ -455,11 +459,11 @@ $text = [
             ['text' => 'En ligne / Site Web / Réseaux Sociaux', 'value' => 'online'],
             ['text' => 'Par l\'intermédiaire d\'un Agent', 'value' => 'agent']
         ],
-        'agent_search_placeholder' => 'Rechercher un agent par nom ou email',
+        'agent_search_placeholder' => 'Rechercher par nom, e-mail, identifiant ou rôle',
         'agent_first' => 'Prénom',
         'agent_last' => 'Nom',
         'agent_email' => 'Email',
-        'agent_help' => 'Commencez à taper pour rechercher et sélectionner un agent enregistré.',
+        'agent_help' => 'Commencez à taper pour rechercher tout le personnel enregistré (tous les rôles). Choisissez une ligne pour confirmer les coordonnées.',
         'comments_placeholder' => 'Commentaires supplémentaires, explications ou notes sur les documents manquants',
         'required' => 'Obligatoire',
         'save_error_title' => 'Enregistrement impossible',
@@ -2280,6 +2284,99 @@ class="list-group mt-2 d-none"></div>
         <p class="form-text mt-2 mb-0 small"><?php echo $t['step1_cart_help']; ?></p>
       </aside>
 
+      <!-- Referral + agent (before Smart AI autofill so routing happens after consultant is set) -->
+      <section
+        class="study-panel study-panel--soft mt-4"
+        id="step1AgentReferralPanel"
+        aria-labelledby="step1-agent-heading"
+      >
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+          <div>
+            <h2 id="step1-agent-heading" class="h6 fw-semibold mb-1"><?php echo htmlspecialchars($t['step1_agent_panel_title'], ENT_QUOTES, 'UTF-8'); ?></h2>
+            <p class="form-text small mb-0"><?php echo htmlspecialchars($t['step1_agent_panel_desc'], ENT_QUOTES, 'UTF-8'); ?></p>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold" for="referral_source">
+            <?php echo $t['referral_title']; ?> <span class="text-danger">*</span>
+          </label>
+          <select
+            id="referral_source"
+            name="referral_source"
+            class="form-select rounded-3 study-touch-control"
+            required
+          >
+            <option value=""><?php echo $lang === 'en' ? 'Select an option' : 'Sélectionnez une option'; ?></option>
+            <?php foreach ($t['referral_options'] as $option): ?>
+            <option value="<?php echo htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($option['text'], ENT_QUOTES, 'UTF-8'); ?></option>
+            <?php endforeach; ?>
+          </select>
+          <div class="form-text"><?php echo $t['referral_help']; ?></div>
+        </div>
+
+        <div id="agentSection" style="display:none;">
+          <div id="agentSearchWrap" class="position-relative mb-2">
+            <label class="form-label small fw-semibold" for="agent_search"><?php echo $lang === 'en' ? 'Find a team member' : 'Trouver un membre de l\'équipe'; ?></label>
+            <input
+              type="text"
+              id="agent_search"
+              class="form-control rounded-3 study-touch-control mb-0"
+              placeholder="<?php echo htmlspecialchars($t['agent_search_placeholder'], ENT_QUOTES, 'UTF-8'); ?>"
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <div
+              id="agentResults"
+              class="list-group position-absolute w-100 d-none shadow-sm border rounded-3 mt-1 overflow-auto agent-results-dropdown"
+              style="z-index: 1050; max-height: 260px;"
+              role="listbox"
+              aria-label="<?php echo $lang === 'en' ? 'Search results' : 'Résultats de recherche'; ?>"
+            ></div>
+          </div>
+
+          <div class="row mt-3 g-2">
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold" for="agent_first_name"><?php echo $t['agent_first']; ?></label>
+              <input
+                type="text"
+                class="form-control rounded-3"
+                name="agent_first_name"
+                id="agent_first_name"
+                placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
+                readonly
+                required
+              >
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold" for="agent_last_name"><?php echo $t['agent_last']; ?></label>
+              <input
+                type="text"
+                class="form-control rounded-3"
+                name="agent_last_name"
+                id="agent_last_name"
+                placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
+                readonly
+                required
+              >
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small fw-semibold" for="agent_email"><?php echo $t['agent_email']; ?></label>
+              <input
+                type="email"
+                class="form-control rounded-3"
+                name="agent_email"
+                id="agent_email"
+                placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
+                readonly
+                required
+              >
+            </div>
+          </div>
+          <div class="form-text mt-2"><?php echo $t['agent_help']; ?></div>
+        </div>
+      </section>
+
       <div class="smart-autofill-card mt-4">
         <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
           <div>
@@ -3325,109 +3422,6 @@ class="list-group mt-2 d-none"></div>
         <ul id="docDebugList" class="doc-debug-list"></ul>
       </div>
     </div>
-
-  <!-- =====================================================
-     AGENT INFORMATION (STEP 7 – REQUIRED)
-===================================================== -->
-<div class="mt-5 position-relative">
-
-  <!-- ===============================
-       REFERRAL SOURCE (FIXED)
-  =============================== -->
-  <div class="mb-4">
-    <label class="form-label fw-semibold">
-      <?php echo $t['referral_title']; ?> <span class="text-danger">*</span>
-    </label>
-
-    <select
-      id="referral_source"
-      class="form-select"
-      required
-    >
-      <option value=""><?php echo $lang === 'en' ? 'Select an option' : 'Sélectionnez une option'; ?></option>
-      <?php foreach ($t['referral_options'] as $option): ?>
-      <option value="<?php echo $option['value']; ?>"><?php echo $option['text']; ?></option>
-      <?php endforeach; ?>
-    </select>
-
-    <div class="form-text">
-      <?php echo $t['referral_help']; ?>
-    </div>
-  </div>
-
-  <!-- ===============================
-       AGENT SECTION (HIDDEN BY DEFAULT)
-  =============================== -->
-  <div id="agentSection" style="display:none;">
-
-    <!-- Agent Search -->
-    <input
-      type="text"
-      id="agent_search"
-      class="form-control mb-2"
-      placeholder="<?php echo $t['agent_search_placeholder']; ?>"
-      autocomplete="off"
-    >
-
-    <!-- Search Results -->
-    <div
-      id="agentResults"
-      class="list-group position-absolute w-100 d-none"
-      style="z-index: 1000;"
-    ></div>
-
-    <!-- Selected Agent Fields (LOCKED) -->
-    <div class="row mt-3">
-
-      <div class="col-md-4 mb-2">
-        <label class="form-label small fw-semibold"><?php echo $t['agent_first']; ?></label>
-        <input
-          type="text"
-          class="form-control"
-          name="agent_first_name"
-          id="agent_first_name"
-          placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
-          readonly
-          required
-        >
-      </div>
-
-      <div class="col-md-4 mb-2">
-        <label class="form-label small fw-semibold"><?php echo $t['agent_last']; ?></label>
-        <input
-          type="text"
-          class="form-control"
-          name="agent_last_name"
-          id="agent_last_name"
-          placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
-          readonly
-          required
-        >
-      </div>
-
-      <div class="col-md-4 mb-2">
-        <label class="form-label small fw-semibold"><?php echo $t['agent_email']; ?></label>
-        <input
-          type="email"
-          class="form-control"
-          name="agent_email"
-          id="agent_email"
-          placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
-          readonly
-          required
-        >
-      </div>
-
-    </div>
-
-    <div class="form-text mt-2">
-      <?php echo $t['agent_help']; ?>
-    </div>
-
-  </div>
-
-</div>
-
 
     <!-- ================= COMMENTS ================= -->
     <div class="mt-4">
@@ -4560,61 +4554,108 @@ function startValidationSimulation(progress) {
 </script>
 
 <script>
-const searchInput = document.getElementById('agent_search');
-const resultsBox  = document.getElementById('agentResults');
+(function () {
+  "use strict";
 
-searchInput.addEventListener('input', function () {
+  const searchInput = document.getElementById("agent_search");
+  const resultsBox = document.getElementById("agentResults");
+  const wrap = document.getElementById("agentSearchWrap");
+  const firstEl = document.getElementById("agent_first_name");
+  const lastEl = document.getElementById("agent_last_name");
+  const emailEl = document.getElementById("agent_email");
+
+  if (!searchInput || !resultsBox || !firstEl || !lastEl || !emailEl) {
+    return;
+  }
+
+  let debounceTimer = null;
+  let controller = null;
+
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+  }
+
+  function hideResults() {
+    resultsBox.classList.add("d-none");
+    resultsBox.innerHTML = "";
+  }
+
+  function runSearch(query) {
+    if (controller) {
+      controller.abort();
+    }
+    controller = new AbortController();
+
+    fetch("searchAgents.php?q=" + encodeURIComponent(query), {
+      signal: controller.signal,
+      cache: "no-store"
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Agent search failed"))))
+      .then((data) => {
+        resultsBox.innerHTML = "";
+
+        if (!Array.isArray(data) || data.length === 0) {
+          hideResults();
+          return;
+        }
+
+        data.forEach((agent) => {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.className = "list-group-item list-group-item-action text-start py-2";
+          const name = agent.full_name || [agent.first_name, agent.last_name].filter(Boolean).join(" ").trim() || "—";
+          const role = (agent.role && String(agent.role).trim()) || "";
+          item.innerHTML =
+            "<strong>" +
+            escapeHtml(name) +
+            "</strong>" +
+            (role ? " <span class=\"badge text-bg-light border ms-1\">" + escapeHtml(role) + "</span>" : "") +
+            "<br><small class=\"text-muted\">" +
+            escapeHtml(agent.email || "") +
+            "</small>";
+
+          item.addEventListener("click", () => {
+            firstEl.value = agent.first_name || "";
+            lastEl.value = agent.last_name || "";
+            emailEl.value = agent.email || "";
+            searchInput.value = name;
+            hideResults();
+            firstEl.dispatchEvent(new Event("input", { bubbles: true }));
+          });
+
+          resultsBox.appendChild(item);
+        });
+
+        resultsBox.classList.remove("d-none");
+      })
+      .catch((err) => {
+        if (err && err.name === "AbortError") return;
+        hideResults();
+      });
+  }
+
+  searchInput.addEventListener("input", function () {
     const query = this.value.trim();
+    clearTimeout(debounceTimer);
 
     if (query.length < 2) {
-        resultsBox.classList.add('d-none');
-        resultsBox.innerHTML = '';
-        return;
+      if (controller) controller.abort();
+      hideResults();
+      return;
     }
 
-    fetch('searchAgents.php?q=' + encodeURIComponent(query))
-        .then(res => (res.ok ? res.json() : Promise.reject(new Error('Agent search failed'))))
-        .then(data => {
-            resultsBox.innerHTML = '';
+    debounceTimer = setTimeout(() => runSearch(query), 220);
+  });
 
-            if (!Array.isArray(data) || data.length === 0) {
-                resultsBox.classList.add('d-none');
-                return;
-            }
-
-            data.forEach(agent => {
-                const item = document.createElement('button');
-                item.type = 'button';
-                item.className = 'list-group-item list-group-item-action';
-                item.innerHTML = `
-                    <strong>${agent.full_name}</strong><br>
-                    <small>${agent.email}</small>
-                `;
-
-                item.onclick = () => {
-                    document.getElementById('agent_first_name').value = agent.first_name;
-                    document.getElementById('agent_last_name').value  = agent.last_name;
-                    document.getElementById('agent_email').value      = agent.email;
-                    searchInput.value = agent.full_name;
-                    resultsBox.classList.add('d-none');
-                };
-
-                resultsBox.appendChild(item);
-            });
-
-            resultsBox.classList.remove('d-none');
-        })
-        .catch(() => {
-            resultsBox.classList.add('d-none');
-        });
-});
-
-// Close dropdown when clicking outside
-document.addEventListener('click', e => {
-    if (!e.target.closest('#agent_search')) {
-        resultsBox.classList.add('d-none');
+  document.addEventListener("click", (e) => {
+    const root = wrap || searchInput;
+    if (!root.contains(e.target)) {
+      resultsBox.classList.add("d-none");
     }
-});
+  });
+})();
 </script>
 <script>
 (function () {

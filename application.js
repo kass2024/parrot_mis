@@ -744,6 +744,8 @@ function initApplicationFormSmartSelects() {
     const $el = $(this);
     const id = $el.attr("id");
     if (id === "regions" || id === "addUniversitySelect" || id === "searchLevel") return;
+    /* Native <select> only: Online vs Through an agent (live search is separate, #agent_search). */
+    if (id === "referral_source") return;
     if ($el.hasClass("country-select")) return;
     if ($el.closest("#studyChoices").length) return;
     if ($el.closest("template").length) return;

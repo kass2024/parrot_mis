@@ -16,7 +16,12 @@ $sql = "
     first_name,
     last_name,
     email,
-    full_name
+    username,
+    COALESCE(
+      NULLIF(TRIM(full_name), ''),
+      TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')))
+    ) AS full_name,
+    COALESCE(role, '') AS role
 FROM admins
 WHERE (
         full_name LIKE ?
@@ -24,8 +29,9 @@ WHERE (
      OR last_name LIKE ?
      OR email LIKE ?
      OR username LIKE ?
+     OR role LIKE ?
   )
-ORDER BY full_name ASC
+ORDER BY last_name ASC, first_name ASC, id ASC
 LIMIT 50
 
 ";
@@ -37,7 +43,7 @@ if (!$stmt) {
     exit;
 }
 
-$stmt->bind_param("sssss", $search, $search, $search, $search, $search);
+$stmt->bind_param("ssssss", $search, $search, $search, $search, $search, $search);
 $stmt->execute();
 
 $result = $stmt->get_result();
