@@ -1720,10 +1720,24 @@ body {
   border: 1px solid #dbeafe;
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.9);
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
 }
 
 .smart-autofill-progress-panel.active {
   display: flex;
+}
+
+/* High-attention “working” state (spinning / in progress) */
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(125deg, #38bdf8, #6366f1, #a855f7, #2563eb, #06b6d4) border-box;
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.12),
+    0 0 28px rgba(59, 130, 246, 0.35),
+    0 14px 36px rgba(79, 70, 229, 0.2);
+  animation: smartAutofillPanelPulse 2.4s ease-in-out infinite;
 }
 
 .smart-autofill-orb {
@@ -1733,12 +1747,48 @@ body {
   flex-shrink: 0;
 }
 
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb {
+  width: 104px;
+  height: 104px;
+}
+
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 3px solid rgba(59, 130, 246, 0.55);
+  animation: smartAutofillRipple 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 2px solid rgba(168, 85, 247, 0.35);
+  animation: smartAutofillRipple 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: 0.55s;
+  pointer-events: none;
+}
+
 .smart-autofill-orb-ring {
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, #2563eb, #60a5fa, #8b5cf6, #2563eb);
-  animation: smartAutofillSpin 1.2s linear infinite;
+  background: conic-gradient(
+    from 0deg,
+    #2563eb,
+    #22d3ee,
+    #a855f7,
+    #6366f1,
+    #3b82f6,
+    #2563eb
+  );
+  animation: smartAutofillSpin 0.85s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.65))
+    drop-shadow(0 0 18px rgba(139, 92, 246, 0.45));
 }
 
 .smart-autofill-orb-ring::after {
@@ -1753,16 +1803,26 @@ body {
   position: absolute;
   inset: 18px;
   border-radius: 50%;
-  background: #fff;
+  background: radial-gradient(circle at 30% 25%, #ffffff 0%, #eff6ff 55%, #e0f2fe 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   text-align: center;
   padding: 8px;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: 0.04em;
   color: #1e3a8a;
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 165, 250, 0.35),
+    inset 0 -2px 8px rgba(59, 130, 246, 0.08);
+}
+
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb-core {
+  inset: 20px;
+  font-size: 12px;
+  color: #172554;
+  animation: smartAutofillCorePulse 1.35s ease-in-out infinite;
 }
 
 .smart-autofill-progress-panel.is-success .smart-autofill-orb-ring,
@@ -1792,6 +1852,16 @@ body {
   display: block;
   font-size: 15px;
   color: #0f172a;
+}
+
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-progress-copy strong {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1e40af, #6366f1, #0e7490);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: smartAutofillTitleShimmer 2.5s ease-in-out infinite;
 }
 
 .smart-autofill-progress-copy small {
@@ -1863,6 +1933,82 @@ body {
 @keyframes smartAutofillSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+@keyframes smartAutofillPanelPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(99, 102, 241, 0.14),
+      0 0 24px rgba(59, 130, 246, 0.28),
+      0 14px 36px rgba(79, 70, 229, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(99, 102, 241, 0.22),
+      0 0 38px rgba(59, 130, 246, 0.48),
+      0 18px 44px rgba(79, 70, 229, 0.28);
+  }
+}
+
+@keyframes smartAutofillRipple {
+  0% {
+    transform: scale(0.88);
+    opacity: 0.85;
+  }
+  70% {
+    opacity: 0.15;
+  }
+  100% {
+    transform: scale(1.22);
+    opacity: 0;
+  }
+}
+
+@keyframes smartAutofillCorePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      inset 0 0 0 1px rgba(96, 165, 250, 0.35),
+      inset 0 -2px 8px rgba(59, 130, 246, 0.08);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow:
+      inset 0 0 0 1px rgba(59, 130, 246, 0.55),
+      inset 0 -2px 10px rgba(37, 99, 235, 0.12);
+  }
+}
+
+@keyframes smartAutofillTitleShimmer {
+  0%, 100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smart-autofill-orb-ring,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger),
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::before,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::after,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb-core,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-progress-copy strong {
+    animation: none !important;
+  }
+
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-progress-copy strong {
+    color: #0f172a;
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+  }
+
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::before,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::after {
+    opacity: 0;
+  }
 }
 
 .smart-autofill-results {
@@ -4559,6 +4705,9 @@ function startValidationSimulation(progress) {
       });
 
       if (!submitted) {
+        if (typeof submitForm.duplicateEmailConflict !== "undefined" && submitForm.duplicateEmailConflict) {
+          return;
+        }
         setStage("submit", "Final submission failed. The extracted application remains saved as a draft.", "warning", "The saved draft and attached documents are still available for later editing.");
         return;
       }

@@ -817,7 +817,6 @@ if (!$conn->begin_transaction()) {
 
 $sessionId = session_id();
 $appId     = null;
-$storedEmailNorm = '';
 
 /* ===============================
    1️⃣ PRIORITY: USE application_id
@@ -941,38 +940,18 @@ if (!$appId) {
    ✅ $appId IS NOW FINAL & SAFE
 =============================== */
 
-$stmt = $conn->prepare("
-    SELECT LOWER(TRIM(COALESCE(email, '')))
-    FROM student_applications
-    WHERE id = ?
-    LIMIT 1
-");
-if ($stmt) {
-    $stmt->bind_param("i", $appId);
-    $stmt->execute();
-    $stmt->bind_result($storedEmailNormResult);
-    if ($stmt->fetch() && is_string($storedEmailNormResult)) {
-        $storedEmailNorm = $storedEmailNormResult;
-    }
-    $stmt->close();
-}
-
 /* ===============================
    UNIQUE APPLICANT EMAIL (blocks duplicate profiles)
    Run once $appId is known; rollback before json_error.
+   Any save from step >= 1 (after study choices) or final submit must reject email owned by another row.
 =============================== */
 $applicantEmailNorm = isset($_POST['email']) ? strtolower(trim((string)$_POST['email'])) : '';
 $postStep = isset($_POST['step']) ? (int)$_POST['step'] : -1;
-$isPersonalInfoStep = ($postStep === 1);
-$emailChangedForCurrentApplication = (
-    $applicantEmailNorm !== ''
-    && filter_var($applicantEmailNorm, FILTER_VALIDATE_EMAIL)
-    && $applicantEmailNorm !== $storedEmailNorm
-);
+$enforceDuplicateEmailCheck = ($postStep >= 1 || $isFinal === 1);
 if (
-    $applicantEmailNorm !== ''
+    $enforceDuplicateEmailCheck
+    && $applicantEmailNorm !== ''
     && filter_var($applicantEmailNorm, FILTER_VALIDATE_EMAIL)
-    && ($isPersonalInfoStep || ($isFinal === 1 && $emailChangedForCurrentApplication))
     && pcvc_applicant_email_taken($conn, $applicantEmailNorm, $appId)
 ) {
     $conn->rollback();

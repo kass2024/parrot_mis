@@ -54,11 +54,20 @@ function getErrorMessage(err, fallback = "Something went wrong. Please try again
   return fallback;
 }
 
+function isDuplicateEmailMessage(text) {
+  if (text == null || typeof text !== "string") return false;
+  return /already\s+(registered|used).*(application|email)/i.test(text) || /email.*already/i.test(text);
+}
+
 function showApplicationSaveError(message, options = {}) {
   const msg = typeof message === "string" && message.trim() !== "" ? message.trim() : getErrorMessage(message);
+  const reloadOnClose = options.reloadOnClose === true;
   const modalEl = document.getElementById("applicationSaveErrorModal");
   if (!modalEl || typeof bootstrap === "undefined" || !bootstrap.Modal) {
     window.alert(msg);
+    if (reloadOnClose) {
+      window.location.reload();
+    }
     return;
   }
   const titleEl = modalEl.querySelector(".modal-title");
@@ -75,6 +84,16 @@ function showApplicationSaveError(message, options = {}) {
     },
     { once: true }
   );
+  if (reloadOnClose) {
+    modalEl.addEventListener(
+      "hidden.bs.modal",
+      function reloadForFreshApplication() {
+        modalEl.removeEventListener("hidden.bs.modal", reloadForFreshApplication);
+        window.location.reload();
+      },
+      { once: true }
+    );
+  }
   inst.show();
 }
 
@@ -176,17 +195,17 @@ function buildApplicationFormData(options = {}) {
 
 async function checkApplicantEmailAvailability(options = {}) {
   const emailInput = getApplicantEmailInput();
-  if (!emailInput) return true;
+  if (!emailInput) return { ok: true };
 
   const email = emailInput.value.trim().toLowerCase();
   if (email === "") {
     clearApplicantEmailError();
-    return true;
+    return { ok: true };
   }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    return true;
+    return { ok: true };
   }
 
   const applicationId =
@@ -209,7 +228,7 @@ async function checkApplicantEmailAvailability(options = {}) {
     if (options.notify) {
       showApplicationSaveError("Unable to verify the email address right now. Please try again.");
     }
-    return false;
+    return { ok: false, reason: "network" };
   }
 
   if (data?.exists) {
@@ -218,13 +237,16 @@ async function checkApplicantEmailAvailability(options = {}) {
       "This email is already registered with an existing application.";
     setApplicantEmailError(message);
     if (options.notify) {
-      showApplicationSaveError(message, { title: "Email Already Exists" });
+      showApplicationSaveError(message, {
+        title: "Email Already Exists",
+        reloadOnClose: true
+      });
     }
-    return false;
+    return { ok: false, reason: "duplicate" };
   }
 
   clearApplicantEmailError();
-  return true;
+  return { ok: true };
 }
 
 async function ensureDefaultSubmissionAgent() {
@@ -598,6 +620,9 @@ document.getElementById("nextBtn").addEventListener("click", async () => {
 
   } catch (err) {
     console.error("Next step failed:", err);
+    if (err && err.skipOuterSaveErrorModal) {
+      return;
+    }
     showApplicationSaveError(getErrorMessage(err, "Failed to save your data. Please try again."));
   } finally {
     isNavigating = false;
@@ -1487,10 +1512,12 @@ async function saveStep() {
     console.log("Current step:", step);
     console.log("Study choices array:", collectStudyChoices());
 
-    if (step === 1) {
-      const emailAvailable = await checkApplicantEmailAvailability({ notify: true });
-      if (!emailAvailable) {
-        throw new Error("This email is already registered with an existing application.");
+    if (step >= 1) {
+      const emailCheck = await checkApplicantEmailAvailability({ notify: true });
+      if (!emailCheck.ok) {
+        const e = new Error("This email is already registered with an existing application.");
+        e.skipOuterSaveErrorModal = true;
+        throw e;
       }
     }
 
@@ -1508,6 +1535,7 @@ async function saveStep() {
       method: "POST",
       body: fd
     });
+    const httpStatus = res.status;
 
     console.log("HTTP status:", res.status);
 
@@ -1533,13 +1561,24 @@ async function saveStep() {
     ============================== */
     if (!res.ok) {
       applyServerFieldErrors(data.fields);
-      throw new Error(data.message || data.debug || "Server error");
+      const msg = data.message || data.debug || "Server error";
+      const dup = httpStatus === 409 || isDuplicateEmailMessage(msg);
+      if (dup) {
+        showApplicationSaveError(msg, {
+          title: "Email Already Exists",
+          reloadOnClose: true
+        });
+        const e = new Error(msg);
+        e.skipOuterSaveErrorModal = true;
+        throw e;
+      }
+      throw new Error(msg);
     }
 
-   if (data.status !== "success") {
+    if (data.status !== "success") {
       applyServerFieldErrors(data.fields);
-  throw new Error(data.message || data.debug || "Save failed");
-}
+      throw new Error(data.message || data.debug || "Save failed");
+    }
 
 /* ✅ STORE APPLICATION ID */
 if (data.application_id) {
@@ -1561,9 +1600,18 @@ return true;
    FINAL SUBMIT (UNCHANGED)
 ===================================================== */
 async function submitForm(options = {}) {
+  submitForm.duplicateEmailConflict = false;
   try {
     if (options.autoAssignDefaultAgent) {
       await ensureDefaultSubmissionAgent();
+    }
+
+    const emailCheck = await checkApplicantEmailAvailability({ notify: true });
+    if (!emailCheck.ok) {
+      if (emailCheck.reason === "duplicate") {
+        submitForm.duplicateEmailConflict = true;
+      }
+      return false;
     }
 
     const fd = buildApplicationFormData({ includeStep: true, stepValue: step, final: true });
@@ -1571,6 +1619,7 @@ async function submitForm(options = {}) {
       fd.set("smart_identity_submit", "1");
     }
     const res = await fetch(API, { method: "POST", body: fd });
+    const httpStatus = res.status;
     const rawText = await res.text();
     let data;
     try {
@@ -1600,7 +1649,15 @@ async function submitForm(options = {}) {
       return true;
     } else {
       applyServerFieldErrors(data.fields);
-      showApplicationSaveError(getErrorMessage({ message: data.message || data.debug }, "Submission failed"));
+      const failMsg = data.message || data.debug || "";
+      const dup = httpStatus === 409 || isDuplicateEmailMessage(failMsg);
+      if (dup) {
+        submitForm.duplicateEmailConflict = true;
+      }
+      showApplicationSaveError(getErrorMessage({ message: failMsg }, "Submission failed"), {
+        title: dup ? "Email Already Exists" : undefined,
+        reloadOnClose: dup
+      });
       return false;
     }
   } catch (err) {
