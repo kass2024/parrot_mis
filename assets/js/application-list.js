@@ -126,6 +126,15 @@ const studyLine = [
         </div>
     ` : "";
 
+    const assignedDisplay = escapeHTML(String(meta.assigned_display || "Parrot Canada"));
+
+    const assignedLine = `
+        <div class="mt-1 text-[11px] leading-snug text-slate-600">
+            <span class="text-slate-500 font-medium">Assigned:</span>
+            <span>${assignedDisplay}</span>
+        </div>
+    `;
+
     li.innerHTML = `
         <div class="min-w-0">
             <div class="font-semibold text-sm whitespace-normal break-words">
@@ -146,6 +155,7 @@ const studyLine = [
 
 
             ${timeDisplay}
+            ${assignedLine}
         </div>
 
         ${Number(meta.is_read) === 0 ? unreadDot() : ""}

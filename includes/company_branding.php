@@ -17,3 +17,6 @@ const PCVC_COMPANY_WEBSITE = 'https://visaconsultantcanada.com';
 
 /** Default admissions contact (aligns with SMTP / admissions flow) */
 const PCVC_COMPANY_SUPPORT_EMAIL = 'admission@visaconsultantcanada.com';
+
+/** Shown when no staff member is assigned on an application (admin lists) */
+const PCVC_DEFAULT_ASSIGNED_PERSON_LABEL = 'Parrot Canada';

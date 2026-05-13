@@ -58,6 +58,17 @@ $turkeySentToPlatformSelect = pcvc_table_has_column($conn, 'turkey_applications'
     ? 'ta.sent_to_platform'
     : '0 AS sent_to_platform';
 
+$hasAssignedToCol = pcvc_table_has_column($conn, 'student_applications', 'assigned_to_admin_id');
+$assignStaffJoin = $hasAssignedToCol
+    ? 'LEFT JOIN admins assign_staff ON assign_staff.id = sa.assigned_to_admin_id'
+    : '';
+$assignStaffSelect = $hasAssignedToCol
+    ? ',
+        assign_staff.first_name AS assigned_staff_first,
+        assign_staff.last_name AS assigned_staff_last,
+        assign_staff.full_name AS assigned_staff_full_name'
+    : '';
+
 // 1. Fetch from student_applications with country name join
 $query1 = $conn->query("
     SELECT 
@@ -95,7 +106,9 @@ $query1 = $conn->query("
         sa.addn_doc,
         sa.deny,
         sa.app_start
+        {$assignStaffSelect}
     FROM student_applications sa
+    {$assignStaffJoin}
     LEFT JOIN countries c 
         ON sa.nationality = c.id 
         OR sa.nationality = c.name
@@ -1034,6 +1047,26 @@ if ($uq) {
                 <div class="application-time js-app-time"
                      data-dt="<?= htmlspecialchars($dtForNameTime, ENT_QUOTES, 'UTF-8') ?>"
                      style="display:none;font-size:12px;font-weight:600"></div>
+                <?php
+                  $assignDisplay = PCVC_DEFAULT_ASSIGNED_PERSON_LABEL;
+                  if (($s['source'] ?? '') === 'student_applications') {
+                    $nmParts = array_filter([
+                      trim((string)($s['assigned_staff_first'] ?? '')),
+                      trim((string)($s['assigned_staff_last'] ?? '')),
+                    ], static fn($x) => $x !== '');
+                    $nm = $nmParts ? implode(' ', $nmParts) : '';
+                    if ($nm === '') {
+                      $nm = trim((string)($s['assigned_staff_full_name'] ?? ''));
+                    }
+                    if ($nm !== '') {
+                      $assignDisplay = $nm;
+                    }
+                  }
+                ?>
+                <div class="assigned-person-subline" style="font-size:11px;color:#475569;margin-top:3px;line-height:1.35;text-align:center">
+                  <span style="color:#64748b;font-weight:600">Assigned:</span>
+                  <?= htmlspecialchars($assignDisplay, ENT_QUOTES, 'UTF-8') ?>
+                </div>
               </div>
             </td>
 

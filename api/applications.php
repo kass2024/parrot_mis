@@ -3,7 +3,8 @@ session_start();
 require_once __DIR__ . '/../helpers/db.php';
 require_once __DIR__ . '/../helpers/datetime_utc.php';
 require_once "../helpers/response.php";
-require_once "../helpers/role.php";
+require_once __DIR__ . '/../helpers/role.php';
+require_once __DIR__ . '/../includes/company_branding.php';
 
 $action = $_GET['action'] ?? '';
 
@@ -245,6 +246,24 @@ if (!empty($_GET['program_level_id'])) {
         OR sa.payment_proof IS NOT NULL
     )";
 
+    $hasAssignedCol = false;
+    $chkAssign = $conn->query("SHOW COLUMNS FROM student_applications LIKE 'assigned_to_admin_id'");
+    if ($chkAssign && $chkAssign->num_rows > 0) {
+        $hasAssignedCol = true;
+    }
+
+    $assignedSelectSql = $hasAssignedCol
+        ? "MAX(COALESCE(
+            NULLIF(TRIM(assign_ast.full_name), ''),
+            TRIM(CONCAT(COALESCE(assign_ast.first_name, ''), ' ', COALESCE(assign_ast.last_name, '')))
+        )) AS assigned_person_name"
+        : "NULL AS assigned_person_name";
+
+    $assignedJoinSql = $hasAssignedCol
+        ? "LEFT JOIN admins assign_ast ON assign_ast.id = sa.assigned_to_admin_id
+"
+        : "";
+
 $sql = "
     SELECT DISTINCT
         sa.id,
@@ -255,6 +274,7 @@ $sql = "
         sa.phone_number,
         sa.created_at,
         sa.is_read,
+        {$assignedSelectSql},
 
     -- aggregated sidebar info (ONE row per application)
 GROUP_CONCAT(DISTINCT u.name ORDER BY u.name SEPARATOR ' · ') AS universities,
@@ -264,6 +284,7 @@ GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ' · ') AS countries
 
     FROM student_applications sa
 
+    {$assignedJoinSql}
     LEFT JOIN application_study_choices ascx
         ON ascx.application_id = sa.id
 
@@ -296,6 +317,11 @@ $sql .= "
    $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
 $data = array_map(function ($r) {
+    $assignRaw = trim((string) ($r['assigned_person_name'] ?? ''));
+    $assignDisplay = $assignRaw !== ''
+        ? $assignRaw
+        : PCVC_DEFAULT_ASSIGNED_PERSON_LABEL;
+
     return [
         "id" => (int)$r["id"],
         "application_id" => $r["application_id"],
@@ -315,7 +341,8 @@ $data = array_map(function ($r) {
 
         "meta" => [
             "created_at" => pcvc_mysql_utc_to_iso8601_z($r["created_at"] ?? null) ?? ($r["created_at"] ?? null),
-            "is_read"    => (bool)$r["is_read"]
+            "is_read"    => (bool)$r["is_read"],
+            "assigned_display" => $assignDisplay,
         ]
     ];
 }, $rows);
