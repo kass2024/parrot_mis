@@ -92,6 +92,11 @@ $text = [
         'step1_remove' => 'Remove',
         'step1_agent_panel_title' => 'Referral & consultant',
         'step1_agent_panel_desc' => 'Tell us how you heard about us. If a member of our team referred you, select them here before uploading documents for Smart AI autofill.',
+        'step1_assign_title' => 'Assign to (staff)',
+        'step1_assign_desc' => 'Optional: pick a staff member. When you submit the application, they receive an email with the applicant summary and all uploaded documents attached.',
+        'staff_assign_placeholder' => 'Search staff by name or email',
+        'staff_assign_hint' => 'Suggested staff appear when you click here; type at least 2 letters to search everyone.',
+        'staff_assign_clear' => 'Clear',
         'doc_prepare_title' => 'Documents to Prepare Before Starting',
         'doc_prepare_desc' => 'To ensure a smooth application process, please have the following documents available. You will be asked to upload them during the application steps.',
         'doc_formats' => 'Supported formats: PDF, JPG, PNG',
@@ -298,6 +303,11 @@ $text = [
         'step1_remove' => 'Supprimer',
         'step1_agent_panel_title' => 'Parrainage et consultant',
         'step1_agent_panel_desc' => 'Indiquez comment vous nous avez connus. Si un membre de notre équipe vous a orienté, sélectionnez-le ici avant de télécharger des documents pour le remplissage automatique IA.',
+        'step1_assign_title' => 'Assigner à (personnel)',
+        'step1_assign_desc' => 'Facultatif : choisissez un membre du personnel. À la soumission, il recevra un courriel avec le résumé du candidat et toutes les pièces jointes.',
+        'staff_assign_placeholder' => 'Rechercher le personnel par nom ou e-mail',
+        'staff_assign_hint' => 'Des suggestions apparaissent au clic ; saisissez au moins 2 lettres pour chercher tout le personnel.',
+        'staff_assign_clear' => 'Effacer',
         'doc_prepare_title' => 'Documents à Préparer Avant de Commencer',
         'doc_prepare_desc' => 'Pour assurer un processus de demande fluide, veuillez avoir les documents suivants disponibles. Ils vous seront demandés lors des étapes de la demande.',
         'doc_formats' => 'Formats supportés : PDF, JPG, PNG',
@@ -2374,6 +2384,37 @@ class="list-group mt-2 d-none"></div>
             </div>
           </div>
           <div class="form-text mt-2"><?php echo $t['agent_help']; ?></div>
+        </div>
+
+        <div class="mt-4 pt-3 border-top border-secondary-subtle">
+          <label class="form-label fw-semibold" for="staff_assign_search"><?php echo htmlspecialchars($t['step1_assign_title'], ENT_QUOTES, 'UTF-8'); ?></label>
+          <p class="form-text small mb-2"><?php echo htmlspecialchars($t['step1_assign_desc'], ENT_QUOTES, 'UTF-8'); ?></p>
+          <p class="form-text small mb-2 text-body-secondary"><?php echo htmlspecialchars($t['staff_assign_hint'], ENT_QUOTES, 'UTF-8'); ?></p>
+          <input type="hidden" id="assigned_to_admin_id" value="">
+          <div id="staffAssignSearchWrap" class="position-relative">
+            <div class="input-group flex-wrap gap-1">
+              <input
+                type="text"
+                id="staff_assign_search"
+                class="form-control rounded-3 study-touch-control flex-grow-1"
+                placeholder="<?php echo htmlspecialchars($t['staff_assign_placeholder'], ENT_QUOTES, 'UTF-8'); ?>"
+                autocomplete="off"
+                spellcheck="false"
+                aria-autocomplete="list"
+                aria-controls="staff_assign_results"
+              >
+              <button type="button" class="btn btn-outline-secondary rounded-3" id="staff_assign_clear_btn">
+                <?php echo htmlspecialchars($t['staff_assign_clear'], ENT_QUOTES, 'UTF-8'); ?>
+              </button>
+            </div>
+            <div
+              id="staff_assign_results"
+              class="list-group position-absolute w-100 d-none shadow-sm border rounded-3 mt-1 overflow-auto"
+              style="z-index: 1040; max-height: 260px;"
+              role="listbox"
+              aria-label="<?php echo $lang === 'en' ? 'Staff search results' : 'Résultats personnel'; ?>"
+            ></div>
+          </div>
         </div>
       </section>
 
@@ -4659,6 +4700,163 @@ function startValidationSimulation(progress) {
 </script>
 <script>
 (function () {
+  "use strict";
+
+  const searchInput = document.getElementById("staff_assign_search");
+  const resultsBox = document.getElementById("staff_assign_results");
+  const wrap = document.getElementById("staffAssignSearchWrap");
+  const hiddenId = document.getElementById("assigned_to_admin_id");
+  const clearBtn = document.getElementById("staff_assign_clear_btn");
+
+  if (!searchInput || !resultsBox || !hiddenId) {
+    return;
+  }
+
+  let debounceTimer = null;
+  let controller = null;
+  let initialStaffCache = null;
+  let initialLoadPromise = null;
+
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+  }
+
+  function hideResults() {
+    resultsBox.classList.add("d-none");
+    resultsBox.innerHTML = "";
+  }
+
+  function clearSelection() {
+    hiddenId.value = "";
+    searchInput.value = "";
+    hideResults();
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", clearSelection);
+  }
+
+  function renderStaffList(rows) {
+    resultsBox.innerHTML = "";
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      hideResults();
+      return;
+    }
+
+    rows.forEach((row) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "list-group-item list-group-item-action text-start py-2";
+      const name =
+        row.full_name ||
+        [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
+        "—";
+      item.innerHTML =
+        "<strong>" +
+        escapeHtml(name) +
+        "</strong><br><small class=\"text-muted\">" +
+        escapeHtml(row.email || "") +
+        "</small>";
+
+      item.addEventListener("click", () => {
+        hiddenId.value = String(row.id || "");
+        searchInput.value = name;
+        hideResults();
+      });
+
+      resultsBox.appendChild(item);
+    });
+
+    resultsBox.classList.remove("d-none");
+  }
+
+  function loadInitialStaff() {
+    const q = searchInput.value.trim();
+    if (q.length >= 2) {
+      return;
+    }
+
+    if (initialStaffCache) {
+      renderStaffList(initialStaffCache);
+      return;
+    }
+
+    if (initialLoadPromise) {
+      initialLoadPromise.then((rows) => renderStaffList(rows));
+      return;
+    }
+
+    initialLoadPromise = fetch("searchStaff.php?initial=1", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Staff list failed"))))
+      .then((data) => {
+        initialStaffCache = Array.isArray(data) ? data : [];
+        initialLoadPromise = null;
+        return initialStaffCache;
+      })
+      .catch(() => {
+        initialLoadPromise = null;
+        return [];
+      });
+
+    initialLoadPromise.then((rows) => renderStaffList(rows));
+  }
+
+  function runSearch(query) {
+    if (controller) {
+      controller.abort();
+    }
+    controller = new AbortController();
+
+    fetch("searchStaff.php?q=" + encodeURIComponent(query), {
+      signal: controller.signal,
+      cache: "no-store"
+    })
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error("Staff search failed"))))
+      .then((data) => {
+        renderStaffList(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => {
+        if (err && err.name === "AbortError") return;
+        hideResults();
+      });
+  }
+
+  searchInput.addEventListener("focus", () => {
+    if (searchInput.value.trim().length < 2) {
+      loadInitialStaff();
+    }
+  });
+
+  searchInput.addEventListener("input", function () {
+    const query = this.value.trim();
+    clearTimeout(debounceTimer);
+
+    if (query.length < 2) {
+      if (controller) controller.abort();
+      if (query.length === 0) {
+        loadInitialStaff();
+      } else {
+        hideResults();
+      }
+      return;
+    }
+
+    debounceTimer = setTimeout(() => runSearch(query), 220);
+  });
+
+  document.addEventListener("click", (e) => {
+    const root = wrap || searchInput;
+    if (root && !root.contains(e.target)) {
+      resultsBox.classList.add("d-none");
+    }
+  });
+})();
+</script>
+<script>
+(function () {
     const firstName = document.getElementById('agent_first_name');
     const lastName  = document.getElementById('agent_last_name');
     const email     = document.getElementById('agent_email');
@@ -6333,6 +6531,15 @@ input.value = value ?? "";
 });
 
 });
+
+const _assignId = document.getElementById("assigned_to_admin_id");
+const _assignSearch = document.getElementById("staff_assign_search");
+if (_assignId && data.assigned_to_admin_id != null && String(data.assigned_to_admin_id).trim() !== "") {
+  _assignId.value = String(data.assigned_to_admin_id).trim();
+}
+if (_assignSearch && data.assigned_staff_name != null && String(data.assigned_staff_name).trim() !== "") {
+  _assignSearch.value = String(data.assigned_staff_name).trim();
+}
 
 if (typeof window.restoreUploadedDocuments === "function") {
 window.restoreUploadedDocuments(data);

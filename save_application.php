@@ -654,6 +654,14 @@ if ($action === 'study_search') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
  debug_log('POST REQUEST RECEIVED', $_POST);
     $isFinal = isset($_POST['final']) ? 1 : 0;
+
+    $assignedPosted = array_key_exists('assigned_to_admin_id', $_POST);
+    $assignedToAdminId = null;
+    if ($assignedPosted) {
+        $tmpAssign = (int)trim((string)($_POST['assigned_to_admin_id'] ?? ''));
+        $assignedToAdminId = $tmpAssign > 0 ? $tmpAssign : null;
+    }
+
     $smartIdentitySubmit = (
         $isFinal === 1
         && isset($_POST['smart_identity_submit'])
@@ -765,6 +773,27 @@ if ($isFinal === 1) {
 
     if (!empty($fieldErrors)) {
         json_error('Please correct the highlighted fields and try again.', $fieldErrors, 400);
+    }
+
+    if ($isFinal === 1 && $assignedToAdminId !== null) {
+        $stStaff = $conn->prepare(
+            "SELECT id FROM admins WHERE id = ? AND LOWER(TRIM(COALESCE(role,''))) = 'staff' LIMIT 1"
+        );
+        if (!$stStaff) {
+            json_error('Database error while validating staff assignment.', [], 500);
+        }
+        $stStaff->bind_param('i', $assignedToAdminId);
+        $stStaff->execute();
+        $stStaff->bind_result($staffRowId);
+        $okStaff = $stStaff->fetch();
+        $stStaff->close();
+        if (!$okStaff || (int)$staffRowId !== $assignedToAdminId) {
+            json_error(
+                'Please choose a valid staff member in Assign to, or clear the field.',
+                ['assigned_to_admin_id' => 'Selected user is not an active staff account.'],
+                400
+            );
+        }
     }
 
 
@@ -1090,6 +1119,14 @@ $allowed = [
             }
         }
 
+        if ($assignedPosted) {
+            if ($assignedToAdminId === null) {
+                $set[] = 'assigned_to_admin_id=NULL';
+            } else {
+                $set[] = 'assigned_to_admin_id=' . (int)$assignedToAdminId;
+            }
+        }
+
         if ($isFinal) {
             $set[] = "submitted=1";
             $set[] = "application_date=?";
@@ -1231,6 +1268,14 @@ if ($isFinal === 1) {
         debug_log('PORTAL ACCESS EMAIL SENT', ['email' => $studentEmail, 'appId' => $appId]);
     } catch (Throwable $e) {
         debug_log('PORTAL ACCESS EMAIL FAILED', $e->getMessage());
+    }
+
+    require_once __DIR__ . '/helpers/staff_assignment_notify.php';
+    try {
+        pcvc_notify_assigned_staff_application_submitted($conn, $appId);
+        debug_log('STAFF ASSIGNMENT NOTIFY SENT', ['application_id' => $appId]);
+    } catch (Throwable $e) {
+        debug_log('STAFF ASSIGNMENT NOTIFY ERROR', $e->getMessage());
     }
 }
 

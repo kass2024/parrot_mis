@@ -152,6 +152,11 @@ function buildApplicationFormData(options = {}) {
   const fd = new FormData(form);
   fd.set("study_choices", JSON.stringify(collectStudyChoices()));
 
+  const assignEl = document.getElementById("assigned_to_admin_id");
+  if (assignEl) {
+    fd.set("assigned_to_admin_id", String(assignEl.value || "").trim());
+  }
+
   if (options.includeStep !== false) {
     fd.set("step", String(options.stepValue ?? step));
   }

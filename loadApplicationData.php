@@ -52,9 +52,14 @@ if ($id <= 0) {
 ========================================= */
 
 $stmt = $conn->prepare("
-    SELECT *
-    FROM student_applications
-    WHERE id = ?
+    SELECT
+        sa.*,
+        TRIM(CONCAT(COALESCE(staff.first_name, ''), ' ', COALESCE(staff.last_name, ''))) AS assigned_staff_name
+    FROM student_applications sa
+    LEFT JOIN admins staff
+      ON staff.id = sa.assigned_to_admin_id
+     AND LOWER(TRIM(COALESCE(staff.role, ''))) = 'staff'
+    WHERE sa.id = ?
     LIMIT 1
 ");
 
