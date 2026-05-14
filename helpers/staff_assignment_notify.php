@@ -255,3 +255,106 @@ function pcvc_notify_assigned_staff_application_submitted(mysqli $conn, int $app
         );
     }
 }
+
+/**
+ * After a superadmin changes assignee on the Student Application Report, notify the new owner (staff).
+ * Email is always attempted when the staff has a valid address; WhatsApp is attempted if configured + phone on file.
+ */
+function pcvc_notify_assignee_reassigned_from_dashboard(
+    mysqli $conn,
+    int $applicationDbId,
+    int $newAssigneeStaffId,
+    string $actorCompanySenderLine
+): void {
+    if ($applicationDbId <= 0 || $newAssigneeStaffId <= 0) {
+        return;
+    }
+
+    require_once __DIR__ . '/task_assignment_data.php';
+
+    $st = $conn->prepare("SELECT id, first_name, last_name, full_name, email, phone_number FROM admins WHERE id = ? AND LOWER(TRIM(COALESCE(role, ''))) = 'staff' LIMIT 1");
+    if (!$st) {
+        return;
+    }
+    $st->bind_param('i', $newAssigneeStaffId);
+    $st->execute();
+    $staff = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$staff) {
+        return;
+    }
+
+    $st2 = $conn->prepare('SELECT id, application_id, first_name, last_name, email FROM student_applications WHERE id = ? LIMIT 1');
+    if (!$st2) {
+        return;
+    }
+    $st2->bind_param('i', $applicationDbId);
+    $st2->execute();
+    $app = $st2->get_result()->fetch_assoc();
+    $st2->close();
+    if (!$app) {
+        return;
+    }
+
+    $studentName = trim((string) ($app['first_name'] ?? '') . ' ' . (string) ($app['last_name'] ?? ''));
+    if ($studentName === '') {
+        $studentName = 'Applicant';
+    }
+    $appRef = trim((string) ($app['application_id'] ?? ''));
+    if ($appRef === '') {
+        $appRef = 'ID ' . (string) $applicationDbId;
+    }
+
+    $staffName = pcvc_task_monitor_staff_display_name($staff);
+    $toEmail = trim((string) ($staff['email'] ?? ''));
+    $subject = 'Application assigned to you — ' . $appRef . ' — ' . PCVC_COMPANY_DISPLAY_NAME;
+
+    $safeStudent = htmlspecialchars($studentName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $safeRef = htmlspecialchars($appRef, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $safeActor = htmlspecialchars($actorCompanySenderLine, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $safeCo = htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+    $body = '<div style="font-family:system-ui,sans-serif;line-height:1.55;color:#111;max-width:640px">'
+        . '<p>Hello <strong>' . htmlspecialchars($staffName, ENT_QUOTES | ENT_HTML5, 'UTF-8') . '</strong>,</p>'
+        . '<p>An application has been assigned to you in <strong>' . $safeCo . '</strong>.</p>'
+        . '<ul style="margin:12px 0;padding-left:20px">'
+        . '<li><strong>Application ref:</strong> ' . $safeRef . '</li>'
+        . '<li><strong>Student:</strong> ' . $safeStudent . '</li>'
+        . '<li><strong>Assigned by:</strong> ' . $safeActor . '</li>'
+        . '</ul>'
+        . '<p style="color:#64748b;font-size:13px">Open <strong>Student Application Report</strong> in the MIS to review this file.</p>'
+        . '</div>';
+
+    if ($toEmail !== '' && filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        try {
+            $mail = app_mailer();
+            $mail->clearAddresses();
+            $mail->addAddress($toEmail, $staffName);
+            $mail->Subject = $subject;
+            $mail->Body = $body;
+            $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $body));
+            $mail->send();
+        } catch (Throwable $e) {
+            @file_put_contents(
+                __DIR__ . '/../email_debug.log',
+                '[' . date('Y-m-d H:i:s') . '] REASSIGN NOTIFY EMAIL FAILED :: ' . $e->getMessage() . PHP_EOL,
+                FILE_APPEND | LOCK_EX
+            );
+        }
+    }
+
+    $phone = trim((string) ($staff['phone_number'] ?? ''));
+    if ($phone !== '' && is_file(__DIR__ . '/task_staff_whatsapp_notify.php')) {
+        require_once __DIR__ . '/task_staff_whatsapp_notify.php';
+        $msg = 'You were assigned application ' . $appRef . '. Student: ' . $studentName . '. Open Student Application Report in the MIS to review.';
+        try {
+            pcvc_task_monitor_send_staff_whatsapp($phone, $staffName, $actorCompanySenderLine, $msg, 'default');
+        } catch (Throwable $e) {
+            @file_put_contents(
+                __DIR__ . '/../email_debug.log',
+                '[' . date('Y-m-d H:i:s') . '] REASSIGN NOTIFY WA FAILED :: ' . $e->getMessage() . PHP_EOL,
+                FILE_APPEND | LOCK_EX
+            );
+        }
+    }
+}

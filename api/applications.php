@@ -155,6 +155,154 @@ if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 /**
  * ======================================================
+ * UPDATE ASSIGNED STAFF (superadmin only — Student Application Report)
+ * ======================================================
+ */
+if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_once __DIR__ . '/../helpers/staff_assignment_notify.php';
+    require_once __DIR__ . '/../helpers/task_assignment_data.php';
+
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $stmtRole = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+    if (!$stmtRole) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stmtRole->bind_param('i', $adminId);
+    $stmtRole->execute();
+    $roleRow = $stmtRole->get_result()->fetch_assoc();
+    $stmtRole->close();
+
+    if (!$roleRow) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $dbRole = (string) ($roleRow['role'] ?? '');
+    $sessionRole = (string) ($_SESSION['role'] ?? '');
+    if (
+        !pcvc_is_superadmin_role($dbRole)
+        && !pcvc_is_superadmin_role($sessionRole)
+    ) {
+        jsonResponse('Forbidden', false, 403);
+    }
+
+    $chkAssignCol = $conn->query("SHOW COLUMNS FROM student_applications LIKE 'assigned_to_admin_id'");
+    if (!$chkAssignCol || $chkAssignCol->num_rows < 1) {
+        jsonResponse('Assignment is not available in this database.', false, 400);
+    }
+
+    $applicationId = (int) ($_POST['application_id'] ?? 0);
+    if ($applicationId <= 0) {
+        jsonResponse('Invalid application id', false, 400);
+    }
+
+    $newAssigneeId = (int) ($_POST['assigned_to_admin_id'] ?? 0);
+
+    if ($newAssigneeId > 0) {
+        $stStaff = $conn->prepare(
+            "SELECT id FROM admins WHERE id = ? AND LOWER(TRIM(COALESCE(role,''))) = 'staff' LIMIT 1"
+        );
+        if (!$stStaff) {
+            jsonResponse('Server error', false, 500);
+        }
+        $stStaff->bind_param('i', $newAssigneeId);
+        $stStaff->execute();
+        $stStaff->bind_result($staffRowId);
+        $okStaff = $stStaff->fetch();
+        $stStaff->close();
+        if (!$okStaff || (int) $staffRowId !== $newAssigneeId) {
+            jsonResponse('Selected assignee is not a valid staff account.', false, 422);
+        }
+    }
+
+    $stCur = $conn->prepare('SELECT assigned_to_admin_id FROM student_applications WHERE id = ? LIMIT 1');
+    if (!$stCur) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stCur->bind_param('i', $applicationId);
+    $stCur->execute();
+    $curRow = $stCur->get_result()->fetch_assoc();
+    $stCur->close();
+    if (!$curRow) {
+        jsonResponse('Application not found', false, 404);
+    }
+
+    $oldAssign = isset($curRow['assigned_to_admin_id']) && $curRow['assigned_to_admin_id'] !== null && $curRow['assigned_to_admin_id'] !== ''
+        ? (int) $curRow['assigned_to_admin_id']
+        : 0;
+
+    if ($newAssigneeId !== $oldAssign) {
+        if ($newAssigneeId > 0) {
+            $upd = $conn->prepare('UPDATE student_applications SET assigned_to_admin_id = ? WHERE id = ? LIMIT 1');
+            if (!$upd) {
+                jsonResponse('Server error', false, 500);
+            }
+            $upd->bind_param('ii', $newAssigneeId, $applicationId);
+            $upd->execute();
+            $upd->close();
+        } else {
+            $upd = $conn->prepare('UPDATE student_applications SET assigned_to_admin_id = NULL WHERE id = ? LIMIT 1');
+            if (!$upd) {
+                jsonResponse('Server error', false, 500);
+            }
+            $upd->bind_param('i', $applicationId);
+            $upd->execute();
+            $upd->close();
+        }
+    }
+
+    $notified = false;
+    if ($newAssigneeId > 0 && $newAssigneeId !== $oldAssign) {
+        $senderAdminLine = 'Admin #' . $adminId;
+        $stFrom = $conn->prepare('SELECT id, first_name, last_name, full_name FROM admins WHERE id = ? LIMIT 1');
+        if ($stFrom) {
+            $stFrom->bind_param('i', $adminId);
+            $stFrom->execute();
+            $fromRow = $stFrom->get_result()->fetch_assoc();
+            $stFrom->close();
+            if ($fromRow) {
+                $senderAdminLine = pcvc_task_monitor_staff_display_name($fromRow) . ' #' . $adminId;
+            }
+        }
+        $companySenderLine = PCVC_COMPANY_DISPLAY_NAME . ' — ' . $senderAdminLine;
+        pcvc_notify_assignee_reassigned_from_dashboard($conn, $applicationId, $newAssigneeId, $companySenderLine);
+        $notified = true;
+    }
+
+    $assignDisplay = PCVC_DEFAULT_ASSIGNED_PERSON_LABEL;
+    if ($newAssigneeId > 0) {
+        $stNm = $conn->prepare(
+            "SELECT COALESCE(NULLIF(TRIM(full_name),''), TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,'')))) AS nm FROM admins WHERE id = ? LIMIT 1"
+        );
+        if ($stNm) {
+            $stNm->bind_param('i', $newAssigneeId);
+            $stNm->execute();
+            $nr = $stNm->get_result()->fetch_assoc();
+            $stNm->close();
+            $nm = trim((string) ($nr['nm'] ?? ''));
+            $assignDisplay = $nm !== '' ? $nm : ('Staff #' . $newAssigneeId);
+        }
+    }
+
+    jsonResponse([
+        'application_id' => $applicationId,
+        'assigned_to_admin_id' => $newAssigneeId,
+        'assigned_display' => $assignDisplay,
+        'notified' => $notified,
+    ]);
+    exit;
+}
+
+/**
+ * ======================================================
  * DELETE APPLICATION (superadmin only)
  * ======================================================
  */
@@ -802,6 +950,32 @@ foreach ($studyChoicesForJobs as $choice) {
             }
     }
 
+    $hasAssignColForMeta = false;
+    $chkAm = $conn->query("SHOW COLUMNS FROM student_applications LIKE 'assigned_to_admin_id'");
+    if ($chkAm && $chkAm->num_rows > 0) {
+        $hasAssignColForMeta = true;
+    }
+    $assignMetaId = 0;
+    $assignMetaDisplay = PCVC_DEFAULT_ASSIGNED_PERSON_LABEL;
+    if ($hasAssignColForMeta) {
+        $rawAm = $app['assigned_to_admin_id'] ?? null;
+        if ($rawAm !== null && (int) $rawAm > 0) {
+            $assignMetaId = (int) $rawAm;
+            $stNm = $conn->prepare(
+                "SELECT COALESCE(NULLIF(TRIM(full_name),''), TRIM(CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,'')))) AS nm FROM admins WHERE id = ? LIMIT 1"
+            );
+            if ($stNm) {
+                $stNm->bind_param('i', $assignMetaId);
+                $stNm->execute();
+                $nr = $stNm->get_result()->fetch_assoc();
+                $stNm->close();
+                $nm = trim((string) ($nr['nm'] ?? ''));
+                $assignMetaDisplay = $nm !== '' ? $nm : ('Staff #' . $assignMetaId);
+            }
+        }
+    }
+    $canEditAssignmentMeta = $hasAssignColForMeta && $canDeleteApplicationMeta;
+
     /**
      * ==================================================
      * FINAL RESPONSE (JS SAFE)
@@ -875,7 +1049,10 @@ foreach ($studyChoicesForJobs as $choice) {
     "updated_at" => pcvc_mysql_utc_to_iso8601_z($app['updated_at'] ?? null) ?? ($app['updated_at'] ?? null),
     "is_read"    => 1,
     "jobs_created" => $jobsCreated, // 👈 ADD THIS
-    "can_delete_application" => $canDeleteApplicationMeta
+    "can_delete_application" => $canDeleteApplicationMeta,
+    "can_edit_assignment" => $canEditAssignmentMeta,
+    "assigned_to_admin_id" => $assignMetaId,
+    "assigned_display" => $assignMetaDisplay,
 ]
 
     ]);

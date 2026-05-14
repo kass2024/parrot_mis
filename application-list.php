@@ -426,6 +426,7 @@ th {
                                 <p id="studentEmail" class="text-sm text-gray-500"></p>
                                 <p id="studentPhone" class="text-sm text-gray-500"></p>
                                 <p id="applicationMeta" class="text-xs text-gray-400 mt-1"></p>
+                                <p id="applicationAssignedDisplay" class="text-sm text-slate-600 mt-1.5"></p>
                             </div>
                             <div
                                 id="applicationActions"
@@ -445,6 +446,33 @@ th {
                             </div>
                         </div>
                     </section>
+
+                    <?php if ($canDeleteApplication): ?>
+                    <!-- Superadmin only: reassignment + notify (enforced in api/applications.php) -->
+                    <section id="assignmentEditorPanel" class="card p-6 hidden" aria-labelledby="assignmentEditorHeading">
+                        <div id="assignmentEditorHeading" class="section-title">Assign to staff</div>
+                        <p class="text-xs text-slate-600 mb-4 leading-snug">
+                            Only a superadmin can change who owns this file. After you save, the newly assigned staff member is notified by email and by WhatsApp when their number and Meta templates are configured.
+                        </p>
+                        <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                            <label class="block min-w-[220px] flex-1">
+                                <span class="text-xs font-medium text-slate-700">Assigned to</span>
+                                <select
+                                    id="assignStaffSelect"
+                                    class="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                ></select>
+                            </label>
+                            <button
+                                type="button"
+                                id="btnSaveAssignment"
+                                class="inline-flex w-full shrink-0 items-center justify-center rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                            >
+                                Save assignment
+                            </button>
+                        </div>
+                        <p id="assignmentSaveStatus" class="mt-2 min-h-[1.25rem] text-xs text-slate-600" role="status"></p>
+                    </section>
+                    <?php endif; ?>
 
                     <!-- PERSONAL INFO -->
                     <section class="card p-6">
@@ -663,6 +691,7 @@ th {
 <script>
 window.APP_ROOT = <?= json_encode($appRoot, JSON_UNESCAPED_SLASHES) ?>;
 window.CAN_DELETE_APPLICATION = <?= json_encode($canDeleteApplication) ?>;
+window.PCVC_DEFAULT_ASSIGNED_LABEL = <?= json_encode(PCVC_DEFAULT_ASSIGNED_PERSON_LABEL, JSON_UNESCAPED_UNICODE) ?>;
 </script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>

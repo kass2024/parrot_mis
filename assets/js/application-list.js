@@ -45,6 +45,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startTimeAgoTicker();
     loadFilterOptions().finally(() => loadStudents());
     wireStudyChoiceAddFormOnce();
+    document.getElementById("btnSaveAssignment")?.addEventListener("click", saveApplicationAssignment);
 });
 
 /**
@@ -79,6 +80,7 @@ async function loadFilterOptions() {
         if (!json?.success || !json?.data) return;
 
         const staff = Array.isArray(json.data.staff) ? json.data.staff : [];
+        window.pcvcStaffAssignOptions = staff;
         const statuses = Array.isArray(json.data.statuses) ? json.data.statuses : [];
 
         statuses.forEach((s) => {
@@ -555,6 +557,167 @@ function resolveCanDeleteApplication(data) {
     return false;
 }
 
+/** Superadmin + DB column — authoritative from view API meta */
+function resolveCanEditAssignment(data) {
+    return data?.meta?.can_edit_assignment === true;
+}
+
+/** Who owns the file — shown to every role; editing is superadmin-only */
+function renderAssignedReadOnly(meta) {
+    const el = document.getElementById("applicationAssignedDisplay");
+    if (!el) {
+        return;
+    }
+    const def =
+        typeof window.PCVC_DEFAULT_ASSIGNED_LABEL === "string" &&
+        window.PCVC_DEFAULT_ASSIGNED_LABEL.length
+            ? window.PCVC_DEFAULT_ASSIGNED_LABEL
+            : "Parrot Canada";
+    const raw = meta?.assigned_display;
+    const name =
+        raw != null && String(raw).trim() !== ""
+            ? String(raw).trim()
+            : def;
+    el.textContent = `Assigned: ${name}`;
+}
+
+function fillAssignStaffSelect() {
+    const sel = document.getElementById("assignStaffSelect");
+    if (!sel) {
+        return;
+    }
+    const defLabel =
+        typeof window.PCVC_DEFAULT_ASSIGNED_LABEL === "string" &&
+        window.PCVC_DEFAULT_ASSIGNED_LABEL.length
+            ? window.PCVC_DEFAULT_ASSIGNED_LABEL
+            : "Parrot Canada";
+    sel.innerHTML = "";
+    const o0 = document.createElement("option");
+    o0.value = "0";
+    o0.textContent = `Unassigned (${defLabel})`;
+    sel.appendChild(o0);
+    const staff = Array.isArray(window.pcvcStaffAssignOptions)
+        ? window.pcvcStaffAssignOptions
+        : [];
+    staff.forEach((row) => {
+        const id = row?.id;
+        if (!id) {
+            return;
+        }
+        const opt = document.createElement("option");
+        opt.value = String(id);
+        opt.textContent = row.label || `Staff #${id}`;
+        sel.appendChild(opt);
+    });
+}
+
+function renderAssignmentEditor(data) {
+    const panel = document.getElementById("assignmentEditorPanel");
+    if (!panel) {
+        return;
+    }
+    if (!resolveCanEditAssignment(data)) {
+        panel.classList.add("hidden");
+        return;
+    }
+    panel.classList.remove("hidden");
+    fillAssignStaffSelect();
+    const sel = document.getElementById("assignStaffSelect");
+    const meta = data?.meta || {};
+    const tid = Number(meta.assigned_to_admin_id || 0);
+    if (sel) {
+        sel.value = String(tid);
+        if (sel.value !== String(tid) && tid > 0) {
+            const opt = document.createElement("option");
+            opt.value = String(tid);
+            opt.textContent = meta.assigned_display || `Staff #${tid}`;
+            sel.appendChild(opt);
+            sel.value = String(tid);
+        }
+    }
+    const statusEl = document.getElementById("assignmentSaveStatus");
+    if (statusEl) {
+        statusEl.textContent = "";
+    }
+}
+
+async function saveApplicationAssignment() {
+    const panel = document.getElementById("assignmentEditorPanel");
+    if (!panel || panel.classList.contains("hidden")) {
+        return;
+    }
+    const appId = currentViewApplicationId;
+    if (!appId) {
+        alert("Select an application first.");
+        return;
+    }
+    const sel = document.getElementById("assignStaffSelect");
+    const statusEl = document.getElementById("assignmentSaveStatus");
+    const btn = document.getElementById("btnSaveAssignment");
+    const newVal = String(sel ? parseInt(sel.value, 10) || 0 : 0);
+
+    if (statusEl) {
+        statusEl.textContent = "";
+    }
+    const prevText = btn ? btn.textContent : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Saving…";
+    }
+
+    const fd = new FormData();
+    fd.append("application_id", String(appId));
+    fd.append("assigned_to_admin_id", newVal);
+
+    try {
+        const res = await fetch(
+            projectApiPath("api/applications.php?action=update_assignment"),
+            {
+                method: "POST",
+                body: fd,
+                credentials: "same-origin"
+            }
+        );
+        const raw = await res.text();
+        let json;
+        try {
+            json = JSON.parse(raw);
+        } catch (e) {
+            console.error("assignment save (non-JSON):", raw);
+            if (statusEl) {
+                statusEl.textContent = "Invalid server response.";
+            }
+            return;
+        }
+        if (!json?.success) {
+            if (statusEl) {
+                statusEl.textContent = json?.message || "Save failed.";
+            }
+            return;
+        }
+        const d = json.data || {};
+        const msg = d.notified
+            ? "Assignment saved. The new assignee was notified (email / WhatsApp where configured)."
+            : "Assignment saved.";
+        if (statusEl) {
+            statusEl.textContent = msg;
+        }
+        showToast(msg, null, "Assignment");
+        loadStudents();
+        loadApplication(appId, null);
+    } catch (err) {
+        console.error(err);
+        if (statusEl) {
+            statusEl.textContent = "Network error.";
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = prevText || "Save assignment";
+        }
+    }
+}
+
 /**
  * =====================================================
  * RENDER FULL APPLICATION
@@ -589,6 +752,8 @@ function renderApplication(data, applicationNumericId) {
             appMetaEl.textContent = "-";
         }
     }
+
+    renderAssignedReadOnly(meta);
 
     // PERSONAL
     setText("pGender", bio.gender);
@@ -628,6 +793,7 @@ function renderApplication(data, applicationNumericId) {
     renderAgent(agent);
 
     renderDeleteControls(applicationNumericId, canDelete);
+    renderAssignmentEditor(data);
 
     currentViewApplicationId = applicationNumericId;
     const scPanel = document.getElementById("studyChoiceAddPanel");
