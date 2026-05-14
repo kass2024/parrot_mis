@@ -711,6 +711,38 @@ function formatAssignStaffSelect2Selection(state) {
         .text(parts.join(" · "));
 }
 
+/** Keep assign dropdown stable while searching (Select2 otherwise reorders matches). */
+function sortAssignStaffSelect2Results(data) {
+    if (!Array.isArray(data)) {
+        return data;
+    }
+    return data.slice().sort((a, b) => {
+        const ida = a.id != null && a.id !== false ? String(a.id) : "";
+        const idb = b.id != null && b.id !== false ? String(b.id) : "";
+        if (ida === "0") {
+            return idb === "0" ? 0 : -1;
+        }
+        if (idb === "0") {
+            return 1;
+        }
+        const elA = a.element;
+        const elB = b.element;
+        const nameA =
+            (elA && typeof elA.getAttribute === "function"
+                ? (elA.getAttribute("data-pcvc-name") || "").trim()
+                : "") || String(a.text || "").trim();
+        const nameB =
+            (elB && typeof elB.getAttribute === "function"
+                ? (elB.getAttribute("data-pcvc-name") || "").trim()
+                : "") || String(b.text || "").trim();
+        const cmp = nameA.localeCompare(nameB, undefined, { sensitivity: "base" });
+        if (cmp !== 0) {
+            return cmp;
+        }
+        return (parseInt(ida, 10) || 0) - (parseInt(idb, 10) || 0);
+    });
+}
+
 function mountAssignStaffSelect2() {
     const el = document.getElementById("assignStaffSelect");
     if (!el || typeof window.jQuery !== "function" || !window.jQuery.fn.select2) {
@@ -727,7 +759,8 @@ function mountAssignStaffSelect2() {
         minimumResultsForSearch: 0,
         dropdownParent: $par && $par.length ? $par : window.jQuery(document.body),
         templateResult: formatAssignStaffSelect2Result,
-        templateSelection: formatAssignStaffSelect2Selection
+        templateSelection: formatAssignStaffSelect2Selection,
+        sorter: sortAssignStaffSelect2Results
     });
 }
 
