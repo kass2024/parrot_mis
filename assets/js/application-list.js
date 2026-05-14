@@ -234,8 +234,11 @@ function renderStudentItem(app) {
     const study = app.study || {};
 
     const li = document.createElement("li");
-    li.className =
-        "p-3 cursor-pointer hover:bg-slate-100 flex justify-between items-start gap-2";
+    li.className = "pcvc-sidebar-app-item p-3 cursor-pointer hover:bg-slate-100";
+
+    const firstName = String(bio.first_name ?? "").trim();
+    const lastName = String(bio.last_name ?? "").trim();
+    const fullName = [firstName, lastName].filter(Boolean).join(" ") || "—";
 
    
  // Build study line safely (AGGREGATED FIELDS)
@@ -248,13 +251,13 @@ const studyLine = [
 
     const timeData = formatFullTime(meta.created_at);
     const timeDisplay = timeData ? `
-        <div class="mt-1 text-[11px] font-medium application-time"
-             style="display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;color:${timeData.color}">
-            <span>${timeData.icon}</span>
+        <div class="pcvc-sidebar-time mt-1 text-[11px] font-medium application-time"
+             style="color:${timeData.color}">
+            <span class="shrink-0" aria-hidden="true">${timeData.icon}</span>
             <span data-time-ago="${escapeAttr(String(meta.created_at || ""))}">${timeAgo(meta.created_at)}</span>
-            <span class="text-gray-400">•</span>
+            <span class="text-gray-400 shrink-0">•</span>
             <span>${timeData.date}</span>
-            <span class="text-gray-400">•</span>
+            <span class="text-gray-400 shrink-0">•</span>
             <span>${timeData.time}</span>
         </div>
     ` : "";
@@ -277,14 +280,22 @@ const studyLine = [
         ? `<div class="mt-0.5 text-[11px] text-slate-700"><span class="text-slate-500 font-medium">Status:</span> ${escapeHTML(String(effLabel))}</div>`
         : "";
 
+    const unreadHtml =
+        Number(meta.is_read) === 0
+            ? `<span class="unread-dot w-2 h-2 shrink-0 bg-blue-600 rounded-full mt-1.5" aria-label="Unread"></span>`
+            : "";
+
     li.innerHTML = `
-        <div class="min-w-0">
-            <div class="font-semibold text-sm whitespace-normal break-words">
-                ${escapeHTML(bio.first_name || "")} ${escapeHTML(bio.last_name || "")}
+        <div class="min-w-0 flex flex-col gap-0.5">
+            <div class="flex items-start justify-between gap-2 w-full">
+                <div class="pcvc-sidebar-name font-semibold text-sm break-words min-w-0 flex-1 leading-snug">
+                    ${escapeHTML(fullName)}
+                </div>
+                ${unreadHtml}
             </div>
 
             <div class="text-xs text-gray-500 whitespace-normal break-words">
-                ${escapeHTML(bio.email || "")}
+                ${escapeHTML(String(bio.email ?? ""))}
             </div>
 
            ${
@@ -300,8 +311,6 @@ const studyLine = [
             ${assignedLine}
             ${statusLine}
         </div>
-
-        ${Number(meta.is_read) === 0 ? unreadDot() : ""}
     `;
 
     li.addEventListener("click", () => {
@@ -548,6 +557,15 @@ function renderAIDecision({ platforms, confidence }) {
 function loadApplication(id, listItem) {
     if (!id) return;
 
+    if (studentListEl) {
+        studentListEl.querySelectorAll("li.pcvc-sidebar-app-item").forEach((el) => {
+            el.classList.remove("active");
+        });
+    }
+    if (listItem) {
+        listItem.classList.add("active");
+    }
+
     fetch(projectApiPath(`api/applications.php?action=view&id=${id}`))
         .then(r => r.json())
         .then(res => {
@@ -557,6 +575,7 @@ function loadApplication(id, listItem) {
                 alert("Failed to load application details");
                 currentViewApplicationId = null;
                 document.getElementById("studyChoiceAddPanel")?.classList.add("hidden");
+                listItem?.classList.remove("active");
                 return;
             }
 
@@ -589,7 +608,10 @@ const dot = listItem?.querySelector(".unread-dot");
 if (dot) dot.remove();
 
         })
-        .catch(err => console.error("loadApplication error:", err));
+        .catch((err) => {
+            console.error("loadApplication error:", err);
+            listItem?.classList.remove("active");
+        });
 }
 
 /**
@@ -1247,11 +1269,6 @@ function setText(id, value) {
     if (el) el.innerText = value || "-";
 }
 
-function unreadDot() {
-    return `<span class="unread-dot w-2 h-2 bg-blue-600 rounded-full mt-1"></span>`;
-}
-
-function formatFullTime(dateStr) {
     if (!dateStr) return null;
 
     const t = normalizeDateInput(dateStr);
@@ -1347,10 +1364,16 @@ function timeAgo(dateStr) {
 let __timeAgoTimer = null;
 
 function refreshTimeAgoLabels() {
-    document.querySelectorAll("[data-time-ago]").forEach(el => {
-        const ts = el.getAttribute("data-time-ago");
-        if (ts) el.textContent = timeAgo(ts);
-    });
+    document
+        .querySelectorAll(
+            "#studentList [data-time-ago], #applicationMeta [data-time-ago], #trackingTimeline [data-time-ago]"
+        )
+        .forEach((el) => {
+            const ts = el.getAttribute("data-time-ago");
+            if (ts) {
+                el.textContent = timeAgo(ts);
+            }
+        });
 }
 
 function startTimeAgoTicker() {
@@ -1368,14 +1391,16 @@ function debounce(fn, delay) {
 }
 
 function escapeHTML(str) {
-    if (typeof str !== "string") return "";
-    return str.replace(/[&<>"']/g, m => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#039;"
-    }[m]));
+    const s = str == null ? "" : String(str);
+    return s.replace(/[&<>"']/g, (m) =>
+        ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;"
+        }[m])
+    );
 }
 
 function escapeAttr(str) {

@@ -166,6 +166,26 @@ aside p {
     );
 }
 
+/* Sidebar row: keep student name on its own line (never merge with time row) */
+#studentList li.pcvc-sidebar-app-item {
+    flex-direction: column;
+    align-items: stretch;
+}
+#studentList .pcvc-sidebar-name {
+    display: block;
+    width: 100%;
+}
+#studentList .pcvc-sidebar-time {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 6px;
+    row-gap: 2px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 /* =====================================================
    CARDS (CONTENT ZONE)
    ===================================================== */
