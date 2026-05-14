@@ -303,6 +303,196 @@ if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 /**
  * ======================================================
+ * SEARCH STUDENTS (superadmin — change recruiting agent from dashboard)
+ * ======================================================
+ */
+if ($action === 'search_students_for_agent' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+    $stmtRole = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+    if (!$stmtRole) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stmtRole->bind_param('i', $adminId);
+    $stmtRole->execute();
+    $roleRow = $stmtRole->get_result()->fetch_assoc();
+    $stmtRole->close();
+    if (!$roleRow) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+    $dbRole = (string) ($roleRow['role'] ?? '');
+    $sessionRole = (string) ($_SESSION['role'] ?? '');
+    if (
+        !pcvc_is_superadmin_role($dbRole)
+        && !pcvc_is_superadmin_role($sessionRole)
+    ) {
+        jsonResponse('Forbidden', false, 403);
+    }
+
+    $q = trim((string) ($_GET['q'] ?? ''));
+    if (strlen($q) < 2) {
+        jsonResponse(['students' => []]);
+        exit;
+    }
+
+    $like = '%' . $q . '%';
+    $likeAppId = '%' . $q . '%';
+    $sql = "
+        SELECT
+            sa.id,
+            sa.application_id,
+            sa.first_name,
+            sa.last_name,
+            sa.email,
+            sa.agent_email,
+            TRIM(CONCAT(COALESCE(sa.agent_first_name, ''), ' ', COALESCE(sa.agent_last_name, ''))) AS agent_name_display
+        FROM student_applications sa
+        WHERE
+            sa.first_name LIKE ?
+            OR sa.last_name LIKE ?
+            OR sa.email LIKE ?
+            OR TRIM(CONCAT(COALESCE(sa.first_name, ''), ' ', COALESCE(sa.last_name, ''))) LIKE ?
+            OR CAST(sa.application_id AS CHAR) LIKE ?
+        ORDER BY sa.id DESC
+        LIMIT 25
+    ";
+    $st = $conn->prepare($sql);
+    if (!$st) {
+        jsonResponse('Server error', false, 500);
+    }
+    $st->bind_param('sssss', $like, $like, $like, $like, $likeAppId);
+    $st->execute();
+    $res = $st->get_result();
+    $rows = [];
+    while ($r = $res->fetch_assoc()) {
+        $aid = trim((string) ($r['agent_name_display'] ?? ''));
+        $em = trim((string) ($r['agent_email'] ?? ''));
+        $curAgent = $aid !== '' ? $aid : ($em !== '' ? $em : '—');
+        $rows[] = [
+            'id' => (int) ($r['id'] ?? 0),
+            'application_id' => $r['application_id'] ?? '',
+            'first_name' => $r['first_name'] ?? '',
+            'last_name' => $r['last_name'] ?? '',
+            'email' => $r['email'] ?? '',
+            'current_agent_label' => $curAgent,
+            'current_agent_email' => $em,
+        ];
+    }
+    $st->close();
+
+    jsonResponse(['students' => $rows]);
+    exit;
+}
+
+/**
+ * ======================================================
+ * UPDATE RECRUITING AGENT (superadmin — student_applications.agent_*)
+ * ======================================================
+ */
+if ($action === 'update_recruiting_agent' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+    $stmtRole = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+    if (!$stmtRole) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stmtRole->bind_param('i', $adminId);
+    $stmtRole->execute();
+    $roleRow = $stmtRole->get_result()->fetch_assoc();
+    $stmtRole->close();
+    if (!$roleRow) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+    $dbRole = (string) ($roleRow['role'] ?? '');
+    $sessionRole = (string) ($_SESSION['role'] ?? '');
+    if (
+        !pcvc_is_superadmin_role($dbRole)
+        && !pcvc_is_superadmin_role($sessionRole)
+    ) {
+        jsonResponse('Forbidden', false, 403);
+    }
+
+    $applicationId = (int) ($_POST['application_id'] ?? 0);
+    $newEmailNorm = strtolower(trim((string) ($_POST['agent_email'] ?? '')));
+    if ($applicationId <= 0) {
+        jsonResponse('Invalid application id', false, 400);
+    }
+    if ($newEmailNorm === '' || !filter_var($newEmailNorm, FILTER_VALIDATE_EMAIL)) {
+        jsonResponse('Choose a valid agent email from the list.', false, 422);
+    }
+
+    $stA = $conn->prepare(
+        'SELECT email, first_name, last_name FROM admins WHERE LOWER(TRIM(email)) = ? LIMIT 1'
+    );
+    if (!$stA) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stA->bind_param('s', $newEmailNorm);
+    $stA->execute();
+    $agentAdmin = $stA->get_result()->fetch_assoc();
+    $stA->close();
+    if (!$agentAdmin) {
+        jsonResponse('That email is not a registered admin account. Pick an agent from the dropdown.', false, 422);
+    }
+
+    $agentEmailStore = trim((string) ($agentAdmin['email'] ?? ''));
+    if ($agentEmailStore === '') {
+        jsonResponse('Invalid agent record.', false, 422);
+    }
+    $fn = trim((string) ($agentAdmin['first_name'] ?? ''));
+    $ln = trim((string) ($agentAdmin['last_name'] ?? ''));
+
+    $stCheck = $conn->prepare('SELECT id FROM student_applications WHERE id = ? LIMIT 1');
+    if (!$stCheck) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stCheck->bind_param('i', $applicationId);
+    $stCheck->execute();
+    $exists = (bool) $stCheck->get_result()->fetch_assoc();
+    $stCheck->close();
+    if (!$exists) {
+        jsonResponse('Application not found.', false, 404);
+    }
+
+    $stU = $conn->prepare(
+        'UPDATE student_applications SET agent_email = ?, agent_first_name = ?, agent_last_name = ? WHERE id = ? LIMIT 1'
+    );
+    if (!$stU) {
+        jsonResponse('Server error', false, 500);
+    }
+    $stU->bind_param('sssi', $agentEmailStore, $fn, $ln, $applicationId);
+    if (!$stU->execute()) {
+        $err = $stU->error;
+        $stU->close();
+        jsonResponse('Update failed: ' . $err, false, 500);
+    }
+    $stU->close();
+
+    jsonResponse([
+        'application_id' => $applicationId,
+        'agent_email' => $agentEmailStore,
+        'agent_first_name' => $fn,
+        'agent_last_name' => $ln,
+    ]);
+    exit;
+}
+
+/**
+ * ======================================================
  * DELETE APPLICATION (superadmin only)
  * ======================================================
  */

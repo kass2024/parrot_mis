@@ -2341,6 +2341,13 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <?php if ($isSuperExecutive): ?>
           <div class="agent-tracking-card">
             <h3><i class="bi bi-person-lines-fill me-2"></i> Agent Tracking Summary</h3>
+            <div class="border rounded-3 p-3 mb-3 bg-white shadow-sm">
+              <div class="fw-semibold text-dark mb-1"><i class="bi bi-arrow-left-right me-1"></i> Change recruiting agent</div>
+              <p class="small text-muted mb-2 mb-0">Search an applicant by name or email, pick a new agent from the roster (admin accounts), then save. Superadmin only.</p>
+              <label for="pcvcStudentAgentSearch" class="form-label small mb-1 mt-2">Search student</label>
+              <input type="search" id="pcvcStudentAgentSearch" class="form-control form-control-sm" maxlength="140" placeholder="Type at least 2 characters…" autocomplete="off">
+              <div id="pcvcStudentAgentSearchResults" class="mt-2"></div>
+            </div>
             <canvas id="agentChart" height="120" style="margin-bottom:20px;"></canvas>
             <div style="overflow-x: auto;">
               <table id="agentTable" class="display compact stripe" style="width: 100%;">
@@ -2380,6 +2387,14 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                 </tbody>
               </table>
             </div>
+            <script>
+            window.pcvcAgentPickerOptions = <?= json_encode(array_values(array_map(static function ($row) {
+                return [
+                    'email' => (string) ($row['email'] ?? ''),
+                    'name' => (string) ($row['name'] ?? ''),
+                ];
+            }, $agentsCombined)), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+            </script>
           </div>
         <?php endif; ?>
       </div>
@@ -3318,6 +3333,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
+    function pcvcEscAttr(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
     window.pcvcOpenAgentStudentsModal = async function (agentEmail, agentName) {
       const modalEl = document.getElementById('agentStudentsModal');
       const titleEl = document.getElementById('agentStudentsModalLabel');
@@ -3426,6 +3445,120 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           language: { emptyTable: 'No allocation data for your account.' }
         });
       }
+
+      (function pcvcInitStudentAgentReassign() {
+        const searchEl = document.getElementById('pcvcStudentAgentSearch');
+        const resultsEl = document.getElementById('pcvcStudentAgentSearchResults');
+        if (!searchEl || !resultsEl) {
+          return;
+        }
+        let deb;
+        searchEl.addEventListener('input', function () {
+          clearTimeout(deb);
+          const q = searchEl.value.trim();
+          if (q.length < 2) {
+            resultsEl.innerHTML = '';
+            return;
+          }
+          deb = setTimeout(pcvcRunStudentAgentSearch, 380);
+        });
+
+        async function pcvcRunStudentAgentSearch() {
+          const q = searchEl.value.trim();
+          if (q.length < 2) {
+            return;
+          }
+          resultsEl.innerHTML = '<p class="text-muted small mb-0">Searching…</p>';
+          try {
+            const url = 'api/applications.php?action=search_students_for_agent&q=' + encodeURIComponent(q);
+            const res = await fetch(url, { credentials: 'same-origin' });
+            const json = await res.json();
+            if (!json || !json.success) {
+              resultsEl.innerHTML = '<p class="text-danger small">' + pcvcEscapeHtml((json && json.message) ? String(json.message) : 'Search failed.') + '</p>';
+              return;
+            }
+            const list = Array.isArray(json.data && json.data.students) ? json.data.students : [];
+            if (!list.length) {
+              resultsEl.innerHTML = '<p class="text-muted small mb-0">No matches.</p>';
+              return;
+            }
+            const agents = Array.isArray(window.pcvcAgentPickerOptions) ? window.pcvcAgentPickerOptions : [];
+            const rows = list.map(function (s) {
+              const id = Number(s.id || 0);
+              const nm = pcvcEscapeHtml(((s.first_name || '') + ' ' + (s.last_name || '')).trim() || '—');
+              const em = pcvcEscapeHtml(s.email || '');
+              const ref = pcvcEscapeHtml(String(s.application_id != null && s.application_id !== '' ? s.application_id : '—'));
+              const cur = pcvcEscapeHtml(s.current_agent_label || '—');
+              const curEm = String(s.current_agent_email || '').trim().toLowerCase();
+              let opts = '<option value="">Select new agent…</option>';
+              agents.forEach(function (a) {
+                if (!a || !a.email) {
+                  return;
+                }
+                const ae = String(a.email).trim();
+                const sel = curEm && ae.toLowerCase() === curEm ? ' selected' : '';
+                const lab = pcvcEscapeHtml(a.name || ae) + ' (' + pcvcEscapeHtml(ae) + ')';
+                opts += '<option value="' + pcvcEscAttr(ae) + '"' + sel + '>' + lab + '</option>';
+              });
+              return '<tr data-app-id="' + id + '"><td class="align-middle">' + nm + '</td><td class="align-middle">' + em + '</td><td class="align-middle">' + ref + '</td><td class="align-middle small">' + cur + '</td><td class="align-middle" style="min-width:220px"><select class="form-select form-select-sm js-pcvc-new-agent">' + opts + '</select></td><td class="align-middle"><button type="button" class="btn btn-sm btn-primary js-pcvc-save-agent">Save</button></td></tr>';
+            }).join('');
+            resultsEl.innerHTML = '<div class="table-responsive"><table class="table table-sm table-bordered align-middle mb-0"><thead class="table-light"><tr><th>Student</th><th>Email</th><th>App ref</th><th>Current agent</th><th>New agent</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+
+            resultsEl.querySelectorAll('.js-pcvc-save-agent').forEach(function (btn) {
+              btn.addEventListener('click', async function () {
+                const tr = btn.closest('tr');
+                if (!tr) {
+                  return;
+                }
+                const appId = parseInt(tr.getAttribute('data-app-id'), 10);
+                const sel = tr.querySelector('.js-pcvc-new-agent');
+                const val = sel ? String(sel.value || '').trim() : '';
+                if (!appId || !val) {
+                  alert('Choose a new agent from the list first.');
+                  return;
+                }
+                btn.disabled = true;
+                const prev = btn.textContent;
+                btn.textContent = 'Saving…';
+                try {
+                  const fd = new FormData();
+                  fd.append('application_id', String(appId));
+                  fd.append('agent_email', val);
+                  const res2 = await fetch('api/applications.php?action=update_recruiting_agent', {
+                    method: 'POST',
+                    body: fd,
+                    credentials: 'same-origin'
+                  });
+                  const raw = await res2.text();
+                  let j2;
+                  try {
+                    j2 = JSON.parse(raw);
+                  } catch (e2) {
+                    throw new Error('Invalid server response');
+                  }
+                  if (!j2 || !j2.success) {
+                    throw new Error((j2 && j2.message) ? String(j2.message) : 'Save failed');
+                  }
+                  btn.textContent = 'Saved';
+                  btn.classList.remove('btn-primary');
+                  btn.classList.add('btn-success');
+                  setTimeout(function () {
+                    pcvcRunStudentAgentSearch();
+                  }, 600);
+                } catch (err) {
+                  console.error(err);
+                  alert(err && err.message ? err.message : 'Save failed');
+                  btn.textContent = prev;
+                  btn.disabled = false;
+                }
+              });
+            });
+          } catch (e) {
+            console.error(e);
+            resultsEl.innerHTML = '<p class="text-danger small">Network error.</p>';
+          }
+        }
+      })();
     });
     
     // Initialize Agent Chart
