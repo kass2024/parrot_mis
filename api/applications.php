@@ -25,9 +25,11 @@ if ($action === 'filter_options') {
             COALESCE(
                 NULLIF(TRIM(full_name), ''),
                 TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')))
-            ) AS display_name
+            ) AS display_name,
+            email,
+            phone_number
         FROM admins
-        WHERE LOWER(TRIM(COALESCE(role, ''))) = 'staff'
+        WHERE " . pcvc_sql_assignable_application_owner_condition() . "
         ORDER BY last_name ASC, first_name ASC, id ASC
     ");
     if ($res) {
@@ -43,6 +45,8 @@ if ($action === 'filter_options') {
             $staff[] = [
                 'id' => $id,
                 'label' => $label !== '' ? $label : ('Staff #' . $id),
+                'email' => trim((string) ($row['email'] ?? '')),
+                'phone' => trim((string) ($row['phone_number'] ?? '')),
             ];
         }
     }
@@ -208,7 +212,7 @@ if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($newAssigneeId > 0) {
         $stStaff = $conn->prepare(
-            "SELECT id FROM admins WHERE id = ? AND LOWER(TRIM(COALESCE(role,''))) = 'staff' LIMIT 1"
+            'SELECT id FROM admins WHERE id = ? AND ' . pcvc_sql_assignable_application_owner_condition() . ' LIMIT 1'
         );
         if (!$stStaff) {
             jsonResponse('Server error', false, 500);
@@ -219,7 +223,7 @@ if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $okStaff = $stStaff->fetch();
         $stStaff->close();
         if (!$okStaff || (int) $staffRowId !== $newAssigneeId) {
-            jsonResponse('Selected assignee is not a valid staff account.', false, 422);
+            jsonResponse('Selected assignee is not a valid staff or superadmin account.', false, 422);
         }
     }
 

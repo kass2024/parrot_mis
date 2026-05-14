@@ -86,6 +86,46 @@ $appRoot = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')),
             background-color: rgb(79 70 229) !important;
         }
 
+        /* Assign-to dropdown (superadmin) — Select2 matches study-choice styling */
+        #assignmentEditorPanel .select2-container {
+            width: 100% !important;
+            max-width: 100%;
+        }
+        #assignmentEditorPanel .select2-container--bootstrap-5 .select2-selection {
+            min-height: 2.75rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 0.5rem;
+            border-color: rgb(226 232 240);
+            background: #fff;
+        }
+        #assignmentEditorPanel .select2-container--bootstrap-5.select2-container--focus .select2-selection,
+        #assignmentEditorPanel .select2-container--bootstrap-5.select2-container--open .select2-selection {
+            border-color: rgb(99 102 241);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+        #assignmentEditorPanel .select2-container--bootstrap-5 .select2-dropdown {
+            border-radius: 0.5rem;
+            border-color: rgb(226 232 240);
+            box-shadow: 0 10px 40px -10px rgba(15, 23, 42, 0.18);
+        }
+        #assignmentEditorPanel .select2-results__option--highlighted {
+            background-color: rgb(79 70 229) !important;
+        }
+        #assignmentEditorPanel .pcvc-assign-opt__name {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: rgb(15 23 42);
+        }
+        #assignmentEditorPanel .pcvc-assign-opt__meta {
+            font-size: 0.75rem;
+            color: rgb(100 116 139);
+            margin-top: 0.15rem;
+        }
+        #assignmentEditorPanel .pcvc-assign-sel-one {
+            font-size: 0.875rem;
+            color: rgb(15 23 42);
+        }
+
         /* Open Select2 list above sticky Application Journey column */
         .select2-container--open {
             z-index: 1100 !important;
@@ -474,7 +514,7 @@ th {
                     <section id="assignmentEditorPanel" class="card p-6 hidden" aria-labelledby="assignmentEditorHeading">
                         <div id="assignmentEditorHeading" class="section-title">Assign to staff</div>
                         <p class="text-xs text-slate-600 mb-4 leading-snug">
-                            Only a superadmin can change who owns this file. After you save, the newly assigned staff member is notified by email and by WhatsApp when their number and Meta templates are configured.
+                            Only a superadmin can change who owns this file. After you save, the newly assigned person (staff or superadmin) is notified by email and by WhatsApp when their number and Meta templates are configured.
                         </p>
                         <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                             <label class="block min-w-[220px] flex-1">

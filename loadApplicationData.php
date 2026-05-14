@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -58,7 +59,7 @@ $stmt = $conn->prepare("
     FROM student_applications sa
     LEFT JOIN admins staff
       ON staff.id = sa.assigned_to_admin_id
-     AND LOWER(TRIM(COALESCE(staff.role, ''))) = 'staff'
+     AND " . pcvc_sql_assignable_application_owner_condition() . "
     WHERE sa.id = ?
     LIMIT 1
 ");

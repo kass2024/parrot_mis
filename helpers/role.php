@@ -11,6 +11,16 @@ function pcvc_is_superadmin_role($role): bool
     return $s === 'superadmin';
 }
 
+/**
+ * SQL fragment: admins.role may own assigned student applications (staff or superadmin).
+ * Superadmin normalization matches pcvc_is_superadmin_role() (spaces / underscores / hyphens removed).
+ */
+function pcvc_sql_assignable_application_owner_condition(): string
+{
+    return '(LOWER(TRIM(COALESCE(role, \'\'))) = \'staff\''
+        . ' OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(role, \'\'))), \' \', \'\'), \'_\', \'\'), \'-\', \'\') = \'superadmin\')';
+}
+
 /** @deprecated Use pcvc_is_superadmin_role() */
 function xander_is_superadmin_role($role): bool
 {

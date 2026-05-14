@@ -267,7 +267,7 @@ function pcvc_tm_render_staff_card(array $s, int $idx, bool $canNotify, array $s
     $email = trim((string) ($s['email'] ?? ''));
     $phone = trim((string) ($s['phone'] ?? ''));
     $roleLabel = (string) ($s['role_label'] ?? 'Staff');
-    $search = mb_strtolower($name . ' ' . $email, 'UTF-8');
+    $search = mb_strtolower($name . ' ' . $email . ' ' . $roleLabel, 'UTF-8');
     $chips = pcvc_tm_top_chips_html($s, $statusOrder, $statusLabels, 5);
     $waNote = ($canNotify && $sid > 0 && $phone === '')
         ? '<p class="tm-wa-note">Add a phone number in Staff Management to enable WhatsApp.</p>' : '';
@@ -676,7 +676,7 @@ if ($tmMetaJson === false) {
             <div>
                 <p class="tm-kicker">Applications · Monitor</p>
                 <h1 class="tm-title">Task assignment monitoring</h1>
-                <p class="tm-sub">Live workload by assigned staff, pipeline mix, and quick actions</p>
+                <p class="tm-sub">Live workload by assigned staff and superadmins, pipeline mix, and quick actions</p>
             </div>
             <button type="button" class="tm-btn-refresh" id="btnRefresh" title="Reload latest data from the server">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
@@ -742,9 +742,9 @@ if ($tmMetaJson === false) {
             </div>
             <p id="emptyState" class="tm-empty<?= ($assignmentsOn && $staffList !== []) ? ' tm-hidden' : '' ?>">
                 <?php if ($assignmentsOn): ?>
-                    No staff accounts with role &ldquo;staff&rdquo; were found. Add staff in Staff Management, or assign applications from Applicants Management.
+                    No assignable accounts (staff or superadmin) were found. Add accounts in Staff Management, or assign applications from Applicants Management.
                 <?php else: ?>
-                    Enable assignments (see above) to list staff workload here.
+                    Enable assignments (see above) to list team workload here.
                 <?php endif; ?>
             </p>
         </div>
@@ -770,19 +770,9 @@ if ($tmMetaJson === false) {
         <div class="tm-modal-panel">
             <h3 style="margin:0;font-size:1.1rem;font-weight:800">Notify staff</h3>
             <p id="notifyTarget" style="margin:0.35rem 0 0;font-size:0.875rem;color:#475569"></p>
-            <label style="display:block;margin-top:1rem;font-size:0.75rem;font-weight:600;color:#475569">Subject (email only)</label>
-            <input type="text" id="notifySubject" style="width:100%;margin-top:0.35rem;padding:0.5rem 0.65rem;border-radius:0.65rem;border:1px solid #e2e8f0;font:inherit">
-            <label style="display:block;margin-top:0.65rem;font-size:0.75rem;font-weight:600;color:#475569">Supervisor comments</label>
-            <p style="margin:0.2rem 0 0;font-size:11px;color:#64748b;line-height:1.35">Staff name, <?= htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') ?>, and sender (from admins) are filled in automatically for WhatsApp. Type only what the staff should read below.</p>
-            <textarea id="notifyMessage" rows="5" placeholder="e.g. Please follow up on the applications in your queue today." style="width:100%;margin-top:0.35rem;padding:0.5rem 0.65rem;border-radius:0.65rem;border:1px solid #e2e8f0;font:inherit;resize:vertical"></textarea>
-            <div id="notifyWaTemplateWrap" style="display:none;margin-top:0.75rem">
-                <label for="notifyWaTemplate" style="display:block;font-size:0.75rem;font-weight:600;color:#475569">WhatsApp delivery</label>
-                <select id="notifyWaTemplate" style="width:100%;max-width:100%;margin-top:0.35rem;padding:0.5rem 0.65rem;border-radius:0.65rem;border:1px solid #e2e8f0;font:inherit">
-                    <option value="default">Standard notice</option>
-                    <option value="urgent">Urgent notice</option>
-                </select>
-                <p style="margin:0.35rem 0 0;font-size:11px;color:#64748b;line-height:1.35">Templates are read from <code style="font-size:10px">.env</code> (Meta-approved names). If no template name is set, a session text message is used (24-hour window rules apply).</p>
-            </div>
+            <label for="notifyMessage" style="display:block;margin-top:1rem;font-size:0.75rem;font-weight:600;color:#475569">Message</label>
+            <textarea id="notifyMessage" rows="5" placeholder="What should this staff member do?" style="width:100%;margin-top:0.35rem;padding:0.5rem 0.65rem;border-radius:0.65rem;border:1px solid #e2e8f0;font:inherit;resize:vertical"></textarea>
+            <p style="margin:0.35rem 0 0;font-size:11px;color:#64748b;line-height:1.35">Email subject is fixed to &ldquo;general followup&rdquo;. WhatsApp uses the <strong>urgent</strong> template from your <code style="font-size:10px">.env</code> (or session message if unset).</p>
             <div style="margin-top:0.85rem;display:flex;gap:1.25rem;font-size:0.875rem">
                 <label><input type="checkbox" id="chkEmail" checked> Email</label>
                 <label><input type="checkbox" id="chkWa" checked> WhatsApp</label>
@@ -979,14 +969,11 @@ if ($tmMetaJson === false) {
             notifyStaffId = sid;
             $('notifyTarget').textContent = (name || '') + (sid ? ' (#' + sid + ')' : '');
             $('notifyMessage').value = '';
-            $('notifySubject').value = '';
             $('chkEmail').checked = true;
             $('chkWa').checked = true;
-            if ($('notifyWaTemplate')) $('notifyWaTemplate').value = 'default';
             $('notifyStatus').textContent = '';
             $('notifyModal').classList.remove('tm-hidden');
             $('notifyModal').classList.add('is-flex');
-            syncWaTemplateVisibility();
         }
         function closeNotifyModal() {
             $('notifyModal').classList.add('tm-hidden');
@@ -995,14 +982,6 @@ if ($tmMetaJson === false) {
         document.querySelectorAll('[data-close-notify]').forEach(function (el) {
             el.addEventListener('click', closeNotifyModal);
         });
-
-        function syncWaTemplateVisibility() {
-            var wrap = $('notifyWaTemplateWrap');
-            if (!wrap || !$('chkWa')) return;
-            wrap.style.display = $('chkWa').checked ? 'block' : 'none';
-        }
-        if ($('chkWa')) $('chkWa').addEventListener('change', syncWaTemplateVisibility);
-        if ($('chkEmail')) $('chkEmail').addEventListener('change', syncWaTemplateVisibility);
 
         $('btnOpenNotify').addEventListener('click', function () {
             if (selectedStaff && selectedStaff.id) {
@@ -1018,12 +997,11 @@ if ($tmMetaJson === false) {
             var payload = {
                 staff_id: notifyStaffId,
                 message: msg,
-                subject: ($('notifySubject').value || '').trim(),
                 send_email: $('chkEmail').checked,
                 send_whatsapp: $('chkWa').checked
             };
             if ($('chkWa').checked) {
-                payload.whatsapp_template = ($('notifyWaTemplate') && $('notifyWaTemplate').value) || 'default';
+                payload.whatsapp_template = 'urgent';
             }
             var body = JSON.stringify(payload);
             fetchJson(apiUrl() + (apiUrl().indexOf('?') >= 0 ? '&' : '?') + 'action=notify', { method: 'POST', body: body })

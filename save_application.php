@@ -56,6 +56,7 @@ require_once __DIR__ . '/helpers/mailer.php';
 require_once __DIR__ . '/helpers/student_portal_accounts.php';
 require_once __DIR__ . '/helpers/study_choices.php';
 require_once __DIR__ . '/helpers/urls.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/includes/company_branding.php';
 function debug_log(string $label, $data = null): void
 {
@@ -777,7 +778,7 @@ if ($isFinal === 1) {
 
     if ($isFinal === 1 && $assignedToAdminId !== null) {
         $stStaff = $conn->prepare(
-            "SELECT id FROM admins WHERE id = ? AND LOWER(TRIM(COALESCE(role,''))) = 'staff' LIMIT 1"
+            'SELECT id FROM admins WHERE id = ? AND ' . pcvc_sql_assignable_application_owner_condition() . ' LIMIT 1'
         );
         if (!$stStaff) {
             json_error('Database error while validating staff assignment.', [], 500);
@@ -790,7 +791,7 @@ if ($isFinal === 1) {
         if (!$okStaff || (int)$staffRowId !== $assignedToAdminId) {
             json_error(
                 'Please choose a valid staff member in Assign to, or clear the field.',
-                ['assigned_to_admin_id' => 'Selected user is not an active staff account.'],
+                ['assigned_to_admin_id' => 'Selected user is not an active staff or superadmin account.'],
                 400
             );
         }

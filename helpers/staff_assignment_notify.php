@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/role.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 
 /**
@@ -257,7 +258,7 @@ function pcvc_notify_assigned_staff_application_submitted(mysqli $conn, int $app
 }
 
 /**
- * After a superadmin changes assignee on the Student Application Report, notify the new owner (staff).
+ * After a superadmin changes assignee on the Student Application Report, notify the new owner (staff or superadmin).
  * Email is always attempted when the staff has a valid address; WhatsApp is attempted if configured + phone on file.
  */
 function pcvc_notify_assignee_reassigned_from_dashboard(
@@ -272,7 +273,11 @@ function pcvc_notify_assignee_reassigned_from_dashboard(
 
     require_once __DIR__ . '/task_assignment_data.php';
 
-    $st = $conn->prepare("SELECT id, first_name, last_name, full_name, email, phone_number FROM admins WHERE id = ? AND LOWER(TRIM(COALESCE(role, ''))) = 'staff' LIMIT 1");
+    $st = $conn->prepare(
+        'SELECT id, first_name, last_name, full_name, email, phone_number FROM admins WHERE id = ? AND '
+        . pcvc_sql_assignable_application_owner_condition()
+        . ' LIMIT 1'
+    );
     if (!$st) {
         return;
     }

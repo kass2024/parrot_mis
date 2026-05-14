@@ -5,6 +5,7 @@ declare(strict_types=1);
  * Shared task-assignment summary (used by api/task_assignment_monitor.php and task-assignment-monitoring.php).
  */
 require_once __DIR__ . '/application_filters.php';
+require_once __DIR__ . '/role.php';
 
 function pcvc_task_monitor_has_assigned_column(mysqli $conn): bool
 {
@@ -54,6 +55,20 @@ function pcvc_task_monitor_staff_display_name(array $r): string
     $n = trim($fn . ' ' . $ln);
 
     return $n !== '' ? $n : ('Staff #' . (int) ($r['id'] ?? 0));
+}
+
+/** Short label for the role pill on task monitoring cards (CSS uppercases). */
+function pcvc_task_monitor_role_label(?string $dbRole): string
+{
+    if (pcvc_is_superadmin_role((string) $dbRole)) {
+        return 'Superadmin';
+    }
+    $lr = strtolower(trim((string) $dbRole));
+    if ($lr === 'staff') {
+        return 'Staff';
+    }
+
+    return $lr !== '' ? ucfirst($lr) : 'Assignee';
 }
 
 /**
@@ -162,11 +177,11 @@ function pcvc_task_monitor_build_summary_payload(mysqli $conn, ?int $restrictSta
     $mergedStaff = [];
     $staffDirSeen = [];
 
-    $dirSql = "
-        SELECT id, first_name, last_name, full_name, email, phone_number, COALESCE(role, '') AS role
+    $dirSql = '
+        SELECT id, first_name, last_name, full_name, email, phone_number, COALESCE(role, \'\') AS role
         FROM admins
-        WHERE LOWER(TRIM(COALESCE(role, ''))) = 'staff'
-    ";
+        WHERE ' . pcvc_sql_assignable_application_owner_condition() . '
+    ';
     if ($restrictStaffId !== null) {
         $dirSql .= ' AND id = ' . (int) $restrictStaffId;
     }
@@ -186,7 +201,7 @@ function pcvc_task_monitor_build_summary_payload(mysqli $conn, ?int $restrictSta
                 'name' => pcvc_task_monitor_staff_display_name($dr),
                 'email' => trim((string) ($dr['email'] ?? '')),
                 'phone' => trim((string) ($dr['phone_number'] ?? '')),
-                'role_label' => 'Staff',
+                'role_label' => pcvc_task_monitor_role_label((string) ($dr['role'] ?? '')),
                 'total' => $fromApps ? (int) $fromApps['total'] : 0,
                 'by_status' => $fromApps ? $fromApps['by_status'] : array_fill_keys($statusPriority, 0),
                 'no_status' => $fromApps ? (int) $fromApps['no_status'] : 0,
@@ -213,10 +228,7 @@ function pcvc_task_monitor_build_summary_payload(mysqli $conn, ?int $restrictSta
         $st2->close();
         $rl = 'Assignee';
         if ($xr) {
-            $lr = strtolower(trim((string) ($xr['role'] ?? '')));
-            if ($lr !== '') {
-                $rl = ucfirst($lr);
-            }
+            $rl = pcvc_task_monitor_role_label((string) ($xr['role'] ?? ''));
             $stats['name'] = pcvc_task_monitor_staff_display_name($xr);
             if (trim((string) ($xr['email'] ?? '')) !== '') {
                 $stats['email'] = trim((string) $xr['email']);

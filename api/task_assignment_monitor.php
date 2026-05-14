@@ -181,10 +181,12 @@ if ($action === 'notify' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         jsonResponse('Invalid staff_id', false, 400);
     }
 
-    $subject = trim((string) ($in['subject'] ?? ''));
     $message = trim((string) ($in['message'] ?? ''));
     $sendEmail = !empty($in['send_email']);
     $sendWa = !empty($in['send_whatsapp']);
+    /** Fixed product policy: email subject and WhatsApp template variant are not user-editable. */
+    $emailSubject = 'general followup';
+    $waVariant = 'urgent';
 
     if ($message === '') {
         jsonResponse('Message is required', false, 400);
@@ -209,9 +211,6 @@ if ($action === 'notify' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = trim((string) ($trow['email'] ?? ''));
     $phone = trim((string) ($trow['phone_number'] ?? ''));
 
-    $waVariantRaw = isset($in['whatsapp_template']) ? trim((string) $in['whatsapp_template']) : 'default';
-    $waVariant = strcasecmp($waVariantRaw, 'urgent') === 0 ? 'urgent' : 'default';
-
     $senderAdminLine = 'Admin #' . (int) $ctx['id'];
     $stFrom = $conn->prepare('SELECT id, first_name, last_name, full_name FROM admins WHERE id = ? LIMIT 1');
     if ($stFrom) {
@@ -235,9 +234,6 @@ if ($action === 'notify' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
             $errors[] = 'Staff has no valid email on file.';
         } else {
-            if ($subject === '') {
-                $subject = 'Task update — ' . PCVC_COMPANY_DISPLAY_NAME;
-            }
             $safeMsg = nl2br(htmlspecialchars($message, ENT_QUOTES, 'UTF-8'));
             $safeCo = htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8');
             $safeSender = htmlspecialchars($senderAdminLine, ENT_QUOTES, 'UTF-8');
@@ -252,7 +248,7 @@ if ($action === 'notify' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $mail = app_mailer();
                 $mail->clearAddresses();
                 $mail->addAddress($email, $name);
-                $mail->Subject = $subject;
+                $mail->Subject = $emailSubject;
                 $mail->Body = $html;
                 $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $html));
                 $emailOk = $mail->send();

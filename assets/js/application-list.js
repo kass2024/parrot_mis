@@ -655,11 +655,103 @@ function renderAssignedReadOnly(meta) {
     el.textContent = `Assigned: ${name}`;
 }
 
+function destroyAssignStaffSelect2IfAny(el) {
+    if (!el || typeof window.jQuery !== "function" || !window.jQuery.fn.select2) {
+        return;
+    }
+    const $el = window.jQuery(el);
+    if ($el.length && $el.hasClass("select2-hidden-accessible")) {
+        $el.select2("destroy");
+    }
+}
+
+function formatAssignStaffSelect2Result(state) {
+    if (!state.id) {
+        return state.text;
+    }
+    const opt = state.element;
+    if (!opt) {
+        return state.text;
+    }
+    const name =
+        (opt.getAttribute("data-pcvc-name") || "").trim() || state.text;
+    const em = (opt.getAttribute("data-email") || "").trim();
+    const ph = (opt.getAttribute("data-phone") || "").trim();
+    const $root = window.jQuery("<div/>").addClass("pcvc-assign-opt");
+    window.jQuery("<div/>").addClass("pcvc-assign-opt__name").text(name).appendTo($root);
+    const sub = [em, ph].filter(Boolean).join(" · ");
+    if (sub) {
+        window.jQuery("<div/>").addClass("pcvc-assign-opt__meta").text(sub).appendTo($root);
+    }
+    return $root;
+}
+
+function formatAssignStaffSelect2Selection(state) {
+    if (!state.id) {
+        return state.text;
+    }
+    const opt = state.element;
+    if (!opt) {
+        return state.text;
+    }
+    const name =
+        (opt.getAttribute("data-pcvc-name") || "").trim() || state.text;
+    const em = (opt.getAttribute("data-email") || "").trim();
+    const ph = (opt.getAttribute("data-phone") || "").trim();
+    const parts = [name];
+    if (em) {
+        parts.push(em);
+    }
+    if (ph) {
+        parts.push(ph);
+    }
+    return window
+        .jQuery("<span/>")
+        .addClass("pcvc-assign-sel-one")
+        .text(parts.join(" · "));
+}
+
+function mountAssignStaffSelect2() {
+    const el = document.getElementById("assignStaffSelect");
+    if (!el || typeof window.jQuery !== "function" || !window.jQuery.fn.select2) {
+        return;
+    }
+    const $el = window.jQuery(el);
+    if ($el.hasClass("select2-hidden-accessible")) {
+        $el.select2("destroy");
+    }
+    const $par = window.jQuery(document.body);
+    $el.select2({
+        theme: "bootstrap-5",
+        width: "100%",
+        minimumResultsForSearch: 0,
+        dropdownParent: $par && $par.length ? $par : window.jQuery(document.body),
+        templateResult: formatAssignStaffSelect2Result,
+        templateSelection: formatAssignStaffSelect2Selection
+    });
+}
+
+function getAssignStaffSelectValue(sel) {
+    if (!sel) {
+        return 0;
+    }
+    if (typeof window.jQuery === "function" && window.jQuery.fn.select2) {
+        const $el = window.jQuery(sel);
+        if ($el.hasClass("select2-hidden-accessible")) {
+            const v = $el.val();
+            const s = v === null || v === undefined ? "" : String(v);
+            return parseInt(s, 10) || 0;
+        }
+    }
+    return parseInt(sel.value, 10) || 0;
+}
+
 function fillAssignStaffSelect() {
     const sel = document.getElementById("assignStaffSelect");
     if (!sel) {
         return;
     }
+    destroyAssignStaffSelect2IfAny(sel);
     const defLabel =
         typeof window.PCVC_DEFAULT_ASSIGNED_LABEL === "string" &&
         window.PCVC_DEFAULT_ASSIGNED_LABEL.length
@@ -680,7 +772,20 @@ function fillAssignStaffSelect() {
         }
         const opt = document.createElement("option");
         opt.value = String(id);
-        opt.textContent = row.label || `Staff #${id}`;
+        const label = (row.label || `Staff #${id}`).trim();
+        const em = String(row.email || "").trim();
+        const ph = String(row.phone || "").trim();
+        opt.setAttribute("data-pcvc-name", label);
+        opt.setAttribute("data-email", em);
+        opt.setAttribute("data-phone", ph);
+        const bits = [label];
+        if (em) {
+            bits.push(em);
+        }
+        if (ph) {
+            bits.push(ph);
+        }
+        opt.textContent = bits.join(" · ");
         sel.appendChild(opt);
     });
 }
@@ -691,6 +796,9 @@ function renderAssignmentEditor(data) {
         return;
     }
     if (!resolveCanEditAssignment(data)) {
+        destroyAssignStaffSelect2IfAny(
+            document.getElementById("assignStaffSelect")
+        );
         panel.classList.add("hidden");
         return;
     }
@@ -704,9 +812,20 @@ function renderAssignmentEditor(data) {
         if (sel.value !== String(tid) && tid > 0) {
             const opt = document.createElement("option");
             opt.value = String(tid);
-            opt.textContent = meta.assigned_display || `Staff #${tid}`;
+            const disp = (meta.assigned_display || `Staff #${tid}`).trim();
+            opt.setAttribute("data-pcvc-name", disp);
+            opt.setAttribute("data-email", "");
+            opt.setAttribute("data-phone", "");
+            opt.textContent = disp;
             sel.appendChild(opt);
             sel.value = String(tid);
+        }
+    }
+    mountAssignStaffSelect2();
+    if (sel && typeof window.jQuery === "function" && window.jQuery.fn.select2) {
+        const $s = window.jQuery(sel);
+        if ($s.hasClass("select2-hidden-accessible")) {
+            $s.val(String(tid)).trigger("change");
         }
     }
     const statusEl = document.getElementById("assignmentSaveStatus");
@@ -728,7 +847,7 @@ async function saveApplicationAssignment() {
     const sel = document.getElementById("assignStaffSelect");
     const statusEl = document.getElementById("assignmentSaveStatus");
     const btn = document.getElementById("btnSaveAssignment");
-    const newVal = String(sel ? parseInt(sel.value, 10) || 0 : 0);
+    const newVal = String(getAssignStaffSelectValue(sel));
 
     if (statusEl) {
         statusEl.textContent = "";
