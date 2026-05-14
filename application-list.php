@@ -345,6 +345,8 @@ th {
 
         </div>
 
+        <div id="agentEmailFilterBanner" class="hidden mx-4 mb-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-900" role="status"></div>
+
         <div class="px-4 pb-3 space-y-2 border-b border-slate-200 bg-slate-50/80">
             <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Track by assignee &amp; status</div>
             <select id="filterAssignedStaff" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white">

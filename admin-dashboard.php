@@ -27,6 +27,7 @@ if ($displayName === '') {
 }
 
 require_once __DIR__ . '/includes/staff_dashboard_stats.php';
+require_once __DIR__ . '/helpers/application_filters.php';
 $isSuperExecutive = ($role === 'superadmin');
 $isCatholicPortal = (strtolower(trim((string) $role)) === 'catholic university of america');
 $showStaffPersonalDashboard = !$isSuperExecutive && !$isCatholicPortal;
@@ -2359,17 +2360,21 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                   <?php
                   $i = 1;
                   foreach ($agentsCombined as $agent) {
-                    echo "<tr>
-                      <td>{$i}</td>
-                      <td>" . htmlspecialchars($agent['name']) . "</td>
-                      <td>" . htmlspecialchars($agent['email']) . "</td>
-                      <td>{$agent['total']}</td>
-                      <td>{$agent['submitted']}</td>
-                      <td>{$agent['admit']}</td>
-                      <td>{$agent['visa_approved']}</td>
-                      <td>{$agent['enrolled']}</td>
-                    </tr>";
-                    $i++;
+                      $agentName = htmlspecialchars((string) ($agent['name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                      $agentEmailRaw = (string) ($agent['email'] ?? '');
+                      $agentEmailEsc = htmlspecialchars($agentEmailRaw, ENT_QUOTES, 'UTF-8');
+                      $agentNameAttr = htmlspecialchars((string) ($agent['name'] ?? ''), ENT_QUOTES, 'UTF-8');
+                      echo '<tr>
+                      <td>' . (int) $i . '</td>
+                      <td><button type="button" class="btn btn-link p-0 m-0 align-baseline text-start text-decoration-none fw-semibold js-agent-students" title="View students allocated to this agent" data-agent-email="' . $agentEmailEsc . '" data-agent-name="' . $agentNameAttr . '">' . $agentName . '</button></td>
+                      <td>' . $agentEmailEsc . '</td>
+                      <td>' . (int) ($agent['total'] ?? 0) . '</td>
+                      <td>' . (int) ($agent['submitted'] ?? 0) . '</td>
+                      <td>' . (int) ($agent['admit'] ?? 0) . '</td>
+                      <td>' . (int) ($agent['visa_approved'] ?? 0) . '</td>
+                      <td>' . (int) ($agent['enrolled'] ?? 0) . '</td>
+                    </tr>';
+                      $i++;
                   }
                   ?>
                 </tbody>
@@ -2426,6 +2431,42 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
           <button type="button" class="btn btn-primary" onclick="saveReminder()">Save Reminder</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agent allocated students (Agent Tracking Summary — superadmin) -->
+  <div class="modal fade" id="agentStudentsModal" tabindex="-1" aria-labelledby="agentStudentsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="agentStudentsModalLabel">Students by agent</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-2" id="agentStudentsModalSub"></p>
+          <div id="agentStudentsModalAlert" class="alert alert-danger d-none py-2" role="alert"></div>
+          <div class="table-responsive">
+            <table class="table table-sm table-striped table-bordered align-middle mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Student</th>
+                  <th>Email</th>
+                  <th>Study</th>
+                  <th>Status</th>
+                  <th>Applied</th>
+                </tr>
+              </thead>
+              <tbody id="agentStudentsModalBody">
+                <tr><td colspan="5" class="text-center text-muted py-4">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-primary" id="agentStudentsOpenReportBtn">Open full report</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         </div>
       </div>
     </div>
@@ -3271,6 +3312,85 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       }
     });
     
+    window.pcvcAppStatusLabels = <?= json_encode($isSuperExecutive ? pcvc_application_status_labels() : [], JSON_UNESCAPED_UNICODE) ?>;
+
+    function pcvcEscapeHtml(s) {
+      return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    window.pcvcOpenAgentStudentsModal = async function (agentEmail, agentName) {
+      const modalEl = document.getElementById('agentStudentsModal');
+      const titleEl = document.getElementById('agentStudentsModalLabel');
+      const subEl = document.getElementById('agentStudentsModalSub');
+      const bodyEl = document.getElementById('agentStudentsModalBody');
+      const alertEl = document.getElementById('agentStudentsModalAlert');
+      const reportBtn = document.getElementById('agentStudentsOpenReportBtn');
+      if (!modalEl || !titleEl || !subEl || !bodyEl) return;
+
+      const email = String(agentEmail || '').trim();
+      const name = String(agentName || '').trim();
+      if (!email) return;
+
+      alertEl.classList.add('d-none');
+      alertEl.textContent = '';
+      titleEl.textContent = 'Students — ' + (name || email);
+      subEl.textContent = 'Agent email: ' + email + ' · Parrot MIS applications (with documents on file).';
+      bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Loading…</td></tr>';
+
+      if (reportBtn) {
+        reportBtn.onclick = function () {
+          if (typeof window.loadInFrame === 'function') {
+            const u = 'application-list.php?agent_email=' + encodeURIComponent(email);
+            window.loadInFrame(u, 'Agent students — ' + (name || email));
+          }
+          const inst = bootstrap.Modal.getInstance(modalEl);
+          if (inst) inst.hide();
+        };
+      }
+
+      const modal = (typeof bootstrap.Modal.getOrCreateInstance === 'function')
+        ? bootstrap.Modal.getOrCreateInstance(modalEl)
+        : (bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl));
+      modal.show();
+
+      try {
+        const params = new URLSearchParams({ action: 'list', agent_email: email, q: '' });
+        const res = await fetch('api/applications.php?' + params.toString(), { credentials: 'same-origin' });
+        const json = await res.json();
+        if (!json || !json.success || !Array.isArray(json.data)) {
+          throw new Error(json && json.message ? String(json.message) : 'Could not load applications.');
+        }
+        const rows = json.data;
+        const labels = window.pcvcAppStatusLabels || {};
+        if (!rows.length) {
+          bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No applications found for this agent.</td></tr>';
+          return;
+        }
+        bodyEl.innerHTML = rows.map(function (app) {
+          const bio = app.bio || {};
+          const meta = app.meta || {};
+          const study = app.study || {};
+          const nm = pcvcEscapeHtml(((bio.first_name || '') + ' ' + (bio.last_name || '')).trim()) || '—';
+          const em = pcvcEscapeHtml(bio.email || '') || '—';
+          const studyLine = [study.universities, study.regions, study.countries].filter(Boolean).join(' · ');
+          const inst = pcvcEscapeHtml(studyLine) || '—';
+          const eff = meta.effective_status ? String(meta.effective_status) : '';
+          const st = eff ? pcvcEscapeHtml(labels[eff] || eff) : '—';
+          let applied = '—';
+          if (meta.created_at) {
+            const d = String(meta.created_at).slice(0, 10);
+            applied = pcvcEscapeHtml(d);
+          }
+          return '<tr><td>' + nm + '</td><td>' + em + '</td><td class="small">' + inst + '</td><td class="small">' + st + '</td><td class="text-nowrap small">' + applied + '</td></tr>';
+        }).join('');
+      } catch (err) {
+        console.error(err);
+        bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">—</td></tr>';
+        alertEl.textContent = err && err.message ? err.message : 'Failed to load.';
+        alertEl.classList.remove('d-none');
+      }
+    };
+
     // Initialize DataTable
     $(document).ready(function() {
       if ($('#agentTable').length) {
@@ -3285,6 +3405,15 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
               previous: "Prev",
               next: "Next"
             }
+          }
+        });
+        $('#agentTable').on('click', '.js-agent-students', function (e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const em = ($(this).attr('data-agent-email') || '').trim();
+          const nm = ($(this).attr('data-agent-name') || '').trim();
+          if (typeof window.pcvcOpenAgentStudentsModal === 'function') {
+            window.pcvcOpenAgentStudentsModal(em, nm);
           }
         });
       }

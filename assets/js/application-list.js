@@ -12,6 +12,47 @@ function projectApiPath(relativePath) {
     return base ? `${base}/${rel}` : rel;
 }
 
+/** Deep link from Agent Tracking Summary (admin-dashboard) */
+function getAgentEmailFromUrl() {
+    try {
+        const u = new URL(window.location.href);
+        const v = u.searchParams.get("agent_email");
+        return v && String(v).trim() ? String(v).trim() : "";
+    } catch (e) {
+        return "";
+    }
+}
+
+function stripAgentEmailFromPageUrl() {
+    try {
+        const u = new URL(window.location.href);
+        if (!u.searchParams.has("agent_email")) {
+            return;
+        }
+        u.searchParams.delete("agent_email");
+        const next = u.pathname + (u.search || "") + (u.hash || "");
+        window.history.replaceState({}, "", next);
+    } catch (e) {
+        /* ignore */
+    }
+}
+
+function updateAgentEmailFilterBanner() {
+    const el = document.getElementById("agentEmailFilterBanner");
+    if (!el) {
+        return;
+    }
+    const ae = getAgentEmailFromUrl();
+    if (!ae) {
+        el.classList.add("hidden");
+        el.textContent = "";
+        return;
+    }
+    el.classList.remove("hidden");
+    el.textContent =
+        "Showing only applications where the recruiting agent email is: " + ae;
+}
+
 /**
  * =====================================================
  * GLOBAL ELEMENTS
@@ -62,6 +103,9 @@ filterAppStatus?.addEventListener("change", () => loadStudents());
 filterClearBtn?.addEventListener("click", () => {
     if (filterAssignedStaff) filterAssignedStaff.value = "";
     if (filterAppStatus) filterAppStatus.value = "";
+    if (searchInput) searchInput.value = "";
+    stripAgentEmailFromPageUrl();
+    updateAgentEmailFilterBanner();
     loadStudents();
 });
 
@@ -142,6 +186,11 @@ function loadStudents() {
     if (filterAppStatus?.value) {
         params.set("application_status", filterAppStatus.value);
     }
+    const agentEmail = getAgentEmailFromUrl();
+    if (agentEmail) {
+        params.set("agent_email", agentEmail);
+    }
+    updateAgentEmailFilterBanner();
 
     studentListEl.innerHTML =
         `<li class="p-4 text-sm text-gray-400">Loading...</li>`;
@@ -154,8 +203,11 @@ function loadStudents() {
             studentListEl.innerHTML = "";
 
             if (!res?.success || !Array.isArray(res.data) || !res.data.length) {
+                const emptyMsg = agentEmail
+                    ? "No applications found for this agent."
+                    : "No applications found";
                 studentListEl.innerHTML =
-                    `<li class="p-4 text-sm text-gray-400">No applications found</li>`;
+                    `<li class="p-4 text-sm text-gray-400">${emptyMsg}</li>`;
                 return;
             }
 

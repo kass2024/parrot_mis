@@ -543,6 +543,16 @@ if ($hasAssignedCol && isset($_GET['assigned_to']) && (string)$_GET['assigned_to
     }
 }
 
+/** Filter by recruiting agent (student_applications.agent_email), case-insensitive */
+if (!empty($_GET['agent_email'])) {
+    $aeNorm = strtolower(trim((string) $_GET['agent_email']));
+    if ($aeNorm !== '') {
+        $where[] = 'LOWER(TRIM(COALESCE(sa.agent_email, \'\'))) = ?';
+        $types .= 's';
+        $values[] = $aeNorm;
+    }
+}
+
 $allowedEffStatuses = pcvc_application_status_priority();
 if (!empty($_GET['application_status']) && in_array((string)$_GET['application_status'], $allowedEffStatuses, true)) {
     $effExpr = pcvc_sql_case_effective_status('sa');
