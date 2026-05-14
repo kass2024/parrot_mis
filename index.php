@@ -2193,14 +2193,10 @@ include 'header.php';
     updateTestimonials();
   }, 5000);
 
-  // User ID Management
-  function getUserId() {
-    let id = sessionStorage.getItem('user_id');
-    if (!id) {
-      id = 'user-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
-      sessionStorage.setItem('user_id', id);
-    }
-    return id;
+  // Fresh application id for each "Apply Now" from the home cards (do not reuse one
+  // browser-wide id — that made every form look like the same draft / wrong id for credit transfer).
+  function newApplicationUserId() {
+    return 'user-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
   }
 
   // Apply Now Buttons
@@ -2213,18 +2209,21 @@ include 'header.php';
       
       const form = card.dataset.form;
       const type = card.dataset.card;
-      const userId = getUserId();
+      const userId = newApplicationUserId();
       
       let targetUrl = '';
       switch (type) {
         case 'scholarships':
           targetUrl = `loan-providers.php?form=${encodeURIComponent(form)}&id=${encodeURIComponent(userId)}`;
           break;
-  case 'visa':
-  // Don't pass any ID - let visa.php generate a new one
-  targetUrl = 'visa.php?country_id=&region_id=';
-  console.log('Opening visa form - will generate new ID');
-  break;
+        case 'credit':
+          // credit_transfer.php assigns its own credit-… id; ?id=user-… was wrong and triggered resume UX
+          targetUrl = form;
+          break;
+        case 'visa':
+          // Don't pass any ID - let visa.php generate a new one
+          targetUrl = 'visa.php?country_id=&region_id=';
+          break;
         case 'i20':
           targetUrl = `select-20.php?form=${encodeURIComponent(form)}&id=${encodeURIComponent(userId)}`;
           break;

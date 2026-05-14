@@ -82,8 +82,7 @@ try {
         <p><strong>Submitted on:</strong> " . htmlspecialchars($formData['created_at'] ?? '') . "</p>
     ";
 
-    // 📎 Attach all files
-    $basePath = __DIR__ . '/uploads/';
+    // Attach all files
     $attachments = [
         'acceptance_letter'     => 'Admission Letter',
         'bachelor_degree'       => 'Bachelor Degree',
@@ -98,12 +97,19 @@ try {
     ];
 
     foreach ($attachments as $field => $label) {
-        if (!empty($formData[$field])) {
-            $filePath = $basePath . basename($formData[$field]);
-            if (file_exists($filePath)) {
-                $mail->addAttachment($filePath, "{$label} - " . basename($formData[$field]));
-            }
+        if (empty($formData[$field])) {
+            continue;
         }
+        $rel = trim(str_replace('\\', '/', (string)$formData[$field]));
+        $rel = ltrim($rel, '/');
+        if ($rel === '') {
+            continue;
+        }
+        $filePath = __DIR__ . '/' . $rel;
+        if (!is_file($filePath)) {
+            continue;
+        }
+        $mail->addAttachment($filePath, "{$label} - " . basename($formData[$field]));
     }
 
     $mail->send();

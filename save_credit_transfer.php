@@ -1,11 +1,14 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/helpers/student_portal_accounts.php';
 header('Content-Type: application/json');
 
-// ✅ Keep/issue a stable user id - EXACTLY AS YOU HAD IT
-$userId = $_SESSION['credit_user_id'] ?? ('credit-' . time() . '-' . rand(1000, 9999));
+// Application id must come from the form (no orphan DB rows on page views).
+$userId = trim((string)($_POST['user_id'] ?? ''));
+if ($userId === '' || !preg_match('/^credit-[a-zA-Z0-9._-]+$/', $userId)) {
+  echo json_encode(['status' => 'error', 'message' => 'Invalid or missing application id. Please reload the page.']);
+  exit;
+}
 $_SESSION['credit_user_id'] = $userId;
 
 // Step guard
@@ -55,6 +58,26 @@ function uploadFile($inputName) {
   }
   
   return $targetRel;
+}
+
+/** Map French / alternate gender labels to form values (Male, Female, Other). */
+function normalize_credit_transfer_gender(string $g): string
+{
+  $g = trim($g);
+  if ($g === '') {
+    return '';
+  }
+  $lower = mb_strtolower($g, 'UTF-8');
+  if (in_array($lower, ['male', 'm', 'homme', 'masculin'], true)) {
+    return 'Male';
+  }
+  if (in_array($lower, ['female', 'f', 'femme', 'féminin', 'feminin'], true)) {
+    return 'Female';
+  }
+  if (in_array($lower, ['other', 'o', 'autre'], true)) {
+    return 'Other';
+  }
+  return $g;
 }
 
 /** ✅ STEP 1: Personal info - KEEPING YOUR EXACT LOGIC **/
@@ -111,14 +134,6 @@ if ($step === 'step1') {
   $stmt->bind_param($types, ...$values);
 
   if ($stmt->execute()) {
-    // Ensure student portal account exists for this email (default password).
-    try {
-      if (!empty($email)) {
-        pcvc_student_portal_ensure_account_for_email($conn, (string)$email);
-      }
-    } catch (Throwable $e) {
-      // do not block
-    }
     echo json_encode(['status' => 'success', 'user_id' => $userId]);
   } else {
     echo json_encode(['status' => 'error', 'message' => $stmt->error]);
@@ -131,6 +146,8 @@ if ($step === 'step1') {
 
 /** ✅ STEP 2: Academic + Files (+ University) - KEEPING YOUR EXACT LOGIC **/
 if ($step === 'step2') {
+  $partialSubmit = isset($_POST['partial_submit']) && (string)$_POST['partial_submit'] === '1';
+
   // ✅ YOUR EXACT DATA PROCESSING
   $educationLevels     = isset($_POST['edu_level']) ? json_encode($_POST['edu_level']) : '';
   $certificationLevels = isset($_POST['cert_level']) ? json_encode($_POST['cert_level']) : '';
@@ -147,6 +164,39 @@ if ($step === 'step2') {
   }
 
   $proposedProgram = $_POST['proposed_program'] ?? '';
+
+  $email = trim((string)($_POST['email'] ?? ''));
+  if ($partialSubmit && $email === '') {
+    $safeLocal = preg_replace('/[^a-zA-Z0-9._-]/', '-', $userId);
+    $email = 'draft+' . $safeLocal . '@credit-transfer-draft.local';
+  } elseif (!$partialSubmit && $email === '') {
+    echo json_encode(['status' => 'error', 'message' => 'Email is required.']);
+    $conn->close();
+    exit;
+  }
+
+  $checkStmt = $conn->prepare('SELECT COUNT(*) FROM credit_transfer_applications WHERE email = ? AND user_id != ?');
+  $checkStmt->bind_param('ss', $email, $userId);
+  $checkStmt->execute();
+  $checkStmt->bind_result($emailCount);
+  $checkStmt->fetch();
+  $checkStmt->close();
+  if ($emailCount > 0) {
+    echo json_encode(['status' => 'error', 'message' => '❌ This email has already been used to apply.']);
+    $conn->close();
+    exit;
+  }
+
+  if (!$partialSubmit) {
+    $requiredPersonal = ['first_name', 'last_name', 'birth_month', 'birth_day', 'birth_year', 'gender'];
+    foreach ($requiredPersonal as $rp) {
+      if (!isset($_POST[$rp]) || trim((string)$_POST[$rp]) === '') {
+        echo json_encode(['status' => 'error', 'message' => 'Please complete all required personal fields (name, birth date, gender).']);
+        $conn->close();
+        exit;
+      }
+    }
+  }
 
   // ✅ YOUR EXACT FILE UPLOADS
   $degree     = uploadFile('current_degree');
@@ -165,21 +215,23 @@ if ($step === 'step2') {
     $exStmt->close();
   }
 
-  $requiredFiles = ['current_degree', 'current_transcripts', 'passport_or_id', 'academic_cv', 'payment_proof'];
-  $fileErrors = [];
+  if (!$partialSubmit) {
+    $requiredFiles = ['current_degree', 'current_transcripts', 'passport_or_id', 'academic_cv', 'payment_proof'];
+    $fileErrors = [];
 
-  foreach ($requiredFiles as $fileField) {
-    $hasUpload = isset($_FILES[$fileField]) && $_FILES[$fileField]['error'] === UPLOAD_ERR_OK;
-    $hasExisting = $existingRow && !empty(trim((string)($existingRow[$fileField] ?? '')));
-    if (!$hasUpload && !$hasExisting) {
-      $fileErrors[] = ucfirst(str_replace('_', ' ', $fileField)) . ' is required';
+    foreach ($requiredFiles as $fileField) {
+      $hasUpload = isset($_FILES[$fileField]) && $_FILES[$fileField]['error'] === UPLOAD_ERR_OK;
+      $hasExisting = $existingRow && !empty(trim((string)($existingRow[$fileField] ?? '')));
+      if (!$hasUpload && !$hasExisting) {
+        $fileErrors[] = ucfirst(str_replace('_', ' ', $fileField)) . ' is required';
+      }
     }
-  }
 
-  if (!empty($fileErrors)) {
-    echo json_encode(['status' => 'error', 'message' => implode(', ', $fileErrors)]);
-    $conn->close();
-    exit;
+    if (!empty($fileErrors)) {
+      echo json_encode(['status' => 'error', 'message' => implode(', ', $fileErrors)]);
+      $conn->close();
+      exit;
+    }
   }
 
   // ✅ YOUR EXACT UPDATE FIELDS BUILDING
@@ -189,7 +241,24 @@ if ($step === 'step2') {
     'current_program'      => $currentProgram,
     'university'           => $university,
     'proposed_program'     => $proposedProgram,
-    'comments'             => $comments
+    'comments'             => $comments,
+    'first_name'           => trim((string)($_POST['first_name'] ?? '')),
+    'middle_name'          => trim((string)($_POST['middle_name'] ?? '')),
+    'last_name'            => trim((string)($_POST['last_name'] ?? '')),
+    'birth_month'          => trim((string)($_POST['birth_month'] ?? '')),
+    'birth_day'            => trim((string)($_POST['birth_day'] ?? '')),
+    'birth_year'           => trim((string)($_POST['birth_year'] ?? '')),
+    'gender'               => normalize_credit_transfer_gender((string)($_POST['gender'] ?? '')),
+    'street_address'       => trim((string)($_POST['street_address'] ?? '')),
+    'address_line_2'       => trim((string)($_POST['address_line_2'] ?? '')),
+    'city'                 => trim((string)($_POST['city'] ?? '')),
+    'state'                => trim((string)($_POST['state'] ?? '')),
+    'postal_code'          => trim((string)($_POST['postal_code'] ?? '')),
+    'email'                => $email,
+    'mobile_number'        => trim((string)($_POST['mobile_number'] ?? '')),
+    'phone_number'         => trim((string)($_POST['phone_number'] ?? '')),
+    'work_number'          => trim((string)($_POST['work_number'] ?? '')),
+    'company'              => trim((string)($_POST['company'] ?? '')),
   ];
 
   // ✅ YOUR EXACT FILE FIELD ADDITION LOGIC
@@ -199,21 +268,37 @@ if ($step === 'step2') {
   if ($cv)         $updateFields['academic_cv']         = $cv;
   if ($payment)    $updateFields['payment_proof']       = $payment;
 
-  // ✅ YOUR EXACT SQL BUILDING
-  $setClause = implode(', ', array_map(fn($k) => "$k = ?", array_keys($updateFields)));
-  $sql = "UPDATE credit_transfer_applications SET $setClause WHERE user_id = ?";
+  // ✅ INSERT new application row once, then UPDATE on later edits (no empty rows on page load)
+  $rowExists = is_array($existingRow);
 
-  $stmt = $conn->prepare($sql);
-  if (!$stmt) {
-    echo json_encode(['status' => 'error', 'message' => 'Prepare failed: ' . $conn->error]);
-    exit;
+  if (!$rowExists) {
+    $insertCols = array_merge(['user_id'], array_keys($updateFields));
+    $quotedCols = array_map(static function ($c) {
+      return '`' . str_replace('`', '', $c) . '`';
+    }, $insertCols);
+    $placeholders = implode(',', array_fill(0, count($insertCols), '?'));
+    $sql = 'INSERT INTO credit_transfer_applications (' . implode(',', $quotedCols) . ') VALUES (' . $placeholders . ')';
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+      echo json_encode(['status' => 'error', 'message' => 'Prepare failed: ' . $conn->error]);
+      exit;
+    }
+    $types = str_repeat('s', count($insertCols));
+    $values = array_merge([$userId], array_values($updateFields));
+    $stmt->bind_param($types, ...$values);
+  } else {
+    $setClause = implode(', ', array_map(fn($k) => "$k = ?", array_keys($updateFields)));
+    $sql = "UPDATE credit_transfer_applications SET $setClause WHERE user_id = ?";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+      echo json_encode(['status' => 'error', 'message' => 'Prepare failed: ' . $conn->error]);
+      exit;
+    }
+    $types  = str_repeat('s', count($updateFields)) . 's';
+    $values = array_values($updateFields);
+    $values[] = $userId;
+    $stmt->bind_param($types, ...$values);
   }
-
-  $types  = str_repeat('s', count($updateFields)) . 's';
-  $values = array_values($updateFields);
-  $values[] = $userId;
-
-  $stmt->bind_param($types, ...$values);
 
   if ($stmt->execute()) {
     // ✅ YOUR EXACT SUCCESS RESPONSE

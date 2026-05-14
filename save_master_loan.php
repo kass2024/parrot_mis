@@ -5,7 +5,6 @@ ini_set('display_errors', 0);
 ini_set('display_startup_errors', 0);
 error_reporting(0);
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/helpers/student_portal_accounts.php';
 $userId = $_POST['user_id'] ?? null;
 $step   = $_POST['step'] ?? null;
 
@@ -60,15 +59,20 @@ switch ($step) {
         break;
 
     case 'step4':
+        $fields = [];
         foreach ($allowedFileFields as $fileField) {
             if (!empty($_FILES[$fileField]['tmp_name']) && $_FILES[$fileField]['size'] > 0) {
                 $filePath = 'uploads/' . uniqid() . '_' . basename($_FILES[$fileField]['name']);
                 move_uploaded_file($_FILES[$fileField]['tmp_name'], $filePath);
                 $_POST[$fileField] = $filePath;
+                $fields[] = $fileField;
             }
         }
-        $certificationFields = ['applicant_first_name', 'applicant_last_name', 'date_signed'];
-        $fields = array_merge($allowedFileFields, $certificationFields);
+        foreach (['applicant_first_name', 'applicant_last_name', 'date_signed'] as $cf) {
+            if (array_key_exists($cf, $_POST) && trim((string)($_POST[$cf] ?? '')) !== '') {
+                $fields[] = $cf;
+            }
+        }
         break;
 
     default:
@@ -77,8 +81,14 @@ switch ($step) {
         exit;
 }
 
+if ($step === 'step4' && empty($fields)) {
+    ob_end_clean();
+    echo json_encode(['status' => 'error', 'message' => 'No documents or certification fields to save for this step.']);
+    exit;
+}
+
 // Add loan provider ID if it exists
-if (isset($_POST['loan_provider_id'])) {
+if (isset($_POST['loan_provider_id']) && trim((string)$_POST['loan_provider_id']) !== '') {
     $fields[] = 'loan_provider_id';
 }
 
@@ -111,14 +121,6 @@ if ($stmt === false) {
 $stmt->bind_param($typesForInsert . $types, ...$paramsForInsert, ...$params);
 
 if ($stmt->execute()) {
-    // Ensure student portal account exists for this email (default password).
-    try {
-        if (!empty($_POST['email'])) {
-            pcvc_student_portal_ensure_account_for_email($conn, (string)$_POST['email']);
-        }
-    } catch (Throwable $e) {
-        // do not block
-    }
     ob_end_clean();
     echo json_encode([
         'status' => 'success',

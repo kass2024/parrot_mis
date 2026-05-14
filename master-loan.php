@@ -123,6 +123,33 @@ $loan_form_translations = [
         // Provider Text
         'applying_with' => 'Applying with:',
         'education_loan' => 'Education Loan Application',
+
+        'smart_autofill_title' => 'Smart AI autofill',
+        'smart_autofill_desc' => 'Upload passport, CV, transcripts, degree, or other documents. AI extracts your details and routes each file into the matching upload fields on this form.',
+        'smart_autofill_existing_note' => 'Files are saved on your application record the same way as a manual upload.',
+        'smart_autofill_button' => 'Add documents',
+        'smart_autofill_start' => 'Start analysis',
+        'smart_autofill_gate' => 'Save step 1 (personal information) first, then you can run document analysis.',
+        'smart_autofill_formats' => 'Supported: PDF, DOCX, JPG, JPEG, PNG, WEBP.',
+        'smart_autofill_hint' => 'Tip: upload passport, CV, and academic documents together for best results.',
+        'smart_autofill_queue_empty' => 'No documents selected yet.',
+        'smart_autofill_processing' => 'Analyzing documents…',
+        'smart_autofill_ready' => 'Ready to analyze.',
+        'smart_autofill_error' => 'Analysis failed.',
+        'smart_autofill_complete' => 'Analysis finished. Your details and routed documents were applied. Review the form and continue when you are ready—nothing was submitted automatically.',
+        'smart_autofill_uploading' => 'Saving recognized documents into your upload fields…',
+        'smart_autofill_stage_queue' => 'Documents queued',
+        'smart_autofill_stage_batch' => 'AI document analysis',
+        'smart_autofill_stage_route' => 'Attaching files to fields',
+        'smart_autofill_stage_done' => 'Autofill complete',
+        'smart_autofill_detail_batch' => 'Reading each file and extracting your details with AI.',
+        'smart_autofill_detail_route' => 'Uploading classified files into the matching attachment fields.',
+        'smart_autofill_detail_done' => 'Review the form and continue when you are ready.',
+        'smart_autofill_results_title' => 'Recognized documents',
+        'smart_autofill_warnings_title' => 'Warnings',
+        'smart_autofill_queue_title' => 'Queued documents',
+        'smart_autofill_queue_ready' => 'Files are queued. Click Start analysis when you are ready.',
+        'smart_autofill_queue_count' => 'file(s) queued',
     ],
     
     'fr' => [
@@ -239,74 +266,149 @@ $loan_form_translations = [
         // Provider Text
         'applying_with' => 'Demande pour :',
         'education_loan' => 'Demande de Prêt Éducation',
+
+        'smart_autofill_title' => 'Remplissage automatique IA',
+        'smart_autofill_desc' => 'Téléversez passeport, CV, relevés ou autres documents. L\'IA extrait vos informations et classe chaque fichier dans le bon champ.',
+        'smart_autofill_existing_note' => 'Les fichiers sont enregistrés sur votre demande comme un envoi manuel.',
+        'smart_autofill_button' => 'Ajouter des documents',
+        'smart_autofill_start' => 'Lancer l\'analyse',
+        'smart_autofill_gate' => 'Enregistrez d\'abord l\'étape 1 (informations personnelles).',
+        'smart_autofill_formats' => 'Formats : PDF, DOCX, JPG, JPEG, PNG, WEBP.',
+        'smart_autofill_hint' => 'Astuce : téléversez passeport, CV et documents académiques ensemble.',
+        'smart_autofill_queue_empty' => 'Aucun document sélectionné.',
+        'smart_autofill_processing' => 'Analyse des documents…',
+        'smart_autofill_ready' => 'Prêt à analyser.',
+        'smart_autofill_error' => 'L\'analyse a échoué.',
+        'smart_autofill_complete' => 'Analyse terminée. Vos informations et documents ont été appliqués. Vérifiez le formulaire puis continuez—aucune soumission automatique.',
+        'smart_autofill_uploading' => 'Enregistrement des documents reconnus dans vos champs de téléversement…',
+        'smart_autofill_stage_queue' => 'Documents en file',
+        'smart_autofill_stage_batch' => 'Analyse IA des documents',
+        'smart_autofill_stage_route' => 'Rattachement des fichiers',
+        'smart_autofill_stage_done' => 'Remplissage terminé',
+        'smart_autofill_detail_batch' => 'Lecture de chaque fichier et extraction de vos informations par l’IA.',
+        'smart_autofill_detail_route' => 'Téléversement des fichiers classés vers les champs correspondants.',
+        'smart_autofill_detail_done' => 'Vérifiez le formulaire puis continuez quand vous êtes prêt.',
+        'smart_autofill_results_title' => 'Documents reconnus',
+        'smart_autofill_warnings_title' => 'Avertissements',
+        'smart_autofill_queue_title' => 'Documents en file',
+        'smart_autofill_queue_ready' => 'Les fichiers sont en file. Cliquez sur Lancer l’analyse quand vous êtes prêt.',
+        'smart_autofill_queue_count' => 'fichier(s) en file',
     ]
 ];
 
-// Function to get loan form translation
 function lft($key) {
     global $loan_form_translations, $current_lang;
     return isset($loan_form_translations[$current_lang][$key]) ? $loan_form_translations[$current_lang][$key] : $key;
 }
 
 // ============================================
-// DATABASE OPERATIONS
+// DATABASE — load application row
 // ============================================
-// In production, uncomment the database connection
-// require_once 'db.php';
+require_once __DIR__ . '/db.php';
 
-// For demo purposes, we'll use session storage
-if (!isset($_SESSION['master_loan_data'])) {
-    $_SESSION['master_loan_data'] = [];
-}
-
-$formData = [];
 $providerId = $_GET['provider_id'] ?? null;
 $providerName = '';
+$formData = [];
 
-// Sample provider names for demo
-$providerNames = [
-    1 => 'CIBC Bank - Education Loan Program',
-    2 => 'RBC Royal Bank - Student Financing',
-    3 => 'Scotiabank - International Student Loan',
-    4 => 'BMO Bank - Graduate Funding',
-];
-
-// Load existing user
-if (isset($_GET['id'])) {
-    $userId = $_GET['id'];
-    
-    // Load from session for demo
-    if (isset($_SESSION['master_loan_data'][$userId])) {
-        $formData = $_SESSION['master_loan_data'][$userId];
-        $providerId = $formData['loan_provider_id'] ?? $providerId;
-    }
-} else {
-    // Generate new user ID
+if (!isset($_GET['id'])) {
     $userId = 'user-' . time() . '-' . rand(1000, 9999);
-    
-    // Redirect with provider_id preserved
-    $redirectUrl = "master-loan.php?id=$userId";
-    if ($providerId) {
-        $redirectUrl .= "&provider_id=$providerId";
+    $redirectUrl = 'master-loan.php?id=' . rawurlencode($userId);
+    if ($providerId !== null && $providerId !== '') {
+        $redirectUrl .= '&provider_id=' . rawurlencode((string)$providerId);
     }
-    header("Location: $redirectUrl");
+    header('Location: ' . $redirectUrl);
     exit;
 }
 
-// Load provider name for display
-if (!empty($providerId) && isset($providerNames[$providerId])) {
-    $providerName = $providerNames[$providerId];
+$userId = (string)$_GET['id'];
+$_SESSION['loan_user_id'] = $userId;
+
+$boot = $conn->prepare('INSERT IGNORE INTO master_loan_applications (user_id) VALUES (?)');
+if ($boot) {
+    $boot->bind_param('s', $userId);
+    @$boot->execute();
+    $boot->close();
 }
 
-// Helper functions
+$st = $conn->prepare('SELECT * FROM master_loan_applications WHERE user_id = ? LIMIT 1');
+if ($st) {
+    $st->bind_param('s', $userId);
+    $st->execute();
+    $res = $st->get_result();
+    if ($res && ($row = $res->fetch_assoc())) {
+        $formData = $row;
+    }
+    $st->close();
+}
+
+if ($providerId === null || $providerId === '') {
+    $providerId = $formData['loan_provider_id'] ?? null;
+}
+
+if (!empty($providerId)) {
+    $pid = (int)$providerId;
+    $p = $conn->prepare('SELECT name FROM loan_providers WHERE id = ? LIMIT 1');
+    if ($p) {
+        $p->bind_param('i', $pid);
+        $p->execute();
+        $p->bind_result($pname);
+        if ($p->fetch()) {
+            $providerName = (string)$pname;
+        }
+        $p->close();
+    }
+}
+
+function loan_form_json_list(?string $raw): array
+{
+    if ($raw === null || $raw === '') {
+        return [];
+    }
+    $d = json_decode($raw, true);
+    return is_array($d) ? array_values(array_filter(array_map('strval', $d), static fn($x) => trim($x) !== '')) : [];
+}
+
+function loan_field_display_string(?string $raw): string
+{
+    if ($raw === null) {
+        return '';
+    }
+    $t = trim((string)$raw);
+    if ($t === '') {
+        return '';
+    }
+    $d = json_decode($t, true);
+    if (is_array($d)) {
+        $flat = array_values(array_filter(array_map(static fn($x) => trim((string)$x), $d), static fn($x) => $x !== ''));
+        return implode(', ', $flat);
+    }
+    return $t;
+}
+
 function checked($field, $value) {
     global $formData;
-    return (isset($formData[$field]) && $formData[$field] == $value) ? 'checked' : '';
+    if (!isset($formData[$field])) {
+        return '';
+    }
+    $v = $formData[$field];
+    if (is_string($v) && str_starts_with(trim($v), '[')) {
+        $list = loan_form_json_list($v);
+        return in_array((string)$value, $list, true) ? 'checked' : '';
+    }
+    return ((string)$v === (string)$value) ? 'checked' : '';
 }
 
 function selected($field, $value) {
     global $formData;
-    return (isset($formData[$field]) && $formData[$field] == $value) ? 'selected' : '';
+    if (!isset($formData[$field])) {
+        return '';
+    }
+    $v = $formData[$field];
+    if (is_string($v) && str_starts_with(trim($v), '[')) {
+        $list = loan_form_json_list($v);
+        return in_array((string)$value, $list, true) ? 'selected' : '';
+    }
+    return ((string)$v === (string)$value) ? 'selected' : '';
 }
 ?>
 <!DOCTYPE html>
@@ -649,6 +751,264 @@ textarea {
   text-decoration: underline;
 }
 
+/* Smart AI autofill progress (aligned with student application UX) */
+.smart-autofill-queue-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13px;
+  color: #0f172a;
+  margin-bottom: 8px;
+}
+.smart-autofill-queue-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.smart-autofill-remove {
+  border: none;
+  background: transparent;
+  color: #dc2626;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+.smart-autofill-progress-panel {
+  display: none;
+  align-items: center;
+  gap: 18px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  transition: box-shadow 0.35s ease, border-color 0.35s ease;
+}
+.smart-autofill-progress-panel.active {
+  display: flex;
+}
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(125deg, #38bdf8, #6366f1, #a855f7, #2563eb, #06b6d4) border-box;
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.12),
+    0 0 28px rgba(59, 130, 246, 0.35),
+    0 14px 36px rgba(79, 70, 229, 0.2);
+  animation: mlSmartAutofillPanelPulse 2.4s ease-in-out infinite;
+}
+.smart-autofill-orb {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  flex-shrink: 0;
+}
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb {
+  width: 104px;
+  height: 104px;
+}
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::before {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 3px solid rgba(59, 130, 246, 0.55);
+  animation: mlSmartAutofillRipple 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::after {
+  content: "";
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  border: 2px solid rgba(168, 85, 247, 0.35);
+  animation: mlSmartAutofillRipple 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: 0.55s;
+  pointer-events: none;
+}
+.smart-autofill-orb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #2563eb, #22d3ee, #a855f7, #6366f1, #3b82f6, #2563eb);
+  animation: mlSmartAutofillSpin 0.85s linear infinite;
+  filter: drop-shadow(0 0 10px rgba(59, 130, 246, 0.65)) drop-shadow(0 0 18px rgba(139, 92, 246, 0.45));
+}
+.smart-autofill-orb-ring::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: #f8fbff;
+}
+.smart-autofill-orb-core {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, #ffffff 0%, #eff6ff 55%, #e0f2fe 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #1e3a8a;
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 165, 250, 0.35),
+    inset 0 -2px 8px rgba(59, 130, 246, 0.08);
+}
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb-core {
+  inset: 20px;
+  font-size: 12px;
+  color: #172554;
+  animation: mlSmartAutofillCorePulse 1.35s ease-in-out infinite;
+}
+.smart-autofill-progress-panel.is-success .smart-autofill-orb-ring,
+.smart-autofill-progress-panel.is-warning .smart-autofill-orb-ring,
+.smart-autofill-progress-panel.is-danger .smart-autofill-orb-ring {
+  animation: none;
+}
+.smart-autofill-progress-panel.is-success .smart-autofill-orb-ring {
+  background: conic-gradient(from 0deg, #16a34a, #86efac, #16a34a);
+}
+.smart-autofill-progress-panel.is-warning .smart-autofill-orb-ring {
+  background: conic-gradient(from 0deg, #d97706, #fcd34d, #d97706);
+}
+.smart-autofill-progress-panel.is-danger .smart-autofill-orb-ring {
+  background: conic-gradient(from 0deg, #dc2626, #fca5a5, #dc2626);
+}
+.smart-autofill-progress-copy { flex: 1 1 auto; min-width: 0; }
+.smart-autofill-progress-copy strong { display: block; font-size: 15px; color: #0f172a; }
+.smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-progress-copy strong {
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(90deg, #1e40af, #6366f1, #0e7490);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: mlSmartAutofillTitleShimmer 2.5s ease-in-out infinite;
+}
+.smart-autofill-progress-copy small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.smart-autofill-stage-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.smart-autofill-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 11px;
+  border-radius: 999px;
+  border: 1px solid #dbeafe;
+  background: #fff;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 600;
+}
+.smart-autofill-stage-pill::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #cbd5e1;
+}
+.smart-autofill-stage-pill.is-active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.smart-autofill-stage-pill.is-active::before {
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+.smart-autofill-stage-pill.is-done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #166534;
+}
+.smart-autofill-stage-pill.is-done::before { background: #16a34a; }
+.smart-autofill-stage-pill.is-error {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.smart-autofill-stage-pill.is-error::before { background: #dc2626; }
+.smart-autofill-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.smart-autofill-results li {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+}
+.smart-autofill-results strong { display: block; font-size: 0.95rem; color: #0f172a; }
+.smart-autofill-results small { display: block; margin-top: 4px; color: #64748b; line-height: 1.45; }
+
+@keyframes mlSmartAutofillSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes mlSmartAutofillPanelPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.14), 0 0 24px rgba(59, 130, 246, 0.28), 0 14px 36px rgba(79, 70, 229, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.22), 0 0 38px rgba(59, 130, 246, 0.48), 0 18px 44px rgba(79, 70, 229, 0.28);
+  }
+}
+@keyframes mlSmartAutofillRipple {
+  0% { transform: scale(0.88); opacity: 0.85; }
+  70% { opacity: 0.15; }
+  100% { transform: scale(1.22); opacity: 0; }
+}
+@keyframes mlSmartAutofillCorePulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.35), inset 0 -2px 8px rgba(59, 130, 246, 0.08);
+  }
+  50% {
+    transform: scale(1.04);
+    box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.55), inset 0 -2px 10px rgba(37, 99, 235, 0.12);
+  }
+}
+@keyframes mlSmartAutofillTitleShimmer {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.15); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .smart-autofill-orb-ring,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger),
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::before,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb::after,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-orb-core,
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-progress-copy strong {
+    animation: none !important;
+  }
+  .smart-autofill-progress-panel.active:not(.is-success):not(.is-warning):not(.is-danger) .smart-autofill-progress-copy strong {
+    color: #0f172a;
+    background: none;
+    -webkit-background-clip: unset;
+    background-clip: unset;
+  }
+}
+
 /* ===== FORM BUTTONS ===== */
 .form-buttons {
   margin-top: 40px;
@@ -972,7 +1332,53 @@ textarea {
       ); ?>
     </div>
 
-    <form id="applicationForm" enctype="multipart/form-data">
+    <div class="smart-autofill-card" style="margin:1.25rem 0;padding:1.25rem 1.5rem;border:1px solid var(--border);border-radius:var(--radius-md);background:#f8fafc;">
+      <div style="display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between;align-items:flex-start;">
+        <div style="flex:1;min-width:220px;">
+          <span style="display:inline-block;font-size:0.65rem;font-weight:700;letter-spacing:0.06em;padding:0.2rem 0.45rem;border-radius:999px;background:var(--secondary-blue);color:#fff;margin-right:0.35rem;">AI</span>
+          <h3 style="font-size:1.05rem;font-weight:600;margin:0.5rem 0;"><?php echo htmlspecialchars(lft('smart_autofill_title'), ENT_QUOTES, 'UTF-8'); ?></h3>
+          <p style="color:var(--text-light);font-size:0.9rem;margin-bottom:0.5rem;"><?php echo htmlspecialchars(lft('smart_autofill_desc'), ENT_QUOTES, 'UTF-8'); ?></p>
+          <p style="color:var(--text-muted);font-size:0.85rem;margin:0;"><?php echo htmlspecialchars(lft('smart_autofill_existing_note'), ENT_QUOTES, 'UTF-8'); ?></p>
+        </div>
+        <div style="text-align:right;min-width:200px;">
+          <div style="display:flex;flex-wrap:wrap;gap:0.5rem;justify-content:flex-end;">
+            <button type="button" class="btn-secondary" id="mlSmartAutofillTrigger" disabled style="padding:10px 18px;border-radius:10px;border:1px solid var(--border);background:#fff;cursor:pointer;"><?php echo htmlspecialchars(lft('smart_autofill_button'), ENT_QUOTES, 'UTF-8'); ?></button>
+            <button type="button" class="btn-primary" id="mlSmartAutofillStart" disabled style="padding:10px 18px;border-radius:10px;border:none;background:var(--primary-navy);color:#fff;cursor:pointer;"><?php echo htmlspecialchars(lft('smart_autofill_start'), ENT_QUOTES, 'UTF-8'); ?></button>
+          </div>
+          <input type="file" id="mlSmartAutofillInput" multiple accept=".pdf,.docx,.jpg,.jpeg,.png,.webp" style="display:none;">
+          <div id="mlSmartAutofillHelp" class="hint" style="margin-top:0.5rem;font-size:0.85rem;color:var(--text-light);text-align:left;"></div>
+        </div>
+      </div>
+      <div id="mlSmartAutofillStatus" style="display:none;margin-top:0.75rem;padding:0.5rem 0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+      <div style="margin-top:1rem;border:1px dashed var(--border);border-radius:10px;padding:0.75rem 1rem;background:#fff;">
+        <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.35rem;"><?php echo htmlspecialchars(lft('smart_autofill_queue_title'), ENT_QUOTES, 'UTF-8'); ?></div>
+        <div id="mlSmartAutofillQueueHint" style="font-size:0.85rem;color:var(--text-light);"><?php echo htmlspecialchars(lft('smart_autofill_queue_empty'), ENT_QUOTES, 'UTF-8'); ?></div>
+        <ul id="mlSmartAutofillQueue" style="list-style:none;margin:0.5rem 0 0;padding:0;"></ul>
+      </div>
+
+      <div id="mlSmartAutofillProgressWrap" class="smart-autofill-progress-panel" aria-live="polite">
+        <div class="smart-autofill-orb">
+          <div class="smart-autofill-orb-ring"></div>
+          <div class="smart-autofill-orb-core" id="mlSmartAutofillProgressText">—</div>
+        </div>
+        <div class="smart-autofill-progress-copy">
+          <strong id="mlSmartAutofillProgressLabel"><?php echo htmlspecialchars(lft('smart_autofill_processing'), ENT_QUOTES, 'UTF-8'); ?></strong>
+          <small id="mlSmartAutofillProgressSubtext"><?php echo htmlspecialchars(lft('smart_autofill_hint'), ENT_QUOTES, 'UTF-8'); ?></small>
+          <div id="mlSmartAutofillStagePills" class="smart-autofill-stage-pills"></div>
+        </div>
+      </div>
+
+      <div id="mlSmartAutofillPanels" style="display:none;margin-top:1rem;">
+        <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-light);"><?php echo htmlspecialchars(lft('smart_autofill_results_title'), ENT_QUOTES, 'UTF-8'); ?></div>
+        <ul id="mlSmartAutofillResults" class="smart-autofill-results"></ul>
+        <div id="mlSmartAutofillWarningsWrap" style="display:none;margin-top:1rem;">
+          <div style="font-weight:600;font-size:0.85rem;margin-bottom:0.5rem;color:var(--text-light);"><?php echo htmlspecialchars(lft('smart_autofill_warnings_title'), ENT_QUOTES, 'UTF-8'); ?></div>
+          <ul id="mlSmartAutofillWarnings" class="smart-autofill-results"></ul>
+        </div>
+      </div>
+    </div>
+
+    <form id="applicationForm" enctype="multipart/form-data" data-loan-autofill-ready="<?= (!empty(trim((string)($formData['first_name'] ?? ''))) && !empty(trim((string)($formData['email'] ?? '')))) ? '1' : '0' ?>">
       <input type="hidden" name="user_id" value="<?= htmlspecialchars($userId) ?>">
       <input type="hidden" name="loan_provider_id" value="<?= htmlspecialchars($providerId) ?>">
 
@@ -1047,7 +1453,7 @@ textarea {
 
         <label class="required"><?php echo lft('masters_program'); ?></label>
         <input type="text" name="masters_program_name" placeholder="<?php echo lft('enter_program'); ?>" required 
-               value="<?= htmlspecialchars($formData['masters_program_name'] ?? '') ?>">
+               value="<?= htmlspecialchars(loan_field_display_string($formData['masters_program_name'] ?? '')) ?>">
 
         <label class="required"><?php echo lft('school_name'); ?></label>
         <select name="school_name[]" class="select2-multiple" multiple="multiple" required>
@@ -1210,7 +1616,7 @@ textarea {
           'bachelor_degree' => lft('bachelor_degree'),
           'bachelor_transcript' => lft('bachelor_transcript'),
           'cv' => lft('cv'),
-          'id' => lft('id'),
+          'id_document' => lft('id'),
           'valid_passport' => lft('valid_passport'),
           'english_certificate' => lft('english_certificate'),
           'admission_fees' => lft('admission_fees'),
@@ -1228,9 +1634,10 @@ textarea {
           echo "</div>";
           
           if (!empty($formData[$field])) {
+            $href = htmlspecialchars($formData[$field], ENT_QUOTES, 'UTF-8');
             echo "<p style='margin-top: 8px; font-size: 0.9rem; color: #10B981;'>";
             echo "<i class='fas fa-check-circle'></i> " . ($current_lang === 'fr' ? 'Déjà téléchargé :' : 'Previously uploaded:') . " ";
-            echo "<a href='#' onclick='viewFile(\"$field\")' style='color: var(--accent-teal); text-decoration: none; font-weight: 600;'>";
+            echo "<a href='" . $href . "' target='_blank' rel='noopener' style='color: var(--accent-teal); text-decoration: none; font-weight: 600;'>";
             echo ($current_lang === 'fr' ? 'Voir le fichier' : 'View File');
             echo "</a></p>";
           }
@@ -1388,125 +1795,86 @@ $(document).ready(function() {
 // ============================================
 // STEP SAVING WITH PROGRESS BAR
 // ============================================
-function saveStep(currentStep, nextStep) {
+function saveStep(currentStepNum, nextStep) {
   const form = $('#applicationForm')[0];
-  if (!validateStep(currentStep)) {
+  if (!validateStep(currentStepNum)) {
     alert('<?php echo $current_lang === "fr" ? "Veuillez remplir tous les champs requis" : "Please fill all required fields"; ?>');
     return;
   }
-  
-  const formData = new FormData(form);
-  formData.append('step', currentStep);
-  
+
+  const fd = new FormData(form);
+  fd.append('step', 'step' + currentStepNum);
+
   const button = $(`[data-next="${nextStep}"]`);
   button.prop('disabled', true);
-  
-  // Show progress
+
   showProgress('<?php echo lft('saving_step'); ?>', '<?php echo lft('validating_data'); ?>');
-  updateProgress(30, 1, '30%');
-  
-  // Simulate AJAX save
-  setTimeout(() => {
-    updateProgress(70, 2, '70%');
-    
-    // Save to session storage for demo
-    const data = {};
-    formData.forEach((value, key) => {
-      if (key !== 'step') {
-        data[key] = value;
+  updateProgress(40, 2, '40%');
+
+  fetch('save_master_loan.php', { method: 'POST', body: fd })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (_ref) {
+      updateProgress(100, 4, '100%');
+      if (!_ref.ok || !_ref.j || _ref.j.status !== 'success') {
+        throw new Error((_ref.j && _ref.j.message) ? _ref.j.message : '<?php echo lft('error_saving'); ?>');
       }
+      if (currentStepNum === 1) {
+        $('#applicationForm').attr('data-loan-autofill-ready', '1');
+        if (typeof window.updateMlAutofillGate === 'function') window.updateMlAutofillGate();
+      }
+      hideProgress();
+      showStep(nextStep);
+      showNotification('✅ <?php echo lft('success_saved'); ?>');
+    })
+    .catch(function (err) {
+      hideProgress();
+      alert('<?php echo lft('error_saving'); ?>: ' + (err && err.message ? err.message : '<?php echo lft('network_error'); ?>'));
+    })
+    .finally(function () {
+      button.prop('disabled', false);
     });
-    
-    const userId = document.querySelector('input[name="user_id"]').value;
-    let sessionData = JSON.parse(sessionStorage.getItem('master_loan_data') || '{}');
-    sessionData[userId] = {...sessionData[userId], ...data};
-    sessionStorage.setItem('master_loan_data', JSON.stringify(sessionData));
-    
-    setTimeout(() => {
-      updateProgress(100, 3, '100%');
-      setTimeout(() => {
-        hideProgress();
-        showStep(nextStep);
-        button.prop('disabled', false);
-        
-        // Show success message
-        showNotification('✅ <?php echo lft('success_saved'); ?>');
-      }, 500);
-    }, 1000);
-  }, 500);
 }
 
 // ============================================
-// FILE UPLOAD HANDLER
+// FILE UPLOAD HANDLER (saves via step4)
 // ============================================
 $(document).ready(function () {
-  $('input[type="file"]').on('change', function () {
-    const field = $(this).data('field');
-    const userId = $(this).data('user');
-    const file = this.files[0];
+  $('#applicationForm input[type=file]').on('change', function () {
+    const input = this;
+    const field = $(input).attr('name');
+    const file = input.files && input.files[0];
+    if (!file || !field) return;
 
-    if (!file || !field || !userId) return;
-
-    // Validate file size (10MB max)
     if (file.size > 10 * 1024 * 1024) {
       alert('<?php echo $current_lang === "fr" ? "Le fichier est trop volumineux (max 10MB)" : "File is too large (max 10MB)"; ?>');
-      this.value = '';
+      input.value = '';
       return;
     }
 
-    // Validate file type
-    const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-    if (!validTypes.includes(file.type)) {
-      alert('<?php echo $current_lang === "fr" ? "Type de fichier non supporté" : "File type not supported"; ?>');
-      this.value = '';
-      return;
-    }
+    const fd = new FormData(document.getElementById('applicationForm'));
+    fd.set('step', 'step4');
 
     showProgress('<?php echo lft('uploading'); ?>', '<?php echo lft('preparing_files'); ?>');
-    updateProgress(10, 2, '10%');
+    updateProgress(30, 2, '30%');
 
-    // Simulate upload
-    setTimeout(() => {
-      updateProgress(50, 2, '50%');
-      
-      setTimeout(() => {
-        updateProgress(90, 3, '90%');
-        
-        // Save file info to session storage
-        const userId = document.querySelector('input[name="user_id"]').value;
-        let sessionData = JSON.parse(sessionStorage.getItem('master_loan_data') || '{}');
-        sessionData[userId] = sessionData[userId] || {};
-        sessionData[userId][field] = file.name;
-        sessionStorage.setItem('master_loan_data', JSON.stringify(sessionData));
-        
-        setTimeout(() => {
-          updateProgress(100, 4, '100%');
-          setTimeout(() => {
-            hideProgress();
-            showNotification('✅ ' + (field === 'acceptance_letter' ? 
-              '<?php echo $current_lang === "fr" ? "Lettre d\'acceptation téléchargée avec succès!" : "Acceptance letter uploaded successfully!" ?>' : 
-              '<?php echo $current_lang === "fr" ? "Document téléchargé avec succès!" : "Document uploaded successfully!" ?>'));
-            
-            // Show file preview
-            const preview = document.createElement('p');
-            preview.innerHTML = `<i class="fas fa-check-circle"></i> <?php echo $current_lang === 'fr' ? 'Téléchargé :' : 'Uploaded:' ?> <a href="#" onclick="viewFile('${field}')" style="color: var(--accent-teal); text-decoration: none; font-weight: 600;">${file.name}</a>`;
-            preview.style.marginTop = '8px';
-            preview.style.fontSize = '0.9rem';
-            preview.style.color = '#10B981';
-            
-            const uploadBox = this.closest('.upload-box');
-            uploadBox.parentNode.insertBefore(preview, uploadBox.nextSibling);
-          }, 500);
-        }, 1000);
-      }, 800);
-    }, 500);
+    fetch('save_master_loan.php', { method: 'POST', body: fd })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (_ref) {
+        if (!_ref.ok || !_ref.j || _ref.j.status !== 'success') {
+          throw new Error((_ref.j && _ref.j.message) ? _ref.j.message : '<?php echo lft('upload_failed'); ?>');
+        }
+        updateProgress(100, 4, '100%');
+        hideProgress();
+        showNotification('✅ <?php echo $current_lang === 'fr' ? 'Document enregistré' : 'Document saved'; ?>');
+        setTimeout(function () { window.location.reload(); }, 600);
+      })
+      .catch(function (err) {
+        hideProgress();
+        alert((err && err.message) ? err.message : '<?php echo lft('upload_failed'); ?>');
+        input.value = '';
+      });
   });
 });
-
-// View file function
-function viewFile(field) {
-  alert('<?php echo $current_lang === "fr" ? "Fonction d\'affichage de fichier - En production, cela ouvrirait le fichier réel." : "File view function - In production, this would open the actual file."; ?>');
-}
 
 // ============================================
 // FORM VALIDATION
@@ -1514,91 +1882,448 @@ function viewFile(field) {
 function validateStep(step) {
   let isValid = true;
   const stepElement = document.getElementById(`step${step}`);
-  
-  // Check required fields
+
   const requiredInputs = stepElement.querySelectorAll('[required]');
   requiredInputs.forEach(input => {
     if (!input.value.trim()) {
       isValid = false;
       input.style.borderColor = '#DC2626';
       input.style.boxShadow = '0 0 0 4px rgba(220, 38, 38, 0.15)';
-      
-      // Add error message
+
       setTimeout(() => {
         input.style.borderColor = '';
         input.style.boxShadow = '';
       }, 3000);
     }
   });
-  
+
   return isValid;
 }
 
 // ============================================
-// FINAL SUBMISSION WITH ANIMATED PROGRESS
+// FINAL SUBMISSION
 // ============================================
 function submitFinalStep() {
   if (!validateStep(4)) {
     alert('<?php echo $current_lang === "fr" ? "Veuillez remplir tous les champs requis" : "Please fill all required fields"; ?>');
     return;
   }
-  
-  const form = $('#applicationForm')[0];
-  const formData = new FormData(form);
-  formData.append('step', 'step4');
 
-  // Show progress overlay
+  const form = document.getElementById('applicationForm');
+  const fd = new FormData(form);
+  fd.append('step', 'step4');
+
   showProgress('<?php echo lft('submitting'); ?>', '<?php echo lft('validating_data'); ?>');
-  
-  // Start progressive updates with detailed messages
-  const progressUpdates = [
-    {percent: 10, step: 1, message: '10%', text: '<?php echo lft('validating_data'); ?>'},
-    {percent: 25, step: 1, message: '25%', text: '<?php echo lft('validating_data'); ?>'},
-    {percent: 40, step: 2, message: '40%', text: '<?php echo lft('preparing_files'); ?>'},
-    {percent: 60, step: 2, message: '60%', text: '<?php echo lft('uploading_files'); ?>'},
-    {percent: 75, step: 3, message: '75%', text: '<?php echo lft('uploading_files'); ?>'},
-    {percent: 85, step: 3, message: '85%', text: '<?php echo lft('finalizing'); ?>'},
-    {percent: 95, step: 4, message: '95%', text: '<?php echo lft('sending_confirmation'); ?>'},
-    {percent: 100, step: 4, message: '100%', text: '<?php echo lft('submitted'); ?>'}
-  ];
-  
-  // Animate progress
-  progressUpdates.forEach((update, index) => {
-    setTimeout(() => {
-      updateProgress(update.percent, update.step, update.message);
-      document.getElementById('progressSubtitle').textContent = update.text;
-    }, index * 600);
+  updateProgress(20, 1, '20%');
+
+  fetch('save_master_loan.php', { method: 'POST', body: fd })
+    .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+    .then(function (_ref) {
+      if (!_ref.ok || !_ref.j || _ref.j.status !== 'success') {
+        throw new Error((_ref.j && _ref.j.message) ? _ref.j.message : '<?php echo lft('error_saving'); ?>');
+      }
+      updateProgress(70, 3, '70%');
+      const uid = document.querySelector('input[name="user_id"]').value;
+      return fetch('send_loan_email.php?user_id=' + encodeURIComponent(uid))
+        .then(function (er) { return er.json().then(function (ej) { return { er: er, ej: ej }; }); })
+        .then(function (mailRes) {
+          updateProgress(100, 4, '100%');
+          hideProgress();
+          if (!mailRes.er.ok || !mailRes.ej || mailRes.ej.status !== 'success') {
+            alert('<?php echo lft('success_submitted'); ?>\n<?php echo lft('email_failed'); ?>' + ((mailRes.ej && mailRes.ej.message) || ''));
+          } else {
+            alert('<?php echo lft('success_submitted'); ?>\n<?php echo lft('email_sent'); ?>');
+          }
+          window.location.href = 'index.php';
+        });
+    })
+    .catch(function (err) {
+      hideProgress();
+      alert('<?php echo lft('error_saving'); ?>: ' + (err && err.message ? err.message : '<?php echo lft('network_error'); ?>'));
+    });
+}
+
+const ML_AUTOFILL_TEXT = <?php echo json_encode([
+  'gate' => lft('smart_autofill_gate'),
+  'formats' => lft('smart_autofill_formats'),
+  'hint' => lft('smart_autofill_hint'),
+  'queueEmpty' => lft('smart_autofill_queue_empty'),
+  'queueReady' => lft('smart_autofill_queue_ready'),
+  'queueCount' => lft('smart_autofill_queue_count'),
+  'processing' => lft('smart_autofill_processing'),
+  'error' => lft('smart_autofill_error'),
+  'complete' => lft('smart_autofill_complete'),
+  'uploading' => lft('smart_autofill_uploading'),
+  'detailBatch' => lft('smart_autofill_detail_batch'),
+  'detailRoute' => lft('smart_autofill_detail_route'),
+  'detailDone' => lft('smart_autofill_detail_done'),
+], JSON_UNESCAPED_UNICODE); ?>;
+
+const ML_STAGE_META = <?php echo json_encode([
+  ['id' => 'queue', 'label' => lft('smart_autofill_stage_queue'), 'short' => $current_lang === 'fr' ? 'Liste' : 'Queue'],
+  ['id' => 'batch', 'label' => lft('smart_autofill_stage_batch'), 'short' => 'AI'],
+  ['id' => 'route', 'label' => lft('smart_autofill_stage_route'), 'short' => $current_lang === 'fr' ? 'Env.' : 'Save'],
+  ['id' => 'done', 'label' => lft('smart_autofill_stage_done'), 'short' => 'OK'],
+], JSON_UNESCAPED_UNICODE); ?>;
+
+(function () {
+  const progressWrap = document.getElementById('mlSmartAutofillProgressWrap');
+  const progressText = document.getElementById('mlSmartAutofillProgressText');
+  const progressLabel = document.getElementById('mlSmartAutofillProgressLabel');
+  const progressSubtext = document.getElementById('mlSmartAutofillProgressSubtext');
+  const stagePillsEl = document.getElementById('mlSmartAutofillStagePills');
+  const panelsEl = document.getElementById('mlSmartAutofillPanels');
+  const resultsEl = document.getElementById('mlSmartAutofillResults');
+  const warningsWrapEl = document.getElementById('mlSmartAutofillWarningsWrap');
+  const warningsEl = document.getElementById('mlSmartAutofillWarnings');
+
+  if (!progressWrap || !progressText || !progressLabel || !progressSubtext || !stagePillsEl || !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl) {
+    return;
+  }
+
+  let pendingFiles = [];
+  let isProcessing = false;
+  let batchToken = '';
+
+  function fileKey(file) {
+    return [file.name, file.size, file.lastModified].join('::');
+  }
+
+  function gateOk() {
+    return typeof window.jQuery !== 'undefined' && $('#applicationForm').attr('data-loan-autofill-ready') === '1';
+  }
+
+  function setField(name, val) {
+    if (val == null || val === '') return;
+    const el = document.querySelector('#applicationForm [name="' + name + '"]');
+    if (!el || el.type === 'file') return;
+    el.value = val;
+    if (window.jQuery && $(el).hasClass('select2-hidden-accessible')) {
+      $(el).val(val).trigger('change');
+    } else {
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  function applyFields(fields) {
+    Object.keys(fields || {}).forEach(function (k) { setField(k, fields[k]); });
+  }
+
+  function resetProgress() {
+    progressWrap.className = 'smart-autofill-progress-panel';
+    progressText.textContent = '\u2014';
+    progressLabel.textContent = ML_AUTOFILL_TEXT.processing;
+    progressSubtext.textContent = ML_AUTOFILL_TEXT.hint;
+    stagePillsEl.innerHTML = '';
+  }
+
+  function setStatus(type, msg) {
+    var el = document.getElementById('mlSmartAutofillStatus');
+    if (!el) return;
+    el.style.display = 'block';
+    el.style.background = type === 'error' ? '#fdeaea' : type === 'success' ? '#e8f5e9' : type === 'warning' ? '#fff8e6' : '#e7f1ff';
+    el.textContent = msg;
+  }
+
+  function renderStagePills(activeId, kind) {
+    stagePillsEl.innerHTML = '';
+    var activeIndex = ML_STAGE_META.findIndex(function (s) { return s.id === activeId; });
+    ML_STAGE_META.forEach(function (stage, index) {
+      var pill = document.createElement('span');
+      pill.className = 'smart-autofill-stage-pill';
+      pill.textContent = stage.label;
+      if (activeIndex > -1 && index < activeIndex) pill.classList.add('is-done');
+      else if (stage.id === activeId) pill.classList.add(kind === 'danger' ? 'is-error' : 'is-active');
+      if (kind === 'success' && activeIndex > -1 && index <= activeIndex) {
+        pill.classList.remove('is-active');
+        pill.classList.add('is-done');
+      }
+      if (kind === 'warning' && stage.id === activeId) {
+        pill.classList.remove('is-active');
+        pill.classList.add('is-error');
+      }
+      stagePillsEl.appendChild(pill);
+    });
+  }
+
+  function setStage(stageId, message, kind, subtext) {
+    kind = kind || 'info';
+    subtext = subtext || '';
+    progressWrap.className = 'smart-autofill-progress-panel active';
+    progressWrap.classList.remove('is-success', 'is-warning', 'is-danger');
+    if (kind === 'success') progressWrap.classList.add('is-success');
+    else if (kind === 'warning') progressWrap.classList.add('is-warning');
+    else if (kind === 'danger') progressWrap.classList.add('is-danger');
+    var stage = ML_STAGE_META.find(function (item) { return item.id === stageId; });
+    progressText.textContent = stage ? stage.short : 'AI';
+    progressLabel.textContent = message;
+    progressSubtext.textContent = subtext || (stage ? stage.label : '');
+    renderStagePills(stageId, kind);
+    if (kind === 'danger') setStatus('error', message);
+    else if (kind === 'success') setStatus('success', message);
+    else if (kind === 'warning') setStatus('warning', message);
+    else setStatus('info', message);
+    try { progressWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (e) {}
+  }
+
+  function clearPanels() {
+    resultsEl.innerHTML = '';
+    warningsEl.innerHTML = '';
+    warningsWrapEl.style.display = 'none';
+    panelsEl.style.display = 'none';
+  }
+
+  function renderPanels(documents, warnings) {
+    resultsEl.innerHTML = '';
+    warningsEl.innerHTML = '';
+    var hasDocs = Array.isArray(documents) && documents.length;
+    var hasWarn = Array.isArray(warnings) && warnings.length;
+    if (!hasDocs && !hasWarn) return;
+    if (hasDocs) {
+      documents.forEach(function (doc) {
+        var li = document.createElement('li');
+        var title = document.createElement('strong');
+        var detail = document.createElement('small');
+        title.textContent = (doc.original_name || '') + ' \u2192 ' + (doc.field_label || doc.field || '?');
+        detail.textContent = doc.summary || '';
+        li.appendChild(title);
+        if (detail.textContent) li.appendChild(detail);
+        resultsEl.appendChild(li);
+      });
+    }
+    if (hasWarn) {
+      warnings.forEach(function (message) {
+        var li = document.createElement('li');
+        var title = document.createElement('strong');
+        title.textContent = 'Warning';
+        li.appendChild(title);
+        if (message) {
+          var detail = document.createElement('small');
+          detail.textContent = message;
+          li.appendChild(detail);
+        }
+        warningsEl.appendChild(li);
+      });
+      warningsWrapEl.style.display = 'block';
+    }
+    panelsEl.style.display = 'block';
+  }
+
+  function updateHelp() {
+    const help = document.getElementById('mlSmartAutofillHelp');
+    if (!help) return;
+    if (gateOk()) {
+      help.innerHTML = ML_AUTOFILL_TEXT.formats + '<br>' + ML_AUTOFILL_TEXT.hint;
+    } else {
+      help.innerHTML = ML_AUTOFILL_TEXT.gate + '<br>' + ML_AUTOFILL_TEXT.formats + '<br>' + ML_AUTOFILL_TEXT.hint;
+    }
+  }
+
+  window.updateMlAutofillGate = function () {
+    const ready = gateOk() && !isProcessing;
+    const trig = document.getElementById('mlSmartAutofillTrigger');
+    const start = document.getElementById('mlSmartAutofillStart');
+    if (trig) trig.disabled = !ready || isProcessing;
+    if (start) start.disabled = !ready || isProcessing || pendingFiles.length === 0;
+    updateHelp();
+  };
+
+  function addPendingFiles(files) {
+    var known = {};
+    pendingFiles.forEach(function (f) { known[fileKey(f)] = 1; });
+    Array.prototype.forEach.call(files || [], function (f) {
+      if (!f || known[fileKey(f)]) return;
+      pendingFiles.push(f);
+      known[fileKey(f)] = 1;
+    });
+  }
+
+  function renderQueue() {
+    const ul = document.getElementById('mlSmartAutofillQueue');
+    const hint = document.getElementById('mlSmartAutofillQueueHint');
+    if (!ul) return;
+    ul.innerHTML = '';
+    if (!pendingFiles.length) {
+      if (hint) {
+        hint.style.display = 'block';
+        hint.textContent = ML_AUTOFILL_TEXT.queueEmpty;
+      }
+      return;
+    }
+    if (hint) {
+      hint.style.display = 'block';
+      hint.textContent = pendingFiles.length + ' ' + ML_AUTOFILL_TEXT.queueCount + '. ' + ML_AUTOFILL_TEXT.queueReady;
+    }
+    pendingFiles.forEach(function (file) {
+      var li = document.createElement('li');
+      li.className = 'smart-autofill-queue-item';
+      var name = document.createElement('span');
+      name.className = 'smart-autofill-queue-name';
+      name.textContent = file.name;
+      var rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'smart-autofill-remove';
+      rm.textContent = '\u00d7';
+      rm.disabled = isProcessing;
+      rm.dataset.fileKey = fileKey(file);
+      li.appendChild(name);
+      li.appendChild(rm);
+      ul.appendChild(li);
+    });
+  }
+
+  document.getElementById('mlSmartAutofillQueue').addEventListener('click', function (event) {
+    var btn = event.target.closest('.smart-autofill-remove');
+    if (!btn || isProcessing) return;
+    var key = btn.dataset.fileKey;
+    pendingFiles = pendingFiles.filter(function (f) { return fileKey(f) !== key; });
+    renderQueue();
+    window.updateMlAutofillGate();
   });
 
-  // Simulate form submission
-  setTimeout(() => {
-    // Save final data to session storage
-    const data = {};
-    formData.forEach((value, key) => {
-      if (key !== 'step') {
-        data[key] = value;
-      }
+  function uploadOne(field, file) {
+    return new Promise(function (resolve, reject) {
+      var fd = new FormData();
+      fd.append('file', file);
+      fd.append('field', field);
+      fd.append('user_id', document.querySelector('input[name="user_id"]').value);
+      fd.append('skip_ai_validation', '1');
+      fd.append('smart_autofill_batch_token', batchToken);
+      fd.append('lang', document.documentElement.lang || 'en');
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', 'upload_master_loan_file.php');
+      xhr.onload = function () {
+        try {
+          var j = JSON.parse(xhr.responseText || '{}');
+          if (xhr.status >= 200 && xhr.status < 300 && j.status === 'success') resolve(j);
+          else reject(new Error(j.message || 'Upload failed'));
+        } catch (e) { reject(e); }
+      };
+      xhr.onerror = function () { reject(new Error('Network')); };
+      xhr.send(fd);
     });
-    
-    const userId = document.querySelector('input[name="user_id"]').value;
-    let sessionData = JSON.parse(sessionStorage.getItem('master_loan_data') || '{}');
-    sessionData[userId] = {...sessionData[userId], ...data};
-    sessionStorage.setItem('master_loan_data', JSON.stringify(sessionData));
-    
-    // Success case
-    setTimeout(() => {
-      hideProgress();
-      
-      // Show success message
-      const successMessage = "🎉 <?php echo lft('success_submitted'); ?>\n\n" +
-                           "<?php echo lft('email_sent'); ?>";
-      
-      if (confirm(successMessage + "\n\n<?php echo $current_lang === 'fr' ? 'Cliquez sur OK pour retourner à l\'accueil' : 'Click OK to return to homepage'; ?>")) {
-        window.location.href = "index.php";
-      }
-    }, 500);
-  }, progressUpdates.length * 600);
-}
+  }
+
+  function markLoanAutofillFile(field, relPath) {
+    if (!relPath) return;
+    var inp = document.getElementById(field);
+    if (!inp) return;
+    inp.value = '';
+    var box = inp.closest('.upload-box');
+    if (!box || !box.parentNode) return;
+    var next = box.nextSibling;
+    while (next && next.nodeType === 1 && next.classList && next.classList.contains('ml-autofill-file-note')) {
+      var rm = next;
+      next = next.nextSibling;
+      rm.remove();
+    }
+    var p = document.createElement('p');
+    p.className = 'ml-autofill-file-note';
+    p.style.cssText = 'margin-top:8px;font-size:0.9rem;color:#10B981;';
+    var icon = document.createElement('i');
+    icon.className = 'fas fa-check-circle';
+    p.appendChild(icon);
+    p.appendChild(document.createTextNode(' '));
+    var a = document.createElement('a');
+    a.href = relPath;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.style.cssText = 'color: var(--accent-teal); text-decoration: none; font-weight: 600;';
+    a.textContent = <?php echo json_encode($current_lang === 'fr' ? 'Voir le fichier' : 'View file', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;
+    p.appendChild(a);
+    box.parentNode.insertBefore(p, box.nextSibling);
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var trig = document.getElementById('mlSmartAutofillTrigger');
+    var input = document.getElementById('mlSmartAutofillInput');
+    var start = document.getElementById('mlSmartAutofillStart');
+    if (trig && input) trig.addEventListener('click', function () { input.click(); });
+    if (input) {
+      input.addEventListener('change', function () {
+        var files = Array.from(input.files || []);
+        input.value = '';
+        if (!files.length) return;
+        addPendingFiles(files);
+        clearPanels();
+        resetProgress();
+        setStage('queue', ML_AUTOFILL_TEXT.queueReady, 'info', pendingFiles.length + ' ' + ML_AUTOFILL_TEXT.queueCount);
+        renderQueue();
+        window.updateMlAutofillGate();
+      });
+    }
+    if (start) {
+      start.addEventListener('click', function () {
+        if (!pendingFiles.length || isProcessing || !gateOk()) return;
+        isProcessing = true;
+        clearPanels();
+        window.updateMlAutofillGate();
+        resetProgress();
+        setStage('batch', ML_AUTOFILL_TEXT.processing, 'info', ML_AUTOFILL_TEXT.detailBatch);
+
+        var uid = document.querySelector('input[name="user_id"]').value;
+        var fd = new FormData();
+        var filesSnapshot = pendingFiles.slice();
+        filesSnapshot.forEach(function (f) { fd.append('documents[]', f); });
+        fd.append('application_id', uid);
+        fd.append('lang', document.documentElement.lang || 'en');
+
+        fetch('master_loan_ai_autofill.php', { method: 'POST', body: fd })
+          .then(function (r) { return r.json().then(function (data) { return { res: r, data: data }; }); })
+          .then(function (_ref) {
+            if (!_ref.res.ok || !_ref.data || _ref.data.status !== 'success') {
+              throw new Error((_ref.data && _ref.data.message) ? _ref.data.message : ML_AUTOFILL_TEXT.error);
+            }
+            batchToken = _ref.data.upload_token || '';
+            applyFields(_ref.data.fields || {});
+
+            setStage('route', ML_AUTOFILL_TEXT.uploading, 'info', ML_AUTOFILL_TEXT.detailRoute);
+
+            var docs = Array.isArray(_ref.data.documents) ? _ref.data.documents : [];
+            var byField = new Map();
+            docs.forEach(function (d) {
+              if (!d || !d.field) return;
+              var cur = byField.get(d.field);
+              if (!cur || (Number(d.confidence) || 0) > (Number(cur.confidence) || 0)) byField.set(d.field, d);
+            });
+            var uploads = [];
+            byField.forEach(function (meta, field) {
+              var file = filesSnapshot[Number(meta.client_index)];
+              if (file) {
+                uploads.push(
+                  uploadOne(field, file).then(function (j) {
+                    if (j && j.file_path) markLoanAutofillFile(field, j.file_path);
+                    return j;
+                  })
+                );
+              }
+            });
+            return Promise.all(uploads).then(function () { return _ref.data; });
+          })
+          .then(function (data) {
+            var warnings = Array.isArray(data.warnings) ? data.warnings.slice() : [];
+            renderPanels(data.documents || [], warnings);
+            pendingFiles = [];
+            renderQueue();
+            var endKind = warnings.length ? 'warning' : 'success';
+            setStage('done', ML_AUTOFILL_TEXT.complete, endKind, ML_AUTOFILL_TEXT.detailDone);
+          })
+          .catch(function (e) {
+            resetProgress();
+            setStage('batch', e.message || ML_AUTOFILL_TEXT.error, 'danger', ML_AUTOFILL_TEXT.error);
+          })
+          .finally(function () {
+            isProcessing = false;
+            window.updateMlAutofillGate();
+          });
+      });
+    }
+    clearPanels();
+    resetProgress();
+    renderQueue();
+    window.updateMlAutofillGate();
+  });
+})();
 
 // ============================================
 // NOTIFICATION FUNCTION
