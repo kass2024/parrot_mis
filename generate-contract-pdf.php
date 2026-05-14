@@ -127,11 +127,11 @@ function getPackageDetails(string $code): array
            7.8 South Korea – Visit
         ========================== */
         'p78' => [
-            'title' => '7.8 South Korea Visitor Visa',
+            'title' => '7.8 🇰🇷 South Korea Visitor Visa',
             'lines' => [
-                'Registration & Application Fee: USD 400',
-                'Visit Visa Documents Preparation: USD 400',
-                'Service Fees (After Visa Approval): USD 2,000',
+                'Registration & Application Fee: USD 500',
+                'Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500',
+                'Participation fees vary depending on the event organizer.',
             ],
             'total' => null,
         ],

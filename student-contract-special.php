@@ -944,9 +944,9 @@ button {
       7.8 🇰🇷 South Korea Visitor Visa
     </label>
     <div id="p78" class="package-details">
-      ➤ Registration & Application Fee: USD 400<br>
-      ➤ Visit Visa Documents Preparation: USD 400<br>
-      ➤ Service Fees (payable after visa approval): USD 2,000
+      ➤ Registration & Application Fee: USD 500<br>
+      ➤ Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500<br>
+      ➤ Participation fees vary depending on the event organizer.
     </div>
   </div>
 

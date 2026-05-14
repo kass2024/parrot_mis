@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once __DIR__ . '/db.php';
 
 if (!isset($_SESSION['id'], $_SESSION['role']) || $_SESSION['role'] !== 'superadmin') {
@@ -28,7 +30,17 @@ if (!isset($conn) || !($conn instanceof mysqli)) {
    SAFE QUERY HELPER
 ===================================================== */
 function run(mysqli $conn, string $sql, string $stage): mysqli_result {
-    $res = $conn->query($sql);
+    try {
+        $res = $conn->query($sql);
+    } catch (mysqli_sql_exception $e) {
+        http_response_code(500);
+        echo json_encode([
+            'error' => true,
+            'stage' => $stage,
+            'mysqli_error' => $e->getMessage(),
+        ], JSON_PRETTY_PRINT);
+        exit;
+    }
     if (!$res) {
         http_response_code(500);
         echo json_encode([
