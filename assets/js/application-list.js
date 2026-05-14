@@ -1269,6 +1269,7 @@ function setText(id, value) {
     if (el) el.innerText = value || "-";
 }
 
+function formatFullTime(dateStr) {
     if (!dateStr) return null;
 
     const t = normalizeDateInput(dateStr);
