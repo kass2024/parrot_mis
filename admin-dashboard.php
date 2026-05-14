@@ -187,6 +187,7 @@ $cards = [
       'students-manage.php' => 'Applicants Management',
       'receipt_viewer.php' => 'Check payment Receipt',
       'applyboard-dashboard.php' => 'ApplyBoard Applications',
+      'task-assignment-monitoring.php' => 'Task assignment monitoring',
     ]
   ],
   'loan_applications' => [
@@ -1626,6 +1627,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('applyboard-dashboard.php', 'ApplyBoard Applications')">
           <i class="bi bi-grid-1x2"></i>
           ApplyBoard Applications
+        </a>
+        <a href="#" onclick="loadInFrame('task-assignment-monitoring.php', 'Task assignment monitoring')">
+          <i class="bi bi-kanban"></i>
+          Task assignment monitoring
         </a>
       </div>
       <?php endif; ?>
