@@ -54,12 +54,14 @@ if (!$contract) {
  */
 $isSigned = ($contract['status'] === 'signed');
 
-// Load student signature image (stored as data URL) when signed
+// Load student signature (stored as data URL) when signed
 $studentSignatureData = null;
+$signedStudentName    = '';
+$signedStudentDate    = '';
 if ($isSigned && !empty($contract['id'])) {
     $contractId = (int)$contract['id'];
     $stmt = $conn->prepare("
-        SELECT signature_image
+        SELECT student_name, signed_date, signature_image
         FROM student_signatures_special
         WHERE contract_id = ?
         ORDER BY id DESC
@@ -70,8 +72,12 @@ if ($isSigned && !empty($contract['id'])) {
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        if (!empty($row['signature_image']) && is_string($row['signature_image'])) {
-            $studentSignatureData = $row['signature_image'];
+        if ($row) {
+            $signedStudentName = trim((string)($row['student_name'] ?? ''));
+            $signedStudentDate = trim((string)($row['signed_date'] ?? ''));
+            if (!empty($row['signature_image']) && is_string($row['signature_image'])) {
+                $studentSignatureData = $row['signature_image'];
+            }
         }
     }
 }
@@ -497,6 +503,24 @@ body {
   cursor: crosshair;
   touch-action: none;
   display: block;
+}
+
+.signature-pad .signed-signature-img {
+  display: block;
+  max-height: 140px;
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  margin: 0 auto;
+  background: #ffffff;
+}
+
+.signature-pad .signature-missing {
+  margin: 0;
+  padding: 24px 12px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
 }
 
 .signatures-layout {
@@ -1349,6 +1373,8 @@ button {
   <p>
     Name:
     <input type="text" id="sig_student_name" class="sig-inline-input"
+           value="<?= htmlspecialchars($signedStudentName, ENT_QUOTES, 'UTF-8') ?>"
+           <?= $isSigned ? 'readonly' : '' ?>
            style="border:none;border-bottom:1px solid #000;">
   </p>
 
@@ -1362,9 +1388,16 @@ button {
     box-sizing:border-box;
     background:#ffffff;
   ">
-    <?php if ($isSigned && !empty($studentSignatureData)): ?>
-      <img src="<?= $studentSignatureData ?>"
-           style="max-height:120px;width:100%;object-fit:contain;background:#ffffff;">
+    <?php if ($isSigned): ?>
+      <?php if (!empty($studentSignatureData)): ?>
+      <img src="view-signature-special.php?token=<?= urlencode($token) ?>"
+           alt="Student signature"
+           class="signed-signature-img"
+           width="320"
+           height="140">
+      <?php else: ?>
+      <p class="signature-missing">Signature not stored for this contract. Please contact support to re-sign.</p>
+      <?php endif; ?>
     <?php else: ?>
       <canvas class="signature-canvas" aria-label="Draw your signature here"></canvas>
     <?php endif; ?>
@@ -1374,6 +1407,8 @@ button {
   <p style="margin-top:4px;">
     Date:
     <input type="date" id="sig_signed_date" class="sig-inline-input"
+           value="<?= htmlspecialchars($signedStudentDate, ENT_QUOTES, 'UTF-8') ?>"
+           <?= $isSigned ? 'readonly' : '' ?>
            style="border:none;border-bottom:1px solid #000;">
   </p>
 
@@ -1522,7 +1557,7 @@ button {
     ctx.lineWidth = 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#111827';
+    ctx.strokeStyle = '#000000';
 
     paintWhiteBackground();
 
@@ -1603,8 +1638,14 @@ button {
   }
 
   function captureSignature() {
-    paintWhiteBackground();
-    return canvas.toDataURL('image/png');
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvas.width;
+    exportCanvas.height = canvas.height;
+    const ex = exportCanvas.getContext('2d');
+    ex.fillStyle = '#ffffff';
+    ex.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+    ex.drawImage(canvas, 0, 0);
+    return exportCanvas.toDataURL('image/png');
   }
 
   function getSelectedPackage() {

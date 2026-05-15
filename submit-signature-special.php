@@ -2,6 +2,7 @@
 declare(strict_types=1);
 ob_start(); // ensure ONLY JSON is returned
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/contract_signature_image.php';
 require_once __DIR__ . "/vendor/autoload.php";
 
 header("Content-Type: application/json");
@@ -106,6 +107,11 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 
 if (!preg_match('#^data:image/(png|jpeg);base64,#i', $signature)) {
     fail("Invalid signature format", 400);
+}
+
+$normalizedPng = contract_signature_to_display_png($signature);
+if ($normalizedPng !== null) {
+    $signature = 'data:image/png;base64,' . base64_encode($normalizedPng);
 }
 
 /* =====================================================

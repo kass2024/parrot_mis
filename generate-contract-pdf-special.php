@@ -4,6 +4,7 @@ declare(strict_types=1);
 use Dompdf\Dompdf;
 use Dompdf\Options;
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/contract_signature_image.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 /* =====================================================
@@ -260,6 +261,10 @@ $stmt = $conn->prepare("
     }
 
     $studentSignature = $data['signature_image'];
+    $normalizedPng = contract_signature_to_display_png($studentSignature);
+    if ($normalizedPng !== null) {
+        $studentSignature = 'data:image/png;base64,' . base64_encode($normalizedPng);
+    }
 
     $consultantSigPath = __DIR__ . '/admin/signature-manager.png';
     if (!file_exists($consultantSigPath)) {
