@@ -28,6 +28,17 @@ if (!$contract) {
 }
 
 $contractId = (int) $contract['id'];
+
+$filePath = contract_signature_file_path($contractId);
+if (is_file($filePath)) {
+    header('Content-Type: image/png');
+    header('Cache-Control: private, max-age=3600');
+    header('X-Content-Type-Options: nosniff');
+    header('Content-Length: ' . (string) filesize($filePath));
+    readfile($filePath);
+    exit;
+}
+
 $stmt = $conn->prepare("
     SELECT signature_image
     FROM student_signatures_special
@@ -45,10 +56,22 @@ if (empty($row['signature_image'])) {
     exit('No signature.');
 }
 
-$png = contract_signature_to_display_png((string) $row['signature_image']);
+$dataUrl = (string) $row['signature_image'];
+$png     = contract_signature_to_display_png($dataUrl);
+
 if ($png === null) {
-    http_response_code(500);
-    exit('Invalid signature image.');
+    $raw = contract_signature_raw_bytes($dataUrl);
+    if ($raw === null) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+        exit('Invalid signature image.');
+    }
+    $mime = preg_match('#^data:image/jpeg#i', $dataUrl) ? 'image/jpeg' : 'image/png';
+    header('Content-Type: ' . $mime);
+    header('Cache-Control: private, max-age=3600');
+    header('X-Content-Type-Options: nosniff');
+    echo $raw;
+    exit;
 }
 
 header('Content-Type: image/png');

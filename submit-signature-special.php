@@ -265,6 +265,8 @@ try {
     $stmt->execute();
     $stmt->close();
 
+    contract_signature_save_png_file($contractId, $signature);
+
     /* =====================================================
        6.4 FINALIZE CONTRACT
     ===================================================== */

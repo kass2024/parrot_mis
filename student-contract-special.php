@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/contract_signature_image.php';
 /**
  * 0. Safety check: DB connection
  */
@@ -80,6 +81,15 @@ if ($isSigned && !empty($contract['id'])) {
             }
         }
     }
+}
+
+/** Image URL for signed contract (PNG file preferred; data-URL fallback). */
+$studentSignatureSrc = '';
+if ($isSigned && !empty($studentSignatureData) && !empty($contract['id'])) {
+    $studentSignatureSrc = contract_signature_resolve_img_src(
+        (int) $contract['id'],
+        $studentSignatureData
+    );
 }
 ?>
 <?php
@@ -1389,12 +1399,10 @@ button {
     background:#ffffff;
   ">
     <?php if ($isSigned): ?>
-      <?php if (!empty($studentSignatureData)): ?>
-      <img src="view-signature-special.php?token=<?= urlencode($token) ?>"
+      <?php if (!empty($studentSignatureSrc)): ?>
+      <img src="<?= htmlspecialchars($studentSignatureSrc, ENT_QUOTES, 'UTF-8') ?>"
            alt="Student signature"
-           class="signed-signature-img"
-           width="320"
-           height="140">
+           class="signed-signature-img">
       <?php else: ?>
       <p class="signature-missing">Signature not stored for this contract. Please contact support to re-sign.</p>
       <?php endif; ?>
