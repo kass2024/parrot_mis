@@ -119,7 +119,7 @@ if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 <head>
 <meta charset="UTF-8">
 <title>International Student Admission & Visa Consultancy Agreement</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <style>
 /* =====================================================
@@ -223,7 +223,72 @@ body {
 
   .signature-canvas {
     max-width: 100%;
-    height: 120px;
+    height: 160px;
+  }
+
+  .signature-pad {
+    min-height: 160px;
+  }
+
+  .signatures-layout {
+    grid-template-columns: 1fr !important;
+    column-gap: 0 !important;
+    row-gap: 28px;
+  }
+
+  .signatures-divider {
+    display: none;
+  }
+
+  .student-details-form input[type="email"],
+  .student-details-form input[type="text"],
+  .student-details-form input[type="date"],
+  .student-details-form input[type="tel"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block;
+    margin-top: 6px;
+    font-size: 16px !important;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .student-details-form > div {
+    margin-bottom: 16px !important;
+  }
+
+  .sig-inline-input {
+    width: 100% !important;
+    max-width: 100% !important;
+    display: block;
+    margin-top: 6px !important;
+    margin-left: 0 !important;
+    font-size: 16px !important;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  .signature-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .signature-actions button {
+    width: 100%;
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .package-label {
+    padding: 10px 4px;
+    min-height: 44px;
+  }
+
+  .package-label input[type="radio"] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
   }
 }
 
@@ -413,13 +478,56 @@ body {
 /* =====================================================
    SIGNATURE CANVAS
 ===================================================== */
+.signature-pad {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  width: 100%;
+  min-height: 140px;
+  box-sizing: border-box;
+}
+
 .signature-canvas {
   width: 100%;
   height: 140px;
-  border: 2px dashed #9ca3af;
+  border: none;
   border-radius: var(--radius-sm);
   background: #ffffff;
   cursor: crosshair;
+  touch-action: none;
+  display: block;
+}
+
+.signatures-layout {
+  display: grid;
+  grid-template-columns: 1fr 2px 1fr;
+  column-gap: 36px;
+  align-items: start;
+}
+
+.signatures-layout > div {
+  min-width: 0;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.signatures-divider {
+  background: #000;
+}
+
+.signature-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.signature-actions button {
+  min-height: 44px;
+}
+
+#signContract {
+  flex: 1 1 160px;
 }
 
 /* =====================================================
@@ -585,7 +693,7 @@ button {
   </p>
 
   <!-- STUDENT DETAILS (AUTOFILL SAFE) -->
-  <div style="font-size:15px; max-width:720px;">
+  <div class="student-details-form" style="font-size:15px; max-width:720px;">
 <div style="margin-bottom:18px;">
       <strong>Email:</strong>
       <input
@@ -1190,12 +1298,7 @@ button {
   </h3>
 
   <!-- TWO-COLUMN WORD-LIKE LAYOUT -->
-  <div style="
-    display:grid;
-    grid-template-columns: 1fr 2px 1fr;
-    column-gap:36px;
-    align-items:start;
-  ">
+  <div class="signatures-layout">
 
     <!-- ============================
      LEFT COLUMN (REFINED)
@@ -1244,47 +1347,37 @@ button {
 
   <p>
     Name:
-    <input type="text" id="sig_student_name"
-           style="
-             width:70%;
-             border:none;
-             border-bottom:1px solid #000;
-             margin-left:4px;
-           ">
+    <input type="text" id="sig_student_name" class="sig-inline-input"
+           style="border:none;border-bottom:1px solid #000;">
   </p>
 
   <p style="margin-top:12px;">Signature:</p>
 
   <!-- SIGNATURE BOX (NO CROWDING) -->
-  <div style="
+  <div class="signature-pad" style="
     border:1px dashed #9ca3af;
-    height:140px;
-    padding:10px;
+    padding:8px;
     margin-bottom:14px;
     box-sizing:border-box;
   ">
     <?php if ($isSigned && !empty($studentSignatureData)): ?>
       <img src="<?= $studentSignatureData ?>"
-           style="max-height:120px;">
+           style="max-height:120px;width:100%;object-fit:contain;">
     <?php else: ?>
-      <canvas class="signature-canvas"></canvas>
+      <canvas class="signature-canvas" aria-label="Draw your signature here"></canvas>
     <?php endif; ?>
   </div>
 
   <!-- DATE CLEARLY BELOW CANVAS -->
   <p style="margin-top:4px;">
     Date:
-    <input type="date" id="sig_signed_date"
-           style="
-             width:55%;
-             border:none;
-             border-bottom:1px solid #000;
-             margin-left:4px;
-           ">
+    <input type="date" id="sig_signed_date" class="sig-inline-input"
+           style="border:none;border-bottom:1px solid #000;">
   </p>
 
+  <?php if (!$isSigned): ?>
   <!-- ACTIONS -->
-  <div style="margin-top:14px;">
+  <div class="signature-actions">
     <button id="clearSignature" type="button">Clear</button>
     <button id="signContract" type="button">Sign &amp; Submit</button>
     <input type="hidden" id="signatureData">
@@ -1301,6 +1394,7 @@ button {
       Submitting signature…
     </div>
   </div>
+  <?php endif; ?>
 
 </div>
 
@@ -1308,7 +1402,7 @@ button {
     <!-- ============================
          VERTICAL DIVIDER
     ============================ -->
-    <div style="background:#000;"></div>
+    <div class="signatures-divider" aria-hidden="true"></div>
 
     <!-- ============================
          RIGHT COLUMN
@@ -1371,24 +1465,27 @@ button {
 </div>
 <script>
 (() => {
-  /* ==========================
-     CONFIG & ELEMENTS
-  ========================== */
-  const canvas = document.querySelector('.signature-canvas');
-  const ctx = canvas.getContext('2d');
+  'use strict';
 
+  const canvas = document.querySelector('.signature-canvas');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
   const btnClear = document.getElementById('clearSignature');
   const btnSubmit = document.getElementById('signContract');
-
   const inputName = document.getElementById('sig_student_name');
   const inputDate = document.getElementById('sig_signed_date');
   const hiddenSignature = document.getElementById('signatureData');
+  const progressBox = document.getElementById('signatureProgress');
+  const progressBar = document.getElementById('signatureProgressBar');
+  const progressText = document.getElementById('signatureProgressText');
 
-  // Auto-fill signature name + date from main student fields
   const mainStudentName = document.getElementById('student_name');
   const todayIso = new Date().toISOString().slice(0, 10);
   if (inputDate && !inputDate.value) inputDate.value = todayIso;
-  if (mainStudentName && inputName && !inputName.value) inputName.value = (mainStudentName.value || '').trim();
+  if (mainStudentName && inputName && !inputName.value) {
+    inputName.value = (mainStudentName.value || '').trim();
+  }
   if (mainStudentName && inputName) {
     mainStudentName.addEventListener('input', () => {
       inputName.value = (mainStudentName.value || '').trim();
@@ -1396,329 +1493,272 @@ button {
   }
 
   let drawing = false;
-let points = [];
+  let isSubmitting = false;
+  let progressTimer = null;
+  let resizeTimer = null;
 
-
-  /* ==========================
-     CANVAS SETUP (RETINA SAFE)
-  ========================== */
   function resizeCanvas() {
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
+    if (rect.width < 1 || rect.height < 1) return;
 
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
+    const snapshot = hasSignature()
+      ? canvas.toDataURL('image/png')
+      : null;
 
+    canvas.width = Math.floor(rect.width * ratio);
+    canvas.height = Math.floor(rect.height * ratio);
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.lineWidth = 2;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = '#111827';
+
+    if (snapshot) {
+      const img = new Image();
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, rect.width, rect.height);
+      };
+      img.src = snapshot;
+    }
+  }
+
+  function scheduleResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resizeCanvas, 120);
   }
 
   resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('resize', scheduleResize);
+  window.addEventListener('orientationchange', scheduleResize);
 
-  /* ==========================
-     DRAWING HELPERS
-  ========================== */
   function getPos(e) {
     const rect = canvas.getBoundingClientRect();
-
-    if (e.touches) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
-      };
-    }
-    return { x: e.offsetX, y: e.offsetY };
+    const pt = e.touches ? e.touches[0] : e;
+    return {
+      x: pt.clientX - rect.left,
+      y: pt.clientY - rect.top
+    };
   }
 
   function startDraw(e) {
-  e.preventDefault();
-  drawing = true;
-  points = [];
-
-  const pos = getPos(e);
-  points.push(pos);
-
-  ctx.beginPath();
-  ctx.moveTo(pos.x, pos.y);
-}
-
-function draw(e) {
-  if (!drawing) return;
-  e.preventDefault();
-
-  const pos = getPos(e);
-  points.push(pos);
-
-  // First points: draw simple line
-  if (points.length < 3) {
-    ctx.lineTo(pos.x, pos.y);
-    ctx.stroke();
-    return;
+    if (isSubmitting) return;
+    e.preventDefault();
+    drawing = true;
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
   }
 
-  // Take last 3 points
-  const p0 = points[points.length - 3];
-  const p1 = points[points.length - 2];
-  const p2 = points[points.length - 1];
+  function draw(e) {
+    if (!drawing || isSubmitting) return;
+    e.preventDefault();
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
 
-  // Midpoint between p1 and p2
-  const midX = (p1.x + p2.x) / 2;
-  const midY = (p1.y + p2.y) / 2;
+  function stopDraw(e) {
+    if (e) e.preventDefault();
+    drawing = false;
+  }
 
-  ctx.beginPath();
-  ctx.moveTo(p0.x, p0.y);
-  ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
-  ctx.stroke();
-}
-
-function stopDraw() {
-  drawing = false;
-  points = [];
-}
-
-  /* ==========================
-     EVENT LISTENERS
-  ========================== */
   canvas.addEventListener('mousedown', startDraw);
   canvas.addEventListener('mousemove', draw);
   canvas.addEventListener('mouseup', stopDraw);
   canvas.addEventListener('mouseleave', stopDraw);
-
   canvas.addEventListener('touchstart', startDraw, { passive: false });
   canvas.addEventListener('touchmove', draw, { passive: false });
-  canvas.addEventListener('touchend', stopDraw);
+  canvas.addEventListener('touchend', stopDraw, { passive: false });
+  canvas.addEventListener('touchcancel', stopDraw, { passive: false });
 
-  /* ==========================
-     CLEAR SIGNATURE
-  ========================== */
-  btnClear.addEventListener('click', () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  });
+  if (btnClear) {
+    btnClear.addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+  }
 
-  /* ==========================
-     VALIDATION HELPERS
-  ========================== */
   function hasSignature() {
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    return pixels.some(channel => channel !== 0);
+    for (let i = 3; i < pixels.length; i += 4) {
+      if (pixels[i] !== 0) return true;
+    }
+    return false;
   }
 
-  /* ==========================
-     SUBMIT SIGNATURE
-  ========================== */
- btnSubmit.addEventListener('click', () => {
-
-  /* ==========================
-     1. SAFETY CHECKS
-  ========================== */
-  if (!inputName || !inputDate || !canvas) {
-    alert("Required signature fields are missing. Please reload the page.");
-    return;
+  function captureSignature() {
+    try {
+      return canvas.toDataURL('image/jpeg', 0.82);
+    } catch (e) {
+      return canvas.toDataURL('image/png');
+    }
   }
 
-  /* ==========================
-     2. PACKAGE SELECTION (ARTICLE 7)
-  ========================== */
-  const selectedRadio = document.querySelector('input[name="package"]:checked');
+  function getSelectedPackage() {
+    const selectedRadio = document.querySelector('input[name="package"]:checked');
+    if (!selectedRadio) return null;
 
-  if (!selectedRadio) {
-    alert("Please select one service package under Article 7 before signing.");
-    return;
+    const code = selectedRadio.value
+      || document.getElementById('selected_package_code')?.value
+      || '';
+
+    const label = selectedRadio.dataset.label
+      || selectedRadio.closest('label')?.textContent?.trim()
+      || '';
+
+    if (!code || !label) return null;
+    return { code, label };
   }
 
-  const selectedPackageLabel = selectedRadio
-    .closest('label')
-    ?.textContent
-    ?.trim();
+  function startProgress() {
+    isSubmitting = true;
+    if (btnSubmit) btnSubmit.disabled = true;
+    if (btnClear) btnClear.disabled = true;
+    if (progressBox) progressBox.style.display = 'block';
+    if (progressBar) {
+      progressBar.style.width = '12%';
+      progressBar.style.background = '#2563eb';
+    }
+    if (progressText) progressText.textContent = 'Submitting signature…';
 
-  if (!selectedPackageLabel) {
-    alert("Invalid package selection. Please reselect your package.");
-    return;
+    let p = 12;
+    progressTimer = setInterval(() => {
+      p = Math.min(90, p + Math.random() * 14);
+      if (progressBar) progressBar.style.width = p + '%';
+    }, 350);
   }
 
-  /* ==========================
-     3. STUDENT NAME VALIDATION
-  ========================== */
-  const studentName = inputName.value.trim();
-  if (!studentName) {
-    alert("Please enter your full name before signing.");
-    inputName.focus();
-    return;
+  function finishProgress(success) {
+    clearInterval(progressTimer);
+    isSubmitting = false;
+    if (progressBar) {
+      progressBar.style.width = '100%';
+      progressBar.style.background = success ? '#16a34a' : '#dc2626';
+    }
+    if (progressText) {
+      progressText.textContent = success
+        ? 'Signature submitted successfully'
+        : 'Submission failed — you can try again';
+    }
+    if (btnSubmit) btnSubmit.disabled = false;
+    if (btnClear) btnClear.disabled = false;
   }
 
-  /* ==========================
-     4. SIGNING DATE VALIDATION
-  ========================== */
-  const signedDate = inputDate.value;
-  if (!signedDate) {
-    alert("Please select the signing date.");
-    inputDate.focus();
-    return;
+  function submitSignature(signature, name, date, pkg) {
+    const emailInput = document.getElementById('student_email');
+    const dobInput = document.getElementById('student_dob');
+    const nationalityInput = document.getElementById('student_nationality');
+    const passportInput = document.getElementById('student_passport');
+    const phoneInput = document.getElementById('student_phone');
+
+    if (!emailInput || !dobInput || !nationalityInput || !passportInput || !phoneInput) {
+      finishProgress(false);
+      alert('Student information fields are missing. Please reload the page.');
+      return;
+    }
+
+    const payload = {
+      token: <?= json_encode($token, JSON_THROW_ON_ERROR) ?>,
+      selected_package_label: pkg.label,
+      selected_package_code: pkg.code,
+      student_name: name,
+      signed_date: date,
+      signature: signature,
+      student_email: emailInput.value.trim(),
+      student_dob: dobInput.value,
+      student_nationality: nationalityInput.value.trim(),
+      student_passport: passportInput.value.trim(),
+      student_phone: phoneInput.value.trim()
+    };
+
+    if (!payload.student_email) {
+      finishProgress(false);
+      alert('Student email is required.');
+      emailInput.focus();
+      return;
+    }
+
+    if (hiddenSignature) hiddenSignature.value = signature;
+
+    fetch('submit-signature-special.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(async (res) => {
+        let data;
+        try {
+          data = await res.json();
+        } catch (e) {
+          throw new Error('Invalid response from server. Please try again.');
+        }
+        if (!res.ok) {
+          throw new Error(data.error || 'Server error');
+        }
+        return data;
+      })
+      .then((data) => {
+        if (data.success) {
+          finishProgress(true);
+          alert('Contract signed successfully.\n\nYou can now download or view the signed agreement.');
+          window.location.reload();
+          return;
+        }
+        if (data.error && data.error.toLowerCase().includes('already signed')) {
+          finishProgress(true);
+          alert('This contract has already been signed.\n\nYou can now download or view the signed agreement.');
+          window.location.reload();
+          return;
+        }
+        finishProgress(false);
+        alert(data.error || 'Submission failed.');
+      })
+      .catch((err) => {
+        console.error('Signature submission error:', err);
+        finishProgress(false);
+        alert(err?.message || 'Unable to submit. Please check your connection and try again.');
+      });
   }
 
-  /* ==========================
-     5. SIGNATURE VALIDATION
-  ========================== */
-  if (!hasSignature()) {
-    alert("Please draw your signature before submitting.");
-    return;
+  if (btnSubmit) {
+    btnSubmit.addEventListener('click', () => {
+      if (isSubmitting) return;
+
+      const pkg = getSelectedPackage();
+      if (!pkg) {
+        alert('Please select one service package under Article 7 before signing.');
+        document.getElementById('article-7')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      const studentName = (inputName?.value || '').trim();
+      if (!studentName) {
+        alert('Please enter your full name before signing.');
+        inputName?.focus();
+        return;
+      }
+
+      if (!inputDate?.value) {
+        alert('Please select the signing date.');
+        inputDate?.focus();
+        return;
+      }
+
+      if (!hasSignature()) {
+        alert('Please draw your signature in the box before submitting.');
+        canvas.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+
+      startProgress();
+      submitSignature(
+        captureSignature(),
+        studentName,
+        inputDate.value,
+        pkg
+      );
+    });
   }
-
-  /* ==========================
-     6. CAPTURE SIGNATURE
-  ========================== */
-  const signature = canvas.toDataURL("image/png");
-  hiddenSignature.value = signature;
-
-  /* ==========================
-     7. SUBMIT (FINAL)
-  ========================== */
-  submitSignature(
-    signature,
-    studentName,
-    signedDate,
-    selectedPackageLabel
-  );
-});
-
-
-  /* ==========================
-     SEND TO BACKEND
-  ========================== */
-function submitSignature(signature, name, date, selectedPackage) {
-
-  /* ==========================
-     1. HARD SAFETY CHECKS
-  ========================== */
-  if (!signature || !name || !date || !selectedPackage) {
-    alert("Missing required data. Please review the form and try again.");
-    return;
-  }
-
-  /* ==========================
-     2. STUDENT FIELD REFERENCES
-  ========================== */
-  const emailInput       = document.getElementById('student_email');
-  const dobInput         = document.getElementById('student_dob');
-  const nationalityInput = document.getElementById('student_nationality');
-  const passportInput    = document.getElementById('student_passport');
-  const phoneInput       = document.getElementById('student_phone');
-
-  if (!emailInput || !dobInput || !nationalityInput || !passportInput || !phoneInput) {
-    alert("Student information fields are missing. Please reload the page.");
-    return;
-  }
-
-  /* ==========================
-   BUILD PAYLOAD
-========================== */
-const payload = {
-  token: "<?= htmlspecialchars($token) ?>",
-
-  /* ==========================
-     📦 ARTICLE 7 – PACKAGE (LOCKED)
-  ========================== */
-  selected_package_label: selectedPackage,
-  selected_package_code: document.getElementById('selected_package_code')?.value || null,
-
-  /* ==========================
-     ✍️ SIGNATURE DATA
-  ========================== */
-  student_name: name,
-  signed_date: date,
-  signature: signature,
-
-  /* ==========================
-     👤 STUDENT DATA
-  ========================== */
-  student_email: emailInput.value.trim(),
-  student_dob: dobInput.value,
-  student_nationality: nationalityInput.value.trim(),
-  student_passport: passportInput.value.trim(),
-  student_phone: phoneInput.value.trim()
-};
-
-/* ==========================
-   FINAL VALIDATION
-========================== */
-if (!payload.student_email) {
-  alert("Student email is required.");
-  emailInput.focus();
-  return;
-}
-
-if (!payload.selected_package_label) {
-  alert("Selected package is missing. Please reselect a package under Article 7.");
-  return;
-}
-
-/* ==========================
-   SUBMIT TO BACKEND
-========================== */
-fetch("submit-signature-special.php", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify(payload)
-})
-.then(async res => {
-  let data;
-
-  try {
-    data = await res.json();
-  } catch (e) {
-    throw new Error("Invalid JSON response from server");
-  }
-
-  // HTTP-level error but JSON returned
-  if (!res.ok) {
-    throw new Error(data.error || "Server error");
-  }
-
-  return data;
-})
-.then(data => {
-
-  // ✅ SUCCESS
-  if (data.success) {
-    alert(
-      "Contract signed successfully.\n\n" +
-      "You can now download or view the signed agreement."
-    );
-    window.location.reload();
-    return;
-  }
-
-  // ⚠️ EXPECTED CASE: already signed
-  if (data.error && data.error.toLowerCase().includes("already signed")) {
-    alert(
-      "This contract has already been signed.\n\n" +
-      "You can now download or view the signed agreement."
-    );
-    window.location.reload();
-    return;
-  }
-
-  // ❌ OTHER BACKEND ERRORS
-  alert(data.error || "Submission failed.");
-
-})
-.catch(err => {
-  console.error("Signature submission error:", err);
-
-  alert(err?.message || (
-    "Unable to submit at this time.\n" +
-    "Please check your connection and try again."
-  ));
-});
-
-
-}
-
 })();
 </script>
 <script>
@@ -1943,182 +1983,6 @@ window.showPkg = function (id) {
     const label = selectedRadio.closest('label');
     return label ? label.textContent.trim() : null;
   };
-
-})();
-</script>
-<script>
-(function () {
-  'use strict';
-
-  const canvas = document.querySelector('.signature-canvas');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-  const btnClear = document.getElementById('clearSignature');
-  const btnSubmit = document.getElementById('signContract');
-
-  const inputName = document.getElementById('sig_student_name');
-  const inputDate = document.getElementById('sig_signed_date');
-
-  const progressBox  = document.getElementById('signatureProgress');
-  const progressBar  = document.getElementById('signatureProgressBar');
-  const progressText = document.getElementById('signatureProgressText');
-
-  let drawing = false;
-  let progressTimer = null;
-
-  /* ============================
-     CANVAS SETUP
-  ============================ */
-  function resizeCanvas() {
-    const ratio = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#111827';
-  }
-
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-
-  function pos(e) {
-    const r = canvas.getBoundingClientRect();
-    const t = e.touches ? e.touches[0] : e;
-    return { x: t.clientX - r.left, y: t.clientY - r.top };
-  }
-
-  canvas.addEventListener('mousedown', e => {
-    drawing = true;
-    const p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  });
-
-canvas.addEventListener('mousemove', e => {
-  if (!drawing) return;
-  e.preventDefault();
-
-  const p = pos(e);
-  points.push(p);
-
-  // Not enough points yet → simple line
-  if (points.length < 3) {
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    return;
-  }
-
-  // Last 3 points
-  const p0 = points[points.length - 3];
-  const p1 = points[points.length - 2];
-  const p2 = points[points.length - 1];
-
-  // Midpoint between p1 and p2
-  const midX = (p1.x + p2.x) / 2;
-  const midY = (p1.y + p2.y) / 2;
-
-  ctx.beginPath();
-  ctx.moveTo(p0.x, p0.y);
-  ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
-  ctx.stroke();
-});
-
-
-  canvas.addEventListener('mouseup', () => drawing = false);
-  canvas.addEventListener('mouseleave', () => drawing = false);
-
-  canvas.addEventListener('touchstart', e => {
-    drawing = true;
-    const p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  }, { passive:false });
-
-  canvas.addEventListener('touchmove', e => {
-    if (!drawing) return;
-    e.preventDefault();
-    const p = pos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-  }, { passive:false });
-
-  canvas.addEventListener('touchend', () => drawing = false);
-
-  btnClear.addEventListener('click', () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  });
-
-  function hasSignature() {
-    return ctx.getImageData(0,0,canvas.width,canvas.height)
-      .data.some(v => v !== 0);
-  }
-
-  /* ============================
-     PROGRESS HELPERS
-  ============================ */
-  function startProgress() {
-    btnSubmit.disabled = true;
-    progressBox.style.display = 'block';
-    progressBar.style.width = '10%';
-    progressText.textContent = 'Submitting signature…';
-
-    let p = 10;
-    progressTimer = setInterval(() => {
-      p += Math.random() * 12;
-      if (p >= 90) {
-        p = 90;
-        clearInterval(progressTimer);
-      }
-      progressBar.style.width = p + '%';
-    }, 400);
-  }
-
-  function finishProgress(success) {
-    clearInterval(progressTimer);
-    progressBar.style.width = '100%';
-    progressBar.style.background = success ? '#16a34a' : '#dc2626';
-    progressText.textContent = success
-      ? 'Signature submitted successfully'
-      : 'Submission failed';
-  }
-
-  /* ============================
-     SUBMIT HANDLER
-  ============================ */
-  btnSubmit.addEventListener('click', () => {
-
-    if (!inputName.value.trim()) {
-      alert('Please enter your name.');
-      return;
-    }
-
-    if (!inputDate.value) {
-      alert('Please select a signing date.');
-      return;
-    }
-
-    if (!hasSignature()) {
-      alert('Please draw your signature.');
-      return;
-    }
-
-    startProgress();
-
-    // 👇 KEEP YOUR EXISTING submitSignature() CALL
-    submitSignature(
-      canvas.toDataURL('image/png'),
-      inputName.value.trim(),
-      inputDate.value,
-      window.getSelectedPackage?.()
-    );
-  });
-
-  // OPTIONAL: expose hooks for backend response
-  window.signatureSubmitSuccess = () => finishProgress(true);
-  window.signatureSubmitError   = () => finishProgress(false);
 
 })();
 </script>

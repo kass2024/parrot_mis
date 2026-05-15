@@ -104,7 +104,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     fail("Invalid email address", 400);
 }
 
-if (!str_starts_with($signature, 'data:image/png;base64,')) {
+if (!preg_match('#^data:image/(png|jpeg);base64,#i', $signature)) {
     fail("Invalid signature format", 400);
 }
 
@@ -162,11 +162,11 @@ try {
     logMsg("Contract locked", ["contract_id" => $contractId]);
 
     /* =====================================================
-       6.2 RESOLVE STUDENT (NO INSERT/UPDATE)
+       6.2 UPSERT STUDENT (contract link, email match, or new row)
     ===================================================== */
     $studentId = !empty($contract['student_id']) ? (int)$contract['student_id'] : 0;
+
     if ($studentId <= 0) {
-        // fallback: try to match by email, but DO NOT insert/update (prevents duplicates)
         $stmt = $conn->prepare("
             SELECT id
             FROM student_applications
@@ -181,9 +181,64 @@ try {
         $studentId = !empty($existing['id']) ? (int)$existing['id'] : 0;
     }
 
-    if ($studentId <= 0) {
-        throw new RuntimeException("Student record not linked to this contract. Please issue the contract for a specific student first.");
+    $nameParts = preg_split('/\s+/', $name, 2) ?: [];
+    $firstName = $nameParts[0] ?? $name;
+    $lastName  = $nameParts[1] ?? '';
+
+    if ($studentId > 0) {
+        $stmt = $conn->prepare("
+            UPDATE student_applications SET
+                first_name      = ?,
+                last_name       = ?,
+                dob             = ?,
+                nationality     = ?,
+                passport_number = ?,
+                phone_number    = ?,
+                updated_at      = NOW()
+            WHERE id = ?
+        ");
+        $stmt->bind_param(
+            "ssssssi",
+            $firstName,
+            $lastName,
+            $dob,
+            $nationality,
+            $passport,
+            $phone,
+            $studentId
+        );
+        if (!$stmt->execute()) {
+            throw new RuntimeException($stmt->error ?: 'Failed to update student record.');
+        }
+        $stmt->close();
+    } else {
+        $stmt = $conn->prepare("
+            INSERT INTO student_applications
+            (email, first_name, last_name, dob, nationality, passport_number, phone_number, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+        ");
+        $stmt->bind_param(
+            "sssssss",
+            $email,
+            $firstName,
+            $lastName,
+            $dob,
+            $nationality,
+            $passport,
+            $phone
+        );
+        if (!$stmt->execute()) {
+            throw new RuntimeException($stmt->error ?: 'Failed to create student record.');
+        }
+        $studentId = (int)$stmt->insert_id;
+        $stmt->close();
     }
+
+    if ($studentId <= 0) {
+        throw new RuntimeException('Unable to link student record for this contract.');
+    }
+
+    logMsg("Student saved", ["student_id" => $studentId]);
 
     /* =====================================================
        6.3 SAVE SIGNATURE
