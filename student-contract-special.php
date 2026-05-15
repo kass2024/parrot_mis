@@ -485,6 +485,7 @@ body {
   width: 100%;
   min-height: 140px;
   box-sizing: border-box;
+  background: #ffffff;
 }
 
 .signature-canvas {
@@ -492,7 +493,7 @@ body {
   height: 140px;
   border: none;
   border-radius: var(--radius-sm);
-  background: #ffffff;
+  background: #ffffff !important;
   cursor: crosshair;
   touch-action: none;
   display: block;
@@ -1359,10 +1360,11 @@ button {
     padding:8px;
     margin-bottom:14px;
     box-sizing:border-box;
+    background:#ffffff;
   ">
     <?php if ($isSigned && !empty($studentSignatureData)): ?>
       <img src="<?= $studentSignatureData ?>"
-           style="max-height:120px;width:100%;object-fit:contain;">
+           style="max-height:120px;width:100%;object-fit:contain;background:#ffffff;">
     <?php else: ?>
       <canvas class="signature-canvas" aria-label="Draw your signature here"></canvas>
     <?php endif; ?>
@@ -1497,6 +1499,14 @@ button {
   let progressTimer = null;
   let resizeTimer = null;
 
+  function paintWhiteBackground() {
+    const rect = canvas.getBoundingClientRect();
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+    ctx.restore();
+  }
+
   function resizeCanvas() {
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
@@ -1514,9 +1524,12 @@ button {
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#111827';
 
+    paintWhiteBackground();
+
     if (snapshot) {
       const img = new Image();
       img.onload = () => {
+        paintWhiteBackground();
         ctx.drawImage(img, 0, 0, rect.width, rect.height);
       };
       img.src = snapshot;
@@ -1574,24 +1587,24 @@ button {
 
   if (btnClear) {
     btnClear.addEventListener('click', () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      paintWhiteBackground();
     });
   }
 
   function hasSignature() {
     const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
-    for (let i = 3; i < pixels.length; i += 4) {
-      if (pixels[i] !== 0) return true;
+    for (let i = 0; i < pixels.length; i += 4) {
+      const a = pixels[i + 3];
+      if (a < 16) continue;
+      const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+      if (r < 240 || g < 240 || b < 240) return true;
     }
     return false;
   }
 
   function captureSignature() {
-    try {
-      return canvas.toDataURL('image/jpeg', 0.82);
-    } catch (e) {
-      return canvas.toDataURL('image/png');
-    }
+    paintWhiteBackground();
+    return canvas.toDataURL('image/png');
   }
 
   function getSelectedPackage() {
