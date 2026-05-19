@@ -851,8 +851,20 @@ button {
 
 <div class="package-item">
   <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p77ca')">
+    7.7 🇨🇦 Study in Canada (With Your Own Admission Letter)
+  </label>
+  <div id="p77ca" class="package-details">
+    ➤ Document Handling, Visa Application & Biometric Fees: CAD 750<br>
+    ➤ Service Fees (payable after visa approval): CAD 1,000<br>
+    <strong>🔥 Total Package: CAD 1,750</strong>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77')">
-    7.7 🇰🇷 Study in South Korea (Self-Sponsored)
+    7.8 🇰🇷 Study in South Korea (Self-Sponsored)
   </label>
   <div id="p77" class="package-details">
     <!-- ➤ Registration & Application Fee: USD 500 (Refundable if admission is not secured)<br> -->
@@ -869,7 +881,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p78')">
-    7.8 🇰🇷 South Korea Visitor Visa
+    7.9 🇰🇷 South Korea Visitor Visa
   </label>
   <div id="p78" class="package-details">
     ➤ Registration & Application Fee: USD 500<br>
@@ -881,7 +893,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p79')">
-    7.9 Credit Transfer (Bachelor, Masters, PhD)
+    7.10 Credit Transfer (Bachelor, Masters, PhD)
   </label>
   <div id="p79" class="package-details">
     ➤ Bachelor: USD 920<br>
@@ -893,7 +905,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710')">
-    7.10 🇨🇦 Canada Visit Visa
+    7.11 🇨🇦 Canada Visit Visa
   </label>
   <div id="p710" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -906,7 +918,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p711')">
-    7.11 🇺🇸 USA Visit Visa
+    7.12 🇺🇸 USA Visit Visa
   </label>
   <div id="p711" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -918,7 +930,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p712')">
-    7.12 🇪🇺 Europe Visit Visa
+    7.13 🇪🇺 Europe Visit Visa
   </label>
   <div id="p712" class="package-details">
     ➤ Documents & Invitation Letter: €600<br>
@@ -930,7 +942,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p713')">
-    7.13 Asia Visit Visa
+    7.14 Asia Visit Visa
   </label>
   <div id="p713" class="package-details">
     ➤ Documents & Invitation Letter: USD 800<br>
@@ -942,7 +954,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p714')">
-    7.14 SHORT COURSES-CANADA
+    7.15 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
     ➤ Registration & Application Fee: CAD 200 (Refundable if admission is not secured within 2 weeks)<br>
@@ -958,7 +970,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p715')">
-    7.15 STUDY PhD IN CANADA-USA-EUROPE & ASIA
+    7.16 STUDY PhD IN CANADA-USA-EUROPE & ASIA
   </label>
   <div id="p715" class="package-details">
     ➤ Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)<br>

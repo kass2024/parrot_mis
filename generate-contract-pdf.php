@@ -106,10 +106,22 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.7 South Korea – Study
+           7.7 Canada – Own Admission Letter
+        ========================== */
+        'p77ca' => [
+            'title' => '7.7 Study in Canada (With Your Own Admission Letter)',
+            'lines' => [
+                'Document Handling, Visa Application & Biometric Fees: CAD 750',
+                'Service Fees (payable after visa approval): CAD 1,000',
+            ],
+            'total' => 'CAD 1,750',
+        ],
+
+        /* =========================
+           7.8 South Korea – Study
         ========================== */
         'p77' => [
-            'title' => '7.7 Study in South Korea (Self-Sponsored)',
+            'title' => '7.8 Study in South Korea (Self-Sponsored)',
             'lines' => [
                 // 'Registration & Application Fee: USD 500 (Refundable if admission is not secured)',
                 'Registration & Application Fee: USD 1000 (Refundable if admission is not secured)',
@@ -127,7 +139,7 @@ function getPackageDetails(string $code): array
            7.8 South Korea – Visit
         ========================== */
         'p78' => [
-            'title' => '7.8 🇰🇷 South Korea Visitor Visa',
+            'title' => '7.9 🇰🇷 South Korea Visitor Visa',
             'lines' => [
                 'Registration & Application Fee: USD 500',
                 'Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500',
@@ -140,7 +152,7 @@ function getPackageDetails(string $code): array
            7.9 Credit Transfer
         ========================== */
         'p79' => [
-            'title' => '7.9 Credit Transfer (Bachelor, Masters, PhD)',
+            'title' => '7.10 Credit Transfer (Bachelor, Masters, PhD)',
             'lines' => [
                 'Bachelor Program: USD 920',
                 'Masters Program: USD 1,220',
@@ -153,7 +165,7 @@ function getPackageDetails(string $code): array
            7.10 Canada Visit Visa
         ========================== */
         'p710' => [
-            'title' => '7.10 Canada Visit Visa',
+            'title' => '7.11 Canada Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: CAD 100',
@@ -167,7 +179,7 @@ function getPackageDetails(string $code): array
            7.11 USA Visit Visa
         ========================== */
         'p711' => [
-            'title' => '7.11 USA Visit Visa',
+            'title' => '7.12 USA Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: USD 185',
@@ -180,7 +192,7 @@ function getPackageDetails(string $code): array
            7.12 Europe Visit Visa
         ========================== */
         'p712' => [
-            'title' => '7.12 Europe Visit Visa',
+            'title' => '7.13 Europe Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: €600',
                 'Visa Application Fees: €85 – €500 (depending on country)',
@@ -193,7 +205,7 @@ function getPackageDetails(string $code): array
            7.13 Asia Visit Visa
         ========================== */
         'p713' => [
-            'title' => '7.13 Asia Visit Visa',
+            'title' => '7.14 Asia Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 800',
                 'Visa Application Fees: USD 85 – USD 500',
@@ -206,7 +218,7 @@ function getPackageDetails(string $code): array
            7.14 Short Courses - Canada
         ========================== */
         'p714' => [
-            'title' => '7.14 SHORT COURSES-CANADA',
+            'title' => '7.15 SHORT COURSES-CANADA',
             'lines' => [
                 'Registration & Application Fee: CAD 200 (Refundable if admission is not secured within 2 weeks)',
                 'Registration & Application Fee for Family Member: CAD 100 (If applicable)',
@@ -222,7 +234,7 @@ function getPackageDetails(string $code): array
            7.15 Study PhD in Multiple Destinations
         ========================== */
         'p715' => [
-            'title' => '7.15 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+            'title' => '7.16 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
             'lines' => [
                 'Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)',
                 'Registration & Application Fee for USA, Europe & Asia: USD 350 (Refundable if admission is not secured within 9 months)',
