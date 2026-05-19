@@ -855,9 +855,9 @@ button {
     7.7 🇨🇦 Study in Canada (With Your Own Admission Letter)
   </label>
   <div id="p77ca" class="package-details">
-    ➤ Document Handling, Visa Application & Biometric Fees: CAD 750<br>
+    ➤ Document Handling, Visa Application & Biometric Fees: CAD 735<br>
     ➤ Service Fees (payable after visa approval): CAD 1,000<br>
-    <strong>🔥 Total Package: CAD 1,750</strong>
+    <strong>🔥 Total Package: CAD 1,735</strong>
   </div>
 </div>
 

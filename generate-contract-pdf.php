@@ -111,10 +111,10 @@ function getPackageDetails(string $code): array
         'p77ca' => [
             'title' => '7.7 Study in Canada (With Your Own Admission Letter)',
             'lines' => [
-                'Document Handling, Visa Application & Biometric Fees: CAD 750',
+                'Document Handling, Visa Application & Biometric Fees: CAD 735',
                 'Service Fees (payable after visa approval): CAD 1,000',
             ],
-            'total' => 'CAD 1,750',
+            'total' => 'CAD 1,735',
         ],
 
         /* =========================
