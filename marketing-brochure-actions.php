@@ -513,7 +513,11 @@ switch ($action) {
             pcvc_brochure_save_contact($conn, $name, $phone);
         }
 
-        $result = pcvc_brochure_send_whatsapp($phone, $body);
+        $result = pcvc_brochure_send_whatsapp($phone, $body, [
+            'name'  => $name,
+            'title' => (string) $brochure['title'],
+            'url'   => $shareUrl,
+        ]);
 
         $shareToken = bin2hex(random_bytes(8));
         $channel    = 'whatsapp';

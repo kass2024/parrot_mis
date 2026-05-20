@@ -292,11 +292,16 @@ function pcvc_brochure_save_contact(mysqli $conn, string $name, string $phone): 
 
 /**
  * Send a brochure via WhatsApp Cloud API.
- * Uses the official Meta number → message is delivered under the company's WhatsApp Business name.
  *
+ * Tries the approved Meta template first (required for business-initiated
+ * messages outside the 24h customer-service window) and falls back to a
+ * session text message ONLY when the template is missing/disabled and the
+ * customer is currently inside the 24h window.
+ *
+ * @param array{name?:string,title?:string,url?:string} $context Used to fill template variables.
  * @return array{sent:bool,method:string,error:string,detail:string,to:?string}
  */
-function pcvc_brochure_send_whatsapp(string $phoneRaw, string $message): array
+function pcvc_brochure_send_whatsapp(string $phoneRaw, string $message, array $context = []): array
 {
     $out = ['sent' => false, 'method' => '', 'error' => '', 'detail' => '', 'to' => null];
 
@@ -306,7 +311,7 @@ function pcvc_brochure_send_whatsapp(string $phoneRaw, string $message): array
     }
     $phoneId = trim(xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
     if ($token === '' || $phoneId === '') {
-        $out['error']  = 'WhatsApp is not configured. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID in .env.';
+        $out['error'] = 'WhatsApp is not configured. Set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID in .env.';
         return $out;
     }
 
@@ -331,7 +336,86 @@ function pcvc_brochure_send_whatsapp(string $phoneRaw, string $message): array
     }
     $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
 
-    $payload = [
+    $tplName = trim(xander_env_get('WHATSAPP_BROCHURE_TEMPLATE_NAME'));
+    if ($tplName === '') {
+        $tplName = 'pcvc_brochure_share';
+    }
+    $tplLang = trim(xander_env_get('WHATSAPP_BROCHURE_TEMPLATE_LANG'));
+    if ($tplLang === '') {
+        $tplLang = 'en';
+    }
+
+    $name  = trim((string) ($context['name']  ?? '')) !== '' ? trim((string) $context['name'])  : 'there';
+    $title = trim((string) ($context['title'] ?? '')) !== '' ? trim((string) $context['title']) : 'our brochure';
+    $link  = trim((string) ($context['url']   ?? ''));
+
+    $bodyTexts = [
+        pcvc_brochure_wa_sanitize_param($name),
+        pcvc_brochure_wa_sanitize_param($title),
+        pcvc_brochure_wa_sanitize_param($link),
+    ];
+
+    // Optional URL button — only added if WHATSAPP_BROCHURE_TEMPLATE_HAS_BUTTON=1
+    $hasButton = trim(xander_env_get('WHATSAPP_BROCHURE_TEMPLATE_HAS_BUTTON')) === '1';
+
+    $components = [
+        ['type' => 'body', 'parameters' => array_map(static fn($t) => ['type' => 'text', 'text' => $t], $bodyTexts)],
+    ];
+    if ($hasButton && $link !== '') {
+        $components[] = [
+            'type'    => 'button',
+            'sub_type'=> 'url',
+            'index'   => '0',
+            'parameters' => [
+                ['type' => 'text', 'text' => pcvc_brochure_wa_button_suffix($link)],
+            ],
+        ];
+    }
+
+    $tplPayload = [
+        'messaging_product' => 'whatsapp',
+        'recipient_type'    => 'individual',
+        'to'                => $to,
+        'type'              => 'template',
+        'template'          => [
+            'name'       => $tplName,
+            'language'   => ['code' => $tplLang],
+            'components' => $components,
+        ],
+    ];
+
+    $res = xander_whatsapp_graph_post($url, $token, $tplPayload);
+    @error_log('[brochure-wa] template HTTP ' . ($res['http'] ?? 0) . ' body=' . substr((string) ($res['body'] ?? ''), 0, 300));
+    if (($res['http'] ?? 0) >= 200 && ($res['http'] ?? 0) < 300 && xander_whatsapp_response_has_message_id($res['json'] ?? null)) {
+        $out['sent']   = true;
+        $out['method'] = 'template:' . $tplName;
+        return $out;
+    }
+
+    // Template failed — capture the error first.
+    $tplErr   = xander_whatsapp_extract_error($res['json'] ?? null);
+    $tplHint  = $tplErr ? xander_whatsapp_user_hint($tplErr) : ('HTTP ' . ($res['http'] ?? 0));
+    $tplBody  = (string) ($res['body'] ?? '');
+
+    // Only attempt text fallback if Meta says template is missing/disabled (132001,132005,etc.) OR HTTP 400 from bad template name.
+    $allowFallback = false;
+    if ($tplErr && isset($tplErr['code'])) {
+        $code = (int) $tplErr['code'];
+        if (in_array($code, [132000, 132001, 132005, 132007, 132012, 132015, 132016, 132068, 132069], true)) {
+            $allowFallback = true;
+        }
+    }
+
+    if (!$allowFallback) {
+        $out['method'] = 'template';
+        $out['error']  = 'Template send failed: ' . $tplHint
+            . ' — verify the template "' . $tplName . '" (' . $tplLang . ') is APPROVED in Meta and has 3 body text variables.';
+        $out['detail'] = $tplBody;
+        return $out;
+    }
+
+    // Fallback: free-form session text (only works inside the customer's 24h window).
+    $textPayload = [
         'messaging_product' => 'whatsapp',
         'recipient_type'    => 'individual',
         'to'                => $to,
@@ -341,20 +425,39 @@ function pcvc_brochure_send_whatsapp(string $phoneRaw, string $message): array
             'body'        => mb_substr($message, 0, 4096),
         ],
     ];
-
-    $res = xander_whatsapp_graph_post($url, $token, $payload);
-    if (($res['http'] ?? 0) >= 200 && ($res['http'] ?? 0) < 300 && xander_whatsapp_response_has_message_id($res['json'] ?? null)) {
+    $res2 = xander_whatsapp_graph_post($url, $token, $textPayload);
+    @error_log('[brochure-wa] text-fallback HTTP ' . ($res2['http'] ?? 0) . ' body=' . substr((string) ($res2['body'] ?? ''), 0, 300));
+    if (($res2['http'] ?? 0) >= 200 && ($res2['http'] ?? 0) < 300 && xander_whatsapp_response_has_message_id($res2['json'] ?? null)) {
         $out['sent']   = true;
-        $out['method'] = 'cloud-api-text';
+        $out['method'] = 'session-text-fallback';
         return $out;
     }
-
-    $err = xander_whatsapp_extract_error($res['json'] ?? null);
-    $msg = $err ? xander_whatsapp_user_hint($err) : ('HTTP ' . ($res['http'] ?? 0));
-    $out['error']  = $msg;
-    $out['detail'] = (string) ($res['body'] ?? '');
-    $out['method'] = 'cloud-api-text';
+    $err2  = xander_whatsapp_extract_error($res2['json'] ?? null);
+    $hint2 = $err2 ? xander_whatsapp_user_hint($err2) : ('HTTP ' . ($res2['http'] ?? 0));
+    $out['method'] = 'session-text-fallback';
+    $out['error']  = 'Template not available + session text rejected: ' . $hint2
+        . ' — outside 24h window. Get the template "' . $tplName . '" approved in Meta Business Manager.';
+    $out['detail'] = (string) ($res2['body'] ?? '');
     return $out;
+}
+
+/** Meta restricts template parameters: no newlines, no tabs, no >4 consecutive spaces. */
+function pcvc_brochure_wa_sanitize_param(string $s): string
+{
+    $s = str_replace(["\r", "\n", "\t"], ' ', $s);
+    $s = preg_replace('/\s{4,}/u', '   ', $s) ?? $s;
+    return mb_substr(trim($s), 0, 512);
+}
+
+/** When the template has a URL button with a dynamic suffix, return only the part after the base URL. */
+function pcvc_brochure_wa_button_suffix(string $url): string
+{
+    // Conventionally we expose just the slug after the last "=" or "/" — adjust to your button template config.
+    $p = parse_url($url);
+    if (!$p) {
+        return $url;
+    }
+    return ltrim(($p['path'] ?? '') . (isset($p['query']) ? ('?' . $p['query']) : ''), '/');
 }
 
 /**
