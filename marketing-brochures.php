@@ -180,6 +180,26 @@ body{
 .region-row{display:flex;gap:8px}
 .region-row .form-select{flex:1}
 
+/* Pretty tick row */
+.tick-row{
+    display:flex;align-items:flex-start;gap:12px;cursor:pointer;
+    background:#f8fafc;border:1px solid var(--border);border-radius:12px;
+    padding:12px 14px;user-select:none;transition:.2s;
+}
+.tick-row:hover{border-color:var(--brand);background:var(--brand-soft)}
+.tick-row input[type=checkbox]{position:absolute;opacity:0;pointer-events:none}
+.tick-row .check-visual{
+    flex:0 0 22px;width:22px;height:22px;border-radius:6px;
+    border:2px solid #cbd5e1;background:#fff;
+    display:grid;place-items:center;color:#fff;font-size:1rem;
+    transition:.2s;margin-top:2px;
+}
+.tick-row input[type=checkbox]:checked + .check-visual{
+    background:var(--brand);border-color:var(--brand);
+}
+.tick-row strong{display:block;font-weight:600;font-size:.92rem;color:var(--text);margin-bottom:2px}
+.tick-row small{color:var(--muted);font-size:.78rem;display:block;line-height:1.4}
+
 /* ---------- Brochure grid ---------- */
 .brochure-grid{
     display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;
@@ -212,26 +232,50 @@ body{
 .brochure-card .body{padding:16px 18px;flex:1;display:flex;flex-direction:column;gap:6px}
 .brochure-card .title{font-weight:700;font-size:1rem;color:var(--text);line-height:1.3}
 .brochure-card .meta{font-size:.75rem;color:var(--muted);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.brochure-card .quick-share{
-    padding:10px 14px;border-top:1px solid var(--border);
-    background:#fafbfd;display:flex;gap:6px;align-items:center;
+.brochure-card .share-block{
+    padding:12px 14px;border-top:1px solid var(--border);
+    background:linear-gradient(180deg,#fafbfd 0%,#f1f5f9 100%);
 }
-.brochure-card .quick-share .link-input{
+.brochure-card .share-label{
+    display:flex;align-items:center;gap:6px;
+    font-size:.7rem;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px;
+}
+.brochure-card .link-row{
+    display:flex;gap:6px;margin-bottom:8px;
+}
+.brochure-card .link-row input{
     flex:1;border:1px solid var(--border);border-radius:8px;
-    background:#fff;padding:6px 8px;font-size:.72rem;font-family:'Courier New',monospace;
-    color:var(--muted);outline:none;min-width:0;
+    background:#fff;padding:7px 10px;font-size:.74rem;
+    font-family:'Courier New',monospace;color:var(--text);outline:none;
+    min-width:0;cursor:text;
 }
-.brochure-card .quick-share button{
-    border:none;background:transparent;padding:6px 8px;border-radius:8px;
-    cursor:pointer;color:var(--text);transition:.2s;font-size:.85rem;
-    display:inline-flex;align-items:center;justify-content:center;
+.brochure-card .link-row .copy-btn{
+    flex:0 0 auto;border:none;background:var(--brand);color:#fff;
+    padding:7px 12px;border-radius:8px;cursor:pointer;font-size:.78rem;
+    font-weight:600;display:inline-flex;align-items:center;gap:5px;transition:.2s;
 }
-.brochure-card .quick-share button.wa{color:var(--whatsapp)}
-.brochure-card .quick-share button.cp{color:var(--brand)}
-.brochure-card .quick-share button:hover{background:#fff;box-shadow:var(--shadow-sm)}
+.brochure-card .link-row .copy-btn:hover{background:var(--brand-dark)}
+.brochure-card .share-actions{
+    display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;
+}
+.brochure-card .share-actions a,
+.brochure-card .share-actions button{
+    border:1px solid var(--border);background:#fff;color:var(--text);
+    padding:8px 6px;border-radius:8px;cursor:pointer;text-decoration:none;
+    display:inline-flex;align-items:center;justify-content:center;gap:5px;
+    font-size:.78rem;font-weight:600;transition:.2s;
+}
+.brochure-card .share-actions a.wa{color:var(--whatsapp);border-color:#d4f5dc}
+.brochure-card .share-actions a.wa:hover{background:var(--whatsapp);color:#fff;border-color:var(--whatsapp)}
+.brochure-card .share-actions a.em{color:var(--info);border-color:#dde6f6}
+.brochure-card .share-actions a.em:hover{background:var(--info);color:#fff;border-color:var(--info)}
+.brochure-card .share-actions button.send{color:var(--accent);border-color:#fbd8d8}
+.brochure-card .share-actions button.send:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+
 .brochure-card .footer{
     padding:10px 14px;border-top:1px solid var(--border);
-    display:flex;gap:6px;background:#fafbfd;
+    display:flex;gap:6px;background:#fff;
 }
 .brochure-card .footer button{
     flex:1;border:none;background:transparent;padding:6px 4px;
@@ -241,6 +285,12 @@ body{
 }
 .brochure-card .footer button:hover{background:var(--brand-soft);color:var(--brand)}
 .brochure-card .footer button.danger:hover{background:var(--accent-soft);color:var(--accent)}
+.brochure-card .attach-toggle{
+    display:flex;align-items:center;gap:6px;font-size:.74rem;color:var(--muted);cursor:pointer;
+    padding:6px 10px;border-radius:8px;transition:.2s;
+}
+.brochure-card .attach-toggle:hover{background:var(--brand-soft);color:var(--brand)}
+.brochure-card .attach-toggle input{margin:0;accent-color:var(--brand)}
 
 /* ---------- Modal ---------- */
 .modal-mask{
@@ -436,11 +486,19 @@ body{
                     </div>
                     <div>
                         <label class="form-label">Short description (optional)</label>
-                        <textarea name="description" id="descInput" class="form-control" rows="3" placeholder="What's inside this brochure? Shown on the public page."></textarea>
+                        <textarea name="description" id="descInput" class="form-control" rows="2" placeholder="What's inside this brochure? Shown on the public page."></textarea>
                     </div>
+                    <label class="tick-row" for="attachPdfChk">
+                        <input type="checkbox" name="attach_pdf" id="attachPdfChk" value="1" checked>
+                        <span class="check-visual"><i class="bi bi-check2"></i></span>
+                        <span>
+                            <strong>Attach original PDF on the public page</strong>
+                            <small>Customers will see the beautified HTML version and the embedded PDF + a download link. Uncheck to share only the HTML.</small>
+                        </span>
+                    </label>
                     <div style="display:flex;gap:8px;margin-top:auto">
                         <button type="submit" class="btn-brand" id="uploadBtn">
-                            <i class="bi bi-cloud-upload-fill"></i> Upload &amp; generate page
+                            <i class="bi bi-magic"></i> Upload &amp; auto-generate share page
                         </button>
                         <button type="reset" class="btn-ghost" onclick="resetUpload()">
                             <i class="bi bi-arrow-counterclockwise"></i> Reset
@@ -754,11 +812,16 @@ function renderBrochures(){
     let html='<div class="brochure-grid">';
     for(const b of BROCHURES){
         const sizeMb=(b.pdf_size_bytes/1024/1024).toFixed(2);
+        const attachOn = (b.attach_pdf||0) === 1;
+        const extStatus = b.extraction_status||'pending';
+        const extBadge = extStatus==='ok'
+            ? '<span class="table-tag" style="background:var(--brand-soft);color:var(--brand);border-color:transparent">HTML ready</span>'
+            : '<span class="table-tag" style="background:#fef3c7;color:#92400e;border-color:transparent">PDF only</span>';
         html += `
             <div class="brochure-card">
                 <div class="cover">
                     <span class="region-tag"><i class="bi bi-geo-alt-fill"></i> ${escapeHtml(b.region_name||'—')}</span>
-                    <i class="bi bi-file-earmark-pdf-fill pdf-icon"></i>
+                    <i class="bi bi-file-earmark-richtext-fill pdf-icon"></i>
                     <div style="font-size:.75rem;opacity:.85;margin-top:8px">PDF · ${sizeMb} MB</div>
                 </div>
                 <div class="body">
@@ -767,17 +830,34 @@ function renderBrochures(){
                         <span><i class="bi bi-eye"></i> ${b.view_count}</span>
                         <span><i class="bi bi-share"></i> ${b.share_count}</span>
                         <span><i class="bi bi-clock"></i> ${formatDate(b.created_at)}</span>
+                        ${extBadge}
                     </div>
                 </div>
-                <div class="quick-share">
-                    <input type="text" class="link-input" value="${escapeHtml(b.share_url)}" readonly onclick="this.select()" title="Share link">
-                    <button class="cp" title="Copy link" onclick="quickCopyLink(${b.id},'${escapeJs(b.share_url)}')"><i class="bi bi-clipboard"></i></button>
-                    <button class="wa" title="Share to WhatsApp" onclick="quickWhatsApp(${b.id},'${escapeJs(b.title)}','${escapeJs(b.share_url)}')"><i class="bi bi-whatsapp"></i></button>
+                <div class="share-block">
+                    <div class="share-label"><i class="bi bi-link-45deg"></i> Auto-generated share link</div>
+                    <div class="link-row">
+                        <input type="text" value="${escapeHtml(b.share_url)}" readonly onclick="this.select()" title="Share link">
+                        <button class="copy-btn" onclick="quickCopyLink(${b.id},'${escapeJs(b.share_url)}')"><i class="bi bi-clipboard-check"></i> Copy</button>
+                    </div>
+                    <div class="share-actions">
+                        <a class="wa" href="https://wa.me/?text=${encodeURIComponent('Hi! Please find our brochure: '+b.title+'\\n'+b.share_url)}" target="_blank" rel="noopener" onclick="logQuickShare(${b.id},'whatsapp')">
+                            <i class="bi bi-whatsapp"></i> WhatsApp
+                        </a>
+                        <a class="em" href="mailto:?subject=${encodeURIComponent(b.title)}&body=${encodeURIComponent('Hi,\\n\\nPlease find our brochure: '+b.title+'\\n'+b.share_url+'\\n\\nBest regards,\\nParrot Canada Visa Consultant')}" onclick="logQuickShare(${b.id},'email')">
+                            <i class="bi bi-envelope-fill"></i> Email
+                        </a>
+                        <button type="button" class="send" onclick="openShareModal(${b.id})">
+                            <i class="bi bi-person-lines-fill"></i> Send to customer
+                        </button>
+                    </div>
                 </div>
                 <div class="footer">
                     <button onclick="previewBrochure('${escapeJs(b.share_url)}')"><i class="bi bi-eye-fill"></i> Preview</button>
-                    <button onclick="openShareModal(${b.id})" style="color:var(--brand)"><i class="bi bi-send-fill"></i> Send to customer</button>
-                    <button class="danger" onclick="deleteBrochure(${b.id})"><i class="bi bi-trash3-fill"></i></button>
+                    <label class="attach-toggle" title="When ON, the customer page also shows the original PDF and a download button.">
+                        <input type="checkbox" ${attachOn?'checked':''} onchange="toggleAttachPdf(${b.id}, this.checked)">
+                        <i class="bi bi-file-earmark-pdf"></i> Attach PDF
+                    </label>
+                    <button class="danger" onclick="deleteBrochure(${b.id})" title="Delete"><i class="bi bi-trash3-fill"></i></button>
                 </div>
             </div>`;
     }
@@ -990,7 +1070,21 @@ function logQuickShare(brochureId,channel){
     fd.append('channel',channel);
     fd.append('notes','quick-share');
     fetch(ENDPOINT,{method:'POST',body:fd})
-      .then(r=>r.json()).then(()=>loadBrochures()).catch(()=>{});
+      .then(r=>r.json()).then(()=>setTimeout(loadBrochures,400)).catch(()=>{});
+}
+async function toggleAttachPdf(id,checked){
+    const fd=new FormData();
+    fd.append('action','set_attach_pdf');
+    fd.append('csrf_token',CSRF);
+    fd.append('id',id);
+    if(checked) fd.append('attach_pdf','1');
+    try{
+        const res=await fetch(ENDPOINT,{method:'POST',body:fd});
+        const d=await res.json();
+        if(!d.ok){toast(d.error||'Failed to update.','error');return;}
+        toast(checked?'Original PDF will be attached on the public page.':'Public page will hide the PDF (HTML only).','success');
+        loadBrochures();
+    }catch(e){toast('Network error: '+e.message,'error')}
 }
 
 /* ---------- Utils ---------- */

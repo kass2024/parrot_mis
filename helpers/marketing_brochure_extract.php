@@ -189,8 +189,8 @@ function pcvc_brochure_text_to_html(string $text): string
         $lines = preg_split("/\n/", $block) ?: [];
 
         // Try list detection: every line starts with a bullet or numbering.
-        $bulletPattern  = '/^\s*([•\-\*\u{25CF}\u{25CB}\u{25A0}\u{2013}\u{2014}\u{00B7}o])\s+(.*)$/u';
-        $numberedPattern = '/^\s*(\d{1,3})[\.\)]\s+(.*)$/';
+        $bulletPattern  = '/^\s*([\x{2022}\x{25CF}\x{25CB}\x{25A0}\x{2013}\x{2014}\x{00B7}\-\*o])\s+(.+)$/u';
+        $numberedPattern = '/^\s*(\d{1,3})[\.\)]\s+(.+)$/';
         $allBullets = true;
         $allNumbered = true;
         foreach ($lines as $ln) {
@@ -222,14 +222,16 @@ function pcvc_brochure_text_to_html(string $text): string
         // Single short uppercase line → heading.
         if (count($lines) === 1) {
             $only = trim($lines[0]);
-            $isUpper = preg_match('/^[A-Z0-9 \-\&\:\(\)\/\,\.]{4,80}$/u', $only)
+            $isUpper = $only !== ''
+                       && preg_match('/^[A-Z0-9 \-\&\:\(\)\/\,\.\']{4,80}$/', $only)
                        && strtoupper($only) === $only
                        && preg_match('/[A-Z]/', $only);
             if ($isUpper) {
                 $html .= '<h3 class="brochure-heading">' . pcvc_brochure_escape_inline($only) . '</h3>';
                 continue;
             }
-            $isShortTitle = mb_strlen($only) <= 70
+            $isShortTitle = mb_strlen($only) > 0
+                            && mb_strlen($only) <= 70
                             && preg_match('/^[A-Z][^.!?]{2,}$/u', $only)
                             && substr($only, -1) !== '.';
             if ($isShortTitle) {

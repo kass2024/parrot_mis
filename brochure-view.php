@@ -198,6 +198,37 @@ body{
     content:'';width:6px;height:24px;background:var(--brand);border-radius:3px;
 }
 .section .lead2{color:var(--muted);font-size:.92rem;margin-bottom:18px}
+
+/* ---------- Article (extracted HTML) ---------- */
+.article-card{
+    background:#fff;border:1px solid var(--border);border-radius:18px;
+    padding:34px 42px;box-shadow:var(--shadow);
+    max-width:880px;margin:0 auto;font-size:1.02rem;line-height:1.75;
+}
+@media (max-width:680px){.article-card{padding:24px 22px}}
+.article-card .brochure-heading{
+    font-size:1.35rem;font-weight:800;color:var(--brand-dark);
+    margin:28px 0 8px;letter-spacing:.3px;
+    padding-bottom:8px;border-bottom:2px solid var(--brand-soft);
+}
+.article-card .brochure-subheading{
+    font-size:1.08rem;font-weight:700;color:var(--text);margin:22px 0 6px;
+}
+.article-card .brochure-para{
+    margin:0 0 14px;color:var(--text);
+}
+.article-card .brochure-list{
+    margin:0 0 18px;padding-left:22px;
+}
+.article-card .brochure-list li{
+    margin-bottom:8px;color:var(--text);
+}
+.article-card ul.brochure-list li::marker{color:var(--brand)}
+.article-card ol.brochure-list li::marker{color:var(--brand);font-weight:700}
+.article-card a{color:var(--info);text-decoration:underline}
+.article-card a:hover{color:var(--brand-dark)}
+.article-card > :first-child{margin-top:0}
+
 .pdf-viewer{
     background:#1e293b;border-radius:16px;overflow:hidden;
     box-shadow:var(--shadow-lg);position:relative;
@@ -282,7 +313,9 @@ body{
                 </div>
             </div>
             <div class="tools">
-                <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn-pill"><i class="bi bi-download"></i> Download</a>
+                <?php if ($attachPdf): ?>
+                    <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn-pill"><i class="bi bi-download"></i> Download PDF</a>
+                <?php endif; ?>
                 <button class="btn-pill" onclick="copyPageLink()"><i class="bi bi-link-45deg"></i> Copy link</button>
                 <button class="btn-pill solid" onclick="shareNative()"><i class="bi bi-share-fill"></i> Share</button>
             </div>
@@ -303,15 +336,17 @@ body{
                 <span><i class="bi bi-file-earmark-pdf"></i> Official PDF</span>
             </div>
             <div class="actions">
-                <a href="#pdf" class="btn btn-primary"><i class="bi bi-book-half"></i> Read brochure</a>
-                <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn btn-outline"><i class="bi bi-download"></i> Download PDF</a>
+                <a href="#read" class="btn btn-primary"><i class="bi bi-book-half"></i> Read brochure</a>
+                <?php if ($attachPdf): ?>
+                    <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn btn-outline"><i class="bi bi-download"></i> Download PDF</a>
+                <?php endif; ?>
                 <button class="btn btn-wa" onclick="shareWhatsApp()"><i class="bi bi-whatsapp"></i> Send via WhatsApp</button>
             </div>
         </div>
         <div class="hero-card">
             <div class="pdf-thumb">
-                <i class="bi bi-file-earmark-pdf-fill"></i>
-                <div class="file-name"><?= htmlspecialchars($brochure['pdf_filename']) ?></div>
+                <i class="bi bi-file-earmark-richtext-fill"></i>
+                <div class="file-name"><?= htmlspecialchars($title) ?></div>
             </div>
             <div class="qr-box">
                 <img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=<?= urlencode($pageUrl) ?>">
@@ -324,9 +359,27 @@ body{
     </div>
 </section>
 
-<main class="container section" id="pdf">
-    <h2><i class="bi bi-book-fill" style="color:var(--brand)"></i> Read the brochure</h2>
-    <p class="lead2">Use the controls below to zoom, search and download the full PDF.</p>
+<!-- ============ Beautified article rendered from the PDF ============ -->
+<main class="container section" id="read">
+    <h2><i class="bi bi-book-fill" style="color:var(--brand)"></i> <?= htmlspecialchars($title) ?></h2>
+    <p class="lead2">Region: <strong><?= htmlspecialchars($regionName) ?></strong><?php if ($createdAt): ?> · Published <?= htmlspecialchars($createdAt) ?><?php endif; ?></p>
+
+    <article class="article-card">
+        <?php if ($hasHtml): ?>
+            <?= $htmlContent /* sanitized inline by extractor */ ?>
+        <?php else: ?>
+            <h3 class="brochure-heading">About this brochure</h3>
+            <p class="brochure-para"><?= nl2br(htmlspecialchars($description)) ?></p>
+            <p class="brochure-para">The full content is available in the original document below — open it in your browser, download it, or contact our team for a personalised walk-through.</p>
+        <?php endif; ?>
+    </article>
+</main>
+
+<?php if ($attachPdf): ?>
+<!-- ============ Original PDF (attached) ============ -->
+<section class="container section" id="pdf">
+    <h2><i class="bi bi-file-earmark-pdf-fill" style="color:var(--accent)"></i> Original PDF document</h2>
+    <p class="lead2">The official PDF version is attached below — open it inline, zoom, or download.</p>
     <div class="pdf-viewer">
         <div class="toolbar">
             <span><i class="bi bi-file-earmark-pdf-fill" style="color:var(--accent)"></i> <?= htmlspecialchars($brochure['pdf_filename']) ?></span>
@@ -338,7 +391,8 @@ body{
         </div>
         <iframe src="<?= htmlspecialchars($pdfUrl) ?>#view=FitH&toolbar=1" title="Brochure PDF"></iframe>
     </div>
-</main>
+</section>
+<?php endif; ?>
 
 <section class="container section">
     <h2><i class="bi bi-stars" style="color:var(--accent)"></i> Why choose Parrot Canada</h2>

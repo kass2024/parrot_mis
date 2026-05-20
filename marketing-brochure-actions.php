@@ -252,8 +252,9 @@ switch ($action) {
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $ins  = $conn->prepare($sql);
         $orig = (string) $f['name'];
+        // i s s s s s i i s s s i  -> 12 placeholders
         $ins->bind_param(
-            'isssssiissssi',
+            'isssssiisssi',
             $regionId, $title, $slug, $description, $orig, $relPath, $size,
             $attachPdf, $extractedText, $htmlContent, $extStatus, $adminId
         );
