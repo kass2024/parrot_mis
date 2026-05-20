@@ -786,7 +786,7 @@ if (!empty($_GET['application_status']) && in_array((string)$_GET['application_s
     $maxEffSql = pcvc_sql_max_effective_status('sa');
 
 $sql = "
-    SELECT DISTINCT
+    SELECT
         sa.id,
         sa.application_id,
         sa.first_name,
