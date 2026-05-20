@@ -6,6 +6,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/csrf.php';
 require_once __DIR__ . '/helpers/marketing_brochure_schema.php';
 require_once __DIR__ . '/helpers/marketing_brochure_ai.php';
+require_once __DIR__ . '/helpers/env_load.php';
 
 pcvc_marketing_brochure_ensure_schema($conn);
 
@@ -17,12 +18,30 @@ if (!isset($_SESSION['id'])) {
 $csrfToken = pcvc_csrf_token();
 $aiEnabled = pcvc_brochure_ai_enabled();
 $aiPaused  = function_exists('pcvc_brochure_ai_quota_paused') && pcvc_brochure_ai_quota_paused();
+$defaultCountryDial = pcvc_brochure_default_dial_code();
 
 $regions = [];
 if ($r = $conn->query('SELECT id, name FROM regions ORDER BY name ASC')) {
     while ($row = $r->fetch_assoc()) {
         $regions[] = $row;
     }
+}
+
+/** Map ISO-2 country codes from .env to a dial code (subset of common values). */
+function pcvc_brochure_default_dial_code(): string
+{
+    $iso = strtoupper(trim((string) (function_exists('xander_env_get') ? xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE') : '')));
+    $map = [
+        'RW' => '+250', 'KE' => '+254', 'UG' => '+256', 'TZ' => '+255',
+        'NG' => '+234', 'GH' => '+233', 'ZA' => '+27',  'ET' => '+251',
+        'BI' => '+257', 'CD' => '+243', 'CM' => '+237', 'SN' => '+221',
+        'CI' => '+225', 'EG' => '+20',  'MA' => '+212', 'DZ' => '+213',
+        'GB' => '+44',  'US' => '+1',   'CA' => '+1',   'FR' => '+33',
+        'DE' => '+49',  'IT' => '+39',  'ES' => '+34',  'TR' => '+90',
+        'IN' => '+91',  'PK' => '+92',  'BD' => '+880', 'CN' => '+86',
+        'AE' => '+971', 'SA' => '+966', 'QA' => '+974',
+    ];
+    return $map[$iso] ?? '+250';
 }
 ?>
 <!DOCTYPE html>
@@ -437,6 +456,27 @@ body{
     border:1px solid var(--border);
 }
 
+.edit-recipient{
+    background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:14px 16px;margin-top:10px;
+}
+.edit-recipient .form-label{
+    font-size:.78rem;font-weight:700;color:var(--text);
+    text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px;
+}
+.edit-recipient .form-control,.edit-recipient .form-select{
+    border:1px solid var(--border);border-radius:9px;font-size:.92rem;
+    padding:9px 12px;background:#f8fafc;width:100%;transition:.18s;
+}
+.edit-recipient .form-control:focus,.edit-recipient .form-select:focus{
+    border-color:var(--brand);background:#fff;outline:none;
+    box-shadow:0 0 0 3px rgba(66,116,49,.12);
+}
+.edit-recipient .phone-row{display:flex;gap:8px}
+.edit-recipient .phone-row .dial{flex:0 0 140px;cursor:pointer}
+.edit-recipient .phone-row input{flex:1}
+.edit-recipient .text-muted{font-size:.74rem;line-height:1.4;margin-top:4px;display:block}
+
 .send-status{margin-top:12px;font-size:.85rem}
 .send-status.success{color:#16a34a;display:flex;align-items:center;gap:6px}
 .send-status.error{color:#dc2626;display:flex;align-items:center;gap:6px}
@@ -759,6 +799,45 @@ body{
                 </div>
 
                 <div class="recipient-box" id="recipientBox"></div>
+
+                <div id="editRecipient" class="edit-recipient">
+                    <label class="form-label">Recipient name</label>
+                    <input type="text" id="editName" class="form-control" placeholder="Customer name">
+
+                    <div id="editPhoneWrap" style="margin-top:10px">
+                        <label class="form-label">WhatsApp number</label>
+                        <div class="phone-row">
+                            <select id="editDial" class="form-select dial">
+                                <option value="+250">🇷🇼 +250 RW</option>
+                                <option value="+254">🇰🇪 +254 KE</option>
+                                <option value="+256">🇺🇬 +256 UG</option>
+                                <option value="+255">🇹🇿 +255 TZ</option>
+                                <option value="+257">🇧🇮 +257 BI</option>
+                                <option value="+243">🇨🇩 +243 CD</option>
+                                <option value="+234">🇳🇬 +234 NG</option>
+                                <option value="+233">🇬🇭 +233 GH</option>
+                                <option value="+27">🇿🇦 +27 ZA</option>
+                                <option value="+251">🇪🇹 +251 ET</option>
+                                <option value="+1">🇺🇸 +1 US/CA</option>
+                                <option value="+44">🇬🇧 +44 UK</option>
+                                <option value="+33">🇫🇷 +33 FR</option>
+                                <option value="+49">🇩🇪 +49 DE</option>
+                                <option value="+91">🇮🇳 +91 IN</option>
+                                <option value="+92">🇵🇰 +92 PK</option>
+                                <option value="+86">🇨🇳 +86 CN</option>
+                                <option value="+971">🇦🇪 +971 AE</option>
+                                <option value="+966">🇸🇦 +966 SA</option>
+                            </select>
+                            <input type="tel" id="editPhone" class="form-control" placeholder="788 123 456">
+                        </div>
+                        <small class="text-muted" id="phoneHint">Pick the country code — the number after it should NOT include the leading 0.</small>
+                    </div>
+
+                    <div id="editEmailWrap" style="margin-top:10px;display:none">
+                        <label class="form-label">Email address</label>
+                        <input type="email" id="editEmail" class="form-control" placeholder="jane@example.com">
+                    </div>
+                </div>
 
                 <label class="form-label" style="margin-top:14px">Message preview <small style="font-weight:400;color:var(--muted)">(you can edit before sending)</small></label>
                 <textarea id="messagePreview" class="form-control" rows="6" style="font-family:inherit;line-height:1.55"></textarea>
@@ -1194,32 +1273,92 @@ function useNewContact(){
     SHARE_STATE.match=null;
     goConfirm();
 }
+const DEFAULT_DIAL = <?= json_encode($defaultCountryDial) ?>;
+
+/** Split a phone string into ["+250","788..."] using known dial codes. */
+function splitDial(raw){
+    const codes = ['+971','+966','+880','+251','+250','+255','+256','+254','+257','+243','+237','+234','+233','+225','+221','+213','+212','+91','+92','+86','+90','+49','+44','+39','+34','+33','+27','+20','+1'];
+    let digits = String(raw||'').replace(/\D+/g,'');
+    if(!digits) return [DEFAULT_DIAL,''];
+    // Already E.164 (no leading 0)
+    if(String(raw||'').trim().startsWith('+') || digits.length>=11){
+        for(const c of codes){
+            const cd = c.replace('+','');
+            if(digits.startsWith(cd)){
+                return ['+'+cd, digits.slice(cd.length)];
+            }
+        }
+    }
+    // National format with leading 0 → strip and use default
+    if(digits.startsWith('0')) digits = digits.replace(/^0+/,'');
+    return [DEFAULT_DIAL, digits];
+}
+
 function goConfirm(){
     const isWa = SHARE_STATE.channel==='whatsapp';
     const b = SHARE_STATE.brochure;
     document.getElementById('recipientBox').innerHTML = `
         <div class="lh">
-            <div class="nm"><i class="bi bi-person-fill"></i> ${escapeHtml(SHARE_STATE.name||'(no name)')}</div>
-            <div class="mt">
-                ${isWa?('<i class="bi bi-whatsapp"></i> '+escapeHtml(SHARE_STATE.phone||'-')):('<i class="bi bi-envelope-fill"></i> '+escapeHtml(SHARE_STATE.email||'-'))}
-            </div>
+            <div class="nm"><i class="bi bi-${isWa?'whatsapp':'envelope-fill'}"></i> Edit before sending</div>
+            <div class="mt">Review the customer name${isWa?', country code and phone':' and email'} below — they can be changed.</div>
         </div>
         <span class="badge">${SHARE_STATE.is_new?'NEW':'EXISTING'}</span>`;
-    const greet = SHARE_STATE.name?('Hello '+SHARE_STATE.name+','):'Hello,';
-    const msg =
+
+    document.getElementById('editName').value = SHARE_STATE.name || '';
+    document.getElementById('editPhoneWrap').style.display = isWa?'block':'none';
+    document.getElementById('editEmailWrap').style.display = isWa?'none':'block';
+    if(isWa){
+        const [dial,local] = splitDial(SHARE_STATE.phone);
+        const sel = document.getElementById('editDial');
+        const opt = Array.from(sel.options).find(o=>o.value===dial);
+        sel.value = opt ? dial : DEFAULT_DIAL;
+        document.getElementById('editPhone').value = local;
+    }else{
+        document.getElementById('editEmail').value = SHARE_STATE.email || '';
+    }
+
+    refreshMessagePreview();
+    document.getElementById('sendStatus').innerHTML='';
+    showSendPane(3);
+}
+
+function refreshMessagePreview(){
+    const isWa = SHARE_STATE.channel==='whatsapp';
+    const b = SHARE_STATE.brochure;
+    const name = document.getElementById('editName').value.trim();
+    const greet = name?('Hello '+name+','):'Hello,';
+    document.getElementById('messagePreview').value =
         greet+'\n\n'+
         'Please find our brochure: '+b.title+'\n'+
         b.share_url+'\n\n'+
         'Open the link to read the full document'+(isWa?' and download the PDF.':'.')+'\n'+
         'Reach out any time if you have questions.\n\n'+
         '— Parrot Canada Visa Consultant';
-    document.getElementById('messagePreview').value = msg;
-    document.getElementById('sendStatus').innerHTML='';
-    showSendPane(3);
 }
+document.addEventListener('input',e=>{
+    if(e.target && e.target.id==='editName') refreshMessagePreview();
+});
 
 async function sendNow(){
     const isWa = SHARE_STATE.channel==='whatsapp';
+    const editedName = document.getElementById('editName').value.trim();
+    let editedPhone = '', editedEmail = '';
+    if(isWa){
+        const dial = document.getElementById('editDial').value;
+        let local = document.getElementById('editPhone').value.replace(/\D+/g,'').replace(/^0+/,'');
+        if(!local){toast('Enter a WhatsApp phone number.','error');return;}
+        editedPhone = dial.replace('+','') + local;
+        if(editedPhone.length < 8){toast('Phone number looks too short.','error');return;}
+    }else{
+        editedEmail = document.getElementById('editEmail').value.trim();
+        if(!editedEmail || !/.+@.+\..+/.test(editedEmail)){toast('Enter a valid email address.','error');return;}
+    }
+
+    // Sync state so success toast + future steps reflect the edits.
+    SHARE_STATE.name  = editedName;
+    SHARE_STATE.phone = isWa?('+'+editedPhone):'';
+    SHARE_STATE.email = isWa?'':editedEmail;
+
     const btn=document.getElementById('sendNowBtn');
     btn.disabled=true;btn.innerHTML='<span class="spinner-mini"></span> Sending…';
     const stat=document.getElementById('sendStatus');
@@ -1229,17 +1368,17 @@ async function sendNow(){
         fd.append('action', isWa?'send_whatsapp':'send_email');
         fd.append('csrf_token',CSRF);
         fd.append('brochure_id',SHARE_STATE.brochure.id);
-        fd.append('name',SHARE_STATE.name||'');
+        fd.append('name',editedName);
         fd.append('is_new_contact',SHARE_STATE.is_new?'1':'0');
         if(SHARE_STATE.match){
             fd.append('matched_table',SHARE_STATE.match.table||'');
             fd.append('matched_row_id',SHARE_STATE.match.row_id||0);
         }
         if(isWa){
-            fd.append('phone',SHARE_STATE.phone||'');
+            fd.append('phone','+'+editedPhone);
             fd.append('message',document.getElementById('messagePreview').value);
         }else{
-            fd.append('email',SHARE_STATE.email||'');
+            fd.append('email',editedEmail);
             fd.append('message',document.getElementById('messagePreview').value);
             if(document.getElementById('emailAttachChk').checked) fd.append('attach_pdf','1');
         }
@@ -1248,7 +1387,7 @@ async function sendNow(){
         if(d.ok&&d.sent){
             stat.className='send-status success';
             stat.innerHTML='<i class="bi bi-check-circle-fill"></i> Sent successfully'+(isWa&&d.method?(' ('+d.method+')'):'')+'.';
-            toast('Brochure sent to '+(isWa?SHARE_STATE.phone:SHARE_STATE.email)+'.','success');
+            toast('Brochure sent to '+(isWa?('+'+editedPhone):editedEmail)+'.','success');
             loadBrochures();
             setTimeout(()=>closeModal('shareModal'),1400);
         }else{
