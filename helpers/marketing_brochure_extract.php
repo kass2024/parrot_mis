@@ -14,12 +14,16 @@ declare(strict_types=1);
  */
 
 /**
- * Public entry point. Returns ['text' => string, 'html' => string, 'engine' => string].
+ * Public entry point. Returns ['text' => string, 'html' => string, 'engine' => string, 'ai_used' => bool].
+ *
+ * When the OpenAI key is configured in .env, the cleaned text is sent to the
+ * AI formatter to produce a mobile-first, semantically marked-up HTML
+ * fragment. Falls back to the regex formatter on any failure.
  */
-function pcvc_brochure_extract_pdf(string $pdfAbsolutePath): array
+function pcvc_brochure_extract_pdf(string $pdfAbsolutePath, string $title = '', string $regionName = ''): array
 {
     if (!is_file($pdfAbsolutePath)) {
-        return ['text' => '', 'html' => '', 'engine' => 'missing'];
+        return ['text' => '', 'html' => '', 'engine' => 'missing', 'ai_used' => false];
     }
 
     $text   = '';
@@ -38,13 +42,27 @@ function pcvc_brochure_extract_pdf(string $pdfAbsolutePath): array
     }
 
     if ($text === '') {
-        return ['text' => '', 'html' => '', 'engine' => 'none'];
+        return ['text' => '', 'html' => '', 'engine' => 'none', 'ai_used' => false];
     }
 
-    $text = pcvc_brochure_clean_extracted_text($text);
-    $html = pcvc_brochure_text_to_html($text);
+    $text   = pcvc_brochure_clean_extracted_text($text);
+    $html   = '';
+    $aiUsed = false;
 
-    return ['text' => $text, 'html' => $html, 'engine' => $engine];
+    if (function_exists('pcvc_brochure_ai_enabled') && pcvc_brochure_ai_enabled()) {
+        $aiHtml = pcvc_brochure_ai_html_from_text($text, $title, $regionName);
+        if (is_string($aiHtml) && trim($aiHtml) !== '') {
+            $html   = $aiHtml;
+            $engine .= '+ai';
+            $aiUsed = true;
+        }
+    }
+
+    if ($html === '') {
+        $html = pcvc_brochure_text_to_html($text);
+    }
+
+    return ['text' => $text, 'html' => $html, 'engine' => $engine, 'ai_used' => $aiUsed];
 }
 
 /**

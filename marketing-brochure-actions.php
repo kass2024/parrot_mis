@@ -39,6 +39,7 @@ require_once __DIR__ . '/helpers/phone_whatsapp_normalize.php';
 require_once __DIR__ . '/helpers/student_status_notify.php';
 require_once __DIR__ . '/helpers/marketing_brochure_schema.php';
 require_once __DIR__ . '/helpers/marketing_brochure_extract.php';
+require_once __DIR__ . '/helpers/marketing_brochure_ai.php';
 require_once __DIR__ . '/helpers/marketing_brochure_send.php';
 
 pcvc_marketing_brochure_ensure_schema($conn);
@@ -268,7 +269,7 @@ switch ($action) {
         $size = (int) @filesize($absPath);
 
         // PDF → HTML extraction (best-effort; failure is non-fatal).
-        $extract = pcvc_brochure_extract_pdf($absPath);
+        $extract = pcvc_brochure_extract_pdf($absPath, $title, (string) $region['name']);
         $extractedText = (string) ($extract['text'] ?? '');
         $htmlContent   = (string) ($extract['html'] ?? '');
         $extEngine     = (string) ($extract['engine'] ?? 'none');
@@ -342,7 +343,10 @@ switch ($action) {
         if ($id <= 0) {
             pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid brochure ID.'], 400);
         }
-        $stmt = $conn->prepare('SELECT pdf_path FROM marketing_brochures WHERE id = ? LIMIT 1');
+        $stmt = $conn->prepare('SELECT b.pdf_path, b.title, COALESCE(r.name, "Global") AS region_name
+                                FROM marketing_brochures b
+                                LEFT JOIN regions r ON r.id = b.region_id
+                                WHERE b.id = ? LIMIT 1');
         $stmt->bind_param('i', $id);
         $stmt->execute();
         $row = $stmt->get_result()->fetch_assoc();
@@ -351,7 +355,7 @@ switch ($action) {
             pcvc_brochure_respond(['ok' => false, 'error' => 'Brochure not found.'], 404);
         }
         $abs = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, (string) $row['pdf_path']);
-        $extract = pcvc_brochure_extract_pdf($abs);
+        $extract = pcvc_brochure_extract_pdf($abs, (string) $row['title'], (string) $row['region_name']);
         $status  = !empty($extract['html']) ? 'ok' : 'failed';
         $u = $conn->prepare('UPDATE marketing_brochures
                               SET extracted_text = ?, html_content = ?, extraction_status = ?
@@ -363,6 +367,56 @@ switch ($action) {
             'ok'                => true,
             'extraction_status' => $status,
             'extraction_engine' => $extract['engine'] ?? 'none',
+            'ai_used'           => !empty($extract['ai_used']),
+        ]);
+        break;
+
+    // -------------------------------------------------------------
+    case 'reextract_all':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+        $onlyMissing = !empty($_POST['only_missing']);
+        $maxRun      = max(1, min((int) ($_POST['limit'] ?? 8), 25));
+        $sqlList = $onlyMissing
+            ? "SELECT b.id, b.pdf_path, b.title, COALESCE(r.name,'Global') AS region_name
+                 FROM marketing_brochures b LEFT JOIN regions r ON r.id = b.region_id
+                 WHERE b.is_active=1 AND (b.html_content IS NULL OR b.html_content='' OR b.extraction_status<>'ok')
+                 ORDER BY b.id ASC LIMIT $maxRun"
+            : "SELECT b.id, b.pdf_path, b.title, COALESCE(r.name,'Global') AS region_name
+                 FROM marketing_brochures b LEFT JOIN regions r ON r.id = b.region_id
+                 WHERE b.is_active=1
+                 ORDER BY b.id ASC LIMIT $maxRun";
+        $rs = $conn->query($sqlList);
+        $done   = [];
+        $failed = [];
+        $aiCnt  = 0;
+        while ($rs && ($row = $rs->fetch_assoc())) {
+            $abs = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, (string) $row['pdf_path']);
+            if (!is_file($abs)) { $failed[] = (int) $row['id']; continue; }
+            $ext = pcvc_brochure_extract_pdf($abs, (string) $row['title'], (string) $row['region_name']);
+            $ok  = !empty($ext['html']);
+            $st  = $ok ? 'ok' : 'failed';
+            $u = $conn->prepare('UPDATE marketing_brochures SET extracted_text=?, html_content=?, extraction_status=? WHERE id=?');
+            $u->bind_param('sssi', $ext['text'], $ext['html'], $st, $row['id']);
+            $u->execute();
+            $u->close();
+            if ($ok) {
+                $done[] = (int) $row['id'];
+                if (!empty($ext['ai_used'])) $aiCnt++;
+            } else {
+                $failed[] = (int) $row['id'];
+            }
+        }
+        pcvc_brochure_respond([
+            'ok'        => true,
+            'processed' => count($done) + count($failed),
+            'succeeded' => count($done),
+            'failed'    => count($failed),
+            'ai_used'   => $aiCnt,
+            'done_ids'  => $done,
+            'failed_ids'=> $failed,
+            'ai_enabled'=> function_exists('pcvc_brochure_ai_enabled') && pcvc_brochure_ai_enabled(),
         ]);
         break;
 

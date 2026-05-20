@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/csrf.php';
 require_once __DIR__ . '/helpers/marketing_brochure_schema.php';
+require_once __DIR__ . '/helpers/marketing_brochure_ai.php';
 
 pcvc_marketing_brochure_ensure_schema($conn);
 
@@ -14,6 +15,7 @@ if (!isset($_SESSION['id'])) {
 }
 
 $csrfToken = pcvc_csrf_token();
+$aiEnabled = pcvc_brochure_ai_enabled();
 
 $regions = [];
 if ($r = $conn->query('SELECT id, name FROM regions ORDER BY name ASC')) {
@@ -115,6 +117,25 @@ body{
     display:flex;flex-wrap:wrap;align-items:center;gap:14px;
     margin-bottom:18px;
 }
+.ai-banner{
+    background:#fff;border:1px solid var(--border);border-radius:14px;
+    padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;
+    justify-content:space-between;gap:14px;flex-wrap:wrap;
+    box-shadow:var(--shadow-sm);
+}
+.ai-banner.on{border-left:4px solid var(--brand)}
+.ai-banner.off{border-left:4px solid #d1d5db;background:#fafbfd}
+.ai-banner-l{display:flex;align-items:flex-start;gap:12px;flex:1;min-width:240px}
+.ai-banner .ai-ic{
+    width:42px;height:42px;border-radius:11px;display:grid;place-items:center;
+    background:linear-gradient(135deg,#427431,#2f5a26);color:#fff;font-size:1.2rem;
+    flex:0 0 42px;
+}
+.ai-banner.off .ai-ic{background:linear-gradient(135deg,#94a3b8,#64748b)}
+.ai-banner strong{font-size:.95rem;color:var(--text)}
+.ai-banner .ai-sub{font-size:.78rem;color:var(--muted);line-height:1.55;margin-top:3px}
+.ai-banner code{background:#f1f5f9;padding:1px 6px;border-radius:4px;font-size:.72rem;color:var(--text)}
+
 .toolbar .search-box{
     position:relative;flex:1 1 280px;
 }
@@ -578,6 +599,28 @@ body{
         </form>
     </div>
 
+    <!-- ============ AI status banner ============ -->
+    <div class="ai-banner <?= $aiEnabled ? 'on' : 'off' ?>">
+        <div class="ai-banner-l">
+            <div class="ai-ic"><i class="bi bi-stars"></i></div>
+            <div>
+                <strong>AI extraction <?= $aiEnabled ? 'enabled' : 'not configured' ?></strong>
+                <div class="ai-sub">
+                    <?php if ($aiEnabled): ?>
+                        Every new upload is rewritten into mobile-first HTML by the model in your <code>OPENAI_API_KEY</code> (<code><?= htmlspecialchars(trim((string) (getenv('OPENAI_MODEL') ?: 'gpt-4o-mini'))) ?></code>). Use the button to refresh older brochures.
+                    <?php else: ?>
+                        Add <code>OPENAI_API_KEY</code> (and optionally <code>OPENAI_MODEL</code>) to <code>.env</code> to enable AI-formatted HTML. Without it brochures use the regex fallback.
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+        <?php if ($aiEnabled): ?>
+            <button class="btn-brand" type="button" onclick="reextractAll(false)">
+                <i class="bi bi-magic"></i> Re-extract all with AI
+            </button>
+        <?php endif; ?>
+    </div>
+
     <!-- ============ Toolbar ============ -->
     <div class="toolbar">
         <div class="search-box">
@@ -870,6 +913,27 @@ document.getElementById('uploadForm').addEventListener('submit',async e=>{
 });
 
 /* ---------- Load brochures ---------- */
+async function reextractAll(onlyMissing){
+    if(!confirm(onlyMissing
+        ? 'Re-extract only brochures that don\'t have HTML yet?'
+        : 'Re-extract ALL active brochures with AI? Existing HTML will be replaced. This may take a minute and uses OpenAI credits.'))
+        return;
+    const fd=new FormData();
+    fd.append('action','reextract_all');
+    fd.append('csrf_token',CSRF);
+    fd.append('limit','25');
+    if(onlyMissing) fd.append('only_missing','1');
+    toast('AI extraction in progress…','info');
+    try{
+        const res=await fetch(ENDPOINT,{method:'POST',body:fd});
+        const d=await res.json();
+        if(!d.ok){toast(d.error||'Bulk extract failed.','error');return;}
+        const aiNote = d.ai_used>0 ? (d.ai_used+' used AI') : (d.ai_enabled ? 'AI failed — used regex fallback (check OpenAI quota)' : 'AI not configured');
+        toast('Done: '+d.succeeded+' / '+d.processed+' refreshed. '+aiNote+'.','success');
+        loadBrochures();
+    }catch(e){toast('Bulk extract failed: '+e.message,'error')}
+}
+
 async function loadBrochures(){
     const q=document.getElementById('searchBox').value.trim();
     const region=document.getElementById('filterRegion').value;
