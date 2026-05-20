@@ -270,12 +270,19 @@ $stmt = $conn->prepare("
         c.contract_token,
         c.selected_package_code,
 
-        /* ✅ SINGLE SOURCE OF TRUTH */
-        TRIM(s.first_name) AS full_name,
+        /* Build full legal name from first + middle + last */
+        TRIM(CONCAT_WS(' ',
+            NULLIF(TRIM(s.first_name),  ''),
+            NULLIF(TRIM(s.middle_name), ''),
+            NULLIF(TRIM(s.last_name),   '')
+        )) AS full_name,
 
         s.email,
         s.dob,
-        s.nationality,
+
+        /* Resolve nationality to country NAME whether stored as id or as name */
+        COALESCE(nat.name, s.nationality) AS nationality,
+
         s.passport_number,
         s.phone_number,
 
@@ -284,6 +291,9 @@ $stmt = $conn->prepare("
     FROM student_contracts c
     INNER JOIN student_applications s ON s.id = c.student_id
     INNER JOIN student_signatures sig ON sig.contract_id = c.id
+    LEFT JOIN countries nat
+           ON nat.id   = s.nationality
+           OR nat.name = s.nationality
     WHERE c.id = ?
     LIMIT 1
 ");

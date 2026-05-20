@@ -36,17 +36,20 @@ $sql = "
     SELECT
         s.id,
         s.first_name,
+        s.middle_name,
         s.last_name,
         s.email,
         s.dob,
 
-        /* ✅ FIX: COUNTRY NAME INSTEAD OF ID */
-        c.name AS nationality,
+        /* Country NAME whether stored as id or already as a name string */
+        COALESCE(c.name, s.nationality) AS nationality,
 
         s.passport_number,
         s.phone_number
     FROM student_applications s
-    LEFT JOIN countries c ON c.id = s.nationality
+    LEFT JOIN countries c
+           ON c.id   = s.nationality
+           OR c.name = s.nationality
     WHERE s.email LIKE ?
     ORDER BY
         CASE WHEN s.email = ? THEN 0 ELSE 1 END,
@@ -81,12 +84,20 @@ if (!$student) {
 /* =====================================================
    5. RETURN DATA (MATCHES JS EXPECTATIONS EXACTLY)
 ===================================================== */
+$fullName = trim(preg_replace('/\s+/', ' ', implode(' ', array_filter([
+    trim((string) ($student['first_name']  ?? '')),
+    trim((string) ($student['middle_name'] ?? '')),
+    trim((string) ($student['last_name']   ?? '')),
+], static fn($v) => $v !== ''))));
+
 echo json_encode([
     'possible_match' => true,
     'student' => [
         'id'              => (int) $student['id'],
         'first_name'      => $student['first_name'] ?? '',
+        'middle_name'     => $student['middle_name'] ?? '',
         'last_name'       => $student['last_name'] ?? '',
+        'full_name'       => $fullName,
         'email'           => $student['email'] ?? '',
         'dob'             => $student['dob'] ?? '',
         'nationality'     => $student['nationality'] ?? '',

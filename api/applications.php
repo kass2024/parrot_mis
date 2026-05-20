@@ -7,8 +7,9 @@ require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 require_once __DIR__ . '/../helpers/application_filters.php';
 require_once __DIR__ . '/../helpers/study_choice_admin_actions.php';
+require_once __DIR__ . '/../helpers/application_documents_admin.php';
 
-$action = $_GET['action'] ?? '';
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
 
 /**
  * ======================================================
@@ -153,6 +154,95 @@ if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'message' => $ins['duplicate']
             ? 'This study choice is already listed for this application.'
             : ($ins['inserted'] ? 'Study choice added.' : ''),
+    ]);
+    exit;
+}
+
+/**
+ * ======================================================
+ * REPLACE / UPLOAD APPLICATION DOCUMENT (all admins)
+ * ======================================================
+ */
+if ($action === 'replace_document' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $applicationId = (int) ($_POST['application_id'] ?? 0);
+    $docKey        = trim((string) ($_POST['document_key'] ?? ''));
+    if ($applicationId <= 0 || $docKey === '') {
+        jsonResponse('Invalid request', false, 400);
+    }
+    if (empty($_FILES['file'])) {
+        jsonResponse('No file uploaded', false, 400);
+    }
+
+    $result = pcvc_app_replace_document($conn, $applicationId, $docKey, $_FILES['file']);
+    if (!$result['ok']) {
+        jsonResponse($result['error'] ?? 'Upload failed', false, 422);
+    }
+
+    jsonResponse([
+        'path'      => $result['path'] ?? '',
+        'documents' => $result['documents'] ?? [],
+        'message'   => 'Document saved.',
+    ]);
+    exit;
+}
+
+/**
+ * ======================================================
+ * NOTIFY STUDENT — MISSING DOCUMENTS (WhatsApp template + email)
+ * ======================================================
+ */
+if ($action === 'notify_missing_documents' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $applicationId = (int) ($_POST['application_id'] ?? 0);
+    $rawKeys         = $_POST['missing_keys'] ?? [];
+    if (is_string($rawKeys)) {
+        $decoded = json_decode($rawKeys, true);
+        $rawKeys = is_array($decoded) ? $decoded : array_filter(array_map('trim', explode(',', $rawKeys)));
+    }
+    if (!is_array($rawKeys)) {
+        $rawKeys = [];
+    }
+    $missingKeys = array_values(array_filter(array_map('strval', $rawKeys)));
+    $customNote  = trim((string) ($_POST['custom_note'] ?? ''));
+    $sendWa      = !isset($_POST['send_whatsapp']) || $_POST['send_whatsapp'] === '1' || $_POST['send_whatsapp'] === 'true';
+    $sendEm      = !isset($_POST['send_email']) || $_POST['send_email'] === '1' || $_POST['send_email'] === 'true';
+
+    if ($applicationId <= 0) {
+        jsonResponse('Invalid application id', false, 400);
+    }
+
+    $result = pcvc_app_notify_missing_documents($conn, $applicationId, $missingKeys, $customNote, $sendWa, $sendEm);
+    if (!$result['ok']) {
+        jsonResponse([
+            'error'    => $result['error'] ?? 'Send failed',
+            'whatsapp' => $result['whatsapp'] ?? [],
+            'email'    => $result['email'] ?? [],
+        ], false, 422);
+    }
+
+    jsonResponse([
+        'message'  => 'Notification sent.',
+        'whatsapp' => $result['whatsapp'] ?? [],
+        'email'    => $result['email'] ?? [],
     ]);
     exit;
 }
@@ -1115,7 +1205,8 @@ foreach ($studyChoicesForJobs as $choice) {
      * DOCUMENTS
      * ==================================================
      */
-    $documents = [
+    $docPayload = pcvc_app_documents_for_view($app);
+    $documents  = [
         "degree_transcripts"     => json_decode($app['degree_transcripts'] ?? "[]", true),
         "high_school_degree"     => $app['high_school_degree'],
         "passport"               => $app['valid_passport'],
@@ -1236,6 +1327,7 @@ foreach ($studyChoicesForJobs as $choice) {
             "email" => $app['agent_email']
         ],
         "documents" => $documents,
+        "document_items" => $docPayload['items'],
 
         "status" => [
             "submitted" => (bool)$app['submitted'],

@@ -670,7 +670,17 @@ th {
 
                     <!-- DOCUMENTS -->
                     <section class="card p-6">
-                        <div class="section-title">Documents</div>
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                            <div class="section-title mb-0">Documents</div>
+                            <button
+                                type="button"
+                                id="btnNotifyMissingDocs"
+                                class="hidden rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-45"
+                                disabled
+                            >
+                                Notify missing documents
+                            </button>
+                        </div>
                         <div id="documentsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
                     </section>
 
@@ -748,6 +758,33 @@ th {
 
         </div>
     </main>
+</div>
+
+<!-- Missing documents notification modal -->
+<div id="missingDocsModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/50 p-4" aria-hidden="true">
+    <div class="w-full max-w-lg rounded-xl bg-white shadow-xl" role="dialog">
+        <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <h3 class="text-base font-bold text-slate-900">Notify student — missing documents</h3>
+            <button type="button" id="missingDocsModalClose" class="text-2xl leading-none text-slate-400 hover:text-slate-700">&times;</button>
+        </div>
+        <div class="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            <p class="text-sm text-slate-600">Send via WhatsApp (approved template) and/or email. Only tick documents that are still missing.</p>
+            <div class="flex gap-3">
+                <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="missingSendWa" checked> WhatsApp</label>
+                <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="missingSendEmail" checked> Email</label>
+            </div>
+            <div id="missingDocsChecklist" class="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50 max-h-48 overflow-y-auto"></div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-600 mb-1">Optional note to student</label>
+                <textarea id="missingDocsNote" rows="3" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Please upload a clear colour scan of your passport bio page."></textarea>
+            </div>
+            <div id="missingDocsSendStatus" class="text-sm hidden"></div>
+        </div>
+        <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+            <button type="button" id="missingDocsCancel" class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+            <button type="button" id="missingDocsSendBtn" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">Send notification</button>
+        </div>
+    </div>
 </div>
 
 <script>

@@ -1923,10 +1923,17 @@ function resetStudentFields() {
       fields.email.value = student.email;
     }
 
-    if (fields.name && (student.first_name || student.last_name)) {
-      fields.name.value = [student.first_name, student.last_name]
-        .filter(Boolean)
-        .join(' ');
+    if (fields.name) {
+      const composed = (student.full_name && String(student.full_name).trim())
+        || [student.first_name, student.middle_name, student.last_name]
+            .map(v => (v == null ? '' : String(v).trim()))
+            .filter(Boolean)
+            .join(' ');
+      if (composed) {
+        fields.name.value = composed;
+        // Sync the signature "Name" input that auto-mirrors student_name
+        fields.name.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
 
     if (fields.dob && student.dob) {

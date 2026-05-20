@@ -74,8 +74,10 @@ const filterLevel = document.getElementById("filterLevel");
 
 /** Currently selected application numeric id (student_applications.id) for inline edits */
 let currentViewApplicationId = null;
+let currentDocumentItems = [];
 let studyChoiceRegionsLoaded = false;
 let studyChoiceAddFormWired = false;
+let missingDocsModalWired = false;
 
 /**
  * =====================================================
@@ -86,6 +88,7 @@ document.addEventListener("DOMContentLoaded", () => {
     startTimeAgoTicker();
     loadFilterOptions().finally(() => loadStudents());
     wireStudyChoiceAddFormOnce();
+    wireMissingDocsModalOnce();
     document.getElementById("btnSaveAssignment")?.addEventListener("click", saveApplicationAssignment);
 });
 
@@ -958,6 +961,7 @@ function renderApplication(data, applicationNumericId) {
         education = {},
         study_choices = [],
         documents = {},
+        document_items = [],
         agent = {},
         meta = {}
     } = data;
@@ -1015,7 +1019,9 @@ function renderApplication(data, applicationNumericId) {
     );
 
     renderStudyChoices(study_choices);
-    renderDocuments(documents);
+    currentDocumentItems = normalizeDocumentItems(document_items, documents);
+    renderDocuments(currentDocumentItems);
+    updateMissingDocsNotifyButton();
     renderAgent(agent);
 
     renderDeleteControls(applicationNumericId, canDelete);
@@ -1366,29 +1372,311 @@ function renderStudyChoices(choices) {
 
 /**
  * =====================================================
- * DOCUMENTS
+ * DOCUMENTS (admin upload / replace + missing-doc notify)
  * =====================================================
  */
-function renderDocuments(docs) {
+function normalizeDocumentItems(documentItems, legacyDocs) {
+    if (Array.isArray(documentItems) && documentItems.length) {
+        return documentItems;
+    }
+    const legacy = legacyDocs && typeof legacyDocs === "object" ? legacyDocs : {};
+    const defs = [
+        { key: "degree_transcripts", label: "Degree Transcripts", multiple: true },
+        { key: "high_school_degree", label: "High School Degree", multiple: false },
+        { key: "passport", label: "Passport", multiple: false },
+        { key: "cv_resume", label: "CV / Resume", multiple: false },
+        { key: "personal_statement", label: "Personal Statement", multiple: false },
+        { key: "recommendation_letters", label: "Recommendation Letters", multiple: false },
+        { key: "english_certificate", label: "English Certificate", multiple: false },
+        { key: "birth_certificate", label: "Birth Certificate", multiple: false },
+        { key: "payment_proof", label: "Payment Proof", multiple: false },
+    ];
+    return defs.map((def) => {
+        const raw = legacy[def.key];
+        const paths = [];
+        if (def.multiple) {
+            const arr = Array.isArray(raw) ? raw : [];
+            arr.forEach((p) => {
+                if (typeof p === "string" && p.trim()) paths.push(p);
+            });
+        } else if (typeof raw === "string" && raw.trim()) {
+            paths.push(raw);
+        }
+        return {
+            key: def.key,
+            label: def.label,
+            multiple: def.multiple,
+            paths,
+            present: paths.length > 0,
+        };
+    });
+}
+
+function updateMissingDocsNotifyButton() {
+    const btn = document.getElementById("btnNotifyMissingDocs");
+    if (!btn) return;
+    if (!currentViewApplicationId) {
+        btn.classList.add("hidden");
+        btn.disabled = true;
+        return;
+    }
+    btn.classList.remove("hidden");
+    btn.disabled = false;
+}
+
+function renderDocuments(items) {
     const list = document.getElementById("documentsList");
+    if (!list) return;
     list.innerHTML = "";
 
-    let found = false;
+    const rows = Array.isArray(items) ? items : [];
+    if (!rows.length) {
+        list.innerHTML = `<div class="text-sm text-gray-400">No document types configured</div>`;
+        return;
+    }
 
-    Object.entries(docs).forEach(([label, value]) => {
-        if (!value) return;
+    rows.forEach((item) => {
+        list.appendChild(buildDocumentAdminCard(item));
+    });
+}
 
-        const files = Array.isArray(value) ? value : [value];
-        files.forEach(path => {
-            if (!path) return;
-            found = true;
-            list.appendChild(documentCard(path, label.replace(/_/g, " ")));
-        });
+function buildDocumentAdminCard(item) {
+    const key = String(item.key || "");
+    const label = String(item.label || key.replace(/_/g, " "));
+    const paths = Array.isArray(item.paths) ? item.paths.filter(Boolean) : [];
+    const present = paths.length > 0 || item.present === true;
+    const primaryPath = paths[0] || "";
+    const fileName = primaryPath ? primaryPath.split("/").pop() : "";
+
+    const div = document.createElement("div");
+    div.className = present
+        ? "flex flex-col gap-2 p-3 border border-slate-200 rounded-lg bg-slate-50"
+        : "flex flex-col gap-2 p-3 border border-amber-200 rounded-lg bg-amber-50";
+
+    const statusBadge = present
+        ? `<span class="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">On file</span>`
+        : `<span class="text-[10px] font-semibold uppercase tracking-wide text-amber-800">Missing</span>`;
+
+    const fileLine = present
+        ? `<span class="text-xs text-slate-500 truncate max-w-full" title="${escapeAttr(fileName)}">${escapeHTML(fileName)}</span>`
+        : `<span class="text-xs text-amber-700">Not uploaded yet</span>`;
+
+    const viewBtn = present
+        ? `<a href="${escapeAttr(primaryPath)}" target="_blank" rel="noopener" class="text-blue-600 text-xs font-semibold hover:underline shrink-0">View</a>`
+        : "";
+
+    const actionLabel = present ? "Replace" : "Upload";
+
+    div.innerHTML = `
+        <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-sm font-semibold text-slate-900">${escapeHTML(label)}</span>
+                    ${statusBadge}
+                </div>
+                ${fileLine}
+            </div>
+            ${viewBtn}
+        </div>
+        <div class="flex justify-end">
+            <button type="button" class="pcvc-doc-upload-btn rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100" data-doc-key="${escapeAttr(key)}">${escapeHTML(actionLabel)}</button>
+        </div>
+    `;
+
+    div.querySelector(".pcvc-doc-upload-btn")?.addEventListener("click", () => {
+        promptDocumentUpload(key);
     });
 
-    if (!found) {
-        list.innerHTML =
-            `<div class="text-sm text-gray-400">No documents uploaded</div>`;
+    return div;
+}
+
+function promptDocumentUpload(docKey) {
+    if (!currentViewApplicationId) {
+        alert("Select an application first.");
+        return;
+    }
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = ".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*";
+    inp.addEventListener("change", () => {
+        const file = inp.files?.[0];
+        if (file) void uploadApplicationDocument(docKey, file);
+    });
+    inp.click();
+}
+
+async function uploadApplicationDocument(docKey, file) {
+    if (!currentViewApplicationId || !docKey || !file) return;
+
+    const fd = new FormData();
+    fd.append("application_id", String(currentViewApplicationId));
+    fd.append("document_key", docKey);
+    fd.append("file", file);
+
+    try {
+        const res = await fetch(
+            projectApiPath("api/applications.php?action=replace_document"),
+            { method: "POST", credentials: "same-origin", body: fd }
+        );
+        const data = await res.json();
+        if (!res.ok || data.success === false) {
+            const err = data.message || data.errors?.error || "Upload failed";
+            alert(err);
+            return;
+        }
+        if (Array.isArray(data.data?.documents)) {
+            currentDocumentItems = data.data.documents;
+            renderDocuments(currentDocumentItems);
+            updateMissingDocsNotifyButton();
+        } else {
+            loadApplication(currentViewApplicationId, null);
+        }
+        showToast(data.data?.message || "Document saved.");
+    } catch (e) {
+        console.error("uploadApplicationDocument:", e);
+        alert("Upload failed. Check your connection and try again.");
+    }
+}
+
+function wireMissingDocsModalOnce() {
+    if (missingDocsModalWired) return;
+    missingDocsModalWired = true;
+
+    document.getElementById("btnNotifyMissingDocs")?.addEventListener("click", openMissingDocsModal);
+    document.getElementById("missingDocsModalClose")?.addEventListener("click", closeMissingDocsModal);
+    document.getElementById("missingDocsCancel")?.addEventListener("click", closeMissingDocsModal);
+    document.getElementById("missingDocsSendBtn")?.addEventListener("click", () => {
+        void sendMissingDocsNotification();
+    });
+
+    document.getElementById("missingDocsModal")?.addEventListener("click", (ev) => {
+        if (ev.target?.id === "missingDocsModal") closeMissingDocsModal();
+    });
+}
+
+function openMissingDocsModal() {
+    if (!currentViewApplicationId) {
+        alert("Select an application first.");
+        return;
+    }
+    const modal = document.getElementById("missingDocsModal");
+    const checklist = document.getElementById("missingDocsChecklist");
+    const statusEl = document.getElementById("missingDocsSendStatus");
+    if (!modal || !checklist) return;
+
+    checklist.innerHTML = "";
+    const items = currentDocumentItems.length
+        ? currentDocumentItems
+        : normalizeDocumentItems([], {});
+
+    items.forEach((item) => {
+        const row = document.createElement("label");
+        row.className = "flex items-start gap-2 text-sm cursor-pointer";
+        const onFile = item.present === true || (Array.isArray(item.paths) && item.paths.length > 0);
+        row.innerHTML = `
+            <input type="checkbox" class="mt-0.5" name="missing_doc_key" value="${escapeAttr(item.key)}" ${onFile ? "" : "checked"}>
+            <span>
+                <span class="font-medium text-slate-800">${escapeHTML(item.label || item.key)}</span>
+                ${onFile ? '<span class="text-slate-400 text-xs"> (already on file)</span>' : '<span class="text-amber-700 text-xs"> (missing)</span>'}
+            </span>
+        `;
+        checklist.appendChild(row);
+    });
+
+    if (statusEl) {
+        statusEl.classList.add("hidden");
+        statusEl.textContent = "";
+        statusEl.className = "text-sm hidden";
+    }
+    const note = document.getElementById("missingDocsNote");
+    if (note) note.value = "";
+
+    modal.classList.remove("hidden");
+    modal.classList.add("flex");
+    modal.setAttribute("aria-hidden", "false");
+}
+
+function closeMissingDocsModal() {
+    const modal = document.getElementById("missingDocsModal");
+    if (!modal) return;
+    modal.classList.add("hidden");
+    modal.classList.remove("flex");
+    modal.setAttribute("aria-hidden", "true");
+}
+
+async function sendMissingDocsNotification() {
+    if (!currentViewApplicationId) return;
+
+    const keys = [...document.querySelectorAll('#missingDocsChecklist input[name="missing_doc_key"]:checked')]
+        .map((el) => el.value)
+        .filter(Boolean);
+    const sendWa = document.getElementById("missingSendWa")?.checked ?? true;
+    const sendEm = document.getElementById("missingSendEmail")?.checked ?? true;
+    const note = (document.getElementById("missingDocsNote")?.value || "").trim();
+    const statusEl = document.getElementById("missingDocsSendStatus");
+    const sendBtn = document.getElementById("missingDocsSendBtn");
+
+    if (!keys.length) {
+        alert("Select at least one document to request.");
+        return;
+    }
+    if (!sendWa && !sendEm) {
+        alert("Select WhatsApp and/or email.");
+        return;
+    }
+
+    const fd = new FormData();
+    fd.append("application_id", String(currentViewApplicationId));
+    fd.append("missing_keys", JSON.stringify(keys));
+    fd.append("custom_note", note);
+    fd.append("send_whatsapp", sendWa ? "1" : "0");
+    fd.append("send_email", sendEm ? "1" : "0");
+
+    if (sendBtn) sendBtn.disabled = true;
+    if (statusEl) {
+        statusEl.classList.remove("hidden");
+        statusEl.className = "text-sm text-slate-600";
+        statusEl.textContent = "Sending…";
+    }
+
+    try {
+        const res = await fetch(
+            projectApiPath("api/applications.php?action=notify_missing_documents"),
+            { method: "POST", credentials: "same-origin", body: fd }
+        );
+        const data = await res.json();
+        if (!res.ok || data.success === false) {
+            const err = data.errors?.error || data.message || "Send failed";
+            if (statusEl) {
+                statusEl.className = "text-sm text-red-600";
+                statusEl.textContent = err;
+            } else {
+                alert(err);
+            }
+            return;
+        }
+        const wa = data.data?.whatsapp || {};
+        const em = data.data?.email || {};
+        const parts = [];
+        if (wa.sent) parts.push(`WhatsApp (${wa.method || "sent"})`);
+        if (em.sent) parts.push("Email");
+        const msg = parts.length ? `Sent via ${parts.join(" and ")}.` : (data.data?.message || "Notification sent.");
+        if (statusEl) {
+            statusEl.className = "text-sm text-emerald-700";
+            statusEl.textContent = msg;
+        }
+        showToast(msg);
+        setTimeout(closeMissingDocsModal, 1200);
+    } catch (e) {
+        console.error("sendMissingDocsNotification:", e);
+        if (statusEl) {
+            statusEl.className = "text-sm text-red-600";
+            statusEl.textContent = "Send failed. Try again.";
+        } else {
+            alert("Send failed.");
+        }
+    } finally {
+        if (sendBtn) sendBtn.disabled = false;
     }
 }
 
@@ -1562,39 +1850,6 @@ function escapeAttr(str) {
         .replace(/&/g, "&amp;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
-}
-/**
- * =====================================================
- * DOCUMENT CARD (REQUIRED)
- * =====================================================
- */
-function documentCard(path, label) {
-    const div = document.createElement("div");
-    div.className =
-        "flex items-center justify-between p-3 border rounded-md bg-slate-50 hover:bg-slate-100";
-
-    const fileName = path.split("/").pop();
-
-    div.innerHTML = `
-        <div class="flex flex-col">
-            <span class="text-sm font-medium capitalize">
-                ${escapeHTML(label)}
-            </span>
-            <span class="text-xs text-gray-500 truncate max-w-[220px]">
-                ${escapeHTML(fileName)}
-            </span>
-        </div>
-
-        <a
-            href="${escapeHTML(path)}"
-            target="_blank"
-            class="text-blue-600 text-xs font-semibold hover:underline"
-        >
-            View
-        </a>
-    `;
-
-    return div;
 }
 /**
  * =====================================================
