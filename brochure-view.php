@@ -124,6 +124,17 @@ body{
 .btn-pill:hover{background:rgba(255,255,255,.28);color:#fff}
 .btn-pill.solid{background:#fff;color:var(--brand)}
 .btn-pill.solid:hover{background:#fdfdfd}
+.btn-pill .lbl{display:inline}
+@media (max-width:780px){
+    .site-header{padding:10px 0}
+    .brand-mark{width:36px;height:36px;font-size:1rem}
+    .brand-name{font-size:.95rem}
+    .brand-tag{font-size:.66rem;letter-spacing:.8px}
+    .site-header .tools{gap:6px}
+    .btn-pill{padding:8px 11px;font-size:0;border-radius:10px}
+    .btn-pill i{font-size:1.05rem}
+    .btn-pill .lbl{display:none}
+}
 
 /* ---------- Hero ---------- */
 .hero{
@@ -138,6 +149,10 @@ body{
 }
 .hero-inner{display:grid;grid-template-columns:1.4fr 1fr;gap:36px;align-items:center}
 @media (max-width:860px){.hero-inner{grid-template-columns:1fr}}
+@media (max-width:780px){
+    .hero{padding:20px 0 16px}
+    .hero-card{display:none}
+}
 .hero .region-pill{
     display:inline-flex;align-items:center;gap:6px;
     background:var(--brand-soft);color:var(--brand);
@@ -148,10 +163,42 @@ body{
     font-size:2.2rem;line-height:1.18;font-weight:800;
     color:var(--text);margin-bottom:14px;
 }
+@media (max-width:780px){
+    .hero h1{font-size:1.5rem;line-height:1.22;margin-bottom:10px}
+    .hero .region-pill{margin-bottom:10px;font-size:.7rem;padding:4px 12px}
+}
 .hero .lead{font-size:1.05rem;color:var(--muted);max-width:600px;margin-bottom:18px}
+@media (max-width:780px){.hero .lead{font-size:.92rem;margin-bottom:12px;display:none}}
 .hero .meta-row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:24px;color:var(--muted);font-size:.85rem}
 .hero .meta-row span{display:inline-flex;align-items:center;gap:6px}
+@media (max-width:780px){
+    .hero .meta-row{gap:8px;font-size:.74rem;margin-bottom:14px}
+    .hero .meta-row span:nth-child(n+3){display:none}
+}
 .hero .actions{display:flex;gap:10px;flex-wrap:wrap}
+@media (max-width:780px){
+    .hero .actions{display:none} /* covered by sticky action bar */
+}
+
+/* ---------- Mobile action bar (sticky, below header) ---------- */
+.mobile-action-bar{display:none}
+@media (max-width:780px){
+    .mobile-action-bar{
+        display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+        background:#fff;border-bottom:1px solid var(--border);
+        padding:8px 14px;position:sticky;top:54px;z-index:40;
+        box-shadow:0 4px 14px -8px rgba(15,23,42,.18);
+    }
+    .mobile-action-bar button,.mobile-action-bar a{
+        background:#fff;border:1px solid var(--border);border-radius:10px;
+        padding:9px 4px;font-size:.65rem;font-weight:600;color:var(--text);
+        text-decoration:none;cursor:pointer;
+        display:flex;flex-direction:column;align-items:center;gap:3px;line-height:1;
+    }
+    .mobile-action-bar i{font-size:1.05rem;color:var(--brand)}
+    .mobile-action-bar .primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+    .mobile-action-bar .primary i{color:#fff}
+}
 .btn{
     border:none;padding:12px 20px;border-radius:12px;font-weight:600;font-size:.92rem;
     cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:8px;
@@ -198,6 +245,12 @@ body{
     content:'';width:6px;height:24px;background:var(--brand);border-radius:3px;
 }
 .section .lead2{color:var(--muted);font-size:.92rem;margin-bottom:18px}
+@media (max-width:780px){
+    .section{padding:18px 0}
+    .section h2{font-size:1.1rem;margin-bottom:4px}
+    .section h2::before{height:18px;width:5px}
+    .section .lead2{font-size:.78rem;margin-bottom:12px}
+}
 
 /* ---------- Article (extracted HTML) ---------- */
 .article-card{
@@ -205,7 +258,13 @@ body{
     padding:34px 42px;box-shadow:var(--shadow);
     max-width:880px;margin:0 auto;font-size:1.02rem;line-height:1.75;
 }
-@media (max-width:680px){.article-card{padding:24px 22px}}
+@media (max-width:680px){
+    .article-card{padding:20px 18px;border-radius:14px;font-size:.95rem;line-height:1.65}
+    .article-card .brochure-heading{font-size:1.05rem;margin:18px 0 6px}
+    .article-card .brochure-subheading{font-size:.96rem;margin:14px 0 4px}
+    .article-card .brochure-list{padding-left:18px}
+    .article-card .brochure-list li{margin-bottom:6px}
+}
 .article-card .brochure-heading{
     font-size:1.35rem;font-weight:800;color:var(--brand-dark);
     margin:28px 0 8px;letter-spacing:.3px;
@@ -236,12 +295,43 @@ body{
 .pdf-viewer .toolbar{
     background:#0f172a;color:#fff;padding:10px 16px;
     display:flex;justify-content:space-between;align-items:center;
-    font-size:.85rem;
+    font-size:.85rem;gap:10px;
 }
 .pdf-viewer .toolbar a{color:#fff;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-weight:600;opacity:.85;transition:.2s}
 .pdf-viewer .toolbar a:hover{opacity:1}
 .pdf-viewer iframe{width:100%;height:800px;border:none;background:#fff;display:block}
-@media (max-width:860px){.pdf-viewer iframe{height:560px}}
+
+/* Mobile PDF card — replaces unreliable inline iframe rendering on phones */
+.pdf-mobile-card{display:none}
+@media (max-width:780px){
+    .pdf-viewer iframe,.pdf-viewer .toolbar{display:none}
+    .pdf-viewer{background:transparent;box-shadow:none}
+    .pdf-mobile-card{
+        display:block;background:#fff;border:1px solid var(--border);
+        border-radius:16px;padding:20px;box-shadow:var(--shadow);
+    }
+    .pdf-mobile-card .pdf-icon{
+        width:60px;height:60px;border-radius:14px;
+        background:linear-gradient(135deg,#fee2e2,#fecaca);color:var(--accent);
+        display:grid;place-items:center;font-size:1.9rem;margin:0 auto 12px;
+    }
+    .pdf-mobile-card .pdf-name{
+        text-align:center;font-weight:700;font-size:.92rem;color:var(--text);
+        word-break:break-word;margin-bottom:4px;
+    }
+    .pdf-mobile-card .pdf-sub{
+        text-align:center;font-size:.74rem;color:var(--muted);margin-bottom:16px;
+    }
+    .pdf-mobile-card .pdf-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .pdf-mobile-card .pdf-actions a{
+        padding:12px 6px;border-radius:11px;text-decoration:none;
+        display:flex;flex-direction:column;align-items:center;gap:4px;
+        font-size:.78rem;font-weight:700;line-height:1.1;
+    }
+    .pdf-mobile-card .pdf-actions a i{font-size:1.2rem}
+    .pdf-mobile-card .open-btn{background:var(--brand);color:#fff}
+    .pdf-mobile-card .download-btn{background:#f1f5f9;color:var(--text);border:1px solid var(--border)}
+}
 
 /* ---------- Features ---------- */
 .features{
@@ -260,6 +350,7 @@ body{
 }
 .feature h5{font-size:1rem;font-weight:700;margin-bottom:6px}
 .feature p{font-size:.85rem;color:var(--muted);margin:0}
+@media (max-width:780px){.features-section{display:none}} /* keep mobile focused on requirements */
 
 /* ---------- CTA ---------- */
 .cta{
@@ -280,6 +371,35 @@ body{
 .cta .btn-primary:hover{background:#fafafa}
 .cta .btn-outline{border-color:#fff;color:#fff}
 .cta .btn-outline:hover{background:rgba(255,255,255,.12)}
+@media (max-width:780px){
+    .cta{padding:24px 20px;border-radius:16px}
+    .cta h2{font-size:1.15rem;margin-bottom:6px}
+    .cta p{font-size:.85rem;margin-bottom:14px}
+    .cta .btn{padding:10px 16px;font-size:.85rem}
+}
+
+/* ---------- QR overlay (mobile) ---------- */
+.qr-overlay{
+    position:fixed;inset:0;background:rgba(15,23,42,.6);
+    display:none;align-items:center;justify-content:center;z-index:300;
+    padding:24px;backdrop-filter:blur(4px);
+}
+.qr-overlay.show{display:flex}
+.qr-overlay .box{
+    background:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;
+    text-align:center;position:relative;box-shadow:var(--shadow-lg);
+}
+.qr-overlay .box img{width:240px;height:240px;border-radius:12px;border:1px solid var(--border);padding:6px;background:#fff}
+.qr-overlay .box h4{font-size:1.05rem;font-weight:700;margin-bottom:6px;color:var(--text)}
+.qr-overlay .box p{font-size:.78rem;color:var(--muted);margin-bottom:14px}
+.qr-overlay .box .close-x{
+    position:absolute;top:10px;right:10px;background:#f1f5f9;border:none;
+    width:32px;height:32px;border-radius:50%;font-size:1.1rem;cursor:pointer;color:var(--muted);
+}
+.qr-overlay .box .url-line{
+    font-size:.72rem;color:var(--muted);word-break:break-all;
+    background:#f8fafc;padding:8px 12px;border-radius:8px;margin-top:12px;
+}
 
 /* ---------- Footer ---------- */
 .site-footer{
@@ -314,14 +434,27 @@ body{
             </div>
             <div class="tools">
                 <?php if ($attachPdf): ?>
-                    <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn-pill"><i class="bi bi-download"></i> Download PDF</a>
+                    <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn-pill" title="Download PDF"><i class="bi bi-download"></i> <span class="lbl">Download PDF</span></a>
                 <?php endif; ?>
-                <button class="btn-pill" onclick="copyPageLink()"><i class="bi bi-link-45deg"></i> Copy link</button>
-                <button class="btn-pill solid" onclick="shareNative()"><i class="bi bi-share-fill"></i> Share</button>
+                <button class="btn-pill" onclick="copyPageLink()" title="Copy link"><i class="bi bi-link-45deg"></i> <span class="lbl">Copy link</span></button>
+                <button class="btn-pill" onclick="openQr()" title="Scan QR"><i class="bi bi-qr-code"></i> <span class="lbl">Scan</span></button>
+                <button class="btn-pill solid" onclick="shareNative()" title="Share"><i class="bi bi-share-fill"></i> <span class="lbl">Share</span></button>
             </div>
         </div>
     </div>
 </header>
+
+<!-- Mobile-only quick action bar — clear path to read / download / share / scan -->
+<div class="mobile-action-bar">
+    <a href="#read" class="primary"><i class="bi bi-book-half"></i> Read</a>
+    <?php if ($attachPdf): ?>
+        <a href="<?= htmlspecialchars($pdfUrl) ?>" download><i class="bi bi-download"></i> PDF</a>
+    <?php else: ?>
+        <button onclick="copyPageLink()"><i class="bi bi-link-45deg"></i> Copy</button>
+    <?php endif; ?>
+    <button onclick="shareNative()"><i class="bi bi-share-fill"></i> Share</button>
+    <button onclick="openQr()"><i class="bi bi-qr-code"></i> Scan</button>
+</div>
 
 <section class="hero">
     <div class="container hero-inner">
@@ -389,12 +522,27 @@ body{
                 <a href="<?= htmlspecialchars($pdfUrl) ?>" download><i class="bi bi-download"></i> Download</a>
             </span>
         </div>
-        <iframe src="<?= htmlspecialchars($pdfUrl) ?>#view=FitH&toolbar=1" title="Brochure PDF"></iframe>
+        <iframe src="<?= htmlspecialchars($pdfUrl) ?>#view=FitH&toolbar=1" title="Brochure PDF" loading="lazy"></iframe>
+
+        <!-- Mobile fallback (phones can't reliably render inline PDFs) -->
+        <div class="pdf-mobile-card">
+            <div class="pdf-icon"><i class="bi bi-file-earmark-pdf-fill"></i></div>
+            <div class="pdf-name"><?= htmlspecialchars($brochure['pdf_filename']) ?></div>
+            <div class="pdf-sub">Tap below to view the official PDF.</div>
+            <div class="pdf-actions">
+                <a class="open-btn" href="<?= htmlspecialchars($pdfUrl) ?>" target="_blank" rel="noopener">
+                    <i class="bi bi-box-arrow-up-right"></i> Open PDF
+                </a>
+                <a class="download-btn" href="<?= htmlspecialchars($pdfUrl) ?>" download>
+                    <i class="bi bi-download"></i> Download
+                </a>
+            </div>
+        </div>
     </div>
 </section>
 <?php endif; ?>
 
-<section class="container section">
+<section class="container section features-section">
     <h2><i class="bi bi-stars" style="color:var(--accent)"></i> Why choose Parrot Canada</h2>
     <p class="lead2">Trusted by hundreds of students applying to <?= htmlspecialchars($regionName) ?> and beyond.</p>
     <div class="features">
@@ -446,6 +594,17 @@ body{
     </div>
 </footer>
 
+<!-- QR overlay (used by the Scan button on header + mobile bar) -->
+<div class="qr-overlay" id="qrOverlay" onclick="if(event.target===this)closeQr()">
+    <div class="box">
+        <button class="close-x" onclick="closeQr()" aria-label="Close">&times;</button>
+        <h4><i class="bi bi-qr-code" style="color:var(--brand)"></i> Scan to share</h4>
+        <p>Point a phone camera at the code to open this brochure.</p>
+        <img alt="QR code" src="https://api.qrserver.com/v1/create-qr-code/?size=480x480&margin=2&data=<?= urlencode($pageUrl) ?>">
+        <div class="url-line"><?= htmlspecialchars($pageUrl) ?></div>
+    </div>
+</div>
+
 <div class="fly-toast" id="flyToast">Link copied!</div>
 
 <script>
@@ -475,6 +634,9 @@ async function shareNative(){
         catch(e){}
     }else{copyPageLink();}
 }
+function openQr(){document.getElementById('qrOverlay').classList.add('show');document.body.style.overflow='hidden';}
+function closeQr(){document.getElementById('qrOverlay').classList.remove('show');document.body.style.overflow='';}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeQr();});
 </script>
 </body>
 </html>

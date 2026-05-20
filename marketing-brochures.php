@@ -348,6 +348,75 @@ body{
 }
 .share-url-box input{flex:1;border:none;background:transparent;outline:none;font-family:'Courier New',monospace;font-size:.82rem}
 
+/* New send modal styles */
+.channel-pick{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:560px){.channel-pick{grid-template-columns:1fr}}
+.channel-card{
+    background:#fff;border:1.5px solid var(--border);border-radius:14px;
+    padding:18px;text-align:left;cursor:pointer;
+    display:flex;gap:14px;align-items:flex-start;transition:.2s;
+}
+.channel-card .ic{
+    width:48px;height:48px;border-radius:12px;display:grid;place-items:center;
+    color:#fff;font-size:1.5rem;flex:0 0 48px;
+}
+.channel-card.wa .ic{background:linear-gradient(135deg,#25D366,#128c7e)}
+.channel-card.em .ic{background:linear-gradient(135deg,#3661B9,#1f3f80)}
+.channel-card .t{font-weight:700;font-size:1rem;color:var(--text);margin-bottom:4px}
+.channel-card .d{font-size:.78rem;color:var(--muted);line-height:1.45}
+.channel-card.wa:hover{border-color:var(--whatsapp);box-shadow:0 8px 24px -10px rgba(37,211,102,.35);transform:translateY(-2px)}
+.channel-card.em:hover{border-color:var(--info);box-shadow:0 8px 24px -10px rgba(54,97,185,.35);transform:translateY(-2px)}
+.channel-card code{background:#f1f5f9;padding:1px 4px;border-radius:4px;font-size:.72rem;color:var(--text)}
+
+.chan-pill{
+    background:linear-gradient(135deg,var(--brand) 0%,var(--brand-dark) 100%);
+    color:#fff;padding:6px 14px;border-radius:999px;
+    font-weight:700;font-size:.82rem;
+    display:inline-flex;align-items:center;gap:6px;
+}
+.chan-pill.wa{background:linear-gradient(135deg,#25D366,#128c7e)}
+.chan-pill.em{background:linear-gradient(135deg,#3661B9,#1f3f80)}
+
+.tab-bar{display:flex;border:1px solid var(--border);border-radius:10px;background:#f8fafc;padding:4px;margin-bottom:12px}
+.tab-btn{
+    flex:1;border:none;background:transparent;padding:8px 12px;border-radius:8px;
+    font-weight:600;font-size:.85rem;color:var(--muted);cursor:pointer;
+    display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:.2s;
+}
+.tab-btn.active{background:#fff;color:var(--brand);box-shadow:var(--shadow-sm)}
+
+.recip-results{margin-top:10px;max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.recip-row{
+    background:#fff;border:1px solid var(--border);border-radius:10px;
+    padding:10px 14px;cursor:pointer;transition:.15s;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.recip-row:hover{border-color:var(--brand);background:var(--brand-soft)}
+.recip-row .nm{font-weight:700;font-size:.9rem;color:var(--text)}
+.recip-row .mt{font-size:.76rem;color:var(--muted);margin-top:2px}
+.recip-row .tag{
+    background:#f1f5f9;color:var(--muted);font-size:.68rem;
+    padding:2px 8px;border-radius:999px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.4px;
+}
+
+.recipient-box{
+    background:var(--brand-soft);border:1px solid #c7e0bc;border-radius:12px;
+    padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.recipient-box .lh{flex:1}
+.recipient-box .nm{font-weight:700;font-size:1rem;color:var(--text)}
+.recipient-box .mt{font-size:.82rem;color:#3a5a2d;margin-top:3px}
+.recipient-box .badge{
+    background:#fff;color:var(--brand);font-size:.7rem;padding:3px 10px;
+    border-radius:999px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+    border:1px solid var(--border);
+}
+
+.send-status{margin-top:12px;font-size:.85rem}
+.send-status.success{color:#16a34a;display:flex;align-items:center;gap:6px}
+.send-status.error{color:#dc2626;display:flex;align-items:center;gap:6px}
+
 .channel-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
 .channel-btn{
     background:#fff;border:1px solid var(--border);
@@ -557,92 +626,110 @@ body{
     </div>
 </div>
 
-<!-- ============ Share Modal ============ -->
+<!-- ============ Send to Customer Modal ============ -->
 <div class="modal-mask" id="shareModal">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:640px">
         <div class="modal-head">
-            <h3><i class="bi bi-share-fill"></i> Share <span id="shareTitle" style="font-weight:400;opacity:.85"></span></h3>
+            <h3><i class="bi bi-send-fill"></i> Send to customer <span id="shareTitle" style="font-weight:400;opacity:.85"></span></h3>
             <button class="close" onclick="closeModal('shareModal')">&times;</button>
         </div>
         <div class="modal-body">
-            <div class="share-stepper">
-                <div class="step active" id="step1"></div>
-                <div class="step" id="step2"></div>
-                <div class="step" id="step3"></div>
+            <!-- Step 1: pick channel -->
+            <div id="sendPane1">
+                <p class="text-muted" style="font-size:.9rem;margin-bottom:14px">How do you want to deliver this brochure?</p>
+                <div class="channel-pick">
+                    <button type="button" class="channel-card wa" onclick="pickChannel('whatsapp')">
+                        <div class="ic"><i class="bi bi-whatsapp"></i></div>
+                        <div>
+                            <div class="t">WhatsApp message</div>
+                            <div class="d">Sent through our official WhatsApp Business number — your customer sees the company name.</div>
+                        </div>
+                    </button>
+                    <button type="button" class="channel-card em" onclick="pickChannel('email')">
+                        <div class="ic"><i class="bi bi-envelope-paper-fill"></i></div>
+                        <div>
+                            <div class="t">Email message</div>
+                            <div class="d">Delivered by SMTP from <code>admission@visaconsultantcanada.com</code> with the brochure attached.</div>
+                        </div>
+                    </button>
+                </div>
             </div>
 
-            <!-- Step 1: phone -->
-            <div id="sharePane1">
-                <label class="form-label">Customer WhatsApp / phone number</label>
-                <input type="tel" id="sharePhone" class="form-control" placeholder="e.g. +250 788 123 456" autofocus>
-                <small class="text-muted">We'll first look this number up across all application tables. If we don't find it, you can create a new contact.</small>
+            <!-- Step 2: pick recipient (search OR new) -->
+            <div id="sendPane2" style="display:none">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+                    <button class="btn-ghost" type="button" onclick="backToChannel()" title="Back"><i class="bi bi-arrow-left"></i></button>
+                    <div class="chan-pill" id="chanPill"></div>
+                </div>
 
-                <div id="lookupResults" style="margin-top:14px"></div>
+                <div class="tab-bar">
+                    <button type="button" class="tab-btn active" data-tab="search" onclick="switchTab('search')">
+                        <i class="bi bi-search"></i> Search applicants
+                    </button>
+                    <button type="button" class="tab-btn" data-tab="new" onclick="switchTab('new')">
+                        <i class="bi bi-person-plus"></i> New contact
+                    </button>
+                </div>
 
-                <div style="margin-top:18px;display:flex;gap:8px;justify-content:flex-end">
+                <!-- Tab: search -->
+                <div class="tab-panel" id="tab-search">
+                    <input type="text" id="recipSearch" class="form-control" placeholder="Search by name, phone or email…" autocomplete="off">
+                    <small class="text-muted" id="searchHelp">Type at least 3 characters to look across every application table.</small>
+                    <div id="recipResults" class="recip-results"></div>
+                </div>
+
+                <!-- Tab: new -->
+                <div class="tab-panel" id="tab-new" style="display:none">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                        <div>
+                            <label class="form-label">Full name</label>
+                            <input type="text" id="newRecipName" class="form-control" placeholder="Jane Doe">
+                        </div>
+                        <div id="newPhoneField">
+                            <label class="form-label">WhatsApp number</label>
+                            <input type="tel" id="newRecipPhone" class="form-control" placeholder="+250 788 123 456">
+                        </div>
+                        <div id="newEmailField" style="display:none;grid-column:span 2">
+                            <label class="form-label">Email address</label>
+                            <input type="email" id="newRecipEmail" class="form-control" placeholder="jane@example.com">
+                        </div>
+                    </div>
+                    <small class="text-muted" style="display:block;margin-top:6px">We'll save this lead to your contacts so it can be reused later.</small>
+                    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+                        <button type="button" class="btn-brand" onclick="useNewContact()">
+                            Continue <i class="bi bi-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: confirm + send -->
+            <div id="sendPane3" style="display:none">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+                    <button class="btn-ghost" type="button" onclick="backToRecipient()" title="Back"><i class="bi bi-arrow-left"></i></button>
+                    <div class="chan-pill" id="chanPill2"></div>
+                </div>
+
+                <div class="recipient-box" id="recipientBox"></div>
+
+                <label class="form-label" style="margin-top:14px">Message preview <small style="font-weight:400;color:var(--muted)">(you can edit before sending)</small></label>
+                <textarea id="messagePreview" class="form-control" rows="6" style="font-family:inherit;line-height:1.55"></textarea>
+
+                <label class="tick-row" style="margin-top:12px" for="emailAttachChk" id="emailAttachWrap">
+                    <input type="checkbox" id="emailAttachChk" value="1" checked>
+                    <span class="check-visual"><i class="bi bi-check2"></i></span>
+                    <span>
+                        <strong>Attach the original PDF to the email</strong>
+                        <small>Recipient gets the PDF as an attachment plus the beautified HTML body. Uncheck for link-only.</small>
+                    </span>
+                </label>
+
+                <div id="sendStatus" class="send-status"></div>
+
+                <div style="margin-top:18px;display:flex;justify-content:space-between;gap:8px">
                     <button class="btn-ghost" onclick="closeModal('shareModal')">Cancel</button>
-                    <button class="btn-brand" id="lookupBtn" onclick="runLookup()">
-                        <i class="bi bi-search"></i> Look up number
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step 2: confirm / add new -->
-            <div id="sharePane2" style="display:none">
-                <h6 style="font-weight:700;margin-bottom:10px"><i class="bi bi-person-plus"></i> Add this contact</h6>
-                <p class="text-muted" style="font-size:.85rem">No existing applicant matched. Please add the customer details — we'll save them to your contacts.</p>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                    <div>
-                        <label class="form-label">Full name</label>
-                        <input type="text" id="newName" class="form-control" placeholder="Jane Doe">
-                    </div>
-                    <div>
-                        <label class="form-label">Email (optional)</label>
-                        <input type="email" id="newEmail" class="form-control" placeholder="jane@example.com">
-                    </div>
-                </div>
-                <div style="margin-top:18px;display:flex;gap:8px;justify-content:space-between">
-                    <button class="btn-ghost" onclick="backToPane(1)">
-                        <i class="bi bi-arrow-left"></i> Back
-                    </button>
-                    <button class="btn-brand" onclick="goToShare(true)">
-                        Continue <i class="bi bi-arrow-right"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Step 3: pick channel -->
-            <div id="sharePane3" style="display:none">
-                <h6 style="font-weight:700;margin-bottom:6px"><i class="bi bi-send-fill"></i> Send the brochure</h6>
-                <div id="shareRecipientBox" class="match-card selected" style="cursor:default"></div>
-                <label class="form-label" style="margin-top:14px">Share link</label>
-                <div class="share-url-box">
-                    <input type="text" id="shareLinkBox" readonly>
-                    <button class="btn-ghost" onclick="copyShareLink()" title="Copy"><i class="bi bi-clipboard"></i></button>
-                </div>
-
-                <label class="form-label" style="margin-top:14px">Choose how to send</label>
-                <div class="channel-row">
-                    <a href="#" class="channel-btn wa" id="chWhatsapp" target="_blank" rel="noopener" onclick="trackShare('whatsapp');">
-                        <i class="bi bi-whatsapp" style="color:var(--whatsapp)"></i>
-                        WhatsApp
-                    </a>
-                    <a href="#" class="channel-btn em" id="chEmail" onclick="trackShare('email');">
-                        <i class="bi bi-envelope-fill" style="color:var(--info)"></i>
-                        Email
-                    </a>
-                    <button type="button" class="channel-btn cp" onclick="copyShareLink(true);trackShare('copy');">
-                        <i class="bi bi-clipboard-check" style="color:var(--brand)"></i>
-                        Copy link
-                    </button>
-                </div>
-
-                <div style="margin-top:18px;display:flex;gap:8px;justify-content:space-between">
-                    <button class="btn-ghost" onclick="backToPane(1)">
-                        <i class="bi bi-arrow-counterclockwise"></i> Start over
-                    </button>
-                    <button class="btn-brand" onclick="closeModal('shareModal')">
-                        <i class="bi bi-check2-all"></i> Done
+                    <button class="btn-brand" id="sendNowBtn" onclick="sendNow()">
+                        <i class="bi bi-send-fill"></i> Send now
                     </button>
                 </div>
             </div>
@@ -888,162 +975,210 @@ async function deleteBrochure(id){
     loadBrochures();
 }
 
-/* ---------- Share ---------- */
+/* ---------- Send-to-customer (WhatsApp Cloud API / SMTP email) ---------- */
 function openShareModal(brochureId){
     const b=BROCHURES.find(x=>x.id===brochureId);
     if(!b){toast('Brochure not found.','error');return;}
-    SHARE_STATE={brochure:b,match:null,is_new:false,name:'',email:'',phone:'',links:null};
+    SHARE_STATE={brochure:b,channel:null,match:null,is_new:false,name:'',email:'',phone:''};
     document.getElementById('shareTitle').textContent=' — '+b.title;
-    document.getElementById('sharePhone').value='';
-    document.getElementById('lookupResults').innerHTML='';
-    document.getElementById('newName').value='';
-    document.getElementById('newEmail').value='';
-    showPane(1);
+    document.getElementById('recipSearch').value='';
+    document.getElementById('recipResults').innerHTML='';
+    document.getElementById('newRecipName').value='';
+    document.getElementById('newRecipPhone').value='';
+    document.getElementById('newRecipEmail').value='';
+    showSendPane(1);
     openModal('shareModal');
-    setTimeout(()=>document.getElementById('sharePhone').focus(),120);
 }
-function showPane(n){
-    [1,2,3].forEach(i=>{
-        document.getElementById('sharePane'+i).style.display = (i===n)?'block':'none';
-        document.getElementById('step'+i).classList.toggle('active',i<=n);
-    });
+function showSendPane(n){
+    [1,2,3].forEach(i=>document.getElementById('sendPane'+i).style.display=(i===n)?'block':'none');
 }
-function backToPane(n){showPane(n)}
+function pickChannel(ch){
+    SHARE_STATE.channel=ch;
+    const isWa = ch==='whatsapp';
+    document.getElementById('chanPill').className='chan-pill '+(isWa?'wa':'em');
+    document.getElementById('chanPill').innerHTML=
+        '<i class="bi bi-'+(isWa?'whatsapp':'envelope-paper-fill')+'"></i> '+(isWa?'WhatsApp delivery':'Email delivery');
+    document.getElementById('chanPill2').className='chan-pill '+(isWa?'wa':'em');
+    document.getElementById('chanPill2').innerHTML=
+        '<i class="bi bi-'+(isWa?'whatsapp':'envelope-paper-fill')+'"></i> '+(isWa?'WhatsApp delivery':'Email delivery');
+    // Toggle the "new contact" tab fields based on channel
+    document.getElementById('newPhoneField').style.display = isWa?'block':'none';
+    document.getElementById('newEmailField').style.display = isWa?'none':'block';
+    document.getElementById('recipSearch').placeholder = isWa
+        ? 'Search by name or phone…'
+        : 'Search by name or email…';
+    document.getElementById('emailAttachWrap').style.display = isWa?'none':'flex';
+    switchTab('search');
+    showSendPane(2);
+    setTimeout(()=>document.getElementById('recipSearch').focus(),120);
+}
+function backToChannel(){ showSendPane(1) }
+function backToRecipient(){ showSendPane(2) }
 
-async function runLookup(){
-    const phone=document.getElementById('sharePhone').value.trim();
-    if(!phone){toast('Please enter a phone number.','error');return;}
-    SHARE_STATE.phone=phone;
-    const btn=document.getElementById('lookupBtn');
-    btn.disabled=true;btn.innerHTML='<span class="spinner-mini"></span> Searching…';
+function switchTab(tab){
+    document.querySelectorAll('#sendPane2 .tab-btn').forEach(b=>{
+        b.classList.toggle('active', b.dataset.tab===tab);
+    });
+    document.getElementById('tab-search').style.display = tab==='search'?'block':'none';
+    document.getElementById('tab-new').style.display    = tab==='new'?'block':'none';
+}
+
+let searchT;
+document.addEventListener('input',e=>{
+    if(e.target && e.target.id==='recipSearch'){
+        clearTimeout(searchT);
+        const q=e.target.value.trim();
+        if(q.length<3){
+            document.getElementById('recipResults').innerHTML='';
+            return;
+        }
+        searchT=setTimeout(()=>runRecipSearch(q),280);
+    }
+});
+
+async function runRecipSearch(q){
+    const box=document.getElementById('recipResults');
+    box.innerHTML='<div class="text-muted" style="font-size:.85rem;padding:8px"><span class="spinner-mini" style="border-color:#64748b;border-top-color:transparent"></span> Searching…</div>';
     try{
         const url=new URL(ENDPOINT,window.location.href);
-        url.searchParams.set('action','lookup_phone');
-        url.searchParams.set('phone',phone);
+        url.searchParams.set('action','search_applicants');
+        url.searchParams.set('q',q);
         const res=await fetch(url);
         const d=await res.json();
-        const box=document.getElementById('lookupResults');
-        if(!d.ok){toast(d.error||'Lookup failed.','error');return;}
-        if(!d.matches.length){
-            box.innerHTML = `
-                <div class="match-card" style="cursor:default;border-color:var(--accent);background:var(--accent-soft)">
-                    <div class="name"><i class="bi bi-person-x"></i> No applicant found for this number.</div>
-                    <div class="row-meta">Click "Add new contact" to send them the brochure anyway.</div>
+        if(!d.ok){box.innerHTML='<div class="text-muted" style="padding:8px">'+escapeHtml(d.error||'Search failed.')+'</div>';return;}
+        renderRecipResults(d.matches||[]);
+    }catch(e){
+        box.innerHTML='<div class="text-muted" style="padding:8px">Search error: '+escapeHtml(e.message)+'</div>';
+    }
+}
+function renderRecipResults(matches){
+    const box=document.getElementById('recipResults');
+    if(!matches.length){
+        box.innerHTML = `
+            <div class="recip-row" style="border-color:var(--accent);background:var(--accent-soft);cursor:default">
+                <div>
+                    <div class="nm"><i class="bi bi-person-x"></i> No matching applicant found</div>
+                    <div class="mt">Switch to the "New contact" tab to add and send anyway.</div>
                 </div>
-                <div style="margin-top:12px;display:flex;justify-content:flex-end">
-                    <button class="btn-accent" onclick="goToAddNew()">
-                        <i class="bi bi-person-plus-fill"></i> Add new contact
-                    </button>
-                </div>`;
-        }else{
-            let h='<small class="text-muted">Found '+d.count+' matching applicant(s). Pick one to autofill:</small>';
-            d.matches.forEach((m,idx)=>{
-                h += `<div class="match-card" onclick="selectMatch(${idx})" data-idx="${idx}">
-                    <div class="name">${escapeHtml(m.name||'(no name)')}<span class="table-tag">${escapeHtml(m.table)}</span></div>
-                    <div class="row-meta"><i class="bi bi-telephone"></i> ${escapeHtml(m.phone||'-')} ${m.email?' · <i class=\"bi bi-envelope\"></i> '+escapeHtml(m.email):''}</div>
-                </div>`;
-            });
-            h += `<div style="margin-top:14px;display:flex;justify-content:space-between;gap:8px">
-                    <button class="btn-ghost" onclick="goToAddNew()">
-                        <i class="bi bi-person-plus"></i> Use a different contact
-                    </button>
-                    <button class="btn-brand" onclick="goToShare(false)" id="useMatchBtn" disabled>
-                        Continue with selected <i class="bi bi-arrow-right"></i>
-                    </button>
-                </div>`;
-            box.innerHTML=h;
-            SHARE_STATE.matches=d.matches;
-        }
-    }catch(e){toast('Lookup failed: '+e.message,'error')}
-    finally{btn.disabled=false;btn.innerHTML='<i class="bi bi-search"></i> Look up number';}
+            </div>`;
+        return;
+    }
+    const isWa = SHARE_STATE.channel==='whatsapp';
+    let html='';
+    matches.forEach((m,i)=>{
+        const usable = isWa ? (m.phone&&m.phone.length>=6) : (m.email&&m.email.includes('@'));
+        if(!usable) return;
+        html += `<div class="recip-row" onclick="chooseRecipient(${i})" data-i="${i}">
+            <div>
+                <div class="nm">${escapeHtml(m.name||'(no name)')}</div>
+                <div class="mt">
+                    ${m.phone?'<i class="bi bi-telephone"></i> '+escapeHtml(m.phone):''}
+                    ${m.phone&&m.email?' · ':''}
+                    ${m.email?'<i class="bi bi-envelope"></i> '+escapeHtml(m.email):''}
+                </div>
+            </div>
+            <span class="tag">${escapeHtml(m.table.replace(/_/g,' ').replace(' applications',''))}</span>
+        </div>`;
+    });
+    if(!html){
+        box.innerHTML = `<div class="text-muted" style="padding:8px">No applicant has a usable ${isWa?'phone':'email'} for this channel.</div>`;
+        return;
+    }
+    SHARE_STATE._lastMatches=matches;
+    box.innerHTML=html;
 }
-function selectMatch(idx){
-    SHARE_STATE.match=SHARE_STATE.matches[idx];
-    document.querySelectorAll('.match-card[data-idx]').forEach(c=>c.classList.remove('selected'));
-    document.querySelector('.match-card[data-idx="'+idx+'"]').classList.add('selected');
-    document.getElementById('useMatchBtn').disabled=false;
+function chooseRecipient(i){
+    const m=SHARE_STATE._lastMatches[i];
+    SHARE_STATE.match=m;
+    SHARE_STATE.is_new=false;
+    SHARE_STATE.name=m.name||'';
+    SHARE_STATE.phone=m.phone||'';
+    SHARE_STATE.email=m.email||'';
+    goConfirm();
 }
-function goToAddNew(){
+function useNewContact(){
+    SHARE_STATE.name=document.getElementById('newRecipName').value.trim();
+    if(SHARE_STATE.channel==='whatsapp'){
+        SHARE_STATE.phone=document.getElementById('newRecipPhone').value.trim();
+        SHARE_STATE.email='';
+        if(!SHARE_STATE.phone){toast('Please enter a WhatsApp number.','error');return;}
+    }else{
+        SHARE_STATE.email=document.getElementById('newRecipEmail').value.trim();
+        SHARE_STATE.phone='';
+        if(!SHARE_STATE.email||!/.+@.+\..+/.test(SHARE_STATE.email)){toast('Please enter a valid email.','error');return;}
+    }
     SHARE_STATE.is_new=true;
     SHARE_STATE.match=null;
-    showPane(2);
+    goConfirm();
 }
-async function goToShare(viaNew){
-    if(viaNew){
-        SHARE_STATE.name=document.getElementById('newName').value.trim();
-        SHARE_STATE.email=document.getElementById('newEmail').value.trim();
-        if(!SHARE_STATE.name){toast('Please enter a name.','error');return;}
-    }else if(SHARE_STATE.match){
-        SHARE_STATE.name=SHARE_STATE.match.name;
-        SHARE_STATE.email=SHARE_STATE.match.email;
-        SHARE_STATE.is_new=false;
-    }
-    const fd=new FormData();
-    fd.append('action','share_brochure');
-    fd.append('csrf_token',CSRF);
-    fd.append('brochure_id',SHARE_STATE.brochure.id);
-    fd.append('channel','copy');
-    fd.append('name',SHARE_STATE.name||'');
-    fd.append('phone',SHARE_STATE.phone||'');
-    fd.append('email',SHARE_STATE.email||'');
-    fd.append('is_new_contact',SHARE_STATE.is_new?'1':'0');
-    if(SHARE_STATE.match){
-        fd.append('matched_table',SHARE_STATE.match.table||'');
-        fd.append('matched_row_id',SHARE_STATE.match.row_id||0);
-    }
-    try{
-        const res=await fetch(ENDPOINT,{method:'POST',body:fd});
-        const d=await res.json();
-        if(!d.ok){toast(d.error||'Share failed.','error');return;}
-        SHARE_STATE.links=d;
-        document.getElementById('shareLinkBox').value=d.share_url;
-        document.getElementById('chWhatsapp').href=d.whatsapp_url||'#';
-        if(!d.whatsapp_url){
-            document.getElementById('chWhatsapp').onclick=e=>{e.preventDefault();toast('Phone could not be normalized for WhatsApp.','error')};
-        }
-        document.getElementById('chEmail').href=d.email_url||'#';
-        if(!d.email_url){
-            document.getElementById('chEmail').onclick=e=>{e.preventDefault();toast('No email captured for this contact.','error')};
-        }
-        document.getElementById('shareRecipientBox').innerHTML = `
-            <div class="name"><i class="bi bi-person-fill"></i> ${escapeHtml(SHARE_STATE.name||'New contact')}</div>
-            <div class="row-meta">
-                <i class="bi bi-telephone"></i> ${escapeHtml(SHARE_STATE.phone||'-')}
-                ${SHARE_STATE.email?'· <i class=\"bi bi-envelope\"></i> '+escapeHtml(SHARE_STATE.email):''}
-                ${SHARE_STATE.is_new?' · <span class=\"table-tag\" style=\"background:var(--accent-soft);color:var(--accent);border-color:transparent\">NEW</span>':''}
-            </div>`;
-        showPane(3);
-        loadBrochures(); // refresh stats
-    }catch(e){toast('Share failed: '+e.message,'error')}
+function goConfirm(){
+    const isWa = SHARE_STATE.channel==='whatsapp';
+    const b = SHARE_STATE.brochure;
+    document.getElementById('recipientBox').innerHTML = `
+        <div class="lh">
+            <div class="nm"><i class="bi bi-person-fill"></i> ${escapeHtml(SHARE_STATE.name||'(no name)')}</div>
+            <div class="mt">
+                ${isWa?('<i class="bi bi-whatsapp"></i> '+escapeHtml(SHARE_STATE.phone||'-')):('<i class="bi bi-envelope-fill"></i> '+escapeHtml(SHARE_STATE.email||'-'))}
+            </div>
+        </div>
+        <span class="badge">${SHARE_STATE.is_new?'NEW':'EXISTING'}</span>`;
+    const greet = SHARE_STATE.name?('Hello '+SHARE_STATE.name+','):'Hello,';
+    const msg =
+        greet+'\n\n'+
+        'Please find our brochure: '+b.title+'\n'+
+        b.share_url+'\n\n'+
+        'Open the link to read the full document'+(isWa?' and download the PDF.':'.')+'\n'+
+        'Reach out any time if you have questions.\n\n'+
+        '— Parrot Canada Visa Consultant';
+    document.getElementById('messagePreview').value = msg;
+    document.getElementById('sendStatus').innerHTML='';
+    showSendPane(3);
 }
 
-function copyShareLink(silent){
-    const inp=document.getElementById('shareLinkBox');
-    inp.select();inp.setSelectionRange(0,inp.value.length);
+async function sendNow(){
+    const isWa = SHARE_STATE.channel==='whatsapp';
+    const btn=document.getElementById('sendNowBtn');
+    btn.disabled=true;btn.innerHTML='<span class="spinner-mini"></span> Sending…';
+    const stat=document.getElementById('sendStatus');
+    stat.className='send-status';stat.innerHTML='';
     try{
-        document.execCommand('copy');
-        if(!silent)toast('Share link copied!','success');
-        else toast('Share link copied to clipboard.','success');
+        const fd=new FormData();
+        fd.append('action', isWa?'send_whatsapp':'send_email');
+        fd.append('csrf_token',CSRF);
+        fd.append('brochure_id',SHARE_STATE.brochure.id);
+        fd.append('name',SHARE_STATE.name||'');
+        fd.append('is_new_contact',SHARE_STATE.is_new?'1':'0');
+        if(SHARE_STATE.match){
+            fd.append('matched_table',SHARE_STATE.match.table||'');
+            fd.append('matched_row_id',SHARE_STATE.match.row_id||0);
+        }
+        if(isWa){
+            fd.append('phone',SHARE_STATE.phone||'');
+            fd.append('message',document.getElementById('messagePreview').value);
+        }else{
+            fd.append('email',SHARE_STATE.email||'');
+            fd.append('message',document.getElementById('messagePreview').value);
+            if(document.getElementById('emailAttachChk').checked) fd.append('attach_pdf','1');
+        }
+        const res=await fetch(ENDPOINT,{method:'POST',body:fd});
+        const d=await res.json();
+        if(d.ok&&d.sent){
+            stat.className='send-status success';
+            stat.innerHTML='<i class="bi bi-check-circle-fill"></i> Sent successfully'+(isWa&&d.method?(' ('+d.method+')'):'')+'.';
+            toast('Brochure sent to '+(isWa?SHARE_STATE.phone:SHARE_STATE.email)+'.','success');
+            loadBrochures();
+            setTimeout(()=>closeModal('shareModal'),1400);
+        }else{
+            stat.className='send-status error';
+            stat.innerHTML='<i class="bi bi-exclamation-octagon-fill"></i> '+escapeHtml(d.error||'Send failed.');
+            toast(d.error||'Send failed.','error');
+        }
     }catch(e){
-        navigator.clipboard.writeText(inp.value).then(()=>toast('Link copied!','success'));
+        stat.className='send-status error';
+        stat.innerHTML='<i class="bi bi-exclamation-octagon-fill"></i> '+escapeHtml(e.message);
+    }finally{
+        btn.disabled=false;btn.innerHTML='<i class="bi bi-send-fill"></i> Send now';
     }
-}
-function trackShare(channel){
-    if(!SHARE_STATE.brochure)return;
-    const fd=new FormData();
-    fd.append('action','share_brochure');
-    fd.append('csrf_token',CSRF);
-    fd.append('brochure_id',SHARE_STATE.brochure.id);
-    fd.append('channel',channel);
-    fd.append('name',SHARE_STATE.name||'');
-    fd.append('phone',SHARE_STATE.phone||'');
-    fd.append('email',SHARE_STATE.email||'');
-    fd.append('is_new_contact','0');
-    if(SHARE_STATE.match){
-        fd.append('matched_table',SHARE_STATE.match.table||'');
-        fd.append('matched_row_id',SHARE_STATE.match.row_id||0);
-    }
-    fetch(ENDPOINT,{method:'POST',body:fd}).catch(()=>{});
 }
 
 /* ---------- Quick share (no lookup required) ---------- */

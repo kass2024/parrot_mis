@@ -3,6 +3,35 @@ declare(strict_types=1);
 
 session_start();
 
+// Always answer JSON — even on a fatal PHP error / uncaught exception.
+ini_set('display_errors', '0');
+header('Content-Type: application/json; charset=UTF-8');
+
+set_exception_handler(static function (Throwable $e): void {
+    if (!headers_sent()) {
+        http_response_code(500);
+    }
+    echo json_encode([
+        'ok'    => false,
+        'error' => 'Server error: ' . $e->getMessage(),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    exit;
+});
+
+register_shutdown_function(static function (): void {
+    $err = error_get_last();
+    if ($err && in_array($err['type'] ?? 0, [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json; charset=UTF-8');
+            http_response_code(500);
+        }
+        echo json_encode([
+            'ok'    => false,
+            'error' => 'Server fatal: ' . ($err['message'] ?? 'unknown'),
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+});
+
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/csrf.php';
 require_once __DIR__ . '/helpers/env_load.php';
@@ -10,10 +39,9 @@ require_once __DIR__ . '/helpers/phone_whatsapp_normalize.php';
 require_once __DIR__ . '/helpers/student_status_notify.php';
 require_once __DIR__ . '/helpers/marketing_brochure_schema.php';
 require_once __DIR__ . '/helpers/marketing_brochure_extract.php';
+require_once __DIR__ . '/helpers/marketing_brochure_send.php';
 
 pcvc_marketing_brochure_ensure_schema($conn);
-
-header('Content-Type: application/json; charset=UTF-8');
 
 if (!isset($_SESSION['id'])) {
     http_response_code(401);
@@ -368,161 +396,160 @@ switch ($action) {
 
     // -------------------------------------------------------------
     case 'lookup_phone':
-        $phone = trim((string) ($_GET['phone'] ?? $_POST['phone'] ?? ''));
-        if ($phone === '') {
-            pcvc_brochure_respond(['ok' => false, 'error' => 'Phone is required.'], 400);
+    case 'search_applicants':
+        $q = trim((string) ($_GET['q'] ?? $_POST['q'] ?? $_GET['phone'] ?? $_POST['phone'] ?? ''));
+        if ($q === '') {
+            pcvc_brochure_respond(['ok' => true, 'matches' => [], 'count' => 0]);
         }
-        $digits = preg_replace('/\D+/', '', $phone) ?? '';
-        if (strlen($digits) < 6) {
-            pcvc_brochure_respond(['ok' => false, 'error' => 'Phone number is too short.'], 400);
+        $isPhone   = (bool) preg_match('/^[\d\+\-\(\)\s]+$/', $q);
+        $digits    = preg_replace('/\D+/', '', $q) ?? '';
+        $shortDig  = strlen($digits) >= 6 ? ltrim(substr($digits, -10), '0') : '';
+        $likeDig   = $shortDig !== '' ? ('%' . $shortDig . '%') : null;
+        $likeText  = '%' . str_replace(['%', '_'], ['\\%', '\\_'], $q) . '%';
+
+        $matches = pcvc_brochure_search_applicants($conn, $likeDig, $likeText, $isPhone, $q);
+
+        $dcc       = trim(xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE'));
+        $defaultCc = $dcc !== '' ? $dcc : null;
+        $waE164    = null;
+        if ($isPhone && $digits !== '') {
+            $waE164 = xander_format_phone_for_whatsapp_e164($q, $defaultCc);
         }
-        $shortDigits = ltrim(substr($digits, -10), '0');
-        $likeAny     = '%' . $shortDigits . '%';
-
-        // Tables to search across, each declares its phone columns + name columns.
-        $sources = [
-            [
-                'table'   => 'student_applications',
-                'phone'   => ['phone_number', 'emergency_phone_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'malta_applications',
-                'phone'   => ['contact_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(name,''),' ',IFNULL(surname,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'turkey_applications',
-                'phone'   => ['mobile'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'budapest_applications',
-                'phone'   => ['phone'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(middle_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'credit_transfer_applications',
-                'phone'   => ['phone_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'master_loan_applications',
-                'phone'   => ['phone_number', 'ref_phone'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'georgia_applications',
-                'phone'   => ['phone_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'form_17_applications',
-                'phone'   => ['phone_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'form_20_applications',
-                'phone'   => ['phone_number', 'emergency_phone_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'canada_medical_exams_requests',
-                'phone'   => ['phone_number', 'emergency_phone_number'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'job_applications',
-                'phone'   => ['telephone'],
-                'name'    => "TRIM(CONCAT(IFNULL(first_name,''),' ',IFNULL(last_name,'')))",
-                'email'   => 'email',
-                'id_col'  => 'id',
-            ],
-            [
-                'table'   => 'contacts',
-                'phone'   => ['phone'],
-                'name'    => 'name',
-                'email'   => 'NULL',
-                'id_col'  => 'id',
-            ],
-        ];
-
-        $matches    = [];
-        $seenKeys   = [];
-        foreach ($sources as $src) {
-            $tableNameSafe = $src['table'];
-            $cleanedConds  = [];
-            foreach ($src['phone'] as $col) {
-                $cleanedConds[] = "REPLACE(REPLACE(REPLACE(REPLACE(IFNULL($col,''),' ',''),'-',''),'(',''),')','') LIKE ?";
-            }
-            $where = '(' . implode(' OR ', $cleanedConds) . ')';
-            $cols  = $src['phone'];
-            $coalesce = 'COALESCE(' . implode(',', array_map(fn($c) => "NULLIF($c,'')", $cols)) . ')';
-            $sql = "SELECT {$src['id_col']} AS rid,
-                           {$src['name']} AS full_name,
-                           {$coalesce} AS phone_match,
-                           {$src['email']} AS email_match
-                    FROM `{$tableNameSafe}`
-                    WHERE $where
-                    LIMIT 5";
-            $stmt = $conn->prepare($sql);
-            if (!$stmt) {
-                continue;
-            }
-            $bindVals = array_fill(0, count($cleanedConds), $likeAny);
-            $stmt->bind_param(str_repeat('s', count($bindVals)), ...$bindVals);
-            if (!$stmt->execute()) {
-                $stmt->close();
-                continue;
-            }
-            $r = $stmt->get_result();
-            while ($row = $r->fetch_assoc()) {
-                $key = strtolower(trim((string) ($row['full_name'] ?? ''))) . '|' . preg_replace('/\D+/', '', (string) ($row['phone_match'] ?? ''));
-                if (isset($seenKeys[$key])) {
-                    continue;
-                }
-                $seenKeys[$key] = true;
-                $matches[] = [
-                    'table'      => $tableNameSafe,
-                    'row_id'     => (int) ($row['rid'] ?? 0),
-                    'name'       => trim((string) ($row['full_name'] ?? '')),
-                    'phone'      => (string) ($row['phone_match'] ?? ''),
-                    'email'      => (string) ($row['email_match'] ?? ''),
-                ];
-            }
-            $stmt->close();
-        }
-
-        $dcc        = trim(xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE'));
-        $defaultCc  = $dcc !== '' ? $dcc : null;
-        $waE164     = xander_format_phone_for_whatsapp_e164($phone, $defaultCc);
 
         pcvc_brochure_respond([
-            'ok'             => true,
-            'normalized_e164'=> $waE164,
-            'whatsapp_url'   => $waE164 ? 'https://wa.me/' . rawurlencode($waE164) : null,
-            'matches'        => $matches,
-            'count'          => count($matches),
+            'ok'              => true,
+            'normalized_e164' => $waE164,
+            'whatsapp_url'    => $waE164 ? 'https://wa.me/' . rawurlencode($waE164) : null,
+            'matches'         => $matches,
+            'count'           => count($matches),
+        ]);
+        break;
+
+    // -------------------------------------------------------------
+    case 'send_whatsapp':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+        $brochureId = (int) ($_POST['brochure_id'] ?? 0);
+        $name       = trim((string) ($_POST['name'] ?? ''));
+        $phone      = trim((string) ($_POST['phone'] ?? ''));
+        $matchTbl   = trim((string) ($_POST['matched_table'] ?? ''));
+        $matchId    = (int) ($_POST['matched_row_id'] ?? 0);
+        $isNew      = (int) (!empty($_POST['is_new_contact']) ? 1 : 0);
+        $customMsg  = trim((string) ($_POST['message'] ?? ''));
+
+        if ($brochureId <= 0 || $phone === '') {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Phone is required.'], 400);
+        }
+
+        $stmt = $conn->prepare('SELECT id, slug, title FROM marketing_brochures WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $brochureId);
+        $stmt->execute();
+        $brochure = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$brochure) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Brochure not found.'], 404);
+        }
+
+        $shareUrl = pcvc_brochure_public_url((string) $brochure['slug']);
+        $defaultMsg = pcvc_brochure_default_message($name, (string) $brochure['title'], $shareUrl);
+        $body = $customMsg !== '' ? $customMsg : $defaultMsg;
+
+        if ($isNew && $phone !== '') {
+            pcvc_brochure_save_contact($conn, $name, $phone);
+        }
+
+        $result = pcvc_brochure_send_whatsapp($phone, $body);
+
+        $shareToken = bin2hex(random_bytes(8));
+        $channel    = 'whatsapp';
+        $notes      = $result['sent'] ? ('sent via ' . $result['method']) : ('failed: ' . substr($result['error'], 0, 200));
+        $email      = '';
+        $sql = 'INSERT INTO marketing_brochure_shares
+                  (brochure_id, share_token, recipient_name, recipient_phone, recipient_email,
+                   channel, matched_table, matched_row_id, is_new_contact, shared_by, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $ins = $conn->prepare($sql);
+        $ins->bind_param('issssssiiis', $brochureId, $shareToken, $name, $phone, $email, $channel, $matchTbl, $matchId, $isNew, $adminId, $notes);
+        $ins->execute();
+        $ins->close();
+        if ($result['sent']) {
+            $conn->query("UPDATE marketing_brochures SET share_count = share_count + 1 WHERE id = $brochureId");
+        }
+
+        pcvc_brochure_respond([
+            'ok'      => (bool) $result['sent'],
+            'sent'    => (bool) $result['sent'],
+            'method'  => $result['method'] ?? '',
+            'error'   => $result['error'] ?? '',
+            'detail'  => $result['detail'] ?? '',
+            'share_url' => $shareUrl,
+            'message' => $body,
+        ]);
+        break;
+
+    // -------------------------------------------------------------
+    case 'send_email':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+        $brochureId = (int) ($_POST['brochure_id'] ?? 0);
+        $name       = trim((string) ($_POST['name'] ?? ''));
+        $email      = trim((string) ($_POST['email'] ?? ''));
+        $matchTbl   = trim((string) ($_POST['matched_table'] ?? ''));
+        $matchId    = (int) ($_POST['matched_row_id'] ?? 0);
+        $isNew      = (int) (!empty($_POST['is_new_contact']) ? 1 : 0);
+        $attachPdfReq = !empty($_POST['attach_pdf']);
+
+        if ($brochureId <= 0 || $email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Valid email is required.'], 400);
+        }
+
+        $stmt = $conn->prepare('SELECT id, slug, title, description, pdf_path, pdf_filename, attach_pdf, html_content FROM marketing_brochures WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $brochureId);
+        $stmt->execute();
+        $brochure = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$brochure) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Brochure not found.'], 404);
+        }
+
+        $shareUrl   = pcvc_brochure_public_url((string) $brochure['slug']);
+        $pdfAbs     = $attachPdfReq && (int) $brochure['attach_pdf'] === 1
+            ? __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, (string) $brochure['pdf_path'])
+            : '';
+        $result = pcvc_brochure_send_email([
+            'to_email'     => $email,
+            'to_name'      => $name,
+            'title'        => (string) $brochure['title'],
+            'description'  => (string) ($brochure['description'] ?? ''),
+            'html_content' => (string) ($brochure['html_content'] ?? ''),
+            'share_url'    => $shareUrl,
+            'pdf_path'     => $pdfAbs,
+            'pdf_filename' => (string) ($brochure['pdf_filename'] ?? ''),
+        ]);
+
+        $shareToken = bin2hex(random_bytes(8));
+        $channel    = 'email';
+        $notes      = $result['sent'] ? 'sent via SMTP' : ('failed: ' . substr((string) $result['error'], 0, 200));
+        $phone      = '';
+        $sql = 'INSERT INTO marketing_brochure_shares
+                  (brochure_id, share_token, recipient_name, recipient_phone, recipient_email,
+                   channel, matched_table, matched_row_id, is_new_contact, shared_by, notes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        $ins = $conn->prepare($sql);
+        $ins->bind_param('issssssiiis', $brochureId, $shareToken, $name, $phone, $email, $channel, $matchTbl, $matchId, $isNew, $adminId, $notes);
+        $ins->execute();
+        $ins->close();
+        if ($result['sent']) {
+            $conn->query("UPDATE marketing_brochures SET share_count = share_count + 1 WHERE id = $brochureId");
+        }
+
+        pcvc_brochure_respond([
+            'ok'        => (bool) $result['sent'],
+            'sent'      => (bool) $result['sent'],
+            'error'     => $result['error'] ?? '',
+            'share_url' => $shareUrl,
         ]);
         break;
 
