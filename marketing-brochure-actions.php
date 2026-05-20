@@ -8,6 +8,10 @@ require_once __DIR__ . '/helpers/csrf.php';
 require_once __DIR__ . '/helpers/env_load.php';
 require_once __DIR__ . '/helpers/phone_whatsapp_normalize.php';
 require_once __DIR__ . '/helpers/student_status_notify.php';
+require_once __DIR__ . '/helpers/marketing_brochure_schema.php';
+require_once __DIR__ . '/helpers/marketing_brochure_extract.php';
+
+pcvc_marketing_brochure_ensure_schema($conn);
 
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -53,15 +57,11 @@ function pcvc_brochure_slugify(string $text): string
 
 /**
  * Ensure the brochures uploads folder exists and return its absolute path.
+ * Delegates to the schema helper so deployment safeguards stay in one place.
  */
 function pcvc_brochure_uploads_dir(): string
 {
-    $dir = __DIR__ . DIRECTORY_SEPARATOR . 'uploads' . DIRECTORY_SEPARATOR . 'brochures';
-    if (!is_dir($dir)) {
-        @mkdir($dir, 0775, true);
-    }
-
-    return $dir;
+    return pcvc_marketing_brochure_ensure_uploads_dir();
 }
 
 /**
@@ -145,7 +145,8 @@ switch ($action) {
         }
 
         $sql = 'SELECT b.id, b.title, b.slug, b.description, b.pdf_filename, b.pdf_path,
-                       b.pdf_size_bytes, b.view_count, b.share_count, b.created_at,
+                       b.pdf_size_bytes, b.attach_pdf, b.extraction_status,
+                       b.view_count, b.share_count, b.created_at,
                        b.region_id, r.name AS region_name
                 FROM marketing_brochures b
                 LEFT JOIN regions r ON r.id = b.region_id
@@ -165,6 +166,7 @@ switch ($action) {
             $row['view_count']     = (int) $row['view_count'];
             $row['share_count']    = (int) $row['share_count'];
             $row['pdf_size_bytes'] = (int) $row['pdf_size_bytes'];
+            $row['attach_pdf']     = (int) ($row['attach_pdf'] ?? 1);
             $row['share_url']      = pcvc_brochure_public_url((string) $row['slug']);
             $list[]                = $row;
         }
@@ -181,6 +183,7 @@ switch ($action) {
         $title       = trim((string) ($_POST['title'] ?? ''));
         $description = trim((string) ($_POST['description'] ?? ''));
         $regionId    = isset($_POST['region_id']) ? (int) $_POST['region_id'] : 0;
+        $attachPdf   = !empty($_POST['attach_pdf']) ? 1 : 0;
 
         if ($title === '') {
             pcvc_brochure_respond(['ok' => false, 'error' => 'Title is required.'], 400);
@@ -236,12 +239,24 @@ switch ($action) {
 
         $size = (int) @filesize($absPath);
 
+        // PDF → HTML extraction (best-effort; failure is non-fatal).
+        $extract = pcvc_brochure_extract_pdf($absPath);
+        $extractedText = (string) ($extract['text'] ?? '');
+        $htmlContent   = (string) ($extract['html'] ?? '');
+        $extEngine     = (string) ($extract['engine'] ?? 'none');
+        $extStatus     = $htmlContent !== '' ? 'ok' : 'failed';
+
         $sql = 'INSERT INTO marketing_brochures
-                  (region_id, title, slug, description, pdf_filename, pdf_path, pdf_size_bytes, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)';
+                  (region_id, title, slug, description, pdf_filename, pdf_path, pdf_size_bytes,
+                   attach_pdf, extracted_text, html_content, extraction_status, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $ins  = $conn->prepare($sql);
         $orig = (string) $f['name'];
-        $ins->bind_param('isssssii', $regionId, $title, $slug, $description, $orig, $relPath, $size, $adminId);
+        $ins->bind_param(
+            'isssssiissssi',
+            $regionId, $title, $slug, $description, $orig, $relPath, $size,
+            $attachPdf, $extractedText, $htmlContent, $extStatus, $adminId
+        );
         if (!$ins->execute()) {
             @unlink($absPath);
             pcvc_brochure_respond(['ok' => false, 'error' => 'Database insert failed: ' . $conn->error], 500);
@@ -252,20 +267,73 @@ switch ($action) {
         pcvc_brochure_respond([
             'ok'        => true,
             'brochure'  => [
-                'id'             => $newId,
-                'title'          => $title,
-                'slug'           => $slug,
-                'description'    => $description,
-                'region_id'      => (int) $region['id'],
-                'region_name'    => (string) $region['name'],
-                'pdf_filename'   => $orig,
-                'pdf_path'       => $relPath,
-                'pdf_size_bytes' => $size,
-                'view_count'     => 0,
-                'share_count'    => 0,
-                'share_url'      => pcvc_brochure_public_url($slug),
-                'created_at'     => date('Y-m-d H:i:s'),
+                'id'                => $newId,
+                'title'             => $title,
+                'slug'              => $slug,
+                'description'       => $description,
+                'region_id'         => (int) $region['id'],
+                'region_name'       => (string) $region['name'],
+                'pdf_filename'      => $orig,
+                'pdf_path'          => $relPath,
+                'pdf_size_bytes'    => $size,
+                'attach_pdf'        => $attachPdf,
+                'extraction_status' => $extStatus,
+                'extraction_engine' => $extEngine,
+                'view_count'        => 0,
+                'share_count'       => 0,
+                'share_url'         => pcvc_brochure_public_url($slug),
+                'created_at'        => date('Y-m-d H:i:s'),
             ],
+        ]);
+        break;
+
+    // -------------------------------------------------------------
+    case 'set_attach_pdf':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+        $id    = (int) ($_POST['id'] ?? 0);
+        $value = !empty($_POST['attach_pdf']) ? 1 : 0;
+        if ($id <= 0) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid brochure ID.'], 400);
+        }
+        $u = $conn->prepare('UPDATE marketing_brochures SET attach_pdf = ? WHERE id = ?');
+        $u->bind_param('ii', $value, $id);
+        $u->execute();
+        $u->close();
+        pcvc_brochure_respond(['ok' => true, 'attach_pdf' => $value]);
+        break;
+
+    // -------------------------------------------------------------
+    case 'regenerate_html':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+        $id = (int) ($_POST['id'] ?? 0);
+        if ($id <= 0) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid brochure ID.'], 400);
+        }
+        $stmt = $conn->prepare('SELECT pdf_path FROM marketing_brochures WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $row = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$row) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Brochure not found.'], 404);
+        }
+        $abs = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, (string) $row['pdf_path']);
+        $extract = pcvc_brochure_extract_pdf($abs);
+        $status  = !empty($extract['html']) ? 'ok' : 'failed';
+        $u = $conn->prepare('UPDATE marketing_brochures
+                              SET extracted_text = ?, html_content = ?, extraction_status = ?
+                              WHERE id = ?');
+        $u->bind_param('sssi', $extract['text'], $extract['html'], $status, $id);
+        $u->execute();
+        $u->close();
+        pcvc_brochure_respond([
+            'ok'                => true,
+            'extraction_status' => $status,
+            'extraction_engine' => $extract['engine'] ?? 'none',
         ]);
         break;
 
@@ -478,11 +546,16 @@ switch ($action) {
         if (!in_array($channel, ['copy', 'whatsapp', 'email', 'sms', 'other'], true)) {
             $channel = 'copy';
         }
-        if ($channel === 'whatsapp' && $phone === '') {
-            pcvc_brochure_respond(['ok' => false, 'error' => 'Phone is required for WhatsApp.'], 400);
-        }
-        if ($channel === 'email' && $email === '') {
-            pcvc_brochure_respond(['ok' => false, 'error' => 'Email is required for email channel.'], 400);
+        // Quick share from the brochure card (no specific recipient) is allowed:
+        // phone/email are only required when a "Send to customer" payload is built.
+        $quickShare = ($notes === 'quick-share');
+        if (!$quickShare) {
+            if ($channel === 'whatsapp' && $phone === '') {
+                pcvc_brochure_respond(['ok' => false, 'error' => 'Phone is required for WhatsApp.'], 400);
+            }
+            if ($channel === 'email' && $email === '') {
+                pcvc_brochure_respond(['ok' => false, 'error' => 'Email is required for email channel.'], 400);
+            }
         }
 
         $stmt = $conn->prepare('SELECT id, slug, title FROM marketing_brochures WHERE id = ? LIMIT 1');

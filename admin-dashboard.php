@@ -335,23 +335,23 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'jobsabrod', 'canada_medical', 'platform', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'platform', 'contracts', 'partner_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'schools', 'marketing', 'visit_study_visa', 'platform'
+    'all_admissions', 'schools', 'marketing', 'smart_brochure', 'visit_study_visa', 'platform'
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
     'agent_report', 'university_portal', 'commission_request', 'staff_attendance',
-    'schools', 'marketing', 'visit_study_visa', 'platform'
+    'schools', 'marketing', 'smart_brochure', 'visit_study_visa', 'platform'
   ],
   'Catholic university of America' => [
-    'university_admissions', 'application_flag_summary', 'schools', 'marketing', 'abroad', 'visit_study_visa', 'platform'
+    'university_admissions', 'application_flag_summary', 'schools', 'marketing', 'smart_brochure', 'abroad', 'visit_study_visa', 'platform'
   ]
 ];
 
@@ -1859,7 +1859,26 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         </a>
       </div>
       <?php endif; ?>
-      
+
+      <?php if (in_array('smart_brochure', $allowedSidebarItems)): ?>
+      <!-- Smart Brochure Sharing -->
+      <a href="#smart_brochure" class="sidebar-link" onclick="toggleSidebarMenu('smart_brochure')">
+        <i class="bi bi-megaphone-fill"></i>
+        <span>Smart Brochure Sharing</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_smart_brochure">
+        <a href="#" onclick="loadInFrame('marketing-brochures.php', 'Smart Brochure Sharing')">
+          <i class="bi bi-collection"></i>
+          Brochures &amp; Share Center
+        </a>
+        <a href="#" onclick="loadInFrame('marketing-brochures.php#upload', 'Upload Brochure')">
+          <i class="bi bi-cloud-upload"></i>
+          Upload new brochure
+        </a>
+      </div>
+      <?php endif; ?>
+
       <?php if (in_array('jobsabrod', $allowedSidebarItems)): ?>
       <!-- Jobs Application - Superadmin only -->
       <a href="#jobsabrod" class="sidebar-link" onclick="toggleSidebarMenu('jobsabrod')">
