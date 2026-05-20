@@ -194,29 +194,43 @@ function pcvc_brochure_clean_extracted_text(string $text): string
 
 /**
  * Convert the plaintext into a small set of safe HTML blocks.
+ * Handles: bullets (•, ✓, ✗, -, *, →, etc.), numbered lists,
+ * "N. Heading" followed by bullets, headings (ALL CAPS or trailing ":"), and
+ * intelligently joins soft-wrapped lines into clean paragraphs.
  */
 function pcvc_brochure_text_to_html(string $text): string
 {
     $blocks = preg_split("/\n\s*\n/", $text) ?: [];
     $html   = '';
+
+    $bulletPattern   = '/^\s*([\x{2022}\x{25CF}\x{25CB}\x{25A0}\x{2013}\x{2014}\x{00B7}\x{2192}\x{27A2}\x{2714}\x{2713}\x{2717}\x{2718}\-\*o])\s+(.+)$/u';
+    $numberedPattern = '/^\s*(\d{1,3})[\.\)]\s+(.+)$/';
+    $numHeadingOnly  = '/^\s*(\d{1,3})[\.\)]\s+([A-Z][^.!?]{1,80})$/u';
+    // True pictographic emoji only — DO NOT include U+2600..U+27BF here, that
+    // range contains bullet/symbol characters (✓, ✗, ➢, etc.) we want to keep.
+    $emojiPrefix     = '/^[\x{1F300}-\x{1FAFF}\x{1F000}-\x{1F2FF}]\s+(.+)$/u';
+
     foreach ($blocks as $block) {
         $block = trim($block);
         if ($block === '') {
             continue;
         }
-        $lines = preg_split("/\n/", $block) ?: [];
-
-        // Try list detection: every line starts with a bullet or numbering.
-        $bulletPattern  = '/^\s*([\x{2022}\x{25CF}\x{25CB}\x{25A0}\x{2013}\x{2014}\x{00B7}\-\*o])\s+(.+)$/u';
-        $numberedPattern = '/^\s*(\d{1,3})[\.\)]\s+(.+)$/';
-        $allBullets = true;
-        $allNumbered = true;
-        foreach ($lines as $ln) {
-            if (!preg_match($bulletPattern, $ln))   { $allBullets  = false; }
-            if (!preg_match($numberedPattern, $ln)) { $allNumbered = false; }
-            if (!$allBullets && !$allNumbered) break;
+        $lines = array_values(array_filter(array_map('trim', preg_split("/\n/", $block) ?: []), static fn($l) => $l !== ''));
+        if (!$lines) {
+            continue;
         }
-        if ($allBullets && count($lines) > 1) {
+
+        // Strip emoji prefixes (e.g. "📜 What You Need" -> "What You Need").
+        $lines = array_map(static function (string $l) use ($emojiPrefix) {
+            return preg_match($emojiPrefix, $l, $m) ? $m[1] : $l;
+        }, $lines);
+
+        // 1) All-bullets block
+        $allBullets = true;
+        foreach ($lines as $ln) {
+            if (!preg_match($bulletPattern, $ln)) { $allBullets = false; break; }
+        }
+        if ($allBullets && count($lines) >= 1) {
             $html .= '<ul class="brochure-list">';
             foreach ($lines as $ln) {
                 if (preg_match($bulletPattern, $ln, $m)) {
@@ -225,6 +239,12 @@ function pcvc_brochure_text_to_html(string $text): string
             }
             $html .= '</ul>';
             continue;
+        }
+
+        // 2) All-numbered block (and not single-line "N. Heading")
+        $allNumbered = true;
+        foreach ($lines as $ln) {
+            if (!preg_match($numberedPattern, $ln)) { $allNumbered = false; break; }
         }
         if ($allNumbered && count($lines) > 1) {
             $html .= '<ol class="brochure-list">';
@@ -237,38 +257,114 @@ function pcvc_brochure_text_to_html(string $text): string
             continue;
         }
 
-        // Single short uppercase line → heading.
-        if (count($lines) === 1) {
-            $only = trim($lines[0]);
-            $isUpper = $only !== ''
-                       && preg_match('/^[A-Z0-9 \-\&\:\(\)\/\,\.\']{4,80}$/', $only)
-                       && strtoupper($only) === $only
-                       && preg_match('/[A-Z]/', $only);
-            if ($isUpper) {
-                $html .= '<h3 class="brochure-heading">' . pcvc_brochure_escape_inline($only) . '</h3>';
-                continue;
+        // 2b) Bullets followed by a "N. Heading" trailer → split into ul + heading
+        if (count($lines) >= 2) {
+            $bulletCount = 0;
+            foreach ($lines as $ln) {
+                if (preg_match($bulletPattern, $ln)) { $bulletCount++; } else { break; }
             }
-            $isShortTitle = mb_strlen($only) > 0
-                            && mb_strlen($only) <= 70
-                            && preg_match('/^[A-Z][^.!?]{2,}$/u', $only)
-                            && substr($only, -1) !== '.';
-            if ($isShortTitle) {
-                $html .= '<h4 class="brochure-subheading">' . pcvc_brochure_escape_inline($only) . '</h4>';
+            if ($bulletCount >= 1 && $bulletCount < count($lines)
+                && preg_match($numHeadingOnly, $lines[$bulletCount], $nm)) {
+                $html .= '<ul class="brochure-list">';
+                for ($i = 0; $i < $bulletCount; $i++) {
+                    if (preg_match($bulletPattern, $lines[$i], $b)) {
+                        $html .= '<li>' . pcvc_brochure_escape_inline($b[2]) . '</li>';
+                    }
+                }
+                $html .= '</ul>';
+                $html .= '<h4 class="brochure-subheading">' . pcvc_brochure_escape_inline($nm[1] . '. ' . $nm[2]) . '</h4>';
+                // Any remaining lines after the heading
+                $tail = array_slice($lines, $bulletCount + 1);
+                if ($tail) {
+                    $html .= '<p class="brochure-para">' . pcvc_brochure_escape_inline(pcvc_brochure_join_soft_wraps($tail)) . '</p>';
+                }
                 continue;
             }
         }
 
-        // Default: paragraph (single line breaks become <br>).
-        $body = implode("\n", $lines);
-        $body = pcvc_brochure_escape_inline($body);
-        $body = nl2br($body, false);
-        $html .= '<p class="brochure-para">' . $body . '</p>';
+        // 3) "N. Title" (first line) followed by bullets → subheading + list
+        if (count($lines) >= 2 && preg_match($numHeadingOnly, $lines[0], $m)) {
+            $rest = array_slice($lines, 1);
+            $restAllBullets = true;
+            foreach ($rest as $ln) {
+                if (!preg_match($bulletPattern, $ln)) { $restAllBullets = false; break; }
+            }
+            if ($restAllBullets) {
+                $html .= '<h4 class="brochure-subheading">' . pcvc_brochure_escape_inline($m[1] . '. ' . $m[2]) . '</h4>';
+                $html .= '<ul class="brochure-list">';
+                foreach ($rest as $ln) {
+                    if (preg_match($bulletPattern, $ln, $b)) {
+                        $html .= '<li>' . pcvc_brochure_escape_inline($b[2]) . '</li>';
+                    }
+                }
+                $html .= '</ul>';
+                continue;
+            }
+        }
+
+        // 4) Single short uppercase line → top heading.
+        if (count($lines) === 1) {
+            $only = $lines[0];
+            $isUpper = $only !== ''
+                && mb_strlen($only) >= 4 && mb_strlen($only) <= 90
+                && mb_strtoupper($only, 'UTF-8') === $only
+                && preg_match('/[A-Z]/', $only);
+            if ($isUpper) {
+                $html .= '<h3 class="brochure-heading">' . pcvc_brochure_escape_inline($only) . '</h3>';
+                continue;
+            }
+            // "Section Title:" or "N. Section Title" alone → subheading.
+            $isColonTitle = preg_match('/^[A-Z][^.!?]{2,80}:\s*$/u', $only);
+            $isNumHead    = preg_match($numHeadingOnly, $only);
+            $isTitleCase  = !$isColonTitle && !$isNumHead
+                && mb_strlen($only) >= 3 && mb_strlen($only) <= 90
+                && preg_match('/^[A-Z][^.!?]{2,}$/u', $only)
+                && substr($only, -1) !== '.';
+            if ($isColonTitle || $isNumHead || $isTitleCase) {
+                $clean = $isColonTitle ? rtrim($only, ': ') : $only;
+                $html .= '<h4 class="brochure-subheading">' . pcvc_brochure_escape_inline($clean) . '</h4>';
+                continue;
+            }
+        }
+
+        // 5) Default: join soft-wrapped lines into clean paragraphs.
+        $joined = pcvc_brochure_join_soft_wraps($lines);
+        $body   = pcvc_brochure_escape_inline($joined);
+        $html  .= '<p class="brochure-para">' . $body . '</p>';
     }
 
     if ($html === '') {
         $html = '<p class="brochure-para">' . pcvc_brochure_escape_inline($text) . '</p>';
     }
     return $html;
+}
+
+/**
+ * Glue soft-wrapped paragraph lines back together. A line is treated as a
+ * continuation unless the previous one ends with terminal punctuation.
+ */
+function pcvc_brochure_join_soft_wraps(array $lines): string
+{
+    $out   = '';
+    $count = count($lines);
+    foreach ($lines as $i => $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        $endsHard = (bool) preg_match('/[\.\!\?\:\;\)]$/u', $line);
+        $out .= $line;
+        if ($i < $count - 1) {
+            // Hyphenated wrap: "informa-\ntion" → "information"
+            if (substr($line, -1) === '-') {
+                $out = substr($out, 0, -1);
+            } else {
+                $out .= $endsHard ? "\n" : ' ';
+            }
+        }
+    }
+    // Newline → <br> only when caller wants paragraph breaks inside body.
+    return preg_replace("/\n+/", "<br>", $out) ?? $out;
 }
 
 /**

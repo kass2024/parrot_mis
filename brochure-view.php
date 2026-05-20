@@ -415,7 +415,10 @@ body{
 }
 .feature h5{font-size:1rem;font-weight:700;margin-bottom:6px}
 .feature p{font-size:.85rem;color:var(--muted);margin:0}
-@media (max-width:780px){.features-section{display:none}} /* keep mobile focused on requirements */
+@media (max-width:780px){
+    .features-section{display:none} /* keep mobile focused on requirements */
+    .desktop-only-article{display:none} /* mobile uses the reader overlay instead */
+}
 
 /* ---------- CTA ---------- */
 .cta{
@@ -443,7 +446,89 @@ body{
     .cta .btn{padding:10px 16px;font-size:.85rem}
 }
 
-/* ---------- QR overlay (mobile) ---------- */
+/* ---------- Mobile Reader Overlay (full-screen smart reader) ---------- */
+.reader-overlay{display:none}
+@media (max-width:780px){
+    .reader-overlay{display:flex}
+}
+.reader-overlay{
+    position:fixed;inset:0;background:#fff;z-index:400;
+    transform:translateY(100%);transition:transform .32s cubic-bezier(.4,0,.2,1);
+    overflow-y:auto;-webkit-overflow-scrolling:touch;
+    flex-direction:column;
+}
+.reader-overlay.show{transform:translateY(0)}
+.reader-head{
+    position:sticky;top:0;background:#fff;z-index:5;
+    padding:12px 16px;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;gap:10px;
+    box-shadow:0 2px 8px -4px rgba(15,23,42,.08);
+}
+.reader-head .close{
+    width:38px;height:38px;border-radius:11px;border:none;background:#f1f5f9;
+    color:var(--text);font-size:1.3rem;cursor:pointer;flex:0 0 38px;
+    display:grid;place-items:center;
+}
+.reader-head .ttl{
+    flex:1;min-width:0;
+}
+.reader-head .ttl .t1{
+    font-size:.7rem;text-transform:uppercase;letter-spacing:1px;
+    color:var(--brand);font-weight:700;
+}
+.reader-head .ttl .t2{
+    font-size:.95rem;font-weight:700;color:var(--text);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.reader-head .quick{display:flex;gap:6px}
+.reader-head .quick button,.reader-head .quick a{
+    width:38px;height:38px;border-radius:11px;border:1px solid var(--border);
+    background:#fff;color:var(--text);cursor:pointer;
+    display:grid;place-items:center;font-size:1.05rem;text-decoration:none;
+}
+.reader-head .quick .primary{background:var(--brand);color:#fff;border-color:var(--brand)}
+
+.reader-body{
+    padding:18px 18px 28px;flex:1;
+}
+.reader-progress{
+    position:sticky;top:62px;background:#e2e8f0;height:3px;z-index:4;
+}
+.reader-progress .bar{
+    height:100%;background:linear-gradient(90deg,var(--brand),var(--accent));
+    width:0;transition:width .12s linear;
+}
+
+.reader-body .article-card{
+    padding:0;border:none;box-shadow:none;background:transparent;
+    max-width:100%;font-size:1rem;line-height:1.72;
+}
+.reader-body .article-card .brochure-heading{
+    font-size:1.25rem;margin:24px 0 10px;line-height:1.3;
+}
+.reader-body .article-card .brochure-heading:first-child{margin-top:6px}
+.reader-body .article-card .brochure-subheading{
+    font-size:1.05rem;margin:20px 0 8px;
+}
+.reader-body .article-card .brochure-para{margin:0 0 14px}
+.reader-body .article-card .brochure-list{margin:0 0 18px;padding-left:22px}
+.reader-body .article-card .brochure-list li{margin-bottom:8px;line-height:1.6}
+
+.reader-foot{
+    background:linear-gradient(135deg,var(--brand) 0%,var(--brand-dark) 100%);
+    color:#fff;padding:22px 18px 26px;margin-top:14px;
+}
+.reader-foot h4{font-size:1.05rem;font-weight:800;margin-bottom:4px}
+.reader-foot p{font-size:.85rem;opacity:.9;margin-bottom:14px;line-height:1.5}
+.reader-foot .rf-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.reader-foot .rf-actions a,.reader-foot .rf-actions button{
+    background:#fff;color:var(--brand);border:none;cursor:pointer;
+    padding:11px 8px;border-radius:11px;font-weight:700;font-size:.82rem;
+    display:flex;align-items:center;justify-content:center;gap:6px;text-decoration:none;
+}
+.reader-foot .rf-actions .outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,.6)}
+
+/* QR overlay (mobile) */
 .qr-overlay{
     position:fixed;inset:0;background:rgba(15,23,42,.6);
     display:none;align-items:center;justify-content:center;z-index:300;
@@ -511,7 +596,7 @@ body{
 
 <!-- Mobile-only quick action bar — clear path to read / download / share / scan -->
 <div class="mobile-action-bar">
-    <a href="#read" class="primary"><i class="bi bi-book-half"></i> Read</a>
+    <button class="primary" onclick="openReader()"><i class="bi bi-book-half"></i> Read</button>
     <?php if ($attachPdf): ?>
         <a href="<?= htmlspecialchars($pdfUrl) ?>" download><i class="bi bi-download"></i> PDF</a>
     <?php else: ?>
@@ -534,7 +619,7 @@ body{
                 <span><i class="bi bi-file-earmark-pdf"></i> Official PDF</span>
             </div>
             <div class="actions">
-                <a href="#read" class="btn btn-primary"><i class="bi bi-book-half"></i> Read brochure</a>
+                <button class="btn btn-primary" onclick="openReader()"><i class="bi bi-book-half"></i> Read brochure</button>
                 <?php if ($attachPdf): ?>
                     <a href="<?= htmlspecialchars($pdfUrl) ?>" download class="btn btn-outline"><i class="bi bi-download"></i> Download PDF</a>
                 <?php endif; ?>
@@ -557,8 +642,8 @@ body{
     </div>
 </section>
 
-<!-- ============ Beautified article rendered from the PDF ============ -->
-<main class="container section" id="read">
+<!-- ============ Beautified article (desktop view; mobile uses the reader overlay) ============ -->
+<main class="container section desktop-only-article" id="read">
     <h2><i class="bi bi-book-fill" style="color:var(--brand)"></i> <?= htmlspecialchars($title) ?></h2>
     <p class="lead2">Region: <strong><?= htmlspecialchars($regionName) ?></strong><?php if ($createdAt): ?> · Published <?= htmlspecialchars($createdAt) ?><?php endif; ?></p>
 
@@ -659,6 +744,44 @@ body{
     </div>
 </footer>
 
+<!-- Full-screen mobile-first smart reader (opens when "Read" is tapped) -->
+<div class="reader-overlay" id="readerOverlay" aria-hidden="true" role="dialog" aria-label="Brochure reader">
+    <div class="reader-head">
+        <button class="close" onclick="closeReader()" aria-label="Close reader">&times;</button>
+        <div class="ttl">
+            <div class="t1"><?= htmlspecialchars($regionName) ?> · Brochure</div>
+            <div class="t2"><?= htmlspecialchars($title) ?></div>
+        </div>
+        <div class="quick">
+            <?php if ($attachPdf): ?>
+                <a href="<?= htmlspecialchars($pdfUrl) ?>" download title="Download PDF"><i class="bi bi-download"></i></a>
+            <?php endif; ?>
+            <button class="primary" onclick="shareNative()" title="Share"><i class="bi bi-share-fill"></i></button>
+        </div>
+    </div>
+    <div class="reader-progress"><div class="bar" id="readerBar"></div></div>
+    <div class="reader-body">
+        <article class="article-card">
+            <?php if ($hasHtml): ?>
+                <?= $htmlContent /* sanitized inline by extractor */ ?>
+            <?php else: ?>
+                <h3 class="brochure-heading">About this brochure</h3>
+                <p class="brochure-para"><?= nl2br(htmlspecialchars($description)) ?></p>
+                <p class="brochure-para">The full content is available in the original document — tap "Download PDF" above.</p>
+            <?php endif; ?>
+        </article>
+
+        <div class="reader-foot">
+            <h4>Need help with this?</h4>
+            <p>Our team is one tap away — we'll walk you through every requirement.</p>
+            <div class="rf-actions">
+                <button onclick="shareWhatsApp()"><i class="bi bi-whatsapp"></i> Chat on WhatsApp</button>
+                <a class="outline" href="mailto:admission@visaconsultantcanada.com?subject=<?= rawurlencode($title) ?>"><i class="bi bi-envelope"></i> Email us</a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- QR overlay (used by the Scan button on header + mobile bar) -->
 <div class="qr-overlay" id="qrOverlay" onclick="if(event.target===this)closeQr()">
     <div class="box">
@@ -701,7 +824,49 @@ async function shareNative(){
 }
 function openQr(){document.getElementById('qrOverlay').classList.add('show');document.body.style.overflow='hidden';}
 function closeQr(){document.getElementById('qrOverlay').classList.remove('show');document.body.style.overflow='';}
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeQr();});
+
+/* ---------- Mobile-first reader overlay ---------- */
+function openReader(){
+    const isMobile = window.matchMedia('(max-width:780px)').matches;
+    if(!isMobile){
+        // On desktop just scroll to the inline article
+        const t=document.getElementById('read');
+        if(t) t.scrollIntoView({behavior:'smooth',block:'start'});
+        return;
+    }
+    const o=document.getElementById('readerOverlay');
+    if(!o){location.hash='read';return;}
+    o.classList.add('show');
+    o.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+    o.scrollTop=0;
+    document.getElementById('readerBar').style.width='0%';
+    history.replaceState(null,'',location.pathname+location.search+'#read');
+}
+function closeReader(){
+    const o=document.getElementById('readerOverlay');
+    o.classList.remove('show');
+    o.setAttribute('aria-hidden','true');
+    document.body.style.overflow='';
+    if(location.hash==='#read') history.replaceState(null,'',location.pathname+location.search);
+}
+(function(){
+    const o=document.getElementById('readerOverlay');
+    if(!o) return;
+    const bar=document.getElementById('readerBar');
+    o.addEventListener('scroll',()=>{
+        const max=o.scrollHeight-o.clientHeight;
+        const pct=max>0?(o.scrollTop/max*100):0;
+        bar.style.width=Math.min(100,Math.max(0,pct))+'%';
+    },{passive:true});
+    // Open automatically if user lands on #read deep link (e.g. from share)
+    if(window.matchMedia('(max-width:780px)').matches && location.hash==='#read'){
+        setTimeout(openReader,80);
+    }
+})();
+document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'){closeQr();closeReader();}
+});
 </script>
 </body>
 </html>

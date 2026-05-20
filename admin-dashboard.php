@@ -1872,10 +1872,6 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <i class="bi bi-collection"></i>
           Brochures &amp; Share Center
         </a>
-        <a href="#" onclick="loadInFrame('marketing-brochures.php#upload', 'Upload Brochure')">
-          <i class="bi bi-cloud-upload"></i>
-          Upload new brochure
-        </a>
       </div>
       <?php endif; ?>
 
