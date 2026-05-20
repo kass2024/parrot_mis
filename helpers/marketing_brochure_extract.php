@@ -70,9 +70,6 @@ function pcvc_brochure_extract_pdf(string $pdfAbsolutePath, string $title = '', 
  */
 function pcvc_brochure_run_pdftotext(string $pdf): ?string
 {
-    if (!function_exists('proc_open')) {
-        return null;
-    }
     $candidates = ['pdftotext'];
     if (DIRECTORY_SEPARATOR === '\\') {
         $candidates[] = 'C:\\Program Files\\xpdf\\bin64\\pdftotext.exe';
@@ -80,32 +77,79 @@ function pcvc_brochure_run_pdftotext(string $pdf): ?string
     } else {
         $candidates[] = '/usr/bin/pdftotext';
         $candidates[] = '/usr/local/bin/pdftotext';
+        $candidates[] = '/opt/homebrew/bin/pdftotext';
     }
 
     foreach ($candidates as $bin) {
-        $cmd = escapeshellarg($bin) . ' -layout -enc UTF-8 -nopgbrk ' . escapeshellarg($pdf) . ' -';
-        $desc = [
-            1 => ['pipe', 'w'],
-            2 => ['pipe', 'w'],
-        ];
-        $proc = @proc_open($cmd, $desc, $pipes);
-        if (!is_resource($proc)) {
-            continue;
-        }
-        $out = stream_get_contents($pipes[1]);
-        $err = stream_get_contents($pipes[2]);
-        fclose($pipes[1]);
-        fclose($pipes[2]);
-        $code = proc_close($proc);
-        if ($code === 0 && is_string($out) && $out !== '') {
-            return $out;
-        }
-        // Some hosts return non-zero even on success; try output anyway when present.
-        if (is_string($out) && trim($out) !== '' && stripos((string) $err, 'not found') === false) {
+        $cmd = escapeshellarg($bin) . ' -layout -enc UTF-8 -nopgbrk ' . escapeshellarg($pdf) . ' - 2>/dev/null';
+        $out = pcvc_brochure_shell_run($cmd);
+        if (is_string($out) && trim($out) !== '') {
             return $out;
         }
     }
 
+    return null;
+}
+
+/** Run a shell command via proc_open or shell_exec (cPanel often disables proc_open). */
+function pcvc_brochure_shell_run(string $cmd): ?string
+{
+    if (function_exists('proc_open')) {
+        $desc = [1 => ['pipe', 'w'], 2 => ['pipe', 'w']];
+        $proc = @proc_open($cmd, $desc, $pipes);
+        if (is_resource($proc)) {
+            $out = stream_get_contents($pipes[1]);
+            $err = stream_get_contents($pipes[2]);
+            fclose($pipes[1]);
+            fclose($pipes[2]);
+            proc_close($proc);
+            if (is_string($out) && trim($out) !== '' && stripos((string) $err, 'not found') === false) {
+                return $out;
+            }
+        }
+    }
+    if (function_exists('shell_exec')) {
+        $out = @shell_exec($cmd);
+        if (is_string($out) && trim($out) !== '') {
+            return $out;
+        }
+    }
+    return null;
+}
+
+/**
+ * Decompress a PDF FlateDecode stream (zlib or raw deflate).
+ */
+function pcvc_brochure_inflate_pdf_stream(string $data): ?string
+{
+    if ($data === '') {
+        return null;
+    }
+    if (function_exists('gzuncompress')) {
+        $un = @gzuncompress($data);
+        if ($un !== false && $un !== '') {
+            return $un;
+        }
+    }
+    if (function_exists('gzinflate')) {
+        $un = @gzinflate($data);
+        if ($un !== false && $un !== '') {
+            return $un;
+        }
+        // Skip 2-byte zlib header if present
+        if (strlen($data) > 2) {
+            $un = @gzinflate(substr($data, 2));
+            if ($un !== false && $un !== '') {
+                return $un;
+            }
+        }
+    }
+    if (function_exists('zlib_decode')) {
+        $un = @zlib_decode($data);
+        if ($un !== false && $un !== '') {
+            return $un;
+        }
+    }
     return null;
 }
 
@@ -120,21 +164,19 @@ function pcvc_brochure_php_extract(string $pdf): ?string
         return null;
     }
 
-    // Decompress FlateDecode streams when possible (no external deps).
-    if (function_exists('gzuncompress')) {
-        $raw = preg_replace_callback(
-            '/stream\\r?\\n(.*?)\\r?\\nendstream/s',
-            static function (array $m): string {
-                $data = $m[1] ?? '';
-                $un   = @gzuncompress($data);
-                if ($un !== false && $un !== '') {
-                    return "stream\n" . $un . "\nendstream";
-                }
-                return $m[0];
-            },
-            $raw
-        ) ?? $raw;
-    }
+    // Decompress FlateDecode streams (try zlib wrapper, raw deflate, zlib_decode).
+    $raw = preg_replace_callback(
+        '/stream\\r?\\n(.*?)\\r?\\nendstream/s',
+        static function (array $m): string {
+            $data = $m[1] ?? '';
+            $decoded = pcvc_brochure_inflate_pdf_stream($data);
+            if ($decoded !== null && $decoded !== '') {
+                return "stream\n" . $decoded . "\nendstream";
+            }
+            return $m[0];
+        },
+        $raw
+    ) ?? $raw;
 
     if (!preg_match_all('/BT\s*(.*?)\s*ET/s', $raw, $blocks)) {
         return null;

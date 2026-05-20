@@ -16,6 +16,7 @@ if (!isset($_SESSION['id'])) {
 
 $csrfToken = pcvc_csrf_token();
 $aiEnabled = pcvc_brochure_ai_enabled();
+$aiPaused  = function_exists('pcvc_brochure_ai_quota_paused') && pcvc_brochure_ai_quota_paused();
 
 $regions = [];
 if ($r = $conn->query('SELECT id, name FROM regions ORDER BY name ASC')) {
@@ -124,7 +125,9 @@ body{
     box-shadow:var(--shadow-sm);
 }
 .ai-banner.on{border-left:4px solid var(--brand)}
+.ai-banner.warn{border-left:4px solid #f59e0b;background:#fffbeb}
 .ai-banner.off{border-left:4px solid #d1d5db;background:#fafbfd}
+.ai-banner.warn .ai-ic{background:linear-gradient(135deg,#f59e0b,#d97706)}
 .ai-banner-l{display:flex;align-items:flex-start;gap:12px;flex:1;min-width:240px}
 .ai-banner .ai-ic{
     width:42px;height:42px;border-radius:11px;display:grid;place-items:center;
@@ -600,23 +603,25 @@ body{
     </div>
 
     <!-- ============ AI status banner ============ -->
-    <div class="ai-banner <?= $aiEnabled ? 'on' : 'off' ?>">
+    <div class="ai-banner <?= $aiEnabled ? ($aiPaused ? 'warn' : 'on') : 'off' ?>">
         <div class="ai-banner-l">
             <div class="ai-ic"><i class="bi bi-stars"></i></div>
             <div>
-                <strong>AI extraction <?= $aiEnabled ? 'enabled' : 'not configured' ?></strong>
+                <strong>AI extraction <?= $aiEnabled ? ($aiPaused ? 'paused (OpenAI quota)' : 'enabled') : 'not configured' ?></strong>
                 <div class="ai-sub">
-                    <?php if ($aiEnabled): ?>
-                        Every new upload is rewritten into mobile-first HTML by the model in your <code>OPENAI_API_KEY</code> (<code><?= htmlspecialchars(trim((string) (getenv('OPENAI_MODEL') ?: 'gpt-4o-mini'))) ?></code>). Use the button to refresh older brochures.
+                    <?php if ($aiEnabled && $aiPaused): ?>
+                        OpenAI returned <strong>insufficient quota</strong>. Brochures still work using the built-in formatter. Add credits at <a href="https://platform.openai.com/billing" target="_blank" rel="noopener">platform.openai.com/billing</a>, then click Re-extract.
+                    <?php elseif ($aiEnabled): ?>
+                        New uploads are formatted into mobile-first HTML via <code>OPENAI_API_KEY</code>. Use Re-extract to refresh older brochures.
                     <?php else: ?>
-                        Add <code>OPENAI_API_KEY</code> (and optionally <code>OPENAI_MODEL</code>) to <code>.env</code> to enable AI-formatted HTML. Without it brochures use the regex fallback.
+                        Add <code>OPENAI_API_KEY</code> to <code>.env</code> for AI-formatted HTML. Without it, the built-in formatter is used automatically.
                     <?php endif; ?>
                 </div>
             </div>
         </div>
         <?php if ($aiEnabled): ?>
             <button class="btn-brand" type="button" onclick="reextractAll(false)">
-                <i class="bi bi-magic"></i> Re-extract all with AI
+                <i class="bi bi-arrow-repeat"></i> Re-extract all
             </button>
         <?php endif; ?>
     </div>
@@ -916,20 +921,34 @@ document.getElementById('uploadForm').addEventListener('submit',async e=>{
 async function reextractAll(onlyMissing){
     if(!confirm(onlyMissing
         ? 'Re-extract only brochures that don\'t have HTML yet?'
-        : 'Re-extract ALL active brochures with AI? Existing HTML will be replaced. This may take a minute and uses OpenAI credits.'))
+        : 'Re-extract ALL active brochures? Existing HTML will be replaced. AI is used when OpenAI credits are available; otherwise the built-in formatter is used.'))
         return;
     const fd=new FormData();
     fd.append('action','reextract_all');
     fd.append('csrf_token',CSRF);
     fd.append('limit','25');
     if(onlyMissing) fd.append('only_missing','1');
-    toast('AI extraction in progress…','info');
+    toast('Extracting brochure content…','info');
     try{
         const res=await fetch(ENDPOINT,{method:'POST',body:fd});
         const d=await res.json();
         if(!d.ok){toast(d.error||'Bulk extract failed.','error');return;}
-        const aiNote = d.ai_used>0 ? (d.ai_used+' used AI') : (d.ai_enabled ? 'AI failed — used regex fallback (check OpenAI quota)' : 'AI not configured');
-        toast('Done: '+d.succeeded+' / '+d.processed+' refreshed. '+aiNote+'.','success');
+        if(d.succeeded===0 && d.failed>0){
+            const f=(d.failures&&d.failures[0])?d.failures[0]:{};
+            let msg='Extraction failed for '+d.failed+' brochure(s).';
+            if(f.reason==='pdf_missing') msg+=' PDF file not found on server — re-upload the brochure.';
+            else if(f.reason==='extract_empty') msg+=' Could not read text from PDF — ask your host to enable pdftotext (poppler-utils).';
+            else msg+=' Check server logs.';
+            toast(msg,'error');
+        }else if(d.ai_used>0){
+            toast('Done: '+d.succeeded+' / '+d.processed+' refreshed with AI formatting.','success');
+        }else if(d.regex_used>0){
+            let msg='Done: '+d.succeeded+' / '+d.processed+' refreshed (standard formatter).';
+            if(d.ai_paused||d.ai_enabled) msg+=' OpenAI quota exhausted — add credits at platform.openai.com for AI formatting.';
+            toast(msg,'success');
+        }else{
+            toast('Done: '+d.succeeded+' / '+d.processed+' refreshed.','success');
+        }
         loadBrochures();
     }catch(e){toast('Bulk extract failed: '+e.message,'error')}
 }

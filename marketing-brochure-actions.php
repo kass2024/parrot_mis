@@ -388,35 +388,57 @@ switch ($action) {
                  WHERE b.is_active=1
                  ORDER BY b.id ASC LIMIT $maxRun";
         $rs = $conn->query($sqlList);
-        $done   = [];
-        $failed = [];
-        $aiCnt  = 0;
+        $done      = [];
+        $failed    = [];
+        $aiCnt     = 0;
+        $regexCnt  = 0;
+        $failNotes = [];
         while ($rs && ($row = $rs->fetch_assoc())) {
+            $bid = (int) $row['id'];
             $abs = __DIR__ . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, (string) $row['pdf_path']);
-            if (!is_file($abs)) { $failed[] = (int) $row['id']; continue; }
+            if (!is_file($abs)) {
+                $failed[] = $bid;
+                $failNotes[] = ['id' => $bid, 'reason' => 'pdf_missing', 'path' => (string) $row['pdf_path']];
+                continue;
+            }
             $ext = pcvc_brochure_extract_pdf($abs, (string) $row['title'], (string) $row['region_name']);
-            $ok  = !empty($ext['html']);
+            $ok  = trim((string) ($ext['html'] ?? '')) !== '';
             $st  = $ok ? 'ok' : 'failed';
+            $txt = (string) ($ext['text'] ?? '');
+            $htm = (string) ($ext['html'] ?? '');
             $u = $conn->prepare('UPDATE marketing_brochures SET extracted_text=?, html_content=?, extraction_status=? WHERE id=?');
-            $u->bind_param('sssi', $ext['text'], $ext['html'], $st, $row['id']);
-            $u->execute();
+            $u->bind_param('sssi', $txt, $htm, $st, $bid);
+            if (!$u->execute()) {
+                $failed[] = $bid;
+                $failNotes[] = ['id' => $bid, 'reason' => 'db_update', 'error' => $conn->error];
+                $u->close();
+                continue;
+            }
             $u->close();
             if ($ok) {
-                $done[] = (int) $row['id'];
-                if (!empty($ext['ai_used'])) $aiCnt++;
+                $done[] = $bid;
+                if (!empty($ext['ai_used'])) {
+                    $aiCnt++;
+                } elseif (pcvc_brochure_ai_enabled()) {
+                    $regexCnt++;
+                }
             } else {
-                $failed[] = (int) $row['id'];
+                $failed[] = $bid;
+                $failNotes[] = ['id' => $bid, 'reason' => 'extract_empty', 'engine' => (string) ($ext['engine'] ?? 'none')];
             }
         }
         pcvc_brochure_respond([
-            'ok'        => true,
-            'processed' => count($done) + count($failed),
-            'succeeded' => count($done),
-            'failed'    => count($failed),
-            'ai_used'   => $aiCnt,
-            'done_ids'  => $done,
-            'failed_ids'=> $failed,
-            'ai_enabled'=> function_exists('pcvc_brochure_ai_enabled') && pcvc_brochure_ai_enabled(),
+            'ok'         => true,
+            'processed'  => count($done) + count($failed),
+            'succeeded'  => count($done),
+            'failed'     => count($failed),
+            'ai_used'    => $aiCnt,
+            'regex_used' => $regexCnt,
+            'done_ids'   => $done,
+            'failed_ids' => $failed,
+            'failures'   => $failNotes,
+            'ai_enabled' => pcvc_brochure_ai_enabled(),
+            'ai_paused'  => function_exists('pcvc_brochure_ai_quota_paused') && pcvc_brochure_ai_quota_paused(),
         ]);
         break;
 

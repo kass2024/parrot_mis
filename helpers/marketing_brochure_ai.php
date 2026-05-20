@@ -21,7 +21,26 @@ require_once __DIR__ . '/env_load.php';
 
 function pcvc_brochure_ai_enabled(): bool
 {
+    if (trim(xander_env_get('PCVC_SKIP_BROCHURE_AI')) === '1') {
+        return false;
+    }
     return trim(xander_env_get('OPENAI_API_KEY')) !== '' && function_exists('curl_init');
+}
+
+/** Skip AI calls for 1h after a quota/rate-limit error (avoids slow bulk re-extract). */
+function pcvc_brochure_ai_quota_paused(): bool
+{
+    $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pcvc_brochure_ai_quota.flag';
+    if (!is_file($flag)) {
+        return false;
+    }
+    return (time() - (int) @filemtime($flag)) < 3600;
+}
+
+function pcvc_brochure_ai_mark_quota_exhausted(): void
+{
+    $flag = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'pcvc_brochure_ai_quota.flag';
+    @touch($flag);
 }
 
 /**
@@ -34,7 +53,7 @@ function pcvc_brochure_ai_enabled(): bool
 function pcvc_brochure_ai_html_from_text(string $rawText, string $title, string $regionName): ?string
 {
     $key = trim(xander_env_get('OPENAI_API_KEY'));
-    if ($key === '' || !function_exists('curl_init')) {
+    if ($key === '' || !function_exists('curl_init') || pcvc_brochure_ai_quota_paused()) {
         return null;
     }
     $text = trim($rawText);
@@ -83,6 +102,9 @@ function pcvc_brochure_ai_html_from_text(string $rawText, string $title, string 
     curl_close($ch);
 
     if ($body === false || $http < 200 || $http >= 300) {
+        if ($http === 429 || (is_string($body) && stripos($body, 'insufficient_quota') !== false)) {
+            pcvc_brochure_ai_mark_quota_exhausted();
+        }
         @error_log('[brochure-ai] HTTP ' . $http . ' ' . $err . ' body=' . substr((string) $body, 0, 300));
         return null;
     }
