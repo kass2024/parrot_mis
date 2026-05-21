@@ -135,30 +135,37 @@ function pcvc_swl_build_html(array $staff, string $subject, string $contentHtml,
     $bodyHtml  = $contentHtml;
 
     $css = <<<'CSS'
-        @page { margin: 165px 35px 130px 35px; size: A4 portrait; }
-        body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 11.5pt; color: #1f2937; line-height: 1.55; }
-        header { position: fixed; top: -150px; left: 0; right: 0; height: 130px; text-align: center; }
-        header img { width: 100%; max-height: 130px; }
-        footer { position: fixed; bottom: -110px; left: 0; right: 0; height: 100px; text-align: center; }
-        footer img { width: 100%; max-height: 100px; }
-        .stamp { position: fixed; top: 0; right: 0; font-size: 9pt; color: #6b7280; }
-        .meta { margin-bottom: 24px; }
-        .meta-row { margin: 2px 0; }
+        @page { margin: 130px 35px 70px 35px; size: A4 portrait; }
+        body { font-family: "DejaVu Sans", Arial, sans-serif; font-size: 11pt; color: #1f2937; line-height: 1.5; }
+        header { position: fixed; top: -120px; left: 0; right: 0; height: 110px; text-align: center; }
+        header img { width: 100%; max-height: 110px; }
+        footer { position: fixed; bottom: -55px; left: 0; right: 0; height: 50px; text-align: center; }
+        footer img { width: 100%; max-height: 45px; }
+        .meta { margin-bottom: 14px; }
+        .meta-row { margin: 1px 0; }
         .meta-label { color: #6b7280; }
-        .ref { float: right; color: #6b7280; font-size: 10pt; }
+        .ref { float: right; color: #6b7280; font-size: 9.5pt; }
         h1.title {
-            font-size: 16pt; margin: 16px 0 18px 0; color: #b91c1c; text-transform: uppercase;
-            letter-spacing: 0.04em; text-align: center; border-bottom: 2px solid #b91c1c; padding-bottom: 8px;
+            font-size: 15pt; margin: 6px 0 12px 0; color: #b91c1c; text-transform: uppercase;
+            letter-spacing: 0.04em; text-align: center; border-bottom: 2px solid #b91c1c; padding-bottom: 6px;
         }
-        .recipient { background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; margin-bottom:18px; }
+        .recipient {
+            background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px;
+            padding:8px 12px; margin-bottom:12px; font-size: 10.5pt;
+        }
         .recipient .name { font-weight: 700; }
         .body { text-align: justify; }
-        .body p { margin: 0 0 10px; }
+        .body p { margin: 0 0 8px; }
         .body strong { color: #111827; }
-        .signature-block { margin-top: 40px; }
-        .signature-img { display: block; height: 70px; margin: 8px 0 -8px 0; }
-        .signature-line { width: 240px; border-bottom: 1px solid #111; margin-top: 4px; padding-top: 4px; }
-        .small { font-size: 9.5pt; color: #6b7280; }
+
+        /* Signature stays as one unbreakable unit */
+        .signature-block { margin-top: 22px; page-break-inside: avoid; }
+        .signature-inner { display: inline-block; min-width: 240px; }
+        .signature-img { display: block; height: 60px; margin: 4px 0 -4px 0; }
+        .signature-line { border-bottom: 1px solid #111; padding-top: 4px; }
+        .signature-name { font-weight: 700; font-size: 11.5pt; padding-top: 4px; }
+        .signature-title { font-size: 10pt; color: #374151; margin-top: 2px; line-height: 1.4; }
+        .signature-org { font-size: 9.5pt; color: #6b7280; margin-top: 1px; }
     CSS;
 
     ob_start();
@@ -199,12 +206,16 @@ function pcvc_swl_build_html(array $staff, string $subject, string $contentHtml,
 </div>
 
 <div class="signature-block">
-    <p>Yours sincerely,</p>
-    <?php if ($signatureUri !== ''): ?>
-    <img src="<?= $signatureUri ?>" alt="Signature" class="signature-img">
-    <?php endif; ?>
-    <div class="signature-line"><strong>Prof. Marc-Logan</strong></div>
-    <p class="small">Company Advisor and Shareholder<br>Parrot Canada Visa Consultant Co. Ltd.</p>
+    <p style="margin:0 0 4px 0;">Yours sincerely,</p>
+    <div class="signature-inner">
+        <?php if ($signatureUri !== ''): ?>
+        <img src="<?= $signatureUri ?>" alt="Signature" class="signature-img">
+        <?php endif; ?>
+        <div class="signature-line"></div>
+        <div class="signature-name">Prof. Marc-Logan</div>
+        <div class="signature-title">Company Advisor and Shareholder</div>
+        <div class="signature-org">Parrot Canada Visa Consultant Co. Ltd.</div>
+    </div>
 </div>
 
 </body>
