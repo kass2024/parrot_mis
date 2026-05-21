@@ -176,7 +176,9 @@ if ($action === 'send' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($phone === '') {
             $waOut['error'] = 'Staff has no phone number on file.';
         } else {
-            $waOut = pcvc_swl_send_whatsapp($phone, $staffName, $subject, $pdfUrl, $ref);
+            // Pass absolute path so the helper can upload the PDF to Meta media
+            // (more reliable than fetching by public URL).
+            $waOut = pcvc_swl_send_whatsapp($phone, $staffName, $subject, $pdfUrl, $ref, $pdf['abs']);
         }
     }
 

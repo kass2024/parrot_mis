@@ -254,12 +254,67 @@ function pcvc_swl_send_email(string $toEmail, string $toName, string $subject, s
 }
 
 /* ============================================================
-   WHATSAPP — template + document
-   - First send approved template (intro)
-   - Then send the PDF as a document (requires public URL)
+   UPLOAD PDF TO META MEDIA ENDPOINT — returns media_id or ''
+   Most reliable way to attach a document; no need for the file
+   to be publicly reachable.
 ============================================================ */
-function pcvc_swl_send_whatsapp(string $phoneRaw, string $staffName, string $subject, string $pdfPublicUrl, string $referenceCode): array
+function pcvc_swl_whatsapp_upload_media(string $phoneId, string $token, string $version, string $pdfAbsPath, string $filename): array
 {
+    $out = ['id' => '', 'http' => 0, 'body' => ''];
+    if (!is_file($pdfAbsPath)) {
+        $out['body'] = 'PDF file not found: ' . $pdfAbsPath;
+        error_log('[warning_letter] media upload: ' . $out['body']);
+        return $out;
+    }
+    $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/media';
+
+    $cfile = new CURLFile($pdfAbsPath, 'application/pdf', $filename);
+    $fields = [
+        'messaging_product' => 'whatsapp',
+        'type'              => 'application/pdf',
+        'file'              => $cfile,
+    ];
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 60,
+        CURLOPT_HTTPHEADER     => ['Authorization: Bearer ' . $token],
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $fields,
+    ]);
+    $body  = (string) curl_exec($ch);
+    $http  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err   = curl_error($ch);
+    curl_close($ch);
+
+    $out['http'] = $http;
+    $out['body'] = $body !== '' ? $body : $err;
+    error_log('[warning_letter] media upload HTTP ' . $http . ' body: ' . $body);
+
+    if ($http >= 200 && $http < 300) {
+        $j = json_decode($body, true);
+        if (is_array($j) && !empty($j['id'])) {
+            $out['id'] = (string) $j['id'];
+        }
+    }
+    return $out;
+}
+
+/* ============================================================
+   WHATSAPP — template + document
+   1) Approved template (intro)
+   2) Upload PDF to Meta media → send document by id (preferred)
+   3) Fall back to document by public URL if upload fails
+============================================================ */
+function pcvc_swl_send_whatsapp(
+    string $phoneRaw,
+    string $staffName,
+    string $subject,
+    string $pdfPublicUrl,
+    string $referenceCode,
+    string $pdfAbsPath = ''
+): array {
     $token   = trim((string) xander_env_get('WHATSAPP_ACCESS_TOKEN'));
     if ($token === '') $token = trim((string) xander_env_get('WHATSAPP_TOKEN'));
     $phoneId = trim((string) xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
@@ -317,35 +372,77 @@ function pcvc_swl_send_whatsapp(string $phoneRaw, string $staffName, string $sub
         return $result;
     }
 
-    /* ---------- 2) send PDF document (public URL required) ---------- */
-    if ($pdfPublicUrl !== '') {
-        $docPayload = [
+    /* ---------- 2) send PDF document ----------
+       Prefer media upload (works regardless of public URL).
+       Fall back to link URL only if upload fails AND a URL was provided.
+    ------------------------------------------------ */
+    $docFilename = 'Warning_Letter_' . $referenceCode . '.pdf';
+    $caption     = 'Warning Letter — ' . $subject;
+
+    $docSent      = false;
+    $docMethod    = '';
+    $docErrParts  = [];
+
+    if ($pdfAbsPath !== '' && is_file($pdfAbsPath)) {
+        $upload = pcvc_swl_whatsapp_upload_media($phoneId, $token, $version, $pdfAbsPath, $docFilename);
+        if ($upload['id'] !== '') {
+            $payload = [
+                'messaging_product' => 'whatsapp',
+                'recipient_type'    => 'individual',
+                'to'                => $to,
+                'type'              => 'document',
+                'document'          => [
+                    'id'       => $upload['id'],
+                    'filename' => $docFilename,
+                    'caption'  => $caption,
+                ],
+            ];
+            $resA = xander_whatsapp_graph_post($url, $token, $payload);
+            error_log('[warning_letter] wa doc-by-id HTTP ' . $resA['http'] . ' body: ' . $resA['body']);
+            if ($resA['http'] >= 200 && $resA['http'] < 300 && xander_whatsapp_response_has_message_id($resA['json'])) {
+                $docSent   = true;
+                $docMethod = 'document_by_id';
+            } else {
+                $err = xander_whatsapp_extract_error($resA['json']);
+                $docErrParts[] = 'doc-by-id failed' . ($err ? (': ' . ($err['message'] ?? 'unknown')) : '');
+            }
+        } else {
+            $docErrParts[] = 'media upload failed (HTTP ' . $upload['http'] . ')';
+        }
+    } else {
+        $docErrParts[] = 'PDF file missing on server';
+    }
+
+    /* fallback: try by link URL */
+    if (!$docSent && $pdfPublicUrl !== '') {
+        $payloadB = [
             'messaging_product' => 'whatsapp',
             'recipient_type'    => 'individual',
             'to'                => $to,
             'type'              => 'document',
             'document'          => [
                 'link'     => $pdfPublicUrl,
-                'filename' => 'Warning_Letter_' . $referenceCode . '.pdf',
-                'caption'  => 'Warning Letter — ' . $subject,
+                'filename' => $docFilename,
+                'caption'  => $caption,
             ],
         ];
-        $res2 = xander_whatsapp_graph_post($url, $token, $docPayload);
-        error_log('[warning_letter] wa doc HTTP ' . $res2['http'] . ' body: ' . $res2['body']);
-        $docSent = ($res2['http'] >= 200 && $res2['http'] < 300 && xander_whatsapp_response_has_message_id($res2['json']));
-
-        // If template went through but doc failed, we still consider the WhatsApp leg "sent" (intro delivered)
-        $result['sent']   = true;
-        $result['method'] = $docSent ? 'template+document' : 'template_only';
-        if (!$docSent) {
-            $err = xander_whatsapp_extract_error($res2['json']);
-            $result['error'] = 'PDF attachment failed' . ($err ? (': ' . ($err['message'] ?? 'unknown')) : '.');
+        $resB = xander_whatsapp_graph_post($url, $token, $payloadB);
+        error_log('[warning_letter] wa doc-by-link HTTP ' . $resB['http'] . ' body: ' . $resB['body']);
+        if ($resB['http'] >= 200 && $resB['http'] < 300 && xander_whatsapp_response_has_message_id($resB['json'])) {
+            $docSent   = true;
+            $docMethod = 'document_by_link';
+        } else {
+            $err = xander_whatsapp_extract_error($resB['json']);
+            $docErrParts[] = 'doc-by-link failed' . ($err ? (': ' . ($err['message'] ?? 'unknown')) : '');
         }
-        return $result;
     }
 
+    // Template intro already delivered → whole leg is "sent"; clarify whether PDF made it.
     $result['sent']   = true;
-    $result['method'] = 'template';
+    $result['method'] = $docSent ? ('template+' . $docMethod) : 'template_only';
+    if (!$docSent) {
+        $result['error'] = 'PDF attachment failed (' . implode('; ', $docErrParts) . ').';
+    }
     return $result;
 }
 
