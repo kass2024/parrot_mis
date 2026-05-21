@@ -219,6 +219,7 @@ $cards = [
       'jobs_report.php'=> 'Check job report ',
       'admin-payroll.php'=> 'Payroll ',
       'cards/generate_staff_card.php'=> 'Generate staff cards',
+      'staff-warning-letters.php' => 'Warning letters',
     ]
   ],
   'commission_request' => [
@@ -1713,6 +1714,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('cards/generate_staff_card.php', 'Generate Staff Cards')">
           <i class="bi bi-card-text"></i>
           Staff cards
+        </a>
+        <a href="#" onclick="loadInFrame('staff-warning-letters.php', 'Staff Warning Letters')">
+          <i class="bi bi-exclamation-octagon"></i>
+          Warning letters
         </a>
         <a href="#" onclick="loadInFrame('mopay-payment-transactions.php', 'MoPay Transactions')">
           <i class="bi bi-arrow-left-right"></i>

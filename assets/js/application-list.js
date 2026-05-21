@@ -1793,7 +1793,10 @@ async function sendMissingDocsNotification() {
 
     // Build smart progressive stages based on what's being sent
     const stages = [{ title: "Preparing reminder…", hint: "Validating phone, email and message" }];
-    if (sendWa) stages.push({ title: "Sending WhatsApp…", hint: "Delivering via approved template to " + phoneOverride });
+    if (sendWa) {
+        stages.push({ title: "Checking WhatsApp number…", hint: "Verifying " + phoneOverride + " is on WhatsApp" });
+        stages.push({ title: "Sending WhatsApp…", hint: "Delivering via approved template" });
+    }
     if (sendEm) stages.push({ title: "Sending Email…", hint: "Dispatching to " + emailOverride });
     stages.push({ title: "Finalising…", hint: "Just a moment" });
 
@@ -1823,17 +1826,48 @@ async function sendMissingDocsNotification() {
         }
         const wa = data.data?.whatsapp || {};
         const em = data.data?.email || {};
-        const parts = [];
-        if (wa.sent) parts.push(`WhatsApp (${wa.method || "sent"})`);
-        if (em.sent) parts.push("Email");
-        const msg = parts.length ? `Sent via ${parts.join(" and ")}.` : (data.data?.message || "Notification sent.");
+        const okParts = [];
+        const skipParts = [];
+        if (wa.sent) {
+            okParts.push(`WhatsApp (${wa.method || "sent"})`);
+        } else if (sendWa) {
+            if (wa.not_on_whatsapp) {
+                skipParts.push("WhatsApp skipped — number not on WhatsApp");
+            } else if (wa.error) {
+                skipParts.push(`WhatsApp failed: ${wa.error}`);
+            }
+        }
+        if (em.sent) {
+            okParts.push("Email");
+        } else if (sendEm && em.error) {
+            skipParts.push(`Email failed: ${em.error}`);
+        }
+
+        let msg = "";
+        let tone = "text-emerald-700";
+        if (okParts.length && skipParts.length) {
+            msg = `Sent via ${okParts.join(" and ")}. ${skipParts.join(". ")}.`;
+            tone = "text-amber-700";
+        } else if (okParts.length) {
+            msg = `Sent via ${okParts.join(" and ")}.`;
+        } else if (skipParts.length) {
+            msg = skipParts.join(". ") + ".";
+            tone = "text-red-600";
+        } else {
+            msg = data.data?.message || "Notification sent.";
+        }
+
         if (statusEl) {
             statusEl.classList.remove("hidden");
-            statusEl.className = "text-sm text-emerald-700";
+            statusEl.className = "text-sm " + tone;
             statusEl.textContent = msg;
         }
         showToast(msg);
-        setTimeout(closeMissingDocsModal, 1200);
+
+        // Only auto-close on full success
+        if (okParts.length && !skipParts.length) {
+            setTimeout(closeMissingDocsModal, 1200);
+        }
     } catch (e) {
         console.error("sendMissingDocsNotification:", e);
         if (statusEl) {

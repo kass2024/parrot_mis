@@ -243,7 +243,7 @@ function pcvc_app_notify_missing_documents(
     $note = trim($customNote);
     $customMessage = trim($customMessage);
 
-    $waOut = ['sent' => false, 'method' => '', 'error' => ''];
+    $waOut = ['sent' => false, 'method' => '', 'error' => '', 'not_on_whatsapp' => false, 'to' => ''];
     $emOut = ['sent' => false, 'error' => ''];
 
     if ($sendWhatsapp) {
@@ -252,6 +252,16 @@ function pcvc_app_notify_missing_documents(
             ? $customMessage
             : pcvc_app_missing_docs_whatsapp_session_body($name, $docList, $portalUrl, $note);
         $waOut  = pcvc_app_send_missing_docs_whatsapp($phone, $name, $docList, $portalUrl, $waBody);
+
+        // If the recipient isn't on WhatsApp, do NOT deliver via WhatsApp.
+        // Carry this clearly upstream so the UI can show "Skipped — not on WhatsApp".
+        if (!empty($waOut['not_on_whatsapp'])) {
+            $waOut['sent']   = false;
+            $waOut['method'] = 'skipped';
+            if (empty($waOut['error'])) {
+                $waOut['error'] = 'This number is not on WhatsApp — message not delivered.';
+            }
+        }
     }
 
     if ($sendEmail) {
@@ -313,9 +323,36 @@ function pcvc_app_missing_docs_whatsapp_session_body(string $name, string $docLi
 }
 
 /**
+ * Heuristic — does this WhatsApp error / status mean the number isn't registered on WhatsApp?
+ */
+function pcvc_app_whatsapp_response_means_not_registered(array $res): bool
+{
+    $err    = (string) ($res['error']  ?? '');
+    $detail = (string) ($res['detail'] ?? '');
+    $blob   = $err . ' ' . $detail;
+
+    // Meta error codes that indicate "recipient is not on WhatsApp"
+    foreach (['131026', '131045', '131051', '131047'] as $code) {
+        if (strpos($detail, $code) !== false) {
+            return true;
+        }
+    }
+    if (stripos($blob, 'not on WhatsApp') !== false) {
+        return true;
+    }
+    if (stripos($blob, 'not a WhatsApp user') !== false) {
+        return true;
+    }
+    if (stripos($blob, 'recipient phone number not in allowed list') !== false) {
+        return true;
+    }
+    return false;
+}
+
+/**
  * WhatsApp Cloud API — template first (outside 24h window).
  *
- * @return array{sent:bool,method:string,error:string,detail:string}
+ * @return array{sent:bool,method:string,error:string,detail:string,not_on_whatsapp?:bool,to?:string}
  */
 function pcvc_app_send_missing_docs_whatsapp(string $phoneRaw, string $name, string $docList, string $portalUrl, string $sessionBody): array
 {
@@ -324,7 +361,7 @@ function pcvc_app_send_missing_docs_whatsapp(string $phoneRaw, string $name, str
         $token = trim(xander_env_get('WHATSAPP_TOKEN'));
     }
     $phoneId = trim(xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
-    $empty   = ['sent' => false, 'method' => '', 'error' => '', 'detail' => ''];
+    $empty   = ['sent' => false, 'method' => '', 'error' => '', 'detail' => '', 'not_on_whatsapp' => false, 'to' => ''];
     if ($token === '' || $phoneId === '') {
         $empty['error'] = 'WhatsApp is not configured.';
         return $empty;
@@ -337,6 +374,7 @@ function pcvc_app_send_missing_docs_whatsapp(string $phoneRaw, string $name, str
         $empty['error'] = 'Student phone number is missing or invalid.';
         return $empty;
     }
+    $empty['to'] = $to;
 
     $version = trim(xander_env_get('META_GRAPH_VERSION')) ?: 'v19.0';
     $url     = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
@@ -363,11 +401,29 @@ function pcvc_app_send_missing_docs_whatsapp(string $phoneRaw, string $name, str
         $bodyTexts,
         $sessionBody
     );
+
+    $sent      = (bool) ($res['sent'] ?? false);
+    $method    = (string) ($res['method'] ?? '');
+    $errorMsg  = (string) ($res['error']  ?? '');
+    $detail    = (string) ($res['detail'] ?? '');
+    $notOnWa   = false;
+    if (!$sent) {
+        $notOnWa = pcvc_app_whatsapp_response_means_not_registered([
+            'error'  => $errorMsg,
+            'detail' => $detail,
+        ]);
+        if ($notOnWa && $errorMsg === '') {
+            $errorMsg = 'This number is not on WhatsApp — message not delivered.';
+        }
+    }
+
     return [
-        'sent'   => (bool) ($res['sent'] ?? false),
-        'method' => (string) ($res['method'] ?? ''),
-        'error'  => (string) ($res['error'] ?? ''),
-        'detail' => (string) ($res['detail'] ?? ''),
+        'sent'            => $sent,
+        'method'          => $method,
+        'error'           => $errorMsg,
+        'detail'          => $detail,
+        'not_on_whatsapp' => $notOnWa,
+        'to'              => $to,
     ];
 }
 
