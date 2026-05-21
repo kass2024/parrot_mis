@@ -90,11 +90,22 @@ function pcvc_swl_img_data_uri(string $absPath): string
     if (!is_file($absPath)) return '';
     $bin = @file_get_contents($absPath);
     if ($bin === false) return '';
-    $mime = 'image/png';
-    if (function_exists('mime_content_type')) {
+    // Pick MIME from extension first (reliable + no dependency on mime_magic).
+    $ext = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));
+    $byExt = [
+        'png'  => 'image/png',
+        'jpg'  => 'image/jpeg',
+        'jpeg' => 'image/jpeg',
+        'gif'  => 'image/gif',
+        'webp' => 'image/webp',
+        'svg'  => 'image/svg+xml',
+    ];
+    $mime = $byExt[$ext] ?? null;
+    if ($mime === null && function_exists('mime_content_type')) {
         $detected = @mime_content_type($absPath);
         if ($detected) $mime = $detected;
     }
+    if ($mime === null) $mime = 'image/png';
     return 'data:' . $mime . ';base64,' . base64_encode($bin);
 }
 
@@ -103,8 +114,16 @@ function pcvc_swl_img_data_uri(string $absPath): string
 ============================================================ */
 function pcvc_swl_build_html(array $staff, string $subject, string $contentHtml, string $referenceCode): string
 {
-    $headerUri = pcvc_swl_img_data_uri(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'cards' . DIRECTORY_SEPARATOR . 'header.png');
-    $footerUri = pcvc_swl_img_data_uri(dirname(__DIR__) . DIRECTORY_SEPARATOR . 'cards' . DIRECTORY_SEPARATOR . 'footer.png');
+    $cardsDir  = dirname(__DIR__) . DIRECTORY_SEPARATOR . 'cards' . DIRECTORY_SEPARATOR;
+    $headerUri = pcvc_swl_img_data_uri($cardsDir . 'header.png');
+    $footerUri = pcvc_swl_img_data_uri($cardsDir . 'footer.png');
+    $signatureUri = pcvc_swl_img_data_uri($cardsDir . 'signature-mac.jpeg');
+    if ($signatureUri === '') {
+        $signatureUri = pcvc_swl_img_data_uri($cardsDir . 'signature-mac.jpg');
+    }
+    if ($signatureUri === '') {
+        $signatureUri = pcvc_swl_img_data_uri($cardsDir . 'signature-mac.png');
+    }
     $name      = htmlspecialchars(trim(($staff['full_name'] ?? '') ?: trim(($staff['first_name'] ?? '') . ' ' . ($staff['last_name'] ?? ''))), ENT_QUOTES, 'UTF-8');
     $position  = htmlspecialchars((string) ($staff['position'] ?? ''), ENT_QUOTES, 'UTF-8');
     $email     = htmlspecialchars((string) ($staff['email'] ?? ''), ENT_QUOTES, 'UTF-8');
@@ -137,7 +156,8 @@ function pcvc_swl_build_html(array $staff, string $subject, string $contentHtml,
         .body p { margin: 0 0 10px; }
         .body strong { color: #111827; }
         .signature-block { margin-top: 40px; }
-        .signature-line { width: 220px; border-bottom: 1px solid #111; margin-top: 36px; padding-top: 4px; }
+        .signature-img { display: block; height: 70px; margin: 8px 0 -8px 0; }
+        .signature-line { width: 240px; border-bottom: 1px solid #111; margin-top: 4px; padding-top: 4px; }
         .small { font-size: 9.5pt; color: #6b7280; }
     CSS;
 
@@ -180,6 +200,9 @@ function pcvc_swl_build_html(array $staff, string $subject, string $contentHtml,
 
 <div class="signature-block">
     <p>Yours sincerely,</p>
+    <?php if ($signatureUri !== ''): ?>
+    <img src="<?= $signatureUri ?>" alt="Signature" class="signature-img">
+    <?php endif; ?>
     <div class="signature-line"><strong>Prof. Marc-Logan</strong></div>
     <p class="small">Company Advisor and Shareholder<br>Parrot Canada Visa Consultant Co. Ltd.</p>
 </div>
@@ -302,10 +325,21 @@ function pcvc_swl_whatsapp_upload_media(string $phoneId, string $token, string $
 }
 
 /* ============================================================
-   WHATSAPP — template + document
-   1) Approved template (intro)
-   2) Upload PDF to Meta media → send document by id (preferred)
-   3) Fall back to document by public URL if upload fails
+   WHATSAPP — TEMPLATE WITH DOCUMENT HEADER
+   - Uploads the PDF to Meta /media → gets media_id
+   - Sends the approved template with a HEADER component of
+     type=document {id: media_id, filename}. The PDF is part of
+     the template message itself (works outside the 24h window
+     because templates always do).
+   - If the template doesn't have a media header in Meta, we
+     gracefully retry without the header so the intro still
+     arrives, and surface a clear error so HR can re-approve the
+     template with a "Document" header.
+
+   IMPORTANT — your template must be approved with a HEADER of
+   type "Document" for the PDF to attach. In Meta Business
+   Manager → WhatsApp Manager → Message templates → edit
+   pcvc_warning_letter → Header → Media → Document → submit.
 ============================================================ */
 function pcvc_swl_send_whatsapp(
     string $phoneRaw,
@@ -338,110 +372,109 @@ function pcvc_swl_send_whatsapp(
 
     $tplName = trim((string) xander_env_get('WHATSAPP_WARNING_LETTER_TEMPLATE_NAME')) ?: 'pcvc_warning_letter';
     $tplLang = trim((string) xander_env_get('WHATSAPP_WARNING_LETTER_TEMPLATE_LANG')) ?: 'en';
-
-    $bodyTexts = [
-        pcvc_brochure_wa_sanitize_param($staffName ?: 'Colleague'),
-        pcvc_brochure_wa_sanitize_param($subject),
-        pcvc_brochure_wa_sanitize_param($referenceCode),
-    ];
-
-    /* ---------- 1) try approved template (intro) ---------- */
-    $sessionBody = "Hello {$staffName},\n\nPlease find the official warning letter regarding: {$subject}.\nReference: {$referenceCode}\n\nKind regards,\nProf. Marc-Logan\nCompany Advisor and Shareholder\nParrot Canada Visa Consultant Co. Ltd.";
-    $tpl = xander_whatsapp_send_template_or_session($to, $url, $token, $tplName, $tplLang, 3, $bodyTexts, $sessionBody);
-
-    $tplSent = (bool) ($tpl['sent'] ?? false);
-    $tplMethod = (string) ($tpl['method'] ?? '');
-    $tplErr  = (string) ($tpl['error']  ?? '');
-    $tplDet  = (string) ($tpl['detail'] ?? '');
-
-    // Detect "not on WhatsApp"
-    $notOnWa = false;
-    foreach (['131026', '131045', '131051', '131047'] as $c) {
-        if (strpos($tplDet, $c) !== false) { $notOnWa = true; break; }
-    }
-    if (!$notOnWa && stripos($tplErr . ' ' . $tplDet, 'not on WhatsApp') !== false) $notOnWa = true;
-    if ($notOnWa) {
-        $result['error'] = 'This number is not on WhatsApp — message not delivered.';
-        $result['not_on_whatsapp'] = true;
-        return $result;
-    }
-
-    if (!$tplSent) {
-        $result['error']  = $tplErr ?: 'WhatsApp template failed.';
-        $result['method'] = $tplMethod ?: 'template';
-        return $result;
-    }
-
-    /* ---------- 2) send PDF document ----------
-       Prefer media upload (works regardless of public URL).
-       Fall back to link URL only if upload fails AND a URL was provided.
-    ------------------------------------------------ */
     $docFilename = 'Warning_Letter_' . $referenceCode . '.pdf';
-    $caption     = 'Warning Letter — ' . $subject;
 
-    $docSent      = false;
-    $docMethod    = '';
-    $docErrParts  = [];
-
+    /* ---------- 1) Upload the PDF to Meta media (so we have a media_id) ---------- */
+    $mediaId = '';
     if ($pdfAbsPath !== '' && is_file($pdfAbsPath)) {
         $upload = pcvc_swl_whatsapp_upload_media($phoneId, $token, $version, $pdfAbsPath, $docFilename);
         if ($upload['id'] !== '') {
-            $payload = [
-                'messaging_product' => 'whatsapp',
-                'recipient_type'    => 'individual',
-                'to'                => $to,
-                'type'              => 'document',
-                'document'          => [
-                    'id'       => $upload['id'],
-                    'filename' => $docFilename,
-                    'caption'  => $caption,
-                ],
-            ];
-            $resA = xander_whatsapp_graph_post($url, $token, $payload);
-            error_log('[warning_letter] wa doc-by-id HTTP ' . $resA['http'] . ' body: ' . $resA['body']);
-            if ($resA['http'] >= 200 && $resA['http'] < 300 && xander_whatsapp_response_has_message_id($resA['json'])) {
-                $docSent   = true;
-                $docMethod = 'document_by_id';
-            } else {
-                $err = xander_whatsapp_extract_error($resA['json']);
-                $docErrParts[] = 'doc-by-id failed' . ($err ? (': ' . ($err['message'] ?? 'unknown')) : '');
-            }
+            $mediaId = $upload['id'];
         } else {
-            $docErrParts[] = 'media upload failed (HTTP ' . $upload['http'] . ')';
+            error_log('[warning_letter] PDF upload to Meta failed (HTTP ' . $upload['http'] . ').');
         }
     } else {
-        $docErrParts[] = 'PDF file missing on server';
+        error_log('[warning_letter] PDF file missing at: ' . $pdfAbsPath);
     }
 
-    /* fallback: try by link URL */
-    if (!$docSent && $pdfPublicUrl !== '') {
-        $payloadB = [
+    /* ---------- 2) Build template body params (always 3) ---------- */
+    $bodyParams = [
+        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($staffName ?: 'Colleague')],
+        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($subject)],
+        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($referenceCode)],
+    ];
+
+    /* ---------- 3) Send template WITH document header (preferred) ---------- */
+    $sendTemplate = function (array $components) use ($url, $token, $to, $tplName, $tplLang) {
+        $payload = [
             'messaging_product' => 'whatsapp',
             'recipient_type'    => 'individual',
             'to'                => $to,
-            'type'              => 'document',
-            'document'          => [
-                'link'     => $pdfPublicUrl,
-                'filename' => $docFilename,
-                'caption'  => $caption,
+            'type'              => 'template',
+            'template'          => [
+                'name'     => $tplName,
+                'language' => ['code' => $tplLang],
+                'components' => $components,
             ],
         ];
-        $resB = xander_whatsapp_graph_post($url, $token, $payloadB);
-        error_log('[warning_letter] wa doc-by-link HTTP ' . $resB['http'] . ' body: ' . $resB['body']);
-        if ($resB['http'] >= 200 && $resB['http'] < 300 && xander_whatsapp_response_has_message_id($resB['json'])) {
-            $docSent   = true;
-            $docMethod = 'document_by_link';
-        } else {
-            $err = xander_whatsapp_extract_error($resB['json']);
-            $docErrParts[] = 'doc-by-link failed' . ($err ? (': ' . ($err['message'] ?? 'unknown')) : '');
+        $res = xander_whatsapp_graph_post($url, $token, $payload);
+        error_log('[warning_letter] wa tpl HTTP ' . $res['http'] . ' body: ' . $res['body']);
+        return $res;
+    };
+
+    $hasMedia = $mediaId !== '';
+    $componentsWithHeader = [];
+    if ($hasMedia) {
+        $componentsWithHeader[] = [
+            'type'       => 'header',
+            'parameters' => [[
+                'type'     => 'document',
+                'document' => ['id' => $mediaId, 'filename' => $docFilename],
+            ]],
+        ];
+    }
+    $componentsWithHeader[] = ['type' => 'body', 'parameters' => $bodyParams];
+
+    $res = $sendTemplate($componentsWithHeader);
+    $ok  = ($res['http'] >= 200 && $res['http'] < 300 && xander_whatsapp_response_has_message_id($res['json']));
+
+    /* Detect "not on WhatsApp" */
+    if (!$ok) {
+        $errStruct = xander_whatsapp_extract_error($res['json']);
+        $errMsg    = $errStruct['message'] ?? '';
+        $errCode   = (int) ($errStruct['code']    ?? 0);
+        $errSub    = (int) ($errStruct['subcode'] ?? 0);
+
+        if ($errCode === 131026 || $errSub === 131026 ||
+            $errCode === 131045 || $errSub === 131045 ||
+            $errCode === 131051 || $errSub === 131051) {
+            $result['error'] = 'This number is not on WhatsApp — message not delivered.';
+            $result['not_on_whatsapp'] = true;
+            return $result;
         }
+
+        /* If template structure mismatch (template has no document header),
+           retry without the header so the intro at least arrives. */
+        $isFormatErr = ($errCode === 132000 || $errCode === 132001 || $errCode === 132012 ||
+                        stripos($errMsg, 'parameter') !== false ||
+                        stripos($errMsg, 'header') !== false ||
+                        stripos($errMsg, 'components') !== false);
+
+        if ($hasMedia && $isFormatErr) {
+            error_log('[warning_letter] template rejected document header; retrying without header. err=' . $errMsg);
+            $res2 = $sendTemplate([['type' => 'body', 'parameters' => $bodyParams]]);
+            $ok2  = ($res2['http'] >= 200 && $res2['http'] < 300 && xander_whatsapp_response_has_message_id($res2['json']));
+            if ($ok2) {
+                $result['sent']   = true;
+                $result['method'] = 'template_only';
+                $result['error']  = 'Template approved without a Document header — PDF could not be attached. Re-approve the template with a "Document" header in Meta Business Manager.';
+                return $result;
+            }
+            $err2 = xander_whatsapp_extract_error($res2['json']);
+            $result['error'] = 'WhatsApp template failed: ' . ($err2['message'] ?? $errMsg ?: 'unknown error');
+            return $result;
+        }
+
+        $result['error']  = 'WhatsApp template failed: ' . ($errMsg ?: 'HTTP ' . $res['http']);
+        $result['method'] = 'template';
+        return $result;
     }
 
-    // Template intro already delivered → whole leg is "sent"; clarify whether PDF made it.
+    /* SUCCESS */
     $result['sent']   = true;
-    $result['method'] = $docSent ? ('template+' . $docMethod) : 'template_only';
-    if (!$docSent) {
-        $result['error'] = 'PDF attachment failed (' . implode('; ', $docErrParts) . ').';
+    $result['method'] = $hasMedia ? 'template_with_pdf_header' : 'template_only';
+    if (!$hasMedia) {
+        $result['error'] = 'PDF could not be uploaded to Meta — template intro delivered without attachment.';
     }
     return $result;
 }
