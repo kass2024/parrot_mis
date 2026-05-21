@@ -75,6 +75,7 @@ const filterLevel = document.getElementById("filterLevel");
 /** Currently selected application numeric id (student_applications.id) for inline edits */
 let currentViewApplicationId = null;
 let currentDocumentItems = [];
+let currentStudentBio = { first_name: "", last_name: "", email: "", phone: "" };
 let studyChoiceRegionsLoaded = false;
 let studyChoiceAddFormWired = false;
 let missingDocsModalWired = false;
@@ -1018,6 +1019,14 @@ function renderApplication(data, applicationNumericId) {
             : "No"
     );
 
+    currentViewApplicationId = applicationNumericId;
+    currentStudentBio = {
+        first_name: String(bio.first_name || "").trim(),
+        last_name: String(bio.last_name || "").trim(),
+        email: String(bio.email || "").trim(),
+        phone: String(bio.phone || "").trim(),
+    };
+
     renderStudyChoices(study_choices);
     currentDocumentItems = normalizeDocumentItems(document_items, documents);
     renderDocuments(currentDocumentItems);
@@ -1026,8 +1035,6 @@ function renderApplication(data, applicationNumericId) {
 
     renderDeleteControls(applicationNumericId, canDelete);
     renderAssignmentEditor(data);
-
-    currentViewApplicationId = applicationNumericId;
     const scPanel = document.getElementById("studyChoiceAddPanel");
     if (scPanel) {
         scPanel.classList.remove("hidden");
@@ -1414,14 +1421,31 @@ function normalizeDocumentItems(documentItems, legacyDocs) {
 
 function updateMissingDocsNotifyButton() {
     const btn = document.getElementById("btnNotifyMissingDocs");
+    const bar = document.getElementById("missingDocsReminderBar");
+    const hint = document.getElementById("missingDocsReminderHint");
     if (!btn) return;
+
     if (!currentViewApplicationId) {
-        btn.classList.add("hidden");
+        if (bar) bar.classList.add("hidden");
         btn.disabled = true;
         return;
     }
-    btn.classList.remove("hidden");
+
+    if (bar) bar.classList.remove("hidden");
     btn.disabled = false;
+
+    const missing = (currentDocumentItems || []).filter((it) => !it.present && !(Array.isArray(it.paths) && it.paths.length));
+    if (hint) {
+        if (missing.length > 0) {
+            const names = missing.slice(0, 2).map((it) => it.label || it.key).join(", ");
+            const extra = missing.length > 2 ? ` and ${missing.length - 2} more` : "";
+            hint.textContent = `${missing.length} missing: ${names}${extra}. Send a WhatsApp + email reminder.`;
+            btn.textContent = `Notify student (${missing.length})`;
+        } else {
+            hint.textContent = "All documents are on file. You can still send a custom reminder.";
+            btn.textContent = "Send reminder";
+        }
+    }
 }
 
 function renderDocuments(items) {
@@ -1554,6 +1578,46 @@ function wireMissingDocsModalOnce() {
     });
 }
 
+function buildMissingDocsDefaultMessage(selectedLabels) {
+    const fullName = `${currentStudentBio.first_name || ""} ${currentStudentBio.last_name || ""}`.trim();
+    const greeting = fullName ? `Dear ${fullName},` : "Dear Applicant,";
+    const docs = (Array.isArray(selectedLabels) && selectedLabels.length)
+        ? selectedLabels.map((l) => `  • ${l}`).join("\n")
+        : "  • (no documents selected yet)";
+
+    return [
+        greeting,
+        "",
+        "Thank you for choosing Parrot Canada Visa Consultant.",
+        "We are reviewing your application and still need the following document(s) to move forward:",
+        "",
+        docs,
+        "",
+        "Kindly upload them through your student portal as soon as possible. Once received, our team will continue processing your application without delay.",
+        "",
+        "If you have any difficulty uploading or need clarification on any document, simply reply to this message and we will assist you right away.",
+        "",
+        "Warm regards,",
+        "Admissions Team",
+        "Parrot Canada Visa Consultant",
+    ].join("\n");
+}
+
+function collectMissingDocsSelectedLabels() {
+    const checked = [...document.querySelectorAll('#missingDocsChecklist input[name="missing_doc_key"]:checked')];
+    const keys = checked.map((el) => el.value).filter(Boolean);
+    return keys
+        .map((k) => (currentDocumentItems.find((it) => it.key === k) || {}).label || k.replace(/_/g, " "))
+        .filter(Boolean);
+}
+
+function refreshMissingDocsMessage() {
+    const ta = document.getElementById("missingDocsMessage");
+    if (!ta) return;
+    ta.value = buildMissingDocsDefaultMessage(collectMissingDocsSelectedLabels());
+    ta.dataset.userEdited = "0";
+}
+
 function openMissingDocsModal() {
     if (!currentViewApplicationId) {
         alert("Select an application first.");
@@ -1564,6 +1628,13 @@ function openMissingDocsModal() {
     const statusEl = document.getElementById("missingDocsSendStatus");
     if (!modal || !checklist) return;
 
+    // Pre-fill editable contact fields
+    const phoneEl = document.getElementById("missingDocsPhone");
+    const emailEl = document.getElementById("missingDocsEmail");
+    if (phoneEl) phoneEl.value = (currentStudentBio.phone || "").replace(/\s+/g, " ").trim();
+    if (emailEl) emailEl.value = currentStudentBio.email || "";
+
+    // Build checklist
     checklist.innerHTML = "";
     const items = currentDocumentItems.length
         ? currentDocumentItems
@@ -1583,13 +1654,25 @@ function openMissingDocsModal() {
         checklist.appendChild(row);
     });
 
+    // Default message, auto-refresh as checkboxes change (unless user edited it)
+    const ta = document.getElementById("missingDocsMessage");
+    if (ta) {
+        ta.value = buildMissingDocsDefaultMessage(collectMissingDocsSelectedLabels());
+        ta.dataset.userEdited = "0";
+        ta.addEventListener("input", () => { ta.dataset.userEdited = "1"; }, { once: false });
+    }
+    checklist.addEventListener("change", () => {
+        if (ta && ta.dataset.userEdited !== "1") {
+            ta.value = buildMissingDocsDefaultMessage(collectMissingDocsSelectedLabels());
+        }
+    });
+    document.getElementById("missingDocsResetMessage")?.addEventListener("click", refreshMissingDocsMessage, { once: false });
+
     if (statusEl) {
         statusEl.classList.add("hidden");
         statusEl.textContent = "";
         statusEl.className = "text-sm hidden";
     }
-    const note = document.getElementById("missingDocsNote");
-    if (note) note.value = "";
 
     modal.classList.remove("hidden");
     modal.classList.add("flex");
@@ -1612,7 +1695,9 @@ async function sendMissingDocsNotification() {
         .filter(Boolean);
     const sendWa = document.getElementById("missingSendWa")?.checked ?? true;
     const sendEm = document.getElementById("missingSendEmail")?.checked ?? true;
-    const note = (document.getElementById("missingDocsNote")?.value || "").trim();
+    const message = (document.getElementById("missingDocsMessage")?.value || "").trim();
+    const phoneOverride = (document.getElementById("missingDocsPhone")?.value || "").trim();
+    const emailOverride = (document.getElementById("missingDocsEmail")?.value || "").trim();
     const statusEl = document.getElementById("missingDocsSendStatus");
     const sendBtn = document.getElementById("missingDocsSendBtn");
 
@@ -1624,11 +1709,24 @@ async function sendMissingDocsNotification() {
         alert("Select WhatsApp and/or email.");
         return;
     }
+    if (sendWa && !phoneOverride) {
+        alert("Phone number is required for WhatsApp.");
+        document.getElementById("missingDocsPhone")?.focus();
+        return;
+    }
+    if (sendEm && !emailOverride) {
+        alert("Email is required for email reminder.");
+        document.getElementById("missingDocsEmail")?.focus();
+        return;
+    }
 
     const fd = new FormData();
     fd.append("application_id", String(currentViewApplicationId));
     fd.append("missing_keys", JSON.stringify(keys));
-    fd.append("custom_note", note);
+    fd.append("custom_note", message);
+    fd.append("custom_message", message);
+    fd.append("override_phone", phoneOverride);
+    fd.append("override_email", emailOverride);
     fd.append("send_whatsapp", sendWa ? "1" : "0");
     fd.append("send_email", sendEm ? "1" : "0");
 

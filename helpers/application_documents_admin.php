@@ -187,7 +187,10 @@ function pcvc_app_notify_missing_documents(
     array $missingKeys,
     string $customNote = '',
     bool $sendWhatsapp = true,
-    bool $sendEmail = true
+    bool $sendEmail = true,
+    string $overridePhone = '',
+    string $overrideEmail = '',
+    string $customMessage = ''
 ): array {
     if (!$sendWhatsapp && !$sendEmail) {
         return ['ok' => false, 'error' => 'Select WhatsApp and/or email.', 'whatsapp' => [], 'email' => []];
@@ -221,21 +224,33 @@ function pcvc_app_notify_missing_documents(
     if ($name === '') {
         $name = 'Applicant';
     }
-    $email = trim((string) ($app['email'] ?? ''));
-    $phone = trim((string) ($app['area_code'] ?? '') . (string) ($app['phone_number'] ?? ''));
+
+    // Resolve recipients (admin-overridden values win over DB values)
+    $email = trim($overrideEmail);
+    if ($email === '') {
+        $email = trim((string) ($app['email'] ?? ''));
+    }
+    $phone = trim($overridePhone);
     if ($phone === '') {
-        $phone = trim((string) ($app['emergency_area_code'] ?? '') . (string) ($app['emergency_phone_number'] ?? ''));
+        $phone = trim((string) ($app['area_code'] ?? '') . (string) ($app['phone_number'] ?? ''));
+        if ($phone === '') {
+            $phone = trim((string) ($app['emergency_area_code'] ?? '') . (string) ($app['emergency_phone_number'] ?? ''));
+        }
     }
 
     $docList = implode(', ', $labels);
     $portalUrl = pcvc_app_student_portal_url();
     $note = trim($customNote);
+    $customMessage = trim($customMessage);
 
     $waOut = ['sent' => false, 'method' => '', 'error' => ''];
     $emOut = ['sent' => false, 'error' => ''];
 
     if ($sendWhatsapp) {
-        $waBody = pcvc_app_missing_docs_whatsapp_session_body($name, $docList, $portalUrl, $note);
+        // Prefer the admin-edited message as the session-window body; fall back to a default.
+        $waBody = $customMessage !== ''
+            ? $customMessage
+            : pcvc_app_missing_docs_whatsapp_session_body($name, $docList, $portalUrl, $note);
         $waOut  = pcvc_app_send_missing_docs_whatsapp($phone, $name, $docList, $portalUrl, $waBody);
     }
 
@@ -244,7 +259,7 @@ function pcvc_app_notify_missing_documents(
             $emOut = ['sent' => false, 'error' => 'Student has no valid email on file.'];
         } else {
             $emOut = [
-                'sent'  => pcvc_app_send_missing_docs_email($email, $name, $labels, $portalUrl, $note),
+                'sent'  => pcvc_app_send_missing_docs_email($email, $name, $labels, $portalUrl, $note, $customMessage),
                 'error' => '',
             ];
             if (!$emOut['sent']) {
@@ -359,32 +374,52 @@ function pcvc_app_send_missing_docs_whatsapp(string $phoneRaw, string $name, str
 /**
  * @param array<int,string> $labels
  */
-function pcvc_app_send_missing_docs_email(string $toEmail, string $name, array $labels, string $portalUrl, string $note): bool
-{
+function pcvc_app_send_missing_docs_email(
+    string $toEmail,
+    string $name,
+    array $labels,
+    string $portalUrl,
+    string $note,
+    string $customMessage = ''
+): bool {
     try {
         require_once __DIR__ . '/mailer.php';
         $mail = app_mailer();
         $mail->addAddress($toEmail, $name ?: $toEmail);
         $mail->Subject = 'Documents needed for your application — Parrot Canada Visa Consultant';
         $safeName = htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
-        $listHtml = '<ul style="margin:12px 0;padding-left:20px;line-height:1.6;">';
-        foreach ($labels as $lb) {
-            $listHtml .= '<li>' . htmlspecialchars($lb, ENT_QUOTES, 'UTF-8') . '</li>';
+
+        $customMessage = trim($customMessage);
+        if ($customMessage !== '') {
+            // Use admin-edited message as the main body; keep the upload CTA + link.
+            $bodyHtml = nl2br(htmlspecialchars($customMessage, ENT_QUOTES, 'UTF-8'));
+            $mail->Body = '<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;line-height:1.6;">'
+                . '<div>' . $bodyHtml . '</div>'
+                . '<p style="margin-top:24px;"><a href="' . htmlspecialchars($portalUrl, ENT_QUOTES) . '" style="display:inline-block;background:#427431;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:700;">Upload documents</a></p>'
+                . '<p style="color:#64748b;font-size:13px;">Or copy this link: ' . htmlspecialchars($portalUrl, ENT_QUOTES) . '</p>'
+                . '</div>';
+            $mail->AltBody = $customMessage . "\n\nUpload: {$portalUrl}\n";
+        } else {
+            $listHtml = '<ul style="margin:12px 0;padding-left:20px;line-height:1.6;">';
+            foreach ($labels as $lb) {
+                $listHtml .= '<li>' . htmlspecialchars($lb, ENT_QUOTES, 'UTF-8') . '</li>';
+            }
+            $listHtml .= '</ul>';
+            $noteHtml = $note !== ''
+                ? '<p style="margin:16px 0;padding:12px;background:#f0f9ff;border-left:4px solid #3661B9;border-radius:6px;">'
+                    . nl2br(htmlspecialchars($note, ENT_QUOTES, 'UTF-8')) . '</p>'
+                : '';
+            $mail->Body = '<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">'
+                . '<p>Dear ' . $safeName . ',</p>'
+                . '<p>We are reviewing your application and still need the following document(s):</p>'
+                . $listHtml
+                . $noteHtml
+                . '<p><a href="' . htmlspecialchars($portalUrl, ENT_QUOTES) . '" style="display:inline-block;background:#427431;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:700;">Upload documents</a></p>'
+                . '<p style="color:#64748b;font-size:13px;">Or copy this link: ' . htmlspecialchars($portalUrl, ENT_QUOTES) . '</p>'
+                . '<p>Thank you,<br><strong>Parrot Canada Visa Consultant</strong></p></div>';
+            $mail->AltBody = "Dear {$name},\n\nWe need: " . implode(', ', $labels) . "\n\n{$note}\n\nUpload: {$portalUrl}\n";
         }
-        $listHtml .= '</ul>';
-        $noteHtml = $note !== ''
-            ? '<p style="margin:16px 0;padding:12px;background:#f0f9ff;border-left:4px solid #3661B9;border-radius:6px;">'
-                . nl2br(htmlspecialchars($note, ENT_QUOTES, 'UTF-8')) . '</p>'
-            : '';
-        $mail->Body = '<div style="font-family:Segoe UI,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">'
-            . '<p>Dear ' . $safeName . ',</p>'
-            . '<p>We are reviewing your application and still need the following document(s):</p>'
-            . $listHtml
-            . $noteHtml
-            . '<p><a href="' . htmlspecialchars($portalUrl, ENT_QUOTES) . '" style="display:inline-block;background:#427431;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:700;">Upload documents</a></p>'
-            . '<p style="color:#64748b;font-size:13px;">Or copy this link: ' . htmlspecialchars($portalUrl, ENT_QUOTES) . '</p>'
-            . '<p>Thank you,<br><strong>Parrot Canada Visa Consultant</strong></p></div>';
-        $mail->AltBody = "Dear {$name},\n\nWe need: " . implode(', ', $labels) . "\n\n{$note}\n\nUpload: {$portalUrl}\n";
+
         $mail->send();
         return true;
     } catch (Throwable $e) {

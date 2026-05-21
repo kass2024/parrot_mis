@@ -221,16 +221,29 @@ if ($action === 'notify_missing_documents' && $_SERVER['REQUEST_METHOD'] === 'PO
     if (!is_array($rawKeys)) {
         $rawKeys = [];
     }
-    $missingKeys = array_values(array_filter(array_map('strval', $rawKeys)));
-    $customNote  = trim((string) ($_POST['custom_note'] ?? ''));
-    $sendWa      = !isset($_POST['send_whatsapp']) || $_POST['send_whatsapp'] === '1' || $_POST['send_whatsapp'] === 'true';
-    $sendEm      = !isset($_POST['send_email']) || $_POST['send_email'] === '1' || $_POST['send_email'] === 'true';
+    $missingKeys     = array_values(array_filter(array_map('strval', $rawKeys)));
+    $customNote      = trim((string) ($_POST['custom_note'] ?? ''));
+    $customMessage   = trim((string) ($_POST['custom_message'] ?? ''));
+    $overridePhone   = trim((string) ($_POST['override_phone'] ?? ''));
+    $overrideEmail   = trim((string) ($_POST['override_email'] ?? ''));
+    $sendWa          = !isset($_POST['send_whatsapp']) || $_POST['send_whatsapp'] === '1' || $_POST['send_whatsapp'] === 'true';
+    $sendEm          = !isset($_POST['send_email']) || $_POST['send_email'] === '1' || $_POST['send_email'] === 'true';
 
     if ($applicationId <= 0) {
         jsonResponse('Invalid application id', false, 400);
     }
 
-    $result = pcvc_app_notify_missing_documents($conn, $applicationId, $missingKeys, $customNote, $sendWa, $sendEm);
+    $result = pcvc_app_notify_missing_documents(
+        $conn,
+        $applicationId,
+        $missingKeys,
+        $customNote,
+        $sendWa,
+        $sendEm,
+        $overridePhone,
+        $overrideEmail,
+        $customMessage
+    );
     if (!$result['ok']) {
         jsonResponse([
             'error'    => $result['error'] ?? 'Send failed',

@@ -670,18 +670,34 @@ th {
 
                     <!-- DOCUMENTS -->
                     <section class="card p-6">
-                        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-                            <div class="section-title mb-0">Documents</div>
-                            <button
-                                type="button"
-                                id="btnNotifyMissingDocs"
-                                class="hidden rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-45"
-                                disabled
-                            >
-                                Notify missing documents
-                            </button>
-                        </div>
+                        <div class="section-title mb-4">Documents</div>
+
                         <div id="documentsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+                        <!-- Missing-docs reminder bar (sits directly under the upload cards) -->
+                        <div
+                            id="missingDocsReminderBar"
+                            class="hidden mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4"
+                        >
+                            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold text-amber-900">
+                                        Need missing documents?
+                                    </div>
+                                    <div id="missingDocsReminderHint" class="text-xs text-amber-800 mt-0.5">
+                                        Send a WhatsApp + email reminder to the student. Tick the documents that are still missing.
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    id="btnNotifyMissingDocs"
+                                    class="shrink-0 rounded-lg bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-amber-600 disabled:opacity-45"
+                                    disabled
+                                >
+                                    Notify student
+                                </button>
+                            </div>
+                        </div>
                     </section>
 
                     <!-- AGENT -->
@@ -768,16 +784,39 @@ th {
             <button type="button" id="missingDocsModalClose" class="text-2xl leading-none text-slate-400 hover:text-slate-700">&times;</button>
         </div>
         <div class="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-            <p class="text-sm text-slate-600">Send via WhatsApp (approved template) and/or email. Only tick documents that are still missing.</p>
+            <p class="text-sm text-slate-600">Send via WhatsApp (approved template) and/or email. Tick the documents that are still missing. You can edit the phone, email, and message before sending.</p>
+
             <div class="flex gap-3">
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="missingSendWa" checked> WhatsApp</label>
                 <label class="flex items-center gap-2 text-sm"><input type="checkbox" id="missingSendEmail" checked> Email</label>
             </div>
-            <div id="missingDocsChecklist" class="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50 max-h-48 overflow-y-auto"></div>
-            <div>
-                <label class="block text-xs font-semibold text-slate-600 mb-1">Optional note to student</label>
-                <textarea id="missingDocsNote" rows="3" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="e.g. Please upload a clear colour scan of your passport bio page."></textarea>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Phone (WhatsApp)</label>
+                    <input id="missingDocsPhone" type="tel" inputmode="tel" autocomplete="off"
+                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="+250788123456">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Email</label>
+                    <input id="missingDocsEmail" type="email" autocomplete="off"
+                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
+                        placeholder="student@example.com">
+                </div>
             </div>
+
+            <div id="missingDocsChecklist" class="space-y-2 border border-slate-200 rounded-lg p-3 bg-slate-50 max-h-48 overflow-y-auto"></div>
+
+            <div>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-semibold text-slate-600">Message</label>
+                    <button type="button" id="missingDocsResetMessage" class="text-[11px] font-semibold text-emerald-700 hover:underline">Reset to default</button>
+                </div>
+                <textarea id="missingDocsMessage" rows="8" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono"></textarea>
+                <p class="mt-1 text-[11px] text-slate-500">This text is sent in the email body and (as a fallback) in WhatsApp. The approved WhatsApp template only uses: student name, missing-document list, and portal link.</p>
+            </div>
+
             <div id="missingDocsSendStatus" class="text-sm hidden"></div>
         </div>
         <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
