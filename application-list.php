@@ -778,10 +778,27 @@ th {
 
 <!-- Missing documents notification modal -->
 <div id="missingDocsModal" class="fixed inset-0 z-[200] hidden items-center justify-center bg-slate-900/50 p-4" aria-hidden="true">
-    <div class="w-full max-w-lg rounded-xl bg-white shadow-xl" role="dialog">
+    <div class="relative w-full max-w-lg rounded-xl bg-white shadow-xl" role="dialog">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
             <h3 class="text-base font-bold text-slate-900">Notify student — missing documents</h3>
             <button type="button" id="missingDocsModalClose" class="text-2xl leading-none text-slate-400 hover:text-slate-700">&times;</button>
+        </div>
+
+        <!-- Sending overlay (smart spinner) -->
+        <div id="missingDocsSendingOverlay" class="hidden absolute inset-0 z-10 rounded-xl bg-white/85 backdrop-blur-sm flex flex-col items-center justify-center gap-3" aria-hidden="true">
+            <svg class="animate-spin h-10 w-10 text-emerald-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.25"></circle>
+                <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"></path>
+            </svg>
+            <div class="text-center">
+                <div id="missingDocsSendingTitle" class="text-sm font-bold text-slate-900">Sending…</div>
+                <div id="missingDocsSendingHint" class="mt-0.5 text-xs text-slate-600">This usually takes a few seconds.</div>
+            </div>
+            <div class="flex gap-1.5">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" style="animation-delay:0ms"></span>
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" style="animation-delay:150ms"></span>
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-bounce" style="animation-delay:300ms"></span>
+            </div>
         </div>
         <div class="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
             <p class="text-sm text-slate-600">Send via WhatsApp (approved template) and/or email. Tick the documents that are still missing. You can edit the phone, email, and message before sending.</p>

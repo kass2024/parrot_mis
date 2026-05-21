@@ -1687,6 +1687,68 @@ function closeMissingDocsModal() {
     modal.setAttribute("aria-hidden", "true");
 }
 
+/* =====================================================
+   SEND — SMART SPINNER (button + overlay + progressive stages)
+===================================================== */
+function setMissingDocsSpinner(active, stages) {
+    const overlay = document.getElementById("missingDocsSendingOverlay");
+    const titleEl = document.getElementById("missingDocsSendingTitle");
+    const hintEl  = document.getElementById("missingDocsSendingHint");
+    const sendBtn = document.getElementById("missingDocsSendBtn");
+    const cancel  = document.getElementById("missingDocsCancel");
+    const closeBt = document.getElementById("missingDocsModalClose");
+
+    if (active) {
+        if (overlay) {
+            overlay.classList.remove("hidden");
+            overlay.setAttribute("aria-hidden", "false");
+        }
+        if (sendBtn) {
+            if (!sendBtn.dataset.origHtml) sendBtn.dataset.origHtml = sendBtn.innerHTML;
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = `
+                <span class="inline-flex items-center gap-2">
+                    <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.35"></circle>
+                        <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"></path>
+                    </svg>
+                    Sending…
+                </span>`;
+        }
+        if (cancel)  cancel.disabled = true;
+        if (closeBt) closeBt.disabled = true;
+
+        // Stage cycler
+        if (Array.isArray(stages) && stages.length && titleEl && hintEl) {
+            let i = 0;
+            titleEl.textContent = stages[i].title;
+            hintEl.textContent  = stages[i].hint;
+            clearInterval(window.__missingDocsStageTimer);
+            window.__missingDocsStageTimer = setInterval(() => {
+                i = (i + 1) % stages.length;
+                titleEl.textContent = stages[i].title;
+                hintEl.textContent  = stages[i].hint;
+            }, 1400);
+        }
+    } else {
+        clearInterval(window.__missingDocsStageTimer);
+        window.__missingDocsStageTimer = null;
+        if (overlay) {
+            overlay.classList.add("hidden");
+            overlay.setAttribute("aria-hidden", "true");
+        }
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            if (sendBtn.dataset.origHtml) {
+                sendBtn.innerHTML = sendBtn.dataset.origHtml;
+                delete sendBtn.dataset.origHtml;
+            }
+        }
+        if (cancel)  cancel.disabled = false;
+        if (closeBt) closeBt.disabled = false;
+    }
+}
+
 async function sendMissingDocsNotification() {
     if (!currentViewApplicationId) return;
 
@@ -1699,7 +1761,6 @@ async function sendMissingDocsNotification() {
     const phoneOverride = (document.getElementById("missingDocsPhone")?.value || "").trim();
     const emailOverride = (document.getElementById("missingDocsEmail")?.value || "").trim();
     const statusEl = document.getElementById("missingDocsSendStatus");
-    const sendBtn = document.getElementById("missingDocsSendBtn");
 
     if (!keys.length) {
         alert("Select at least one document to request.");
@@ -1730,11 +1791,17 @@ async function sendMissingDocsNotification() {
     fd.append("send_whatsapp", sendWa ? "1" : "0");
     fd.append("send_email", sendEm ? "1" : "0");
 
-    if (sendBtn) sendBtn.disabled = true;
+    // Build smart progressive stages based on what's being sent
+    const stages = [{ title: "Preparing reminder…", hint: "Validating phone, email and message" }];
+    if (sendWa) stages.push({ title: "Sending WhatsApp…", hint: "Delivering via approved template to " + phoneOverride });
+    if (sendEm) stages.push({ title: "Sending Email…", hint: "Dispatching to " + emailOverride });
+    stages.push({ title: "Finalising…", hint: "Just a moment" });
+
+    setMissingDocsSpinner(true, stages);
     if (statusEl) {
-        statusEl.classList.remove("hidden");
-        statusEl.className = "text-sm text-slate-600";
-        statusEl.textContent = "Sending…";
+        statusEl.classList.add("hidden");
+        statusEl.textContent = "";
+        statusEl.className = "text-sm hidden";
     }
 
     try {
@@ -1746,6 +1813,7 @@ async function sendMissingDocsNotification() {
         if (!res.ok || data.success === false) {
             const err = data.errors?.error || data.message || "Send failed";
             if (statusEl) {
+                statusEl.classList.remove("hidden");
                 statusEl.className = "text-sm text-red-600";
                 statusEl.textContent = err;
             } else {
@@ -1760,6 +1828,7 @@ async function sendMissingDocsNotification() {
         if (em.sent) parts.push("Email");
         const msg = parts.length ? `Sent via ${parts.join(" and ")}.` : (data.data?.message || "Notification sent.");
         if (statusEl) {
+            statusEl.classList.remove("hidden");
             statusEl.className = "text-sm text-emerald-700";
             statusEl.textContent = msg;
         }
@@ -1768,13 +1837,14 @@ async function sendMissingDocsNotification() {
     } catch (e) {
         console.error("sendMissingDocsNotification:", e);
         if (statusEl) {
+            statusEl.classList.remove("hidden");
             statusEl.className = "text-sm text-red-600";
             statusEl.textContent = "Send failed. Try again.";
         } else {
             alert("Send failed.");
         }
     } finally {
-        if (sendBtn) sendBtn.disabled = false;
+        setMissingDocsSpinner(false);
     }
 }
 
