@@ -153,6 +153,65 @@ switch ($action) {
         break;
 
     // -------------------------------------------------------------
+    case 'add_university':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+        $uname    = trim((string) ($_POST['name'] ?? ''));
+        $uregion  = isset($_POST['region_id']) ? (int) $_POST['region_id'] : 0;
+        if ($uname === '') {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'University name is required.'], 400);
+        }
+
+        $stmt = $conn->prepare('SELECT id, name, region_id FROM universities WHERE LOWER(name) = LOWER(?) LIMIT 1');
+        $stmt->bind_param('s', $uname);
+        $stmt->execute();
+        $existing = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($existing) {
+            if ($uregion > 0 && (int) $existing['region_id'] !== $uregion) {
+                $upd = $conn->prepare('UPDATE universities SET region_id = ? WHERE id = ?');
+                $existingId = (int) $existing['id'];
+                $upd->bind_param('ii', $uregion, $existingId);
+                $upd->execute();
+                $upd->close();
+                $existing['region_id'] = $uregion;
+            }
+            pcvc_brochure_respond([
+                'ok'         => true,
+                'university' => [
+                    'id'        => (int) $existing['id'],
+                    'name'      => (string) $existing['name'],
+                    'region_id' => (int) $existing['region_id'],
+                ],
+                'note' => 'University already existed; reusing it.',
+            ]);
+        }
+
+        if ($uregion > 0) {
+            $ins = $conn->prepare('INSERT INTO universities (name, region_id) VALUES (?, ?)');
+            $ins->bind_param('si', $uname, $uregion);
+        } else {
+            $ins = $conn->prepare('INSERT INTO universities (name) VALUES (?)');
+            $ins->bind_param('s', $uname);
+        }
+        if (!$ins->execute()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Could not create university: ' . $conn->error], 500);
+        }
+        $newUniId = (int) $conn->insert_id;
+        $ins->close();
+
+        pcvc_brochure_respond([
+            'ok'         => true,
+            'university' => [
+                'id'        => $newUniId,
+                'name'      => $uname,
+                'region_id' => $uregion,
+            ],
+        ]);
+        break;
+
+    // -------------------------------------------------------------
     case 'list_brochures':
         $regionId = isset($_GET['region_id']) ? (int) $_GET['region_id'] : 0;
         $q = trim((string) ($_GET['q'] ?? ''));
@@ -175,10 +234,12 @@ switch ($action) {
 
         $sql = 'SELECT b.id, b.title, b.slug, b.description, b.pdf_filename, b.pdf_path,
                        b.pdf_size_bytes, b.attach_pdf, b.extraction_status,
+                       b.university_id, u.name AS university_name,
                        b.view_count, b.share_count, b.created_at,
                        b.region_id, r.name AS region_name
                 FROM marketing_brochures b
                 LEFT JOIN regions r ON r.id = b.region_id
+                LEFT JOIN universities u ON u.id = b.university_id
                 WHERE ' . implode(' AND ', $where) . '
                 ORDER BY b.created_at DESC
                 LIMIT 200';
@@ -196,6 +257,8 @@ switch ($action) {
             $row['share_count']    = (int) $row['share_count'];
             $row['pdf_size_bytes'] = (int) $row['pdf_size_bytes'];
             $row['attach_pdf']     = (int) ($row['attach_pdf'] ?? 1);
+            $row['university_id']  = (int) ($row['university_id'] ?? 0);
+            $row['university_name']= (string) ($row['university_name'] ?? '');
             $row['share_url']      = pcvc_brochure_public_url((string) $row['slug']);
             $list[]                = $row;
         }
@@ -209,16 +272,20 @@ switch ($action) {
             pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
         }
 
-        $title       = trim((string) ($_POST['title'] ?? ''));
-        $description = trim((string) ($_POST['description'] ?? ''));
-        $regionId    = isset($_POST['region_id']) ? (int) $_POST['region_id'] : 0;
-        $attachPdf   = !empty($_POST['attach_pdf']) ? 1 : 0;
+        $title        = trim((string) ($_POST['title'] ?? ''));
+        $description  = trim((string) ($_POST['description'] ?? ''));
+        $regionId     = isset($_POST['region_id'])     ? (int) $_POST['region_id']     : 0;
+        $universityId = isset($_POST['university_id']) ? (int) $_POST['university_id'] : 0;
+        $attachPdf    = !empty($_POST['attach_pdf']) ? 1 : 0;
 
         if ($title === '') {
             pcvc_brochure_respond(['ok' => false, 'error' => 'Title is required.'], 400);
         }
-        if ($regionId <= 0) {
-            pcvc_brochure_respond(['ok' => false, 'error' => 'Please select or create a region.'], 400);
+        if ($regionId <= 0 && $universityId <= 0) {
+            pcvc_brochure_respond([
+                'ok'    => false,
+                'error' => 'Please choose at least a region or a university (you can create either inline).',
+            ], 400);
         }
         if (!isset($_FILES['pdf']) || ($_FILES['pdf']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
             pcvc_brochure_respond(['ok' => false, 'error' => 'A PDF file is required.'], 400);
@@ -233,13 +300,33 @@ switch ($action) {
             pcvc_brochure_respond(['ok' => false, 'error' => 'PDF must be 25 MB or less.'], 400);
         }
 
-        $stmt = $conn->prepare('SELECT id, name FROM regions WHERE id = ? LIMIT 1');
-        $stmt->bind_param('i', $regionId);
-        $stmt->execute();
-        $region = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (!$region) {
-            pcvc_brochure_respond(['ok' => false, 'error' => 'Selected region no longer exists.'], 400);
+        $region = null;
+        if ($regionId > 0) {
+            $stmt = $conn->prepare('SELECT id, name FROM regions WHERE id = ? LIMIT 1');
+            $stmt->bind_param('i', $regionId);
+            $stmt->execute();
+            $region = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$region) {
+                pcvc_brochure_respond(['ok' => false, 'error' => 'Selected region no longer exists.'], 400);
+            }
+        } else {
+            $regionId = 0;
+        }
+
+        $universityName = '';
+        if ($universityId > 0) {
+            $stmt = $conn->prepare('SELECT id, name FROM universities WHERE id = ? LIMIT 1');
+            $stmt->bind_param('i', $universityId);
+            $stmt->execute();
+            $uni = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            if (!$uni) {
+                pcvc_brochure_respond(['ok' => false, 'error' => 'Selected university no longer exists.'], 400);
+            }
+            $universityName = (string) $uni['name'];
+        } else {
+            $universityId = 0;
         }
 
         $baseSlug = pcvc_brochure_slugify($title);
@@ -276,15 +363,17 @@ switch ($action) {
         $extStatus     = $htmlContent !== '' ? 'ok' : 'failed';
 
         $sql = 'INSERT INTO marketing_brochures
-                  (region_id, title, slug, description, pdf_filename, pdf_path, pdf_size_bytes,
+                  (region_id, university_id, title, slug, description, pdf_filename, pdf_path, pdf_size_bytes,
                    attach_pdf, extracted_text, html_content, extraction_status, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
         $ins  = $conn->prepare($sql);
         $orig = (string) $f['name'];
-        // i s s s s s i i s s s i  -> 12 placeholders
+        $regionIdParam     = $regionId     > 0 ? $regionId     : null;
+        $universityIdParam = $universityId > 0 ? $universityId : null;
+        // i i s s s s s i i s s s i -> 13 placeholders
         $ins->bind_param(
-            'isssssiisssi',
-            $regionId, $title, $slug, $description, $orig, $relPath, $size,
+            'iisssssiisssi',
+            $regionIdParam, $universityIdParam, $title, $slug, $description, $orig, $relPath, $size,
             $attachPdf, $extractedText, $htmlContent, $extStatus, $adminId
         );
         if (!$ins->execute()) {
@@ -301,8 +390,10 @@ switch ($action) {
                 'title'             => $title,
                 'slug'              => $slug,
                 'description'       => $description,
-                'region_id'         => (int) $region['id'],
-                'region_name'       => (string) $region['name'],
+                'region_id'         => (int) ($region['id'] ?? 0),
+                'region_name'       => (string) ($region['name'] ?? ''),
+                'university_id'     => $universityId,
+                'university_name'   => $universityName,
                 'pdf_filename'      => $orig,
                 'pdf_path'          => $relPath,
                 'pdf_size_bytes'    => $size,
@@ -313,6 +404,120 @@ switch ($action) {
                 'share_count'       => 0,
                 'share_url'         => pcvc_brochure_public_url($slug),
                 'created_at'        => date('Y-m-d H:i:s'),
+            ],
+        ]);
+        break;
+
+    // -------------------------------------------------------------
+    case 'update_brochure':
+        if (!pcvc_csrf_validate_post()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid security token.'], 403);
+        }
+
+        $id           = (int) ($_POST['id'] ?? 0);
+        $title        = trim((string) ($_POST['title'] ?? ''));
+        $description  = trim((string) ($_POST['description'] ?? ''));
+        $regionId     = isset($_POST['region_id'])     ? (int) $_POST['region_id']     : 0;
+        $universityId = isset($_POST['university_id']) ? (int) $_POST['university_id'] : 0;
+
+        if ($id <= 0) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Invalid brochure ID.'], 400);
+        }
+        if ($title === '') {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Title is required.'], 400);
+        }
+        if ($regionId <= 0 && $universityId <= 0) {
+            pcvc_brochure_respond([
+                'ok'    => false,
+                'error' => 'Please choose at least a region or a university.',
+            ], 400);
+        }
+
+        $stmt = $conn->prepare('SELECT id, slug FROM marketing_brochures WHERE id = ? LIMIT 1');
+        $stmt->bind_param('i', $id);
+        $stmt->execute();
+        $existing = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$existing) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Brochure not found.'], 404);
+        }
+
+        if ($regionId > 0) {
+            $r = $conn->prepare('SELECT id, name FROM regions WHERE id = ? LIMIT 1');
+            $r->bind_param('i', $regionId);
+            $r->execute();
+            $rRow = $r->get_result()->fetch_assoc();
+            $r->close();
+            if (!$rRow) {
+                pcvc_brochure_respond(['ok' => false, 'error' => 'Selected region no longer exists.'], 400);
+            }
+        }
+
+        if ($universityId > 0) {
+            $u = $conn->prepare('SELECT id, name FROM universities WHERE id = ? LIMIT 1');
+            $u->bind_param('i', $universityId);
+            $u->execute();
+            $uRow = $u->get_result()->fetch_assoc();
+            $u->close();
+            if (!$uRow) {
+                pcvc_brochure_respond(['ok' => false, 'error' => 'Selected university no longer exists.'], 400);
+            }
+        }
+
+        // mysqli needs typed vars; use 0 + SQL NULLIF for optional FK columns.
+        $regionIdVal     = $regionId     > 0 ? $regionId     : 0;
+        $universityIdVal = $universityId > 0 ? $universityId : 0;
+
+        $hasUpdatedAt = false;
+        if ($colRes = $conn->query("SHOW COLUMNS FROM marketing_brochures LIKE 'updated_at'")) {
+            $hasUpdatedAt = (bool) $colRes->num_rows;
+            $colRes->close();
+        }
+
+        $sqlUpd = $hasUpdatedAt
+            ? 'UPDATE marketing_brochures
+                  SET title = ?, description = ?,
+                      region_id = NULLIF(?, 0),
+                      university_id = NULLIF(?, 0),
+                      updated_at = NOW()
+                WHERE id = ?'
+            : 'UPDATE marketing_brochures
+                  SET title = ?, description = ?,
+                      region_id = NULLIF(?, 0),
+                      university_id = NULLIF(?, 0)
+                WHERE id = ?';
+
+        $upd = $conn->prepare($sqlUpd);
+        $upd->bind_param('ssiii', $title, $description, $regionIdVal, $universityIdVal, $id);
+        if (!$upd->execute()) {
+            pcvc_brochure_respond(['ok' => false, 'error' => 'Update failed: ' . $conn->error], 500);
+        }
+        $upd->close();
+
+        $sel = $conn->prepare(
+            'SELECT b.id, b.title, b.slug, b.description, b.region_id, b.university_id,
+                    r.name AS region_name, u.name AS university_name
+               FROM marketing_brochures b
+               LEFT JOIN regions r      ON r.id = b.region_id
+               LEFT JOIN universities u ON u.id = b.university_id
+              WHERE b.id = ? LIMIT 1'
+        );
+        $sel->bind_param('i', $id);
+        $sel->execute();
+        $row = $sel->get_result()->fetch_assoc() ?: [];
+        $sel->close();
+
+        pcvc_brochure_respond([
+            'ok'       => true,
+            'brochure' => [
+                'id'              => (int) ($row['id'] ?? $id),
+                'title'           => (string) ($row['title'] ?? $title),
+                'slug'            => (string) ($row['slug'] ?? ($existing['slug'] ?? '')),
+                'description'    => (string) ($row['description'] ?? $description),
+                'region_id'       => (int) ($row['region_id'] ?? 0),
+                'region_name'     => (string) ($row['region_name'] ?? ''),
+                'university_id'   => (int) ($row['university_id'] ?? 0),
+                'university_name' => (string) ($row['university_name'] ?? ''),
             ],
         ]);
         break;

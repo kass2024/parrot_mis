@@ -63,6 +63,10 @@ function pcvc_marketing_brochure_ensure_schema(mysqli $conn): void
     if (!$hasCol('extraction_status')) {
         @$conn->query("ALTER TABLE `marketing_brochures` ADD COLUMN `extraction_status` VARCHAR(32) NOT NULL DEFAULT 'pending' AFTER `html_content`");
     }
+    if (!$hasCol('university_id')) {
+        @$conn->query("ALTER TABLE `marketing_brochures` ADD COLUMN `university_id` INT UNSIGNED NULL DEFAULT NULL AFTER `region_id`");
+        @$conn->query("ALTER TABLE `marketing_brochures` ADD INDEX `idx_brochure_university` (`university_id`)");
+    }
 
     $sqlShares = "
         CREATE TABLE IF NOT EXISTS `marketing_brochure_shares` (

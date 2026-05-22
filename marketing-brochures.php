@@ -27,6 +27,17 @@ if ($r = $conn->query('SELECT id, name FROM regions ORDER BY name ASC')) {
     }
 }
 
+$universities = [];
+if ($u = $conn->query('SELECT id, name, region_id FROM universities ORDER BY name ASC')) {
+    while ($row = $u->fetch_assoc()) {
+        $universities[] = [
+            'id'        => (int) $row['id'],
+            'name'      => (string) $row['name'],
+            'region_id' => (int) ($row['region_id'] ?? 0),
+        ];
+    }
+}
+
 /** Map ISO-2 country codes from .env to a dial code (subset of common values). */
 function pcvc_brochure_default_dial_code(): string
 {
@@ -604,9 +615,11 @@ body{
                         <input type="text" name="title" id="titleInput" class="form-control" placeholder="e.g. Details for Common Documents Needed for Admission in Canada" required>
                     </div>
                     <div>
-                        <label class="form-label">Region</label>
+                        <label class="form-label">
+                            Region <small class="text-muted" style="font-weight:400">(optional)</small>
+                        </label>
                         <div class="region-row">
-                            <select name="region_id" id="regionSelect" class="form-select" required>
+                            <select name="region_id" id="regionSelect" class="form-select">
                                 <option value="">— Choose region —</option>
                                 <?php foreach ($regions as $r): ?>
                                     <option value="<?= (int) $r['id'] ?>"><?= htmlspecialchars($r['name']) ?></option>
@@ -616,6 +629,28 @@ body{
                                 <i class="bi bi-plus-lg"></i>
                             </button>
                         </div>
+                    </div>
+                    <div>
+                        <label class="form-label">
+                            University <small class="text-muted" style="font-weight:400">(optional)</small>
+                        </label>
+                        <div class="region-row">
+                            <select name="university_id" id="universitySelect" class="form-select">
+                                <option value="">— Choose university —</option>
+                                <?php foreach ($universities as $u): ?>
+                                    <option value="<?= (int) $u['id'] ?>"
+                                            data-region="<?= (int) $u['region_id'] ?>">
+                                        <?= htmlspecialchars($u['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="button" class="btn-ghost" onclick="openNewUniversity()" title="Add new university">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                        <small class="text-muted" style="display:block;margin-top:4px">
+                            A brochure can target a region, a university, or both. Choose at least one.
+                        </small>
                     </div>
                     <div>
                         <label class="form-label">Short description (optional)</label>
@@ -689,6 +724,87 @@ body{
             <i class="bi bi-hourglass-split"></i>
             <h4>Loading brochures…</h4>
             <p>Hang on a second.</p>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Add University Modal ============ -->
+<div class="modal-mask" id="newUniversityModal">
+    <div class="modal-box" style="max-width:480px">
+        <div class="modal-head">
+            <h3><i class="bi bi-building"></i> Add a new university</h3>
+            <button class="close" onclick="closeModal('newUniversityModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <label class="form-label">University name</label>
+            <input type="text" id="newUniversityName" class="form-control" placeholder="e.g. University of Toronto" autofocus>
+
+            <label class="form-label" style="margin-top:14px">Region (optional)</label>
+            <select id="newUniversityRegion" class="form-select">
+                <option value="">— None —</option>
+                <?php foreach ($regions as $r): ?>
+                    <option value="<?= (int) $r['id'] ?>"><?= htmlspecialchars($r['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+            <small class="text-muted" style="display:block;margin-top:6px">
+                The university will be added to the universities list and reusable everywhere else in the system.
+            </small>
+        </div>
+        <div class="modal-foot">
+            <button class="btn-ghost" onclick="closeModal('newUniversityModal')">Cancel</button>
+            <button class="btn-brand" onclick="saveNewUniversity()" id="saveUniversityBtn">
+                <i class="bi bi-check2-circle"></i> Save university
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ============ Edit Brochure Modal ============ -->
+<div class="modal-mask" id="editBrochureModal">
+    <div class="modal-box" style="max-width:560px">
+        <div class="modal-head">
+            <h3><i class="bi bi-pencil-square"></i> Edit brochure</h3>
+            <button class="close" onclick="closeModal('editBrochureModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <input type="hidden" id="editBrochureId" value="">
+
+            <label class="form-label">Brochure title</label>
+            <input type="text" id="editBrochureTitle" class="form-control" placeholder="Brochure title">
+
+            <label class="form-label" style="margin-top:14px">
+                Region <small class="text-muted" style="font-weight:400">(optional)</small>
+            </label>
+            <select id="editBrochureRegion" class="form-select">
+                <option value="">— Choose region —</option>
+                <?php foreach ($regions as $r): ?>
+                    <option value="<?= (int) $r['id'] ?>"><?= htmlspecialchars($r['name']) ?></option>
+                <?php endforeach; ?>
+            </select>
+
+            <label class="form-label" style="margin-top:14px">
+                University <small class="text-muted" style="font-weight:400">(optional)</small>
+            </label>
+            <select id="editBrochureUniversity" class="form-select">
+                <option value="">— Choose university —</option>
+                <?php foreach ($universities as $u): ?>
+                    <option value="<?= (int) $u['id'] ?>" data-region="<?= (int) $u['region_id'] ?>">
+                        <?= htmlspecialchars($u['name']) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <small class="text-muted" style="display:block;margin-top:6px">
+                Pick a region, a university, or both. The public share link will not change.
+            </small>
+
+            <label class="form-label" style="margin-top:14px">Short description (optional)</label>
+            <textarea id="editBrochureDesc" class="form-control" rows="2" placeholder="Shown on the public page."></textarea>
+        </div>
+        <div class="modal-foot">
+            <button class="btn-ghost" onclick="closeModal('editBrochureModal')">Cancel</button>
+            <button class="btn-brand" id="saveBrochureBtn" onclick="saveEditBrochure()">
+                <i class="bi bi-check2-circle"></i> Save changes
+            </button>
         </div>
     </div>
 </div>
@@ -913,13 +1029,96 @@ async function saveNewRegion(){
     finally{btn.innerHTML='<i class="bi bi-check2-circle"></i> Save region';btn.disabled=false;}
 }
 function addRegionToSelects(region){
-    [document.getElementById('regionSelect'),document.getElementById('filterRegion')].forEach(sel=>{
+    [document.getElementById('regionSelect'),document.getElementById('filterRegion'),
+     document.getElementById('newUniversityRegion'),document.getElementById('editBrochureRegion')].forEach(sel=>{
         if(!sel)return;
+        if(Array.from(sel.options).some(o=>o.value===String(region.id))) return;
         const o=document.createElement('option');
         o.value=region.id; o.textContent=region.name;
         sel.appendChild(o);
     });
 }
+
+/* ---------- New university ---------- */
+function openNewUniversity(){
+    document.getElementById('newUniversityName').value='';
+    const regionPreset = document.getElementById('regionSelect').value;
+    document.getElementById('newUniversityRegion').value = regionPreset || '';
+    openModal('newUniversityModal');
+    setTimeout(()=>document.getElementById('newUniversityName').focus(),100);
+}
+
+async function saveNewUniversity(){
+    const name = document.getElementById('newUniversityName').value.trim();
+    const regionId = document.getElementById('newUniversityRegion').value;
+    if(!name){toast('Please enter a university name.','error');return;}
+    const btn=document.getElementById('saveUniversityBtn');
+    btn.innerHTML='<span class="spinner-mini"></span> Saving…';
+    btn.disabled=true;
+    try{
+        const fd=new FormData();
+        fd.append('action','add_university');
+        fd.append('csrf_token',CSRF);
+        fd.append('name',name);
+        if(regionId) fd.append('region_id',regionId);
+        const res=await fetch(ENDPOINT,{method:'POST',body:fd});
+        const d=await res.json();
+        if(!d.ok){toast(d.error||'Could not add university.','error');return;}
+        addUniversityToSelect(d.university);
+        toast('University saved: '+d.university.name,'success');
+        closeModal('newUniversityModal');
+        document.getElementById('universitySelect').value=d.university.id;
+    }catch(e){toast('Network error: '+e.message,'error');}
+    finally{btn.innerHTML='<i class="bi bi-check2-circle"></i> Save university';btn.disabled=false;}
+}
+
+function addUniversityToSelect(university){
+    [document.getElementById('universitySelect'),document.getElementById('editBrochureUniversity')].forEach(sel=>{
+        if(!sel) return;
+        if(Array.from(sel.options).some(o=>o.value===String(university.id))) return;
+        const o = document.createElement('option');
+        o.value = university.id;
+        o.textContent = university.name;
+        o.dataset.region = university.region_id || 0;
+        sel.appendChild(o);
+    });
+}
+
+/* ---------- University select: filter by selected region (independent) ----------
+   When a region is chosen, narrow the university list to that region.
+   Universities without a region stay visible. Selecting "all regions" (no value)
+   shows every university. */
+(function(){
+    const regionSel = document.getElementById('regionSelect');
+    const uniSel    = document.getElementById('universitySelect');
+    if(!regionSel || !uniSel) return;
+
+    const allOpts = Array.from(uniSel.querySelectorAll('option[data-region]')).map(o => ({
+        id: o.value,
+        text: o.textContent.trim(),
+        regionId: parseInt(o.dataset.region || '0', 10),
+    }));
+
+    function refresh(){
+        const sel = parseInt(regionSel.value || '0', 10);
+        const previous = uniSel.value;
+        uniSel.innerHTML = '<option value="">— Choose university —</option>';
+        allOpts
+            .filter(o => !sel || o.regionId === 0 || o.regionId === sel)
+            .forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = o.text;
+                opt.dataset.region = o.regionId;
+                uniSel.appendChild(opt);
+            });
+        if (Array.from(uniSel.options).some(o => o.value === previous)) {
+            uniSel.value = previous;
+        }
+    }
+
+    regionSel.addEventListener('change', refresh);
+})();
 
 /* ---------- Drop zone ---------- */
 const dropZone=document.getElementById('dropZone');
@@ -1070,6 +1269,7 @@ function renderBrochures(){
             <div class="brochure-card">
                 <div class="cover">
                     <span class="region-tag"><i class="bi bi-geo-alt-fill"></i> ${escapeHtml(b.region_name||'—')}</span>
+                    ${b.university_name ? `<span class="region-tag" style="top:auto;bottom:12px;background:rgba(0,0,0,.25);"><i class="bi bi-building"></i> ${escapeHtml(b.university_name)}</span>` : ''}
                     <i class="bi bi-file-earmark-richtext-fill pdf-icon"></i>
                     <div style="font-size:.75rem;opacity:.85;margin-top:8px">PDF · ${sizeMb} MB</div>
                 </div>
@@ -1102,6 +1302,7 @@ function renderBrochures(){
                 </div>
                 <div class="footer">
                     <button onclick="previewBrochure('${escapeJs(b.share_url)}')"><i class="bi bi-eye-fill"></i> Preview</button>
+                    <button onclick="openEditBrochure(${b.id})" title="Edit title, region & university"><i class="bi bi-pencil-square"></i> Edit</button>
                     <label class="attach-toggle" title="When ON, the customer page also shows the original PDF and a download button.">
                         <input type="checkbox" ${attachOn?'checked':''} onchange="toggleAttachPdf(${b.id}, this.checked)">
                         <i class="bi bi-file-earmark-pdf"></i> Attach PDF
@@ -1124,6 +1325,75 @@ function renderEmpty(msg){
 }
 
 function previewBrochure(url){window.open(url,'_blank');}
+
+/* ---------- Edit brochure ---------- */
+function openEditBrochure(id){
+    const b = BROCHURES.find(x => x.id === id);
+    if(!b){toast('Brochure not found.','error');return;}
+    document.getElementById('editBrochureId').value          = b.id;
+    document.getElementById('editBrochureTitle').value       = b.title || '';
+    document.getElementById('editBrochureDesc').value        = b.description || '';
+    document.getElementById('editBrochureRegion').value      = b.region_id ? String(b.region_id) : '';
+    filterEditUniversities();
+    document.getElementById('editBrochureUniversity').value  = b.university_id ? String(b.university_id) : '';
+    openModal('editBrochureModal');
+    setTimeout(()=>document.getElementById('editBrochureTitle').focus(),100);
+}
+
+/* Filter the edit university list by the currently selected edit region.
+   Universities with no region stay visible; "no region" shows them all. */
+function filterEditUniversities(){
+    const regionSel = document.getElementById('editBrochureRegion');
+    const uniSel    = document.getElementById('editBrochureUniversity');
+    if(!regionSel || !uniSel) return;
+    const sel = parseInt(regionSel.value || '0', 10);
+    const previous = uniSel.value;
+    Array.from(uniSel.options).forEach(opt => {
+        if(opt.value === '') { opt.hidden = false; return; }
+        const r = parseInt(opt.dataset.region || '0', 10);
+        opt.hidden = sel > 0 && r > 0 && r !== sel;
+    });
+    if(!Array.from(uniSel.options).some(o => o.value === previous && !o.hidden)){
+        uniSel.value = '';
+    }
+}
+document.getElementById('editBrochureRegion')
+    .addEventListener('change', filterEditUniversities);
+
+async function saveEditBrochure(){
+    const id          = parseInt(document.getElementById('editBrochureId').value || '0', 10);
+    const title       = document.getElementById('editBrochureTitle').value.trim();
+    const regionId    = document.getElementById('editBrochureRegion').value;
+    const universityId= document.getElementById('editBrochureUniversity').value;
+    const desc        = document.getElementById('editBrochureDesc').value.trim();
+    if(id<=0){toast('Invalid brochure.','error');return;}
+    if(!title){toast('Title is required.','error');return;}
+    if(!regionId && !universityId){toast('Pick a region or a university.','error');return;}
+    const btn = document.getElementById('saveBrochureBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-mini"></span> Saving…';
+    try{
+        const fd = new FormData();
+        fd.append('action','update_brochure');
+        fd.append('csrf_token',CSRF);
+        fd.append('id',id);
+        fd.append('title',title);
+        fd.append('description',desc);
+        fd.append('region_id', regionId || '0');
+        fd.append('university_id', universityId || '0');
+        const res = await fetch(ENDPOINT,{method:'POST',body:fd});
+        const d   = await res.json();
+        if(!d.ok){toast(d.error||'Update failed.','error');return;}
+        toast('Brochure updated.','success');
+        closeModal('editBrochureModal');
+        loadBrochures();
+    }catch(e){toast('Network error: '+e.message,'error');}
+    finally{
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check2-circle"></i> Save changes';
+    }
+}
+
 async function deleteBrochure(id){
     if(!confirm('Delete this brochure? This cannot be undone.'))return;
     const fd=new FormData();
