@@ -8,6 +8,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/generateReceiptPdf.php';
 require_once __DIR__ . '/helpers/custom_fee_package.php';
+require_once __DIR__ . '/helpers/receipt_render.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -242,12 +243,34 @@ try {
     ================================================= */
     $receiptNo = 'RCT-' . date('Ymd-His') . '-' . random_int(100, 999);
 
-    $receiptHtml = generateReceiptHtml([
-        'receipt_no' => $receiptNo,
-        'student_id' => $applicationId,
-        'items'      => $receiptItems,
-        'total'      => $totalRecorded,
-        'method'     => $method
+    $packageTitle = 'Payment Package';
+    $packageCurrency = '';
+    $pkgStmt = $conn->prepare('SELECT title, currency FROM fee_packages WHERE id = ? LIMIT 1');
+    if ($pkgStmt) {
+        $pkgStmt->bind_param('i', $packageId);
+        $pkgStmt->execute();
+        if ($pkgRow = $pkgStmt->get_result()->fetch_assoc()) {
+            $packageTitle    = (string) ($pkgRow['title'] ?? $packageTitle);
+            $packageCurrency = (string) ($pkgRow['currency'] ?? '');
+        }
+        $pkgStmt->close();
+    }
+
+    $receiptHtml = pcvc_render_receipt_html([
+        'receipt_no'     => $receiptNo,
+        'application_id' => $applicationId,
+        'source_table'   => $sourceTable,
+        'customer_name'  => pcvc_receipt_customer_name($conn, $applicationId, $sourceTable),
+        'package_title'  => $packageTitle,
+        'currency'       => $packageCurrency,
+        'payment_method' => $method,
+        'created_at'     => date('Y-m-d H:i:s'),
+        'total_amount'   => $totalRecorded,
+        'items'          => array_map(static fn($row) => [
+            'name'    => (string) ($row['label'] ?? ''),
+            'amount'  => (float)  ($row['amount'] ?? 0),
+            'comment' => '',
+        ], $receiptItems),
     ]);
 
     $stmt = $conn->prepare(
@@ -281,7 +304,7 @@ try {
        10. ASYNC BACKGROUND TASKS (must not alter JSON response)
     ================================================= */
     try {
-        generateReceiptPdf($receiptHtml, $receiptNo);
+        generateReceiptPdf($receiptNo, $conn);
 
         $emailUrl = pcvc_public_base_url() . '/sendReceiptEmail.php';
         $payload = http_build_query([
@@ -320,46 +343,3 @@ try {
     exit;
 }
 
-/* =====================================================
-   RECEIPT HTML GENERATOR (UNCHANGED)
-===================================================== */
-function generateReceiptHtml(array $data): string
-{
-    ob_start(); ?>
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Receipt</title>
-<style>
-@page { size: 80mm auto; margin: 0; }
-body { width: 80mm; margin: 0; padding: 5mm; font-family: monospace; font-size: 12px; }
-.center { text-align: center; }
-.line { border-top: 1px dashed #000; margin: 6px 0; }
-table { width: 100%; border-collapse: collapse; }
-td { padding: 2px 0; }
-.right { text-align: right; }
-</style>
-</head>
-<body>
-<div class="center"><strong>SCHOOL NAME</strong><br>OFFICIAL PAYMENT RECEIPT</div>
-<div class="line"></div>
-Receipt: <?= htmlspecialchars($data['receipt_no']) ?><br>
-Student ID: <?= htmlspecialchars((string)$data['student_id']) ?><br>
-Date: <?= date('Y-m-d H:i') ?><br>
-<div class="line"></div>
-<table>
-<?php foreach ($data['items'] as $row): ?>
-<tr><td><?= htmlspecialchars($row['label']) ?></td><td class="right"><?= number_format($row['amount'], 2) ?></td></tr>
-<?php endforeach; ?>
-</table>
-<div class="line"></div>
-<table><tr><td><strong>TOTAL</strong></td><td class="right"><strong><?= number_format($data['total'], 2) ?></strong></td></tr></table>
-<div class="line"></div>
-Payment: <?= htmlspecialchars($data['method']) ?><br>
-<div class="center">Thank you<br>Keep this receipt</div>
-</body>
-</html>
-<?php
-    return ob_get_clean();
-}

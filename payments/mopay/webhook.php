@@ -348,7 +348,7 @@ function mopay_finalize_fee_payment(mysqli $conn, string $transactionId, array $
 
         // Generate PDF + email (same settings as sendReceiptEmail.php)
         $pdfHtml = $receiptHtml;
-        generateReceiptPdf($pdfHtml, $receiptNo);
+        generateReceiptPdf($receiptNo, $conn);
 
         // Send email directly (reuse same SMTP settings).
         $stmt = $conn->prepare("SELECT first_name, last_name, email FROM student_applications WHERE id = ? LIMIT 1");
