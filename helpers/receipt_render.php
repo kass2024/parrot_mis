@@ -292,11 +292,8 @@ function pcvc_render_receipt_html(array $data, array $opts = []): string
         : '<div class="logo logo-placeholder">PC</div>';
 
     $stampBlock = $stampUri !== ''
-        ? '<div class="stamp-wrap">'
-            . '<img src="' . $h($stampUri) . '" alt="Authorized Signature & Official Stamp" class="stamp-img">'
-            . '<div class="stamp-caption">Authorized Signature &amp; Official Stamp</div>'
-          . '</div>'
-        : '<div class="stamp-wrap stamp-placeholder">Authorized Signature &amp; Official Stamp</div>';
+        ? '<img src="' . $h($stampUri) . '" alt="Official stamp" class="stamp-img">'
+        : '';
 
     $printButton = $opts['include_print_button']
         ? '<div class="no-print print-bar">
@@ -310,11 +307,7 @@ function pcvc_render_receipt_html(array $data, array $opts = []): string
            window.onafterprint = function(){ setTimeout(function(){ window.close(); }, 400); };</script>'
         : '';
 
-    $contactLine = $companyName . ' &nbsp;·&nbsp; ' . $supportEmail;
-    if ($supportPhone !== '') {
-        $contactLine .= ' &nbsp;·&nbsp; ' . $supportPhone;
-    }
-    $contactLine .= ' &nbsp;·&nbsp; ' . $supportWebsite;
+    $contactLine = $supportEmail . ' · ' . $supportWebsite;
 
     return <<<HTML
 <!DOCTYPE html>
@@ -323,7 +316,7 @@ function pcvc_render_receipt_html(array $data, array $opts = []): string
 <meta charset="UTF-8">
 <title>Receipt {$receiptNo}</title>
 <style>
-@page { size: A4; margin: 14mm; }
+@page { size: A4 portrait; margin: 10mm; }
 
 * { box-sizing: border-box; }
 
@@ -333,298 +326,192 @@ html, body {
     background: #eef2f6;
     color: #1f2933;
     font-family: "DejaVu Sans", "Helvetica Neue", Arial, sans-serif;
-    font-size: 12px;
+    font-size: 11px;
+    line-height: 1.35;
 }
 
 .page {
-    width: 210mm;
-    min-height: 297mm;
-    margin: 16px auto;
-    padding: 14mm;
+    width: 190mm;
+    max-width: 190mm;
+    margin: 12px auto;
+    padding: 0;
     background: #fff;
-    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
-    position: relative;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
 }
 
 .no-print.print-bar {
-    max-width: 210mm;
-    margin: 16px auto 0;
+    max-width: 190mm;
+    margin: 12px auto 0;
     text-align: right;
-    padding: 0 8mm;
 }
 .btn-print, .btn-close {
     border: 0;
-    padding: 9px 18px;
-    border-radius: 8px;
+    padding: 8px 16px;
+    border-radius: 6px;
     font-weight: 700;
     cursor: pointer;
-    margin-left: 8px;
+    margin-left: 6px;
 }
 .btn-print { background: #0b3c5d; color: #fff; }
 .btn-close { background: #e5e7eb; color: #1f2933; }
 
 .frame {
     border: 2px solid #0b3c5d;
-    border-radius: 12px;
-    padding: 14mm 12mm 30mm 12mm;
-    position: relative;
-    min-height: 250mm;
+    border-radius: 8px;
+    padding: 8mm 9mm 7mm;
+    page-break-inside: avoid;
 }
-
-.watermark {
-    position: absolute;
-    top: 48%;
-    left: 50%;
-    transform: translate(-50%, -50%) rotate(-26deg);
-    font-size: 130px;
-    font-weight: 900;
-    letter-spacing: 14px;
-    color: rgba(11, 60, 93, 0.06);
-    pointer-events: none;
-    white-space: nowrap;
-    z-index: 0;
-}
-
-.frame > * { position: relative; z-index: 1; }
 
 .header {
     display: table;
     width: 100%;
-    border-bottom: 1px solid #cbd5e1;
-    padding-bottom: 10px;
+    border-bottom: 2px solid #0b3c5d;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
 }
 .header .col-left, .header .col-right {
     display: table-cell;
     vertical-align: middle;
 }
-.header .col-right { text-align: right; }
+.header .col-right { text-align: right; width: 42%; }
 
 .logo {
-    width: 64px;
-    height: 64px;
+    width: 48px;
+    height: 48px;
     object-fit: contain;
     vertical-align: middle;
-    margin-right: 12px;
+    margin-right: 8px;
 }
 .logo-placeholder {
     display: inline-block;
-    width: 64px;
-    height: 64px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     background: #0b3c5d;
     color: #fff;
     text-align: center;
-    line-height: 64px;
+    line-height: 48px;
     font-weight: 800;
-    font-size: 22px;
-    margin-right: 12px;
+    font-size: 16px;
+    margin-right: 8px;
     vertical-align: middle;
 }
 
-.company-block {
-    display: inline-block;
-    vertical-align: middle;
-}
+.company-block { display: inline-block; vertical-align: middle; }
 .company-name {
-    font-size: 17px;
+    font-size: 14px;
     font-weight: 800;
     color: #0b3c5d;
+    margin: 0;
+    line-height: 1.2;
+}
+.receipt-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    background: #0b3c5d;
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-top: 3px;
     letter-spacing: 0.5px;
+}
+.receipt-no {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0b3c5d;
     margin: 0;
 }
-.company-sub {
-    font-size: 11px;
+.receipt-date {
+    font-size: 10px;
     color: #6b7280;
     margin-top: 2px;
 }
 
-.receipt-id {
-    font-size: 11px;
-    color: #6b7280;
-    margin: 0 0 4px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-}
-.receipt-no {
-    font-size: 18px;
-    font-weight: 800;
-    color: #0b3c5d;
-    margin: 0;
-}
-
-.title-bar {
-    margin: 18px 0 14px;
-    padding: 10px 14px;
-    background: linear-gradient(135deg, #0b3c5d, #14629c);
-    color: #fff;
-    border-radius: 8px;
-    text-align: center;
-    font-size: 15px;
-    font-weight: 800;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-}
-
-.meta {
-    width: 100%;
-    margin-bottom: 14px;
-    border-collapse: collapse;
-}
-.meta td {
+.summary {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
     padding: 6px 8px;
-    border-bottom: 1px dashed #e5e7eb;
-    font-size: 12px;
-    vertical-align: top;
-}
-.meta td.label {
-    width: 28%;
-    color: #6b7280;
-    font-weight: 700;
-    text-transform: uppercase;
+    margin-bottom: 8px;
     font-size: 10.5px;
-    letter-spacing: 0.6px;
 }
-.meta td.value { color: #111827; font-weight: 600; }
+.summary span { display: inline-block; margin-right: 14px; }
+.summary b { color: #475569; font-weight: 600; }
 
 .items {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 6px;
 }
 .items th {
     background: #0b3c5d;
     color: #fff;
     text-align: left;
-    padding: 10px 8px;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+    padding: 5px 6px;
+    font-size: 10px;
 }
 .items th.col-amt { text-align: right; }
 .items td {
-    padding: 10px 8px;
+    padding: 5px 6px;
     border-bottom: 1px solid #e5e7eb;
-    vertical-align: top;
+    font-size: 10.5px;
 }
-.items td.col-no { width: 36px; color: #6b7280; font-weight: 700; }
-.items td.col-amt { text-align: right; white-space: nowrap; font-weight: 700; color: #0b3c5d; }
-.item-name { font-weight: 600; }
-.item-note { color: #6b7280; font-size: 10.5px; margin-top: 2px; }
+.items td.col-no { width: 28px; color: #6b7280; }
+.items td.col-amt { text-align: right; font-weight: 700; color: #0b3c5d; white-space: nowrap; }
 
-.totals {
-    width: 100%;
-    margin-top: 10px;
-}
-.totals-inner {
-    float: right;
-    width: 55%;
-    border-collapse: collapse;
-}
-.totals-inner td {
-    padding: 8px 10px;
-}
-.totals-inner tr.grand td {
-    background: #eef6fc;
-    color: #0b3c5d;
-    font-weight: 800;
-    font-size: 14px;
-    border-top: 2px solid #0b3c5d;
-}
-.totals-inner td.label { text-align: right; color: #6b7280; }
-.totals-inner td.value { text-align: right; }
-
-.payment-method {
-    clear: both;
-    margin-top: 18px;
-    padding: 10px 12px;
-    background: #f1f5f9;
-    border-left: 4px solid #0b3c5d;
-    border-radius: 4px;
-    font-size: 12px;
-}
-
-.footer-grid {
+.bottom-row {
     display: table;
     width: 100%;
-    margin-top: 28px;
+    margin-top: 8px;
+    border-top: 2px solid #0b3c5d;
+    padding-top: 6px;
 }
-.footer-grid .col {
+.bottom-row .col-left, .bottom-row .col-right {
     display: table-cell;
-    vertical-align: bottom;
-    width: 50%;
+    vertical-align: middle;
 }
+.bottom-row .col-right { text-align: right; width: 38%; }
 
-.signed-by .label {
-    font-size: 10.5px;
-    color: #6b7280;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
-    margin-bottom: 28px;
+.total-line {
+    font-size: 13px;
+    font-weight: 800;
+    color: #0b3c5d;
 }
-.signed-by .line {
-    border-top: 1px solid #1f2933;
-    width: 78%;
-    padding-top: 4px;
-    font-size: 11px;
-}
-
-.stamp-wrap {
-    text-align: right;
-    padding-right: 4px;
-}
-.stamp-img {
-    max-width: 170px;
-    max-height: 110px;
-    object-fit: contain;
-    opacity: 0.95;
-}
-.stamp-caption {
+.total-line small {
+    display: block;
     font-size: 10px;
-    color: #6b7280;
-    margin-top: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.stamp-placeholder {
-    display: inline-block;
-    border: 1.5px dashed #9ca3af;
-    color: #9ca3af;
-    padding: 30px 26px;
-    font-size: 10.5px;
-    border-radius: 8px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    font-weight: 600;
+    color: #64748b;
+    margin-top: 2px;
 }
 
-.note {
-    margin-top: 22px;
-    padding: 10px 12px;
-    border: 1px dashed #cbd5e1;
-    border-radius: 6px;
-    font-size: 10.5px;
-    color: #475569;
-    line-height: 1.5;
+.stamp-img {
+    max-width: 120px;
+    max-height: 72px;
+    object-fit: contain;
 }
 
-.contact-strip {
-    margin-top: 14px;
+.footer-contact {
     text-align: center;
-    color: #6b7280;
-    font-size: 10.5px;
+    font-size: 9px;
+    color: #94a3b8;
+    margin-top: 6px;
 }
-.contact-strip strong { color: #0b3c5d; }
 
 @media print {
-    body { background: #fff; }
+    html, body { background: #fff; height: auto; }
     .no-print { display: none !important; }
     .page {
-        margin: 0;
+        margin: 0 auto;
         box-shadow: none;
-        padding: 0;
-        width: auto;
-        min-height: auto;
+        width: 100%;
+        max-width: 100%;
     }
-    .frame { border-radius: 10px; }
+    .frame {
+        border-radius: 6px;
+        page-break-inside: avoid;
+        page-break-after: avoid;
+    }
 }
 </style>
 </head>
@@ -634,44 +521,31 @@ html, body {
 
 <div class="page">
     <div class="frame">
-        <div class="watermark">PAID</div>
-
         <div class="header">
             <div class="col-left">
                 {$logoTag}
                 <div class="company-block">
                     <div class="company-name">{$companyName}</div>
-                    <div class="company-sub">{$companySub}</div>
+                    <div class="receipt-title">OFFICIAL PAYMENT RECEIPT</div>
                 </div>
             </div>
             <div class="col-right">
-                <div class="receipt-id">Receipt No.</div>
                 <div class="receipt-no">{$receiptNo}</div>
+                <div class="receipt-date">{$createdAt}</div>
             </div>
         </div>
 
-        <div class="title-bar">Official Payment Receipt</div>
-
-        <table class="meta">
-            <tr>
-                <td class="label">Received From</td>
-                <td class="value">{$customerName}</td>
-                <td class="label">Application ID</td>
-                <td class="value">#{$applicationId}</td>
-            </tr>
-            <tr>
-                <td class="label">Package</td>
-                <td class="value">{$packageTitle}</td>
-                <td class="label">Date Issued</td>
-                <td class="value">{$createdAt}</td>
-            </tr>
-        </table>
+        <div class="summary">
+            <span><b>Customer:</b> {$customerName}</span>
+            <span><b>Package:</b> {$packageTitle}</span>
+            <span><b>Method:</b> {$paymentMethod}</span>
+        </div>
 
         <table class="items">
             <thead>
                 <tr>
                     <th class="col-no">#</th>
-                    <th>Description</th>
+                    <th>Item</th>
                     <th class="col-amt">Amount</th>
                 </tr>
             </thead>
@@ -680,36 +554,19 @@ html, body {
             </tbody>
         </table>
 
-        <div class="totals">
-            <table class="totals-inner">
-                <tr class="grand">
-                    <td class="label">TOTAL PAID</td>
-                    <td class="value">{$currency} {$totalAmount}</td>
-                </tr>
-            </table>
-        </div>
-
-        <div class="payment-method">
-            <strong>Payment Method:</strong> {$paymentMethod}
-        </div>
-
-        <div class="footer-grid">
-            <div class="col signed-by">
-                <div class="label">Received By</div>
-                <div class="line">Parrot Canada Visa Consultant — Finance Office</div>
+        <div class="bottom-row">
+            <div class="col-left">
+                <div class="total-line">
+                    TOTAL PAID: {$currency} {$totalAmount}
+                    <small>Ref #{$applicationId}</small>
+                </div>
             </div>
-            <div class="col">
+            <div class="col-right">
                 {$stampBlock}
             </div>
         </div>
 
-        <div class="note">
-            This receipt confirms the payment received for the package indicated above.
-            Please retain this document for your records. For any questions regarding this
-            payment, contact our finance office quoting the Receipt No. shown.
-        </div>
-
-        <div class="contact-strip">{$contactLine}</div>
+        <div class="footer-contact">{$contactLine}</div>
     </div>
 </div>
 
