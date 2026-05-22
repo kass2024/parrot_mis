@@ -1322,6 +1322,35 @@ $applicantCount = count($all_applicants);
             </select>
           </div>
 
+          <div id="customPackageFields" class="d-none border border-warning border-2 rounded-3 bg-white p-3 mb-3">
+            <p class="small text-muted mb-2">Package or fee item not in the list? Enter details below — saved to the same package &amp; payment tables.</p>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold" for="custom_package_name">Package / Service Name</label>
+                <input type="text" id="custom_package_name" class="form-control" maxlength="255" placeholder="e.g. Special visa service">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold" for="custom_item_name">Fee Item Description</label>
+                <input type="text" id="custom_item_name" class="form-control" maxlength="255" placeholder="Optional — defaults to package name">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold" for="custom_package_currency">Currency</label>
+                <select id="custom_package_currency" class="form-select">
+                  <option value="CAD">CAD</option>
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                  <option value="GBP">GBP</option>
+                  <option value="GHS">GHS</option>
+                  <option value="RWF">RWF</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold" for="custom_package_amount">Proposed Total Price</label>
+                <input type="number" id="custom_package_amount" class="form-control" min="0.01" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+          </div>
+
           <!-- Package Totals -->
           <div class="row g-3 mb-4">
             <div class="col-md-4">
@@ -1456,6 +1485,7 @@ $applicantCount = count($all_applicants);
 </div>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="assets/js/payment-other-package.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
   window.CAN_DELETE_STUDENT_APP = <?= json_encode($canDeleteApplication) ?>;
@@ -1624,7 +1654,7 @@ $(function() {
           data.packages.forEach(pkg => {
             pkgOptions += '<option value="' + pkg.id + '">' + pkg.name + ' (' + pkg.currency + ' ' + Number(pkg.total_amount).toFixed(2) + ')</option>';
           });
-          $('#package_select').html(pkgOptions);
+          $('#package_select').html(window.appendOtherPackageOption(pkgOptions));
         })
         .fail(function (xhr) {
           console.error(xhr.responseText);
@@ -1974,9 +2004,14 @@ $(function() {
     $('#pay_package_id').val('');
     $('select[name="payment_method"]').val('Cash');
     $('input[name="comment"]').val('');
+    window.resetCustomPackageFields();
     itemPayments = {};
     isSubmitting = false;
   });
+
+  window._paymentOtherRefresh = function () {
+    paymentCurrency = window.refreshCustomPackageUI(itemPayments, updateGrandTotal) || paymentCurrency;
+  };
 
   /* =====================================================
      PACKAGE SELECT
@@ -1988,6 +2023,17 @@ $(function() {
 
     $('#pay_package_id').val(packageId);
     itemPayments = {};
+
+    if (packageId === 'other') {
+      window.resetCustomPackageFields();
+      $('#customPackageFields').removeClass('d-none');
+      $('#expected_total, #paid_total, #remaining_total').val('');
+      $('#payment_grand_total').val('0.00');
+      window.refreshCustomPackageUI(itemPayments, updateGrandTotal);
+      return;
+    }
+
+    window.resetCustomPackageFields();
 
     $('#feeItemsWrapper').html('<div class="text-muted text-center py-4">Loading fee items…</div>');
 
@@ -2082,7 +2128,7 @@ $(function() {
     showLoading();
     startPaymentProgress();
 
-    const payload = {
+    let payload = {
       student_id: $('#pay_student_id').val(),
       table: $('#pay_table').val(),
       package_id: $('#pay_package_id').val(),
@@ -2090,6 +2136,15 @@ $(function() {
       comment: $('input[name="comment"]').val(),
       items: itemPayments
     };
+
+    if (window.isOtherPackageSelected()) {
+      payload = window.buildCustomPaymentPayload(payload, itemPayments);
+      if (!payload) {
+        isSubmitting = false;
+        hideLoading();
+        return;
+      }
+    }
 
     $.ajax({
       url: 'record-payment.php',

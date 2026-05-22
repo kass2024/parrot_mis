@@ -7,6 +7,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/generateReceiptPdf.php';
+require_once __DIR__ . '/helpers/custom_fee_package.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -39,6 +40,12 @@ $method        = trim((string) ($data['payment_method'] ?? ''));
 $comment       = trim((string) ($data['comment'] ?? ''));
 $items         = $data['items'] ?? [];
 
+$isCustomPackage = !empty($data['custom_package']);
+$customTitle     = trim((string) ($data['custom_title'] ?? ''));
+$customItemName  = trim((string) ($data['custom_item_name'] ?? ''));
+$customCurrency  = strtoupper(trim((string) ($data['custom_currency'] ?? '')));
+$customAmount    = round((float) ($data['custom_amount'] ?? 0), 2);
+
 /* =====================================================
    3. VALIDATION
 ===================================================== */
@@ -48,11 +55,39 @@ $allowedTables = [
     'turkey_applications'
 ];
 
-if (
-    $applicationId <= 0 ||
+$allowedCurrencies = ['USD', 'CAD', 'EUR', 'GBP', 'GHS', 'RWF'];
+
+if ($applicationId <= 0 || $method === '' || !in_array($sourceTable, $allowedTables, true)) {
+    http_response_code(422);
+    echo json_encode(['success' => false, 'message' => 'Invalid or missing required fields']);
+    exit;
+}
+
+if ($isCustomPackage) {
+    if (
+        $customTitle === '' ||
+        $customAmount <= 0 ||
+        !in_array($customCurrency, $allowedCurrencies, true) ||
+        !is_array($items) ||
+        empty($items)
+    ) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'message' => 'Enter package name, currency, price, and payment amount']);
+        exit;
+    }
+
+    $customPayTotal = 0.0;
+    foreach ($items as $amount) {
+        $customPayTotal += round((float) $amount, 2);
+    }
+
+    if ($customPayTotal <= 0 || $customPayTotal > $customAmount) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'message' => 'Payment amount must be greater than zero and not exceed the proposed price']);
+        exit;
+    }
+} elseif (
     $packageId <= 0 ||
-    $method === '' ||
-    !in_array($sourceTable, $allowedTables, true) ||
     !is_array($items) ||
     empty($items)
 ) {
@@ -67,6 +102,21 @@ if (
 $conn->begin_transaction();
 
 try {
+
+    $customItemLabel = null;
+
+    if ($isCustomPackage) {
+        $created = pcvc_create_custom_fee_package(
+            $conn,
+            $customTitle,
+            $customItemName !== '' ? $customItemName : $customTitle,
+            $customCurrency,
+            $customAmount
+        );
+        $packageId = $created['package_id'];
+        $customItemLabel = $created['item_name'];
+        $items = [$created['fee_item_id'] => $customPayTotal];
+    }
 
     /* =================================================
        5. ENSURE PACKAGE ASSIGNMENT
@@ -145,8 +195,20 @@ try {
 
         $totalRecorded += $amount;
 
+        $itemLabel = $customItemLabel ?? null;
+        if ($itemLabel === null) {
+            $stmt = $conn->prepare('SELECT name FROM fee_items WHERE id = ? LIMIT 1');
+            $stmt->bind_param('i', $feeItemId);
+            $stmt->execute();
+            $nameRow = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+            $itemLabel = $nameRow['name'] ?? ('Item ' . $feeItemId);
+        } else {
+            $customItemLabel = null;
+        }
+
         $receiptItems[] = [
-            'label'  => 'Item ' . $feeItemId,
+            'label'  => (string) $itemLabel,
             'amount' => $amount
         ];
     }
