@@ -187,26 +187,75 @@ if ($statusFilter !== null) {
 }
 
 /* =====================================================
-   1. EXPECTED REVENUE
+   1. EXPECTED / COLLECTED BY CURRENCY (active receipts only)
 ===================================================== */
-$expectedSql = "
-    SELECT COALESCE(SUM(fi.amount),0) AS expected
+$expectedByCurrencySql = "
+    SELECT
+        fp.currency,
+        COALESCE(SUM(fi.amount), 0) AS expected
     FROM application_packages ap
     JOIN fee_items fi ON fi.package_id = ap.package_id
+    JOIN fee_packages fp ON fp.id = fi.package_id
+    WHERE fp.currency IS NOT NULL AND fp.currency <> ''
+    GROUP BY fp.currency
 ";
-$expected = (float) run($conn, $expectedSql, 'expected')
-    ->fetch_assoc()['expected'];
+$expectedByCurrency = [];
+$res = run($conn, $expectedByCurrencySql, 'expected_by_currency');
+while ($row = $res->fetch_assoc()) {
+    $expectedByCurrency[$row['currency']] = (float) $row['expected'];
+}
 
-/* =====================================================
-   2. TOTAL COLLECTED
-===================================================== */
-$collectedSql = "
-    SELECT COALESCE(SUM(total_amount),0) AS collected
-    FROM payment_receipts
-    WHERE COALESCE(status, 'ACTIVE') <> 'CANCELED'
+$collectedByCurrencySql = "
+    SELECT
+        COALESCE(fp.currency, '—') AS currency,
+        COALESCE(SUM(pr.total_amount), 0) AS collected,
+        COUNT(*) AS receipt_count
+    FROM payment_receipts pr
+    LEFT JOIN fee_packages fp ON fp.id = pr.package_id
+    WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
+    GROUP BY COALESCE(fp.currency, '—')
 ";
-$collected = (float) run($conn, $collectedSql, 'collected')
-    ->fetch_assoc()['collected'];
+$collectedByCurrency = [];
+$activeReceipts = 0;
+$res = run($conn, $collectedByCurrencySql, 'collected_by_currency');
+while ($row = $res->fetch_assoc()) {
+    $cur = (string) $row['currency'];
+    $collectedByCurrency[$cur] = (float) $row['collected'];
+    $activeReceipts += (int) $row['receipt_count'];
+}
+
+$cancelledSql = "
+    SELECT COUNT(*) AS c
+    FROM payment_receipts
+    WHERE status = 'CANCELED'
+";
+$cancelledReceipts = (int) (run($conn, $cancelledSql, 'cancelled')->fetch_assoc()['c'] ?? 0);
+
+$allCurrencies = array_unique(array_merge(
+    array_keys($expectedByCurrency),
+    array_keys($collectedByCurrency)
+));
+sort($allCurrencies);
+
+$byCurrency = [];
+$expected = 0.0;
+$collected = 0.0;
+
+foreach ($allCurrencies as $currency) {
+    if ($currency === '—' || $currency === '') {
+        continue;
+    }
+    $exp = (float) ($expectedByCurrency[$currency] ?? 0);
+    $col = (float) ($collectedByCurrency[$currency] ?? 0);
+    $expected += $exp;
+    $collected += $col;
+    $byCurrency[] = [
+        'currency'    => $currency,
+        'expected'    => $exp,
+        'collected'   => $col,
+        'outstanding' => max(0, $exp - $col),
+    ];
+}
 
 /* =====================================================
    3. STATUS COUNTS (ITEM-AWARE)
@@ -280,15 +329,26 @@ $status = run($conn, $statusSql, 'status')->fetch_assoc();
    4. PAYMENT METHODS
 ===================================================== */
 $methodsSql = "
-    SELECT payment_method, SUM(total_amount) AS total
-    FROM payment_receipts
-    WHERE COALESCE(status, 'ACTIVE') <> 'CANCELED'
-    GROUP BY payment_method
+    SELECT
+        pr.payment_method,
+        COALESCE(fp.currency, '—') AS currency,
+        SUM(pr.total_amount) AS total
+    FROM payment_receipts pr
+    LEFT JOIN fee_packages fp ON fp.id = pr.package_id
+    WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
+    GROUP BY pr.payment_method, COALESCE(fp.currency, '—')
+    ORDER BY total DESC
 ";
 $methods = [];
+$methodsChart = [];
 $res = run($conn, $methodsSql, 'methods');
 while ($row = $res->fetch_assoc()) {
-    $methods[$row['payment_method']] = (float)$row['total'];
+    $method = (string) $row['payment_method'];
+    $currency = (string) $row['currency'];
+    $total = (float) $row['total'];
+    $methods[$method] = ($methods[$method] ?? 0) + $total;
+    $label = $currency !== '—' ? "{$method} ({$currency})" : $method;
+    $methodsChart[] = ['label' => $label, 'total' => $total, 'method' => $method, 'currency' => $currency];
 }
 
 /* =====================================================
@@ -316,15 +376,19 @@ $recent = run($conn, $recentSql, 'recent')->fetch_all(MYSQLI_ASSOC);
    FINAL RESPONSE
 ===================================================== */
 echo json_encode([
-    'error'       => false,
-    'expected'    => $expected,
-    'collected'   => $collected,
-    'outstanding' => max(0, $expected - $collected),
+    'error'              => false,
+    'expected'           => $expected,
+    'collected'          => $collected,
+    'outstanding'        => max(0, $expected - $collected),
+    'by_currency'        => $byCurrency,
+    'active_receipts'    => $activeReceipts,
+    'cancelled_receipts' => $cancelledReceipts,
     'status' => [
-        'fully_paid'   => (int)$status['fully_paid'],
-        'partial_paid' => (int)$status['partial_paid'],
-        'unpaid'       => (int)$status['unpaid']
+        'fully_paid'   => (int) $status['fully_paid'],
+        'partial_paid' => (int) $status['partial_paid'],
+        'unpaid'       => (int) $status['unpaid'],
     ],
-    'methods' => $methods,
-    'recent'  => $recent
-], JSON_PRETTY_PRINT);
+    'methods'       => $methods,
+    'methods_chart' => $methodsChart,
+    'recent'        => $recent,
+], JSON_UNESCAPED_UNICODE);

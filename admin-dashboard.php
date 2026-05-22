@@ -1273,53 +1273,224 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       margin-bottom: 28px;
     }
 
+    .payment-dashboard {
+      background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+      border-radius: 16px;
+      padding: 24px 26px 28px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06);
+    }
+
+    .pay-dash-header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .pay-dash-header h3 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #0b3c5d;
+    }
+
+    .pay-dash-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pay-dash-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 5px 10px;
+      border-radius: 999px;
+      letter-spacing: 0.02em;
+    }
+
+    .pay-dash-badge.ok {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .pay-dash-badge.muted {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+
+    .pay-currency-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .pay-currency-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px 18px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pay-currency-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #427431, #0b3c5d);
+    }
+
+    .pay-currency-code {
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    .pay-currency-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 0.82rem;
+      padding: 3px 0;
+      color: #475569;
+    }
+
+    .pay-currency-row strong {
+      color: #0f172a;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .pay-currency-row.out strong {
+      color: #b45309;
+    }
+
     .payment-kpis {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin-bottom: 25px;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
     }
 
     .payment-kpi-card {
-      background: var(--surface);
-      border-radius: 10px;
-      padding: 15px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 14px 12px;
       text-align: center;
-      transition: all 0.2s;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
       cursor: pointer;
-      border: 2px solid transparent;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
     }
 
     .payment-kpi-card:hover {
-      transform: translateY(-3px);
-      border-color: var(--navy-secondary);
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+      border-color: #94a3b8;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    .payment-kpi-card.is-money {
+      cursor: default;
+    }
+
+    .payment-kpi-card.is-money:hover {
+      transform: none;
+      box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+      border-color: #e2e8f0;
     }
 
     .payment-kpi-icon {
-      font-size: 2rem;
-      margin-bottom: 10px;
+      font-size: 1.5rem;
+      margin-bottom: 6px;
+      line-height: 1;
     }
 
     .payment-kpi-value {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: var(--navy);
-      margin: 5px 0;
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: #0b3c5d;
+      margin: 4px 0;
+      line-height: 1.2;
+    }
+
+    .payment-kpi-value.small {
+      font-size: 1.1rem;
     }
 
     .payment-kpi-title {
-      font-size: 0.9rem;
-      color: var(--muted);
-      font-weight: 500;
+      font-size: 0.78rem;
+      color: #64748b;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .chart-container {
-      background: var(--surface);
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+      border: 1px solid #e2e8f0;
+      height: 100%;
+    }
+
+    .chart-container h6 {
+      color: #0b3c5d;
+      font-size: 0.95rem;
+      margin-bottom: 12px !important;
+    }
+
+    .pay-recent-wrap {
+      background: #fff;
+      border-radius: 12px;
+      padding: 18px 20px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+    }
+
+    .pay-recent-wrap h6 {
+      color: #0b3c5d;
+      font-size: 0.95rem;
+    }
+
+    .pay-recent-wrap .table thead th {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      border-bottom-width: 2px;
+      border-color: #e2e8f0;
+      background: #f8fafc !important;
+    }
+
+    .pay-recent-wrap .table tbody td {
+      font-size: 0.88rem;
+      vertical-align: middle;
+      border-color: #f1f5f9;
+    }
+
+    .pay-currency-pill {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 800;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: #e8eef9;
+      color: #0b3c5d;
+      margin-right: 6px;
+      vertical-align: middle;
     }
 
     /* ========== AGENT TRACKING ========== */
@@ -1456,6 +1627,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       
       .payment-kpis {
         grid-template-columns: repeat(2, 1fr);
+      }
+
+      .pay-currency-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -2282,41 +2457,42 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           
           <!-- Payment Dashboard -->
           <div class="payment-dashboard mt-4" id="paymentDashboard">
-            <h3 class="mb-3" style="color: var(--navy);">
-              <i class="bi bi-credit-card-2-front me-2"></i>
-              Payments Overview
-            </h3>
-            
+            <div class="pay-dash-header">
+              <h3><i class="bi bi-credit-card-2-front me-2"></i>Payments Overview</h3>
+              <div class="pay-dash-meta" id="pay-dash-meta">
+                <span class="pay-dash-badge ok">Active receipts only</span>
+                <span class="pay-dash-badge muted">Loading…</span>
+              </div>
+            </div>
+
+            <div class="pay-currency-grid" id="payment-currency-cards">
+              <div class="text-center py-4 text-muted col-span-all">Loading financial summary…</div>
+            </div>
+
             <div class="payment-kpis" id="payment-kpis">
-              <!-- Payment KPIs will be loaded by JavaScript -->
-              <div class="text-center py-5">
-                <div class="spinner-border text-primary" role="status">
-                  <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2 text-muted">Loading payment data...</p>
-              </div>
+              <div class="text-center py-4 text-muted">Loading student status…</div>
             </div>
-            
-            <div class="row g-4 mb-4">
-              <div class="col-lg-6">
+
+            <div class="row g-3 mb-3">
+              <div class="col-lg-5">
                 <div class="chart-container">
-                  <h6 class="fw-bold mb-3">Payment Status Distribution</h6>
-                  <canvas id="paymentStatusChart" height="220"></canvas>
+                  <h6 class="fw-bold mb-2">Students by payment status</h6>
+                  <canvas id="paymentStatusChart" height="200"></canvas>
                 </div>
               </div>
-              <div class="col-lg-6">
+              <div class="col-lg-7">
                 <div class="chart-container">
-                  <h6 class="fw-bold mb-3">Payment Methods</h6>
-                  <canvas id="paymentMethodChart" height="220"></canvas>
+                  <h6 class="fw-bold mb-2">Collections by method &amp; currency</h6>
+                  <canvas id="paymentMethodChart" height="200"></canvas>
                 </div>
               </div>
             </div>
-            
-            <div class="chart-container">
-              <h6 class="fw-bold mb-3">Recent Payments</h6>
+
+            <div class="pay-recent-wrap">
+              <h6 class="fw-bold mb-3">Recent payments <span class="text-muted fw-normal">(latest active receipts)</span></h6>
               <div class="table-responsive">
-                <table class="table table-hover table-sm align-middle">
-                  <thead class="table-light">
+                <table class="table table-hover table-sm align-middle mb-0">
+                  <thead>
                     <tr>
                       <th>Student</th>
                       <th>Amount</th>
@@ -2326,7 +2502,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                   </thead>
                   <tbody id="recent-payments">
                     <tr>
-                      <td colspan="4" class="text-center text-muted">Loading payments…</td>
+                      <td colspan="4" class="text-center text-muted py-4">Loading payments…</td>
                     </tr>
                   </tbody>
                 </table>
@@ -3206,101 +3382,168 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     document.addEventListener('DOMContentLoaded', async () => {
       const dashboard = document.getElementById('paymentDashboard');
       if (!dashboard) return;
-      
-      try {
-        const res = await fetch('payment_dashboard_stats.php', {
-          credentials: 'same-origin'
+
+      const fmtMoney = (amount, currency) => {
+        const n = Number(amount || 0).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
         });
-        
+        return currency ? `${currency} ${n}` : n;
+      };
+
+      const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      try {
+        const res = await fetch('payment_dashboard_stats.php', { credentials: 'same-origin' });
         if (!res.ok) throw new Error('HTTP ' + res.status);
-        
         const data = await res.json();
-        
-        // KPI Cards
-        const kpis = [
-          { title: 'Expected Revenue', value: data.expected, icon: 'bi-cash-stack', color: 'primary' },
-          { title: 'Total Collected', value: data.collected, icon: 'bi-check-circle', color: 'success' },
-          { title: 'Outstanding', value: data.outstanding, icon: 'bi-exclamation-circle', color: 'warning', status: 'outstanding' },
-          { title: 'Fully Paid', value: data.status.fully_paid, icon: 'bi-check2-circle', color: 'success', status: 'fully_paid' },
-          { title: 'Partial Paid', value: data.status.partial_paid, icon: 'bi-hourglass-split', color: 'info', status: 'partial_paid' },
-          { title: 'Unpaid', value: data.status.unpaid, icon: 'bi-x-circle', color: 'danger', status: 'unpaid' }
+        if (data.error) throw new Error(data.message || 'Stats unavailable');
+
+        const metaEl = document.getElementById('pay-dash-meta');
+        if (metaEl) {
+          const active = Number(data.active_receipts || 0);
+          const cancelled = Number(data.cancelled_receipts || 0);
+          metaEl.innerHTML = `
+            <span class="pay-dash-badge ok">${active} active receipt${active === 1 ? '' : 's'}</span>
+            ${cancelled > 0 ? `<span class="pay-dash-badge muted">${cancelled} cancelled hidden</span>` : ''}
+          `;
+        }
+
+        const currencyWrap = document.getElementById('payment-currency-cards');
+        const byCur = Array.isArray(data.by_currency) ? data.by_currency : [];
+        if (currencyWrap) {
+          currencyWrap.innerHTML = byCur.length
+            ? byCur.map(c => `
+              <div class="pay-currency-card">
+                <div class="pay-currency-code">${esc(c.currency)}</div>
+                <div class="pay-currency-row"><span>Expected</span><strong>${fmtMoney(c.expected, '')}</strong></div>
+                <div class="pay-currency-row"><span>Collected</span><strong>${fmtMoney(c.collected, '')}</strong></div>
+                <div class="pay-currency-row out"><span>Outstanding</span><strong>${fmtMoney(c.outstanding, '')}</strong></div>
+              </div>
+            `).join('')
+            : `<div class="text-muted py-3">No package revenue data yet.</div>`;
+        }
+
+        const statusKpis = [
+          { title: 'Fully Paid', value: data.status?.fully_paid ?? 0, icon: 'bi-check2-circle', color: 'success', status: 'fully_paid' },
+          { title: 'Partial Paid', value: data.status?.partial_paid ?? 0, icon: 'bi-hourglass-split', color: 'info', status: 'partial_paid' },
+          { title: 'Unpaid', value: data.status?.unpaid ?? 0, icon: 'bi-x-circle', color: 'danger', status: 'unpaid' },
+          { title: 'Need Attention', value: (data.status?.partial_paid ?? 0) + (data.status?.unpaid ?? 0), icon: 'bi-exclamation-circle', color: 'warning', status: 'outstanding', hint: 'Students with balance — click to list' }
         ];
-        
+
         const kpiWrap = document.getElementById('payment-kpis');
-        kpiWrap.innerHTML = kpis.map(k => `
-          <div class="payment-kpi-card" ${k.status ? `data-status="${k.status}"` : ''}>
-            <div class="payment-kpi-icon text-${k.color}">
-              <i class="bi ${k.icon}"></i>
+        if (kpiWrap) {
+          kpiWrap.innerHTML = statusKpis.map(k => `
+            <div class="payment-kpi-card" data-status="${k.status}" title="${k.hint || 'Click for student list'}">
+              <div class="payment-kpi-icon text-${k.color}"><i class="bi ${k.icon}"></i></div>
+              <div class="payment-kpi-value">${esc(k.value)}</div>
+              <div class="payment-kpi-title">${esc(k.title)}</div>
             </div>
-            <div class="payment-kpi-value">${Number(k.value).toLocaleString()}</div>
-            <div class="payment-kpi-title">${k.title}</div>
-          </div>
-        `).join('');
-        
-        // Payment Status Chart
-        if (document.getElementById('paymentStatusChart')) {
-          new Chart(document.getElementById('paymentStatusChart'), {
+          `).join('');
+        }
+
+        const statusTotal = (data.status?.fully_paid || 0) + (data.status?.partial_paid || 0) + (data.status?.unpaid || 0);
+        const statusCanvas = document.getElementById('paymentStatusChart');
+        if (statusCanvas) {
+          const sData = [
+            data.status?.fully_paid || 0,
+            data.status?.partial_paid || 0,
+            data.status?.unpaid || 0
+          ];
+          new Chart(statusCanvas, {
             type: 'doughnut',
             data: {
               labels: ['Fully Paid', 'Partial Paid', 'Unpaid'],
               datasets: [{
-                data: [
-                  data.status.fully_paid,
-                  data.status.partial_paid,
-                  data.status.unpaid
-                ],
-                backgroundColor: ['#198754', '#0dcaf0', '#dc3545']
-              }]
-            },
-            options: { plugins: { legend: { position: 'bottom' } } }
-          });
-        }
-        
-        // Payment Method Chart
-        if (document.getElementById('paymentMethodChart')) {
-          new Chart(document.getElementById('paymentMethodChart'), {
-            type: 'bar',
-            data: {
-              labels: Object.keys(data.methods),
-              datasets: [{
-                label: 'Total Collected',
-                data: Object.values(data.methods),
-                backgroundColor: '#427431'
+                data: sData,
+                backgroundColor: ['#427431', '#3661B9', '#dc3545'],
+                borderWidth: 2,
+                borderColor: '#fff'
               }]
             },
             options: {
               responsive: true,
-              scales: { y: { beginAtZero: true } }
+              maintainAspectRatio: true,
+              cutout: '58%',
+              plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14, font: { size: 11 } } },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => {
+                      const v = ctx.raw || 0;
+                      const pct = statusTotal ? Math.round((v / statusTotal) * 100) : 0;
+                      return ` ${ctx.label}: ${v} (${pct}%)`;
+                    }
+                  }
+                }
+              }
             }
           });
         }
-        
-        // Recent Payments
+
+        const methodCanvas = document.getElementById('paymentMethodChart');
+        if (methodCanvas) {
+          const chartRows = Array.isArray(data.methods_chart) && data.methods_chart.length
+            ? data.methods_chart
+            : Object.entries(data.methods || {}).map(([method, total]) => ({ label: method, total }));
+          const labels = chartRows.map(r => r.label || r.method);
+          const values = chartRows.map(r => Number(r.total || 0));
+          new Chart(methodCanvas, {
+            type: 'bar',
+            data: {
+              labels,
+              datasets: [{
+                label: 'Collected',
+                data: values,
+                backgroundColor: ['#427431', '#0b3c5d', '#3661B9', '#64748b', '#b45309'].slice(0, labels.length),
+                borderRadius: 6,
+                maxBarThickness: 48
+              }]
+            },
+            options: {
+              responsive: true,
+              indexAxis: labels.length > 4 ? 'y' : 'x',
+              plugins: {
+                legend: { display: false },
+                tooltip: {
+                  callbacks: {
+                    label: (ctx) => ' ' + Number(ctx.raw || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                  }
+                }
+              },
+              scales: {
+                x: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+                y: { beginAtZero: true, grid: { display: false } }
+              }
+            }
+          });
+        }
+
         const recentBody = document.getElementById('recent-payments');
         if (recentBody) {
-          recentBody.innerHTML = data.recent.length
-            ? data.recent.map(p => `
-               <tr>
-                <td>${p.student && p.student.trim() ? p.student : '—'}</td>
-                <td class="fw-semibold">${p.currency ? p.currency + ' ' : ''}${Number(p.amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                <td><span class="badge bg-secondary">${p.payment_method || '—'}</span></td>
-                <td class="text-muted">${p.paid_at ? new Date(p.paid_at).toLocaleString() : '—'}</td>
-              </tr>
-              `).join('')
-            : `<tr><td colspan="4" class="text-center text-muted">No payments</td></tr>`;
+          recentBody.innerHTML = (data.recent && data.recent.length)
+            ? data.recent.map(p => {
+                const cur = (p.currency || '').trim();
+                const amt = Number(p.amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const method = (p.payment_method || '—').toLowerCase();
+                const methodClass = method.includes('mopay') ? 'bg-primary' : method.includes('bank') ? 'bg-info text-dark' : 'bg-secondary';
+                return `
+                  <tr>
+                    <td class="fw-semibold">${esc(p.student && p.student.trim() ? p.student : '—')}</td>
+                    <td>${cur ? `<span class="pay-currency-pill">${esc(cur)}</span>` : ''}<span class="fw-bold text-success">${amt}</span></td>
+                    <td><span class="badge ${methodClass}">${esc(p.payment_method || '—')}</span></td>
+                    <td class="text-muted small">${p.paid_at ? new Date(p.paid_at).toLocaleString() : '—'}</td>
+                  </tr>`;
+              }).join('')
+            : `<tr><td colspan="4" class="text-center text-muted py-4">No active receipts yet</td></tr>`;
         }
-          
+
       } catch (err) {
         console.error('Payment dashboard failed:', err);
-        const paymentDashboard = document.getElementById('paymentDashboard');
-        if (paymentDashboard) {
-          paymentDashboard.innerHTML = `
-            <div class="alert alert-danger mb-0">
-              <strong>Payment dashboard error.</strong><br>
-              ${err.message}
-            </div>
-          `;
-        }
+        dashboard.innerHTML = `
+          <div class="alert alert-danger mb-0">
+            <strong>Payment dashboard error.</strong><br>${esc(err.message || 'Unknown error')}
+          </div>`;
       }
     });
     
