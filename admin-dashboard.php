@@ -3282,7 +3282,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             ? data.recent.map(p => `
                <tr>
                 <td>${p.student && p.student.trim() ? p.student : '—'}</td>
-                <td class="fw-semibold">${Number(p.amount_paid || 0).toLocaleString()}</td>
+                <td class="fw-semibold">${p.currency ? p.currency + ' ' : ''}${Number(p.amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                 <td><span class="badge bg-secondary">${p.payment_method || '—'}</span></td>
                 <td class="text-muted">${p.paid_at ? new Date(p.paid_at).toLocaleString() : '—'}</td>
               </tr>

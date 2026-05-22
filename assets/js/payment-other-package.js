@@ -6,6 +6,8 @@
 
   const CUSTOM_ITEM_KEY = 'custom';
   let customItemNameEdited = false;
+  let customPayAmountEdited = false;
+  let lastProposedTotal = 0;
 
   function escHtml(text) {
     return String(text)
@@ -77,13 +79,24 @@
     $('#remaining_total').val(`${data.currency} ${data.total.toFixed(2)}`);
 
     const itemLabel = escHtml(data.itemName);
-    const existingVal = itemPaymentsRef && itemPaymentsRef[CUSTOM_ITEM_KEY]
-      ? Number(itemPaymentsRef[CUSTOM_ITEM_KEY])
-      : data.total;
-    const payVal = existingVal > 0 ? existingVal : data.total;
+    const proposedChanged = data.total !== lastProposedTotal;
+    let payVal = data.total;
+
+    if (
+      !proposedChanged &&
+      customPayAmountEdited &&
+      itemPaymentsRef &&
+      Number(itemPaymentsRef[CUSTOM_ITEM_KEY]) > 0
+    ) {
+      payVal = Math.min(Number(itemPaymentsRef[CUSTOM_ITEM_KEY]), data.total);
+    } else if (proposedChanged) {
+      customPayAmountEdited = false;
+    }
+
+    lastProposedTotal = data.total;
 
     if (itemPaymentsRef) {
-      itemPaymentsRef[CUSTOM_ITEM_KEY] = Math.min(payVal, data.total);
+      itemPaymentsRef[CUSTOM_ITEM_KEY] = payVal;
     }
 
     const html = `
@@ -116,6 +129,8 @@
 
   window.resetCustomPackageFields = function () {
     customItemNameEdited = false;
+    customPayAmountEdited = false;
+    lastProposedTotal = 0;
     $('#customPackageFields').addClass('d-none');
     $('#custom_package_name, #custom_item_name, #custom_package_amount').val('');
     $('#custom_package_currency').val('CAD');
@@ -158,11 +173,15 @@
 
   window.isOtherPackageSelected = isOtherPackageSelected;
 
-  $(document).on('input', '#custom_package_name, #custom_package_currency, #custom_package_amount', function () {
+  $(document).on('input change', '#custom_package_name, #custom_package_currency, #custom_package_amount', function () {
     if (!isOtherPackageSelected()) return;
     if (typeof window._paymentOtherRefresh === 'function') {
       window._paymentOtherRefresh();
     }
+  });
+
+  $(document).on('input', '#feeItemsWrapper .item-payment-input[data-item-id="custom"]', function () {
+    customPayAmountEdited = true;
   });
 
   $(document).on('input', '#custom_item_name', function () {

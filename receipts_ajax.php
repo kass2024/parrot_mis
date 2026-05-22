@@ -46,7 +46,7 @@ SELECT
     fp.currency
 FROM payment_receipts pr
 LEFT JOIN fee_packages fp ON fp.id = pr.package_id
-WHERE 1=1
+WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
 ";
 
 $params = [];

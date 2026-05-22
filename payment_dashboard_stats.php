@@ -201,9 +201,9 @@ $expected = (float) run($conn, $expectedSql, 'expected')
    2. TOTAL COLLECTED
 ===================================================== */
 $collectedSql = "
-    SELECT COALESCE(SUM(amount_paid),0) AS collected
-    FROM application_payments
-    WHERE status = 'PAID'
+    SELECT COALESCE(SUM(total_amount),0) AS collected
+    FROM payment_receipts
+    WHERE COALESCE(status, 'ACTIVE') <> 'CANCELED'
 ";
 $collected = (float) run($conn, $collectedSql, 'collected')
     ->fetch_assoc()['collected'];
@@ -280,9 +280,9 @@ $status = run($conn, $statusSql, 'status')->fetch_assoc();
    4. PAYMENT METHODS
 ===================================================== */
 $methodsSql = "
-    SELECT payment_method, SUM(amount_paid) AS total
-    FROM application_payments
-    WHERE status = 'PAID'
+    SELECT payment_method, SUM(total_amount) AS total
+    FROM payment_receipts
+    WHERE COALESCE(status, 'ACTIVE') <> 'CANCELED'
     GROUP BY payment_method
 ";
 $methods = [];
@@ -297,17 +297,16 @@ while ($row = $res->fetch_assoc()) {
 $recentSql = "
     SELECT
         CONCAT_WS(' ', sa.first_name, sa.last_name) AS student,
-        SUM(p.amount_paid) AS amount_paid,
-        p.payment_method,
-        MAX(p.paid_at) AS paid_at
-    FROM application_payments p
-    LEFT JOIN application_packages ap
-        ON ap.application_id = p.application_id
+        pr.total_amount AS amount_paid,
+        pr.payment_method,
+        pr.created_at AS paid_at,
+        COALESCE(fp.currency, '') AS currency
+    FROM payment_receipts pr
+    LEFT JOIN fee_packages fp ON fp.id = pr.package_id
     LEFT JOIN {$studentsSource}
-        ON sa.id = ap.application_id
-    WHERE p.status = 'PAID'
-    GROUP BY ap.application_id
-    ORDER BY paid_at DESC
+        ON sa.id = pr.application_id
+    WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
+    ORDER BY pr.created_at DESC
     LIMIT 10
 ";
 
