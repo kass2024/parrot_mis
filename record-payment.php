@@ -277,7 +277,7 @@ try {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
     $stmt->bind_param(
-        'sisidssis',
+        'sisidsiss',
         $receiptNo,
         $applicationId,
         $sourceTable,

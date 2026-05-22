@@ -63,6 +63,7 @@ function pcvc_ensure_payment_receipt_recorded_by_schema(mysqli $conn): void
 function pcvc_receipt_recorded_by_filter_options(mysqli $conn): array
 {
     pcvc_ensure_payment_receipt_recorded_by_schema($conn);
+    pcvc_payment_receipt_repair_recorded_by($conn);
 
     $options = [
         ['id' => '', 'label' => 'All — done by'],
@@ -215,11 +216,14 @@ function pcvc_receipt_admin_from_session(mysqli $conn): array
 function pcvc_receipt_recorded_by_display(mysqli $conn, ?int $adminId, ?string $storedName): string
 {
     $name = trim((string) $storedName);
-    if ($name !== '') {
+    if ($name !== '' && !ctype_digit($name)) {
         return $name;
     }
 
     $adminId = (int) $adminId;
+    if ($adminId <= 0 && ctype_digit($name)) {
+        $adminId = (int) $name;
+    }
     if ($adminId <= 0) {
         return '—';
     }
@@ -243,4 +247,65 @@ function pcvc_receipt_recorded_by_display(mysqli $conn, ?int $adminId, ?string $
     }
 
     return $resolved !== '' ? $resolved : '—';
+}
+
+/**
+ * One-time data fix: previous inserts swapped bind types so admin IDs were
+ * stored in recorded_by_name as digits, and recorded_by was empty / cast.
+ * This rewrites those rows so recorded_by holds the ID and the name is resolved.
+ */
+function pcvc_payment_receipt_repair_recorded_by(mysqli $conn): void
+{
+    static $done = false;
+    if ($done) {
+        return;
+    }
+    $done = true;
+
+    pcvc_ensure_payment_receipt_recorded_by_schema($conn);
+
+    $res = @$conn->query(
+        "SELECT id, recorded_by, recorded_by_name
+         FROM payment_receipts
+         WHERE recorded_by_name REGEXP '^[0-9]+$'
+            OR (recorded_by IS NULL AND recorded_by_name REGEXP '^[0-9]+$')"
+    );
+    if (!$res) {
+        return;
+    }
+
+    $update = $conn->prepare(
+        'UPDATE payment_receipts
+         SET recorded_by = ?, recorded_by_name = ?
+         WHERE id = ?'
+    );
+    if (!$update) {
+        $res->free();
+        return;
+    }
+
+    while ($row = $res->fetch_assoc()) {
+        $rowId    = (int) $row['id'];
+        $stored   = trim((string) ($row['recorded_by_name'] ?? ''));
+        $adminId  = (int) ($row['recorded_by'] ?? 0);
+
+        if ($adminId <= 0 && ctype_digit($stored)) {
+            $adminId = (int) $stored;
+        }
+        if ($adminId <= 0) {
+            continue;
+        }
+
+        $resolved = pcvc_receipt_recorded_by_display($conn, $adminId, null);
+        if ($resolved === '—') {
+            $resolvedToSave = null;
+        } else {
+            $resolvedToSave = $resolved;
+        }
+
+        $update->bind_param('isi', $adminId, $resolvedToSave, $rowId);
+        $update->execute();
+    }
+    $update->close();
+    $res->free();
 }
