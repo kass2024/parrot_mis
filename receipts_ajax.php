@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/payment_receipt_recorded_by.php';
+
+pcvc_ensure_payment_receipt_recorded_by_schema($conn);
 /* =====================================================
    SAFETY (AJAX CONTEXT)
 ===================================================== */
@@ -12,6 +15,7 @@ ini_set('display_errors', '0');
 ===================================================== */
 $customer = trim($_GET['customer'] ?? '');
 $range    = $_GET['range'] ?? '';
+$doneBy   = trim($_GET['done_by'] ?? '');
 
 $fromDate = '';
 $toDate   = '';
@@ -41,6 +45,8 @@ SELECT
     pr.application_id,
     pr.total_amount,
     pr.payment_method,
+    pr.recorded_by,
+    pr.recorded_by_name,
     pr.created_at,
     pr.status,
     fp.currency
@@ -87,6 +93,8 @@ if ($toDate !== '') {
     $params[] = $toDate;
     $types   .= 's';
 }
+
+pcvc_receipt_recorded_by_apply_filter($doneBy, $sql, $params, $types);
 
 $sql .= " ORDER BY pr.created_at DESC";
 
@@ -171,6 +179,11 @@ foreach ($receipts as $r):
     $items  = getReceiptItems($conn, $appId, $r['created_at']);
     $name   = getCustomerName($conn, $appId);
     $cancel = ($r['status'] === 'CANCELED');
+    $doneBy = pcvc_receipt_recorded_by_display(
+        $conn,
+        isset($r['recorded_by']) ? (int) $r['recorded_by'] : null,
+        isset($r['recorded_by_name']) ? (string) $r['recorded_by_name'] : null
+    );
 
     $total  = (float)$r['total_amount'];
     $curr   = htmlspecialchars((string)$r['currency']);
@@ -210,6 +223,7 @@ foreach ($receipts as $r):
 
     <div><strong>Customer:</strong> <?= htmlspecialchars($name) ?></div>
     <div><strong>Payment:</strong> <?= htmlspecialchars($r['payment_method']) ?></div>
+    <div class="done-by"><strong>Done by:</strong> <?= htmlspecialchars($doneBy) ?></div>
 
     <table>
         <thead>

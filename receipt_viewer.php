@@ -1,3 +1,12 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/payment_receipt_recorded_by.php';
+
+pcvc_ensure_payment_receipt_recorded_by_schema($conn);
+$doneByFilterOptions = pcvc_receipt_recorded_by_filter_options($conn);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -31,13 +40,20 @@ body{
     padding:18px;
     border-radius:16px;
     display:grid;
-    grid-template-columns:1fr auto;
+    grid-template-columns:1fr 200px auto;
     gap:14px;
     margin-bottom:22px;
     box-shadow:0 6px 14px rgba(0,0,0,.08);
 }
 
-.filter-bar input{
+@media (max-width:900px){
+    .filter-bar{
+        grid-template-columns:1fr;
+    }
+}
+
+.filter-bar input,
+.filter-bar select{
     padding:14px 16px;
     border-radius:12px;
     border:1px solid #d1d5db;
@@ -45,9 +61,15 @@ body{
     width:100%;
 }
 
-.filter-bar input:focus{
+.filter-bar input:focus,
+.filter-bar select:focus{
     outline:none;
     border-color:#2563eb;
+}
+
+.filter-bar select{
+    cursor:pointer;
+    background:#fff;
 }
 
 /* =========================
@@ -187,6 +209,16 @@ td{
     font-weight:bold;
 }
 
+.done-by{
+    margin-top:6px;
+    color:#4b5563;
+    font-size:12px;
+}
+
+@media print{
+    .done-by{display:none !important;}
+}
+
 /* =========================
    STATES
 ========================= */
@@ -217,6 +249,14 @@ td{
     <div class="filter-bar">
         <input id="search" placeholder="Search customer name…" autocomplete="off">
 
+        <select id="doneBy" aria-label="Filter by done by">
+            <?php foreach ($doneByFilterOptions as $opt): ?>
+            <option value="<?= htmlspecialchars((string) $opt['id'], ENT_QUOTES, 'UTF-8') ?>">
+                <?= htmlspecialchars((string) $opt['label'], ENT_QUOTES, 'UTF-8') ?>
+            </option>
+            <?php endforeach; ?>
+        </select>
+
         <div class="quick-filters">
             <button data-range="" class="active">All</button>
             <button data-range="today">Today</button>
@@ -239,6 +279,7 @@ td{
 let timer=null;
 let controller=null;
 let dateRange='';
+let doneByFilter='';
 
 /* =========================
    EVENTS
@@ -246,6 +287,11 @@ let dateRange='';
 document.getElementById('search').addEventListener('input',()=>{
     clearTimeout(timer);
     timer=setTimeout(loadReceipts,300);
+});
+
+document.getElementById('doneBy').addEventListener('change',()=>{
+    doneByFilter=document.getElementById('doneBy').value;
+    loadReceipts();
 });
 
 document.querySelectorAll('.quick-filters button').forEach(btn=>{
@@ -270,7 +316,13 @@ function loadReceipts(){
 
     results.innerHTML='<div class="state loading">Loading</div>';
 
-    fetch(`receipts_ajax.php?customer=${encodeURIComponent(customer)}&range=${dateRange}`,{
+    const qs=new URLSearchParams({
+        customer,
+        range:dateRange,
+        done_by:doneByFilter
+    });
+
+    fetch(`receipts_ajax.php?${qs.toString()}`,{
         signal:controller.signal
     })
     .then(r=>{

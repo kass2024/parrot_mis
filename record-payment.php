@@ -9,6 +9,13 @@ require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/generateReceiptPdf.php';
 require_once __DIR__ . '/helpers/custom_fee_package.php';
 require_once __DIR__ . '/helpers/receipt_render.php';
+require_once __DIR__ . '/helpers/payment_receipt_recorded_by.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+pcvc_ensure_payment_receipt_recorded_by_schema($conn);
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -259,13 +266,28 @@ try {
         ], $receiptItems),
     ]);
 
+    $recordedAdmin = pcvc_receipt_admin_from_session($conn);
+    $recordedBy    = $recordedAdmin['id'] > 0 ? $recordedAdmin['id'] : null;
+    $recordedName  = $recordedAdmin['name'] !== '' ? $recordedAdmin['name'] : null;
+
     $stmt = $conn->prepare(
         "INSERT INTO payment_receipts
          (receipt_no, application_id, source_table, package_id,
-          total_amount, payment_method, receipt_html)
-         VALUES (?, ?, ?, ?, ?, ?, ?)"
+          total_amount, payment_method, recorded_by, recorded_by_name, receipt_html)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
     );
-    $stmt->bind_param('sisidss', $receiptNo, $applicationId, $sourceTable, $packageId, $totalRecorded, $method, $receiptHtml);
+    $stmt->bind_param(
+        'sisidssis',
+        $receiptNo,
+        $applicationId,
+        $sourceTable,
+        $packageId,
+        $totalRecorded,
+        $method,
+        $recordedBy,
+        $recordedName,
+        $receiptHtml
+    );
     $stmt->execute();
     $stmt->close();
 
