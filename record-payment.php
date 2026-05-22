@@ -215,24 +215,10 @@ try {
     }
 
     /* =================================================
-       7. PACKAGE COMPLETION CHECK
+       7. SET APP PAID (milestone — keep prior flags at 1)
     ================================================= */
-    $stmt = $conn->prepare(
-        "SELECT SUM(fi.amount) AS expected, COALESCE(SUM(p.amount_paid),0) AS paid
-         FROM fee_items fi
-         LEFT JOIN application_payments p
-           ON p.fee_item_id = fi.id
-          AND p.application_id = ?
-          AND p.status = 'PAID'
-         WHERE fi.package_id = ?"
-    );
-    $stmt->bind_param('ii', $applicationId, $packageId);
-    $stmt->execute();
-    $totals = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    if ((float)$totals['paid'] >= (float)$totals['expected']) {
-        $stmt = $conn->prepare("UPDATE {$sourceTable} SET app_paid = 1 WHERE application_id = ?");
+    $stmt = $conn->prepare("UPDATE `{$sourceTable}` SET `app_paid` = 1 WHERE `id` = ? LIMIT 1");
+    if ($stmt) {
         $stmt->bind_param('i', $applicationId);
         $stmt->execute();
         $stmt->close();
@@ -289,11 +275,14 @@ try {
        9. SEND RESPONSE IMMEDIATELY
     ================================================= */
     echo json_encode([
-        'success'     => true,
-        'message'     => 'Payment recorded successfully',
-        'receipt_no'  => $receiptNo,
-        'total_paid'  => number_format($totalRecorded, 2, '.', ''),
-        'items_count' => count($items)
+        'success'        => true,
+        'message'        => 'Payment recorded successfully',
+        'receipt_no'     => $receiptNo,
+        'total_paid'     => number_format($totalRecorded, 2, '.', ''),
+        'items_count'    => count($items),
+        'app_paid_set'   => true,
+        'application_id' => $applicationId,
+        'source_table'   => $sourceTable,
     ]);
 
     if (function_exists('fastcgi_finish_request')) {

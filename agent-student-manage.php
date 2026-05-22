@@ -1035,6 +1035,7 @@ $applicantCount = count($all_applicants);
           $statusOptions = [
             'incomplete_app' => 'Incomplete App',
             'submitted' => 'Submitted',
+            'sent_to_platform' => 'Sent to Platform',
             'app_paid' => 'App Paid',
             'admit' => 'Admit',
             'i20_sent' => 'I-20 Sent',
@@ -1046,15 +1047,29 @@ $applicantCount = count($all_applicants);
             'deny' => 'Rejected',
             'app_start' => 'App Start'
           ];
+          $statusDisplayPriority = [
+            'deny',
+            'enrolled',
+            'visa_approved',
+            'visa_scheduled',
+            'sevis_paid',
+            'i20_sent',
+            'admit',
+            'app_paid',
+            'sent_to_platform',
+            'submitted',
+            'addn_doc',
+            'incomplete_app',
+            'app_start'
+          ];
           
           foreach ($all_applicants as $s): 
-            // Find current status
             $currentStatus = null;
             $currentStatusText = 'Select Status';
-            foreach ($statusOptions as $key => $label) {
-              if (!empty($s[$key]) && $s[$key] == 1) {
+            foreach ($statusDisplayPriority as $key) {
+              if (!empty($s[$key]) && (int)$s[$key] === 1) {
                 $currentStatus = $key;
-                $currentStatusText = $label;
+                $currentStatusText = $statusOptions[$key] ?? 'Select Status';
                 break;
               }
             }
@@ -1139,7 +1154,7 @@ $applicantCount = count($all_applicants);
                   <?php foreach ($statusOptions as $key => $label): ?>
                   <div class="status-dropdown-item status-<?= $key ?>" data-flag="<?= $key ?>">
                     <span><?= htmlspecialchars($label) ?></span>
-                    <span class="status-check <?= ($currentStatus === $key) ? 'active' : '' ?>">✓</span>
+                    <span class="status-check <?= (!empty($s[$key]) && (int)$s[$key] === 1) ? 'active' : '' ?>">✓</span>
                   </div>
                   <?php endforeach; ?>
                 </div>
@@ -1592,9 +1607,6 @@ $(function() {
 
     // Special handling for Admit (letter flow — keep existing behavior)
     if (flag === 'admit') {
-      statusText.text(label);
-      dropdown.find('.status-check').removeClass('active');
-      item.find('.status-check').addClass('active');
       showLoading();
       const row = dropdown.closest('tr');
       const email = row.find('td[data-field="email"]').text().trim();
@@ -1611,9 +1623,6 @@ $(function() {
 
     // Special handling for App Paid (payment modal)
     if (flag === 'app_paid') {
-      statusText.text(label);
-      dropdown.find('.status-check').removeClass('active');
-      item.find('.status-check').addClass('active');
       showLoading();
       const row = dropdown.closest('tr');
       const fullName = row.find('td').eq(1).text().trim();
@@ -1735,7 +1744,6 @@ $(function() {
           return;
         }
         p.statusText.text(p.label);
-        p.dropdown.find('.status-check').removeClass('active');
         p.item.find('.status-check').addClass('active');
 
         const n = data.notify;
@@ -2117,12 +2125,28 @@ $(function() {
     return null;
   }
 
+  function refreshApplicantStatusAfterPayment(resp) {
+    const studentId = String($('#pay_student_id').val() || resp?.application_id || '');
+    const table = String($('#pay_table').val() || resp?.source_table || '');
+    if (!studentId) return;
+
+    const dropdown = $('.status-dropdown').filter(function () {
+      return String($(this).data('id')) === studentId
+        && (!table || String($(this).data('table')) === table);
+    }).first();
+    if (!dropdown.length) return;
+
+    dropdown.find('.status-text').text('App Paid');
+    dropdown.find('.status-dropdown-item[data-flag="app_paid"] .status-check').addClass('active');
+  }
+
   function handlePaymentSuccess(resp) {
     updatePaymentProgress(60, 'Generating receipt & sending email...');
     isSubmitting = false;
     setTimeout(() => {
       finishPaymentProgress(true);
       paymentHideLoading();
+      refreshApplicantStatusAfterPayment(resp);
       showSuccessToast(resp.message || 'Payment recorded successfully');
       const modal = bootstrap.Modal.getInstance(modalEl);
       if (modal) modal.hide();
