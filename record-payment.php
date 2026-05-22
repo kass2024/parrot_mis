@@ -278,27 +278,34 @@ try {
     }
 
     /* =================================================
-       10. ASYNC BACKGROUND TASKS
+       10. ASYNC BACKGROUND TASKS (must not alter JSON response)
     ================================================= */
-    generateReceiptPdf($receiptHtml, $receiptNo);
+    try {
+        generateReceiptPdf($receiptHtml, $receiptNo);
 
-    $emailUrl = pcvc_public_base_url() . '/sendReceiptEmail.php';
-    $payload = http_build_query([
-        'receipt_no' => $receiptNo,
-        'secret'     => 'RCP_9fA8kKx_2026_SECURE'
-    ]);
+        $emailUrl = pcvc_public_base_url() . '/sendReceiptEmail.php';
+        $payload = http_build_query([
+            'receipt_no' => $receiptNo,
+            'secret'     => 'RCP_9fA8kKx_2026_SECURE'
+        ]);
 
-    $ch = curl_init($emailUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_TIMEOUT        => 10,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_SSL_VERIFYHOST => false,
-    ]);
-    curl_exec($ch);
-    curl_close($ch);
+        $ch = curl_init($emailUrl);
+        if ($ch !== false) {
+            curl_setopt_array($ch, [
+                CURLOPT_POST           => true,
+                CURLOPT_POSTFIELDS     => $payload,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_TIMEOUT        => 10,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => false,
+            ]);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+    } catch (Throwable $bgErr) {
+        error_log('record-payment background task failed: ' . $bgErr->getMessage());
+    }
+    exit;
 
 } catch (Throwable $e) {
 

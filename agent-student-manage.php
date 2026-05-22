@@ -2102,6 +2102,33 @@ $(function() {
     else $('#loadingOverlay').fadeOut();
   }
 
+  function parsePaymentResponse(text) {
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch (ignore) {
+      const match = text.match(/\{"success"\s*:\s*true[\s\S]*?\}/);
+      if (match) {
+        try {
+          return JSON.parse(match[0]);
+        } catch (ignore2) {}
+      }
+    }
+    return null;
+  }
+
+  function handlePaymentSuccess(resp) {
+    updatePaymentProgress(60, 'Generating receipt & sending email...');
+    isSubmitting = false;
+    setTimeout(() => {
+      finishPaymentProgress(true);
+      paymentHideLoading();
+      showSuccessToast(resp.message || 'Payment recorded successfully');
+      const modal = bootstrap.Modal.getInstance(modalEl);
+      if (modal) modal.hide();
+    }, 800);
+  }
+
   $(document).on('input', '.item-payment-input', function () {
     const id  = $(this).attr('data-item-id');
     const max = Number($(this).attr('data-max'));
@@ -2174,24 +2201,21 @@ $(function() {
         contentType: 'application/json',
         dataType: 'json',
         success: function (resp) {
-          updatePaymentProgress(60, 'Generating receipt & sending email...');
-          isSubmitting = false;
-
           if (resp && resp.success === true) {
-            setTimeout(() => {
-              finishPaymentProgress(true);
-              paymentHideLoading();
-              showSuccessToast(resp.message || 'Payment recorded successfully');
-              const modal = bootstrap.Modal.getInstance(modalEl);
-              if (modal) modal.hide();
-            }, 800);
-          } else {
-            finishPaymentProgress(false);
-            paymentHideLoading();
-            alert(resp?.message || 'Payment failed');
+            handlePaymentSuccess(resp);
+            return;
           }
+          isSubmitting = false;
+          finishPaymentProgress(false);
+          paymentHideLoading();
+          alert(resp?.message || 'Payment failed');
         },
         error: function (xhr) {
+          const recovered = parsePaymentResponse(xhr.responseText || '');
+          if (recovered && recovered.success === true) {
+            handlePaymentSuccess(recovered);
+            return;
+          }
           isSubmitting = false;
           finishPaymentProgress(false);
           paymentHideLoading();
