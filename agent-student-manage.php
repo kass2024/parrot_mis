@@ -1493,15 +1493,16 @@ $applicantCount = count($all_applicants);
 
 <script>
 $(function() {
-  // Show loading overlay
-  function showLoading() {
+  window.showLoading = function () {
     $('#loadingOverlay').fadeIn();
-  }
-  
-  // Hide loading overlay
-  function hideLoading() {
+  };
+
+  window.hideLoading = function () {
     $('#loadingOverlay').fadeOut();
-  }
+  };
+
+  const showLoading = window.showLoading;
+  const hideLoading = window.hideLoading;
 
   // SEARCH
   $('#searchInput').on('keyup', function(){
@@ -2091,9 +2092,19 @@ $(function() {
   /* =====================================================
      ITEM INPUT
   ===================================================== */
+  function paymentShowLoading() {
+    if (typeof window.showLoading === 'function') window.showLoading();
+    else $('#loadingOverlay').fadeIn();
+  }
+
+  function paymentHideLoading() {
+    if (typeof window.hideLoading === 'function') window.hideLoading();
+    else $('#loadingOverlay').fadeOut();
+  }
+
   $(document).on('input', '.item-payment-input', function () {
-    const id  = $(this).data('item-id');
-    const max = Number($(this).data('max'));
+    const id  = $(this).attr('data-item-id');
+    const max = Number($(this).attr('data-max'));
     let val   = Number(this.value || 0);
 
     if (val > max) {
@@ -2119,65 +2130,86 @@ $(function() {
     e.preventDefault();
 
     if (isSubmitting) return;
-    if (!Object.keys(itemPayments).length) {
+
+    const isOther = window.isOtherPackageSelected && window.isOtherPackageSelected();
+    if (isOther && typeof window.syncCustomItemPaymentsFromDom === 'function') {
+      window.syncCustomItemPaymentsFromDom(itemPayments);
+    }
+
+    if (!isOther && !Object.keys(itemPayments).length) {
       alert('Please enter at least one item payment');
       return;
     }
 
     isSubmitting = true;
-    showLoading();
+    paymentShowLoading();
     startPaymentProgress();
 
-    let payload = {
-      student_id: $('#pay_student_id').val(),
-      table: $('#pay_table').val(),
-      package_id: $('#pay_package_id').val(),
-      payment_method: $('select[name="payment_method"]').val(),
-      comment: $('input[name="comment"]').val(),
-      items: itemPayments
-    };
+    try {
+      let payload = {
+        student_id: $('#pay_student_id').val(),
+        table: $('#pay_table').val(),
+        package_id: $('#pay_package_id').val(),
+        payment_method: $('select[name="payment_method"]').val(),
+        comment: $('input[name="comment"]').val(),
+        items: itemPayments
+      };
 
-    if (window.isOtherPackageSelected()) {
-      payload = window.buildCustomPaymentPayload(payload, itemPayments);
-      if (!payload) {
-        isSubmitting = false;
-        hideLoading();
-        return;
-      }
-    }
-
-    $.ajax({
-      url: 'record-payment.php',
-      method: 'POST',
-      data: JSON.stringify(payload),
-      contentType: 'application/json',
-      dataType: 'json',
-      success: function (resp) {
-        updatePaymentProgress(60, 'Generating receipt & sending email...');
-        isSubmitting = false;
-
-        if (resp && resp.success === true) {
-          setTimeout(() => {
-            finishPaymentProgress(true);
-            hideLoading();
-            showSuccessToast(resp.message || 'Payment recorded successfully');
-            const modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) modal.hide();
-          }, 800);
-        } else {
-          finishPaymentProgress(false);
-          hideLoading();
-          alert(resp?.message || 'Payment failed');
+      if (isOther) {
+        if (typeof window.buildCustomPaymentPayload !== 'function') {
+          throw new Error('Payment script failed to load. Refresh the page and try again.');
         }
-      },
-      error: function (xhr) {
-        isSubmitting = false;
-        finishPaymentProgress(false);
-        hideLoading();
-        console.error('Payment error:', xhr.responseText);
-        alert('Server error. Please try again.');
+        payload = window.buildCustomPaymentPayload(payload, itemPayments);
+        if (!payload) {
+          isSubmitting = false;
+          paymentHideLoading();
+          return;
+        }
       }
-    });
+
+      $.ajax({
+        url: 'record-payment.php',
+        method: 'POST',
+        data: JSON.stringify(payload),
+        contentType: 'application/json',
+        dataType: 'json',
+        success: function (resp) {
+          updatePaymentProgress(60, 'Generating receipt & sending email...');
+          isSubmitting = false;
+
+          if (resp && resp.success === true) {
+            setTimeout(() => {
+              finishPaymentProgress(true);
+              paymentHideLoading();
+              showSuccessToast(resp.message || 'Payment recorded successfully');
+              const modal = bootstrap.Modal.getInstance(modalEl);
+              if (modal) modal.hide();
+            }, 800);
+          } else {
+            finishPaymentProgress(false);
+            paymentHideLoading();
+            alert(resp?.message || 'Payment failed');
+          }
+        },
+        error: function (xhr) {
+          isSubmitting = false;
+          finishPaymentProgress(false);
+          paymentHideLoading();
+          let msg = 'Server error. Please try again.';
+          try {
+            const err = JSON.parse(xhr.responseText || '{}');
+            if (err.message) msg = err.message;
+          } catch (ignore) {}
+          console.error('Payment error:', xhr.responseText);
+          alert(msg);
+        }
+      });
+    } catch (err) {
+      isSubmitting = false;
+      finishPaymentProgress(false);
+      paymentHideLoading();
+      alert(err.message || 'Could not start payment.');
+    }
   });
 
   /* =====================================================
