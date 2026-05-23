@@ -31,6 +31,13 @@ function logMsg(string $msg, array $data = []): void {
 }
 
 function respond(array $payload, int $code = 200): void {
+    // Capture any accidental output before cleaning
+    $accidentalOutput = ob_get_contents();
+    if (!empty($accidentalOutput)) {
+        // Log any accidental output for debugging
+        error_log("ACCIDENTAL OUTPUT BEFORE JSON: " . $accidentalOutput);
+    }
+    
     ob_clean(); // 🔑 remove ANY accidental output
     http_response_code($code);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE);
@@ -58,6 +65,8 @@ if (!is_array($data)) {
     fail("Invalid JSON payload", 400);
 }
 
+logMsg("PARSED DATA", ["data" => $data]);
+
 /* =====================================================
    2. EXTRACT DATA
 ===================================================== */
@@ -80,11 +89,25 @@ $dob         = $data['student_dob'] ?? null;
 $nationality = trim($data['student_nationality'] ?? '');
 $passport    = trim($data['student_passport'] ?? '');
 $phone       = trim($data['student_phone'] ?? '');
-$country     = trim($data['student_country'] ?? '');
-$address     = trim($data['student_address'] ?? '');
 $clientTypes = is_array($data['client_type'] ?? null)
     ? implode(', ', $data['client_type'])
     : '';
+
+logMsg("EXTRACTED VARIABLES", [
+    "token" => $token,
+    "name" => $name,
+    "fullName" => $fullName,
+    "email" => $email,
+    "signedDate" => $signedDate,
+    "pkgCode" => $pkgCode,
+    "pkgLabel" => $pkgLabel,
+    "dob" => $dob,
+    "nationality" => $nationality,
+    "passport" => $passport,
+    "phone" => $phone,
+    "pkgCodeEmpty" => empty($pkgCode),
+    "pkgCodeValue" => var_export($pkgCode, true)
+]);
 
 /* =====================================================
    3. HARD VALIDATION
@@ -99,14 +122,23 @@ if (
     $pkgCode === ''
 ) {
 
-    fail("Missing required fields", 400);
+    $missing = [];
+    if ($token === '') $missing[] = 'token';
+    if ($fullName === '') $missing[] = 'full_name or student_name';
+    if ($signedDate === '') $missing[] = 'signed_date';
+    if ($email === '') $missing[] = 'student_email';
+    if ($signature === '') $missing[] = 'signature';
+    if ($pkgLabel === '') $missing[] = 'selected_package_label';
+    if ($pkgCode === '') $missing[] = 'selected_package_code';
+    
+    fail("Missing required fields: " . implode(', ', $missing), 400, ["missing" => $missing]);
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     fail("Invalid email address", 400);
 }
 
-if (!str_starts_with($signature, 'data:image/png;base64,')) {
+if (!str_starts_with($signature, 'data:image/') || !str_contains($signature, 'base64,')) {
     fail("Invalid signature format", 400);
 }
 
@@ -164,13 +196,14 @@ try {
     logMsg("Contract locked", ["contract_id" => $contractId]);
 
     /* =====================================================
-       6.2 RESOLVE STUDENT (NO INSERT/UPDATE)
+       6.2 RESOLVE OR CREATE STUDENT - ENHANCED
     ===================================================== */
     $studentId = !empty($contract['student_id']) ? (int)$contract['student_id'] : 0;
+    
     if ($studentId <= 0) {
-        // fallback: try to match by email, but DO NOT insert/update (prevents duplicates)
+        // Try to find existing student by email first
         $stmt = $conn->prepare("
-            SELECT id
+            SELECT id, first_name, last_name, email, dob, nationality, passport_number, phone_number
             FROM student_applications
             WHERE email = ?
             LIMIT 1
@@ -180,11 +213,47 @@ try {
         $existing = $stmt->get_result()->fetch_assoc();
         $stmt->close();
 
-        $studentId = !empty($existing['id']) ? (int)$existing['id'] : 0;
-    }
-
-    if ($studentId <= 0) {
-        throw new RuntimeException("Student record not linked to this contract. Please issue the contract for a specific student first.");
+        if (!empty($existing['id'])) {
+            $studentId = (int)$existing['id'];
+            logMsg("Found existing student", ["student_id" => $studentId, "email" => $email]);
+        } else {
+            // Create new student record with better validation
+            $stmt = $conn->prepare("
+                INSERT INTO student_applications
+                (first_name, last_name, email, dob, nationality, passport_number, phone_number, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            
+            // Split full name into first and last name with better handling
+            $nameParts = explode(' ', trim($name), 2);
+            $firstName = trim($nameParts[0] ?? '');
+            $lastName = trim($nameParts[1] ?? '');
+            
+            // Handle case where only one name is provided
+            if (empty($lastName)) {
+                $lastName = 'Not provided';
+            }
+            
+            // Validate required fields
+            if (empty($firstName) || empty($email)) {
+                throw new Exception("Missing required student information");
+            }
+            
+            $stmt->bind_param("sssssss", 
+                $firstName, 
+                $lastName, 
+                $email, 
+                $dob, 
+                $nationality, 
+                $passport, 
+                $phone
+            );
+            $stmt->execute();
+            $studentId = $stmt->insert_id;
+            $stmt->close();
+            
+            logMsg("Created new student record", ["student_id" => $studentId, "email" => $email, "name" => $name]);
+        }
     }
 
     /* =====================================================
@@ -219,7 +288,7 @@ try {
         WHERE id = ?
     ");
     $stmt->bind_param(
-        "issi",
+        "isss",
         $studentId,
         $pkgCode,
         $pkgLabel,

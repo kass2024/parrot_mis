@@ -97,6 +97,7 @@ if ($isSigned && !empty($studentSignatureData) && !empty($contract['id'])) {
    LOAD STUDENT DATA FOR SERVER-SIDE RENDERING (SAFE)
 ===================================================== */
 $student = null;
+$externalStudent = null;
 
 if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 
@@ -127,7 +128,36 @@ if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 
         $stmt->close();
     }
+} else {
+    // Load external student data from contract record
+    $externalStudent = [
+        'first_name' => $contract['external_student_name'] ?? '',
+        'last_name' => '',
+        'email' => $contract['external_student_email'] ?? '',
+        'dob' => $contract['external_student_dob'] ?? '',
+        'nationality' => $contract['external_student_nationality'] ?? '',
+        'passport_number' => $contract['external_student_passport'] ?? '',
+        'phone_number' => $contract['external_student_phone'] ?? ''
+    ];
+    
+    // Split full name into first and last name if available
+    if (!empty($externalStudent['first_name'])) {
+        $nameParts = explode(' ', trim($externalStudent['first_name']), 2);
+        $externalStudent['first_name'] = $nameParts[0] ?? '';
+        $externalStudent['last_name'] = $nameParts[1] ?? '';
+    }
 }
+
+// Determine which student data to use
+$displayStudent = $student ?? $externalStudent ?? [
+    'first_name' => '',
+    'last_name' => '',
+    'email' => '',
+    'dob' => '',
+    'nationality' => '',
+    'passport_number' => '',
+    'phone_number' => ''
+];
 ?>
 
 <!DOCTYPE html>
@@ -158,40 +188,153 @@ if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 }
 
 /* =====================================================
-   PAGE BACKGROUND
+   PAGE BACKGROUND - MOBILE FIRST
 ===================================================== */
 body {
   margin: 0;
-  padding: 48px 16px;
-  background: linear-gradient(180deg, #eef2f7, #e5e7eb);
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  padding: 12px 8px;
+  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
+  min-height: 100vh;
 }
 
 /* =====================================================
-   CONTRACT SHEET
+   CONTRACT SHEET - MOBILE FIRST
 ===================================================== */
 .contract-page {
-  max-width: 900px;
-  margin: auto;
+  max-width: 100%;
+  margin: 0 auto;
   background: var(--paper);
-  padding: 64px 72px;
-  box-shadow: var(--shadow-paper);
-  border-radius: var(--radius-md);
+  padding: 20px 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-radius: 12px;
 
-  font-family: "Georgia", "Times New Roman", serif;
-  font-size: 12.2pt;
-  line-height: 1.75;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 /* =====================================================
-   RESPONSIVE LAYOUT (TABLET & PHONE)
+   RESPONSIVE BREAKPOINTS - MOBILE FIRST
 ===================================================== */
-.contract-page,
-.contract-section {
-  box-sizing: border-box;
+
+/* Tablet and up */
+@media (min-width: 768px) {
+  body {
+    padding: 24px 20px;
+  }
+
+  .contract-page {
+    max-width: 900px;
+    padding: 40px 48px;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+}
+
+/* Desktop and up */
+@media (min-width: 1024px) {
+  body {
+    padding: 48px 32px;
+  }
+
+  .contract-page {
+    padding: 64px 72px;
+    font-size: 16px;
+    line-height: 1.75;
+    font-family: "Georgia", "Times New Roman", serif;
+  }
+}
+
+/* =====================================================
+   MOBILE INPUT STYLES - CRITICAL FOR USABILITY
+===================================================== */
+.contract-page input[type="email"],
+.contract-page input[type="text"],
+.contract-page input[type="tel"],
+.contract-page input[type="date"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  font-size: 16px !important; /* Prevents zoom on iOS */
+  padding: 12px 16px !important;
+  margin: 8px 0 !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.contract-page input[type="email"]:focus,
+.contract-page input[type="text"]:focus,
+.contract-page input[type="tel"]:focus,
+.contract-page input[type="date"]:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* =====================================================
+   MOBILE LABEL STYLES
+===================================================== */
+.contract-page strong {
+  display: block !important;
+  margin-bottom: 6px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+}
+
+/* =====================================================
+   MOBILE FORM CONTAINER
+===================================================== */
+.contract-page div[style*="margin-bottom"] {
+  margin-bottom: 20px !important;
+}
+
+/* =====================================================
+   MOBILE HEADINGS
+===================================================== */
+.contract-page h1 {
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+  margin-bottom: 16px !important;
+  text-align: center !important;
+}
+
+.contract-page h3 {
+  font-size: 16px !important;
+  margin-top: 24px !important;
+  margin-bottom: 12px !important;
+}
+
+/* =====================================================
+   SIGNATURE CANVAS - MOBILE OPTIMIZED
+===================================================== */
+.signature-canvas {
+  width: 100% !important;
+  height: 120px !important;
+  border: 2px dashed #cbd5e1 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  touch-action: none !important;
+  margin: 16px 0 !important;
+}
+
+/* =====================================================
+   BUTTON STYLES - MOBILE FRIENDLY
+===================================================== */
+.contract-page button {
+  padding: 12px 24px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  margin: 8px 4px !important;
+  min-height: 48px !important;
+  touch-action: manipulation !important;
 }
 
 @media (max-width: 768px) {
@@ -737,9 +880,8 @@ button {
         name="student_email"
         required
         autocomplete="email"
-        style="border:none; border-bottom:1.5px solid #1d4ed8;
-               width:58%; font-size:15px; font-family:inherit;
-               outline:none; font-weight:600; color:#1d4ed8;">
+        value="<?= htmlspecialchars($displayStudent['email'] ?? '') ?>"
+        placeholder="Enter your email address">
     </div>
     <div style="margin-bottom:12px;">
       <strong>Full Legal Name:</strong>
@@ -749,8 +891,8 @@ button {
         name="student_name"
         required
         autocomplete="name"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:62%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars(trim(($displayStudent['first_name'] ?? '') . ' ' . ($displayStudent['last_name'] ?? ''))) ?>"
+        placeholder="Enter your full legal name">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -761,8 +903,8 @@ button {
         name="student_dob"
         required
         autocomplete="bday"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:42%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['dob'] ?? '') ?>"
+        placeholder="Select your date of birth">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -773,8 +915,8 @@ button {
         name="student_nationality"
         required
         autocomplete="country-name"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:52%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['nationality'] ?? '') ?>"
+        placeholder="Enter your nationality">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -784,8 +926,8 @@ button {
         id="student_passport"
         name="student_passport"
         autocomplete="off"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:52%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['passport_number'] ?? '') ?>"
+        placeholder="Enter your passport number">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -796,8 +938,8 @@ button {
         name="student_phone"
         required
         autocomplete="tel"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:48%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['phone_number'] ?? '') ?>"
+        placeholder="Enter your phone number">
     </div>
 
     
@@ -1917,6 +2059,27 @@ function resetStudentFields() {
   ===================================================== */
   function autofillStudent(student) {
     if (!student || autofilled) return;
+
+    // Check if fields are already populated (external students)
+    const hasExistingData = fields.name.value.trim() || 
+                          fields.dob.value || 
+                          fields.nationality.value.trim() || 
+                          fields.phone.value.trim() || 
+                          fields.passportNumber.value.trim();
+    
+    if (hasExistingData) {
+      console.log('Fields already populated, skipping autofill');
+      autofilled = true;
+      confirmStudent();
+      return;
+    }
+
+    // For new students without data, don't try to autofill from empty student object
+    if (!student.email && !student.first_name && !student.last_name) {
+      console.log('No student data to autofill, allowing manual entry');
+      autofilled = true; // Mark as processed to prevent repeated attempts
+      return;
+    }
 
     // Always overwrite email with full DB email
     if (student.email) {

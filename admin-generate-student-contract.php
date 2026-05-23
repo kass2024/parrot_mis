@@ -182,6 +182,8 @@ h1 {
     <?php endif; ?>
 
     <form method="post">
+        <!-- Optional binding -->
+        <!-- <input type="hidden" name="student_id" value="123"> -->
         <button class="btn btn-primary" type="submit">📄 Issue / Retrieve Contract</button>
     </form>
 

@@ -223,27 +223,30 @@ $stmt = $conn->prepare("
         c.contract_token,
         c.selected_package_code,
 
-        /* Build full legal name from first + middle + last */
-        TRIM(CONCAT_WS(' ',
-            NULLIF(TRIM(s.first_name),  ''),
-            NULLIF(TRIM(s.middle_name), ''),
-            NULLIF(TRIM(s.last_name),   '')
-        )) AS full_name,
+        /* Build full legal name from MIS data or external student data */
+        COALESCE(
+            TRIM(CONCAT_WS(' ',
+                NULLIF(TRIM(s.first_name),  ''),
+                NULLIF(TRIM(s.middle_name), ''),
+                NULLIF(TRIM(s.last_name),   '')
+            )),
+            c.external_student_name
+        ) AS full_name,
 
-        s.email,
-        s.dob,
+        COALESCE(s.email, c.external_student_email) AS email,
+        COALESCE(s.dob, c.external_student_dob) AS dob,
 
         /* Resolve nationality to country NAME whether stored as id or as name */
-        COALESCE(nat.name, s.nationality) AS nationality,
+        COALESCE(nat.name, s.nationality, c.external_student_nationality) AS nationality,
 
-        s.passport_number,
-        s.phone_number,
+        COALESCE(s.passport_number, c.external_student_passport) AS passport_number,
+        COALESCE(s.phone_number, c.external_student_phone) AS phone_number,
 
         sig.signed_date,
         sig.signature_image
     FROM student_contracts_special c
-    INNER JOIN student_applications s ON s.id = c.student_id
     INNER JOIN student_signatures_special sig ON sig.contract_id = c.id
+    LEFT JOIN student_applications s ON s.id = c.student_id
     LEFT JOIN countries nat
            ON nat.id   = s.nationality
            OR nat.name = s.nationality

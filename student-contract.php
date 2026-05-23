@@ -81,6 +81,7 @@ if ($isSigned && !empty($contract['id'])) {
    LOAD STUDENT DATA FOR SERVER-SIDE RENDERING (SAFE)
 ===================================================== */
 $student = null;
+$externalStudent = null;
 
 if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 
@@ -111,7 +112,36 @@ if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 
         $stmt->close();
     }
+} else {
+    // Load external student data from contract record
+    $externalStudent = [
+        'first_name' => $contract['external_student_name'] ?? '',
+        'last_name' => '',
+        'email' => $contract['external_student_email'] ?? '',
+        'dob' => $contract['external_student_dob'] ?? '',
+        'nationality' => $contract['external_student_nationality'] ?? '',
+        'passport_number' => $contract['external_student_passport'] ?? '',
+        'phone_number' => $contract['external_student_phone'] ?? ''
+    ];
+    
+    // Split full name into first and last name if available
+    if (!empty($externalStudent['first_name'])) {
+        $nameParts = explode(' ', trim($externalStudent['first_name']), 2);
+        $externalStudent['first_name'] = $nameParts[0] ?? '';
+        $externalStudent['last_name'] = $nameParts[1] ?? '';
+    }
 }
+
+// Determine which student data to use
+$displayStudent = $student ?? $externalStudent ?? [
+    'first_name' => '',
+    'last_name' => '',
+    'email' => '',
+    'dob' => '',
+    'nationality' => '',
+    'passport_number' => '',
+    'phone_number' => ''
+];
 ?>
 
 <!DOCTYPE html>
@@ -142,133 +172,278 @@ if (!empty($contract['student_id']) && is_numeric($contract['student_id'])) {
 }
 
 /* =====================================================
-   PAGE BACKGROUND
+   PAGE BACKGROUND - MOBILE FIRST
 ===================================================== */
 body {
   margin: 0;
-  padding: 48px 16px;
-  background: linear-gradient(180deg, #eef2f7, #e5e7eb);
-  font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+  padding: 12px 8px;
+  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: var(--ink);
+  min-height: 100vh;
 }
 
 /* =====================================================
-   CONTRACT SHEET
+   CONTRACT SHEET - MOBILE FIRST
 ===================================================== */
 .contract-page {
-  max-width: 900px;
-  margin: auto;
+  max-width: 100%;
+  margin: 0 auto;
   background: var(--paper);
-  padding: 64px 72px;
-  box-shadow: var(--shadow-paper);
-  border-radius: var(--radius-md);
+  padding: 20px 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  border-radius: 12px;
 
-  font-family: "Georgia", "Times New Roman", serif;
-  font-size: 12.2pt;
-  line-height: 1.75;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
 /* =====================================================
-   RESPONSIVE LAYOUT (TABLET & PHONE)
+   RESPONSIVE BREAKPOINTS - MOBILE FIRST
 ===================================================== */
-.contract-page,
-.contract-section {
-  box-sizing: border-box;
-}
 
-@media (max-width: 768px) {
+/* Tablet and up */
+@media (min-width: 768px) {
   body {
-    padding: 24px 12px;
+    padding: 24px 20px;
   }
 
   .contract-page {
-    padding: 32px 16px;
-    max-width: 100%;
-    overflow-x: hidden;
-    font-size: 11.2pt;
-    line-height: 1.65;
-  }
-
-  .contract-page h1 {
-    font-size: clamp(15pt, 4.5vw, 21pt);
-    line-height: 1.25;
-    letter-spacing: 0.04em;
-  }
-
-  .contract-page h3 {
-    font-size: 13pt;
-    margin-top: 24pt;
-  }
-
-  .contract-section {
-    padding: 0 16px;
-    max-width: 100%;
-    overflow-x: hidden;
-  }
-
-  .package-label {
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: flex-start;
-    line-height: 1.35;
-  }
-
-  .package-details {
-    padding-left: 8px;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-  }
-
-  .signature-canvas {
-    max-width: 100%;
-    height: 120px;
+    max-width: 900px;
+    padding: 40px 48px;
+    font-size: 15px;
+    line-height: 1.7;
   }
 }
 
-@media (max-width: 480px) {
+/* Desktop and up */
+@media (min-width: 1024px) {
   body {
-    padding: 16px 8px;
+    padding: 48px 32px;
   }
 
   .contract-page {
-    padding: 22px 12px;
-    font-size: 10.5pt;
-    border-radius: 8px;
-  }
-
-  .contract-page h1 {
-    font-size: 13pt;
-  }
-
-  .contract-section {
-    padding: 0 10px;
-  }
-
-  .package-details {
-    font-size: 10.5pt;
-    padding-left: 4px;
+    padding: 64px 72px;
+    font-size: 16px;
+    line-height: 1.75;
+    font-family: "Georgia", "Times New Roman", serif;
   }
 }
 
 /* =====================================================
-   HEADINGS
+   MOBILE INPUT STYLES - CRITICAL FOR USABILITY
+===================================================== */
+.contract-page input[type="email"],
+.contract-page input[type="text"],
+.contract-page input[type="tel"],
+.contract-page input[type="date"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  font-size: 16px !important; /* Prevents zoom on iOS */
+  padding: 12px 16px !important;
+  margin: 8px 0 !important;
+  border: 2px solid #e2e8f0 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-sizing: border-box !important;
+  transition: border-color 0.2s ease !important;
+}
+
+.contract-page input[type="email"]:focus,
+.contract-page input[type="text"]:focus,
+.contract-page input[type="tel"]:focus,
+.contract-page input[type="date"]:focus {
+  outline: none !important;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* =====================================================
+   MOBILE LABEL STYLES
+===================================================== */
+.contract-page strong {
+  display: block !important;
+  margin-bottom: 6px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #374151 !important;
+}
+
+/* =====================================================
+   MOBILE FORM CONTAINER - IMPROVED
+===================================================== */
+.contract-page div[style*="margin-bottom"] {
+  margin-bottom: 24px !important;
+}
+
+/* =====================================================
+   ENHANCED MOBILE RESPONSIVENESS
+===================================================== */
+@media (max-width: 767px) {
+  .contract-page {
+    padding: 12px 8px !important;
+  }
+  
+  .contract-section {
+    padding: 0 8px !important;
+  }
+  
+  /* Improve signature text stacking on mobile */
+  .signature-section p {
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+    margin-bottom: 12px !important;
+    word-break: keep-all !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  .signature-section strong {
+    font-size: 14px !important;
+    display: inline !important;
+    margin-right: 6px !important;
+  }
+  
+  /* Fix package selection on mobile */
+  .package-item {
+    margin-bottom: 16px !important;
+    padding: 12px !important;
+  }
+  
+  .package-label {
+    font-size: 14px !important;
+    line-height: 1.4 !important;
+  }
+  
+  .package-details {
+    font-size: 13px !important;
+    padding-left: 20px !important;
+  }
+  
+  /* Student signature section mobile fixes */
+  .signature-block {
+    margin-bottom: 24px !important;
+  }
+  
+  /* Input field improvements for mobile */
+  .contract-page input[type="text"],
+  .contract-page input[type="email"],
+  .contract-page input[type="tel"],
+  .contract-page input[type="date"] {
+    font-size: 16px !important; /* Prevents zoom on iOS */
+    padding: 14px 16px !important;
+    border-radius: 8px !important;
+    border: 2px solid #e5e7eb !important;
+  }
+  
+  .contract-page input:focus {
+    border-color: #3b82f6 !important;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    outline: none !important;
+  }
+}
+
+/* =====================================================
+   TABLET OPTIMIZATIONS
+===================================================== */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .contract-page {
+    padding: 24px 20px !important;
+  }
+  
+  .signature-grid {
+    gap: 32pt 48pt !important;
+  }
+  
+  .signature-canvas {
+    height: 170px !important;
+  }
+}
+
+/* =====================================================
+   MOBILE HEADINGS
 ===================================================== */
 .contract-page h1 {
-  text-align: center;
-  font-size: 24pt;
-  font-weight: 700;
-  letter-spacing: .6px;
-  text-transform: uppercase;
-  margin-bottom: 32pt;
+  font-size: 20px !important;
+  line-height: 1.3 !important;
+  margin-bottom: 16px !important;
+  text-align: center !important;
 }
 
 .contract-page h3 {
-  font-size: 15pt;
-  font-weight: 700;
-  margin-top: 34pt;
-  margin-bottom: 14pt;
+  font-size: 16px !important;
+  margin-top: 24px !important;
+  margin-bottom: 12px !important;
+}
+
+/* =====================================================
+   SIGNATURE CANVAS - MOBILE OPTIMIZED
+===================================================== */
+.signature-canvas {
+  width: 100% !important;
+  height: 150px !important;
+  border: 2px dashed #cbd5e1 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  touch-action: none !important;
+  margin: 16px 0 !important;
+  cursor: crosshair;
+}
+
+@media (min-width: 768px) {
+  .signature-canvas {
+    height: 180px !important;
+  }
+}
+
+@media (min-width: 1024px) {
+  .signature-canvas {
+    height: 200px !important;
+  }
+}
+
+/* =====================================================
+   BUTTON STYLES - MOBILE FRIENDLY ENHANCED
+===================================================== */
+.contract-page button {
+  padding: 14px 28px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  border-radius: 8px !important;
+  margin: 8px 4px !important;
+  min-height: 52px !important;
+  min-width: 120px !important;
+  touch-action: manipulation !important;
+  transition: all 0.2s ease !important;
+}
+
+@media (max-width: 767px) {
+  .contract-page button {
+    width: 100% !important;
+    margin: 6px 0 !important;
+    max-width: none !important;
+  }
+}
+
+/* =====================================================
+   PACKAGE SELECTION - MOBILE
+===================================================== */
+.package-label {
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  align-items: flex-start !important;
+  line-height: 1.4 !important;
+  font-size: 14px !important;
+}
+
+.package-details {
+  padding-left: 12px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
 }
 
 /* =====================================================
@@ -423,18 +598,25 @@ body {
 }
 
 /* =====================================================
-   SIGNATURE GRID
+   SIGNATURE GRID - MOBILE FIRST RESPONSIVE
 ===================================================== */
 .signature-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 40pt 64pt;
+  grid-template-columns: 1fr;
+  gap: 32pt;
+  margin: 32pt 0;
 }
 
-@media (max-width: 768px) {
+@media (min-width: 768px) {
   .signature-grid {
-    grid-template-columns: 1fr;
-    gap: 28pt;
+    grid-template-columns: 1fr 1fr;
+    gap: 40pt 64pt;
+  }
+}
+
+@media (min-width: 1024px) {
+  .signature-grid {
+    gap: 48pt 80pt;
   }
 }
 
@@ -594,9 +776,8 @@ button {
         name="student_email"
         required
         autocomplete="email"
-        style="border:none; border-bottom:1.5px solid #1d4ed8;
-               width:58%; font-size:15px; font-family:inherit;
-               outline:none; font-weight:600; color:#1d4ed8;">
+        value="<?= htmlspecialchars($displayStudent['email'] ?? '') ?>"
+        placeholder="Enter your email address">
     </div>
     <div style="margin-bottom:12px;">
       <strong>Full Legal Name:</strong>
@@ -606,8 +787,8 @@ button {
         name="student_name"
         required
         autocomplete="name"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:62%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars(trim(($displayStudent['first_name'] ?? '') . ' ' . ($displayStudent['last_name'] ?? ''))) ?>"
+        placeholder="Enter your full legal name">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -618,8 +799,8 @@ button {
         name="student_dob"
         required
         autocomplete="bday"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:42%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['dob'] ?? '') ?>"
+        placeholder="Select your date of birth">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -630,8 +811,8 @@ button {
         name="student_nationality"
         required
         autocomplete="country-name"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:52%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['nationality'] ?? '') ?>"
+        placeholder="Enter your nationality">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -641,8 +822,8 @@ button {
         id="student_passport"
         name="student_passport"
         autocomplete="off"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:52%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['passport_number'] ?? '') ?>"
+        placeholder="Enter your passport number">
     </div>
 
     <div style="margin-bottom:12px;">
@@ -653,8 +834,8 @@ button {
         name="student_phone"
         required
         autocomplete="tel"
-        style="border:none; border-bottom:1.5px solid #111827;
-               width:48%; font-size:15px; font-family:inherit; outline:none;">
+        value="<?= htmlspecialchars($displayStudent['phone_number'] ?? '') ?>"
+        placeholder="Enter your phone number">
     </div>
 
     
@@ -1015,7 +1196,6 @@ button {
   </div>
 </div>
 
-<input type="hidden" id="selected_package_code" value="">
 
 </div>
 
@@ -1136,54 +1316,42 @@ button {
 
 </div>
 <!-- ============================
-     15. SIGNATURES
+     15. SIGNATURES - RESPONSIVE LAYOUT
 ============================ -->
-<div class="contract-section" style="margin-top:40px;">
-
-<h3 style="font-size:20px;font-weight:700;margin-bottom:30px;">
-<!-- ============================
-     15. SIGNATURES
-============================ -->
-<div class="contract-section" style="margin-top:40px;">
+<div class="contract-section signature-section" style="margin-top:40px;">
 
 <h3 style="font-size:20px;font-weight:700;margin-bottom:32px;">
 15. SIGNATURES
 </h3>
 
 <!-- ============================
-     ROW 1 : REPRESENTATIVE + NOTARY
+     SIGNATURE GRID - MOBILE FIRST
 ============================ -->
-<div style="
-display:grid;
-grid-template-columns:1fr 1fr;
-gap:120px;
-margin-bottom:60px;
-">
+<div class="signature-grid">
 
 <!-- CONSULTANT REPRESENTATIVE -->
-<div>
-
+<div class="signature-block">
 <p style="font-weight:700;margin-bottom:18px;font-size:16px;">
 For the Consultant Representative
 </p>
 
 <div style="margin-bottom:18px;">
-Name: <strong>Jean Pierre TWAJAMAHORO</strong>
+<strong>Name:</strong> Jean Pierre TWAJAMAHORO
 </div>
 
 <div style="margin-bottom:18px;">
-Title: <strong>Managing Director</strong>
+<strong>Title:</strong> Managing Director
 </div>
 
 <div style="margin-bottom:18px;">
-Signature:
+<strong>Signature:</strong>
 <div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;position:relative;">
-  <img src="admin/signature-manager.png" style="max-height:55px;position:absolute;bottom:2px;left:0;">
+  <img src="admin/signature-manager.png" style="max-height:55px;position:absolute;bottom:2px;left:0;" alt="Consultant Signature">
 </div>
 </div>
 
-<div>
-Date:
+<div style="margin-bottom:18px;">
+<strong>Date:</strong>
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 
@@ -1191,94 +1359,108 @@ Date:
 
 
 <!-- NOTARY -->
-<div>
-
+<div class="signature-block">
 <p style="font-weight:700;margin-bottom:18px;font-size:16px;">
 For the Notary
 </p>
 
 <div style="margin-bottom:18px;">
-Name:
+<strong>Name:</strong>
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 
 <div style="margin-bottom:18px;">
-Signature:
+<strong>Signature:</strong>
 <div style="border-bottom:1px solid #000;height:45px;width:85%;margin-top:6px;"></div>
 </div>
 
-<div>
-Date:
+<div style="margin-bottom:18px;">
+<strong>Date:</strong>
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 
 </div>
 
-</div>
+</div> <!-- End signature grid -->
 
 
 <!-- ============================
-     ROW 2 : STUDENT (CENTERED)
+     STUDENT SIGNATURE - CENTERED
 ============================ -->
 <div style="
-max-width:420px;
-margin:auto;
-text-align:left;
+max-width:500px;
+margin:40px auto 0;
+padding:20px;
+background:#f9fafb;
+border-radius:12px;
+border:1px solid #e5e7eb;
 ">
 
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
+<p style="font-weight:700;margin-bottom:20px;font-size:18px;text-align:center;">
 For the Student
 </p>
 
-<div style="margin-bottom:16px;">
-Name:
+<div style="margin-bottom:20px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Full Name:</label>
 <input type="text" id="sig_student_name"
 style="
-width:70%;
-border:none;
-border-bottom:1px solid #000;
-margin-left:6px;
-padding:2px 4px;
-">
+width:100%;
+border:2px solid #e5e7eb;
+border-radius:6px;
+padding:12px 16px;
+font-size:16px;
+box-sizing:border-box;
+transition:border-color 0.2s ease;
+"
+placeholder="Enter your full legal name">
 </div>
 
-<p style="margin-top:16px;">Signature:</p>
-
+<div style="margin-bottom:20px;">
+<label style="display:block;margin-bottom:12px;font-weight:600;color:#374151;">Signature:</label>
 <div style="
-border:1px dashed #9ca3af;
-height:130px;
-padding:10px;
+border:2px dashed #9ca3af;
+height:150px;
+padding:8px;
 margin-bottom:14px;
-background:#fafafa;
+background:#ffffff;
+border-radius:8px;
 display:flex;
 align-items:center;
 justify-content:center;
+position:relative;
 ">
 
 <?php if ($isSigned && !empty($studentSignatureData)): ?>
-<img src="<?= $studentSignatureData ?>" style="max-height:110px;">
+<img src="<?= $studentSignatureData ?>" style="max-height:130px;" alt="Student Signature">
 <?php else: ?>
 <canvas class="signature-canvas"></canvas>
+<div style="position:absolute;top:8px;right:8px;font-size:12px;color:#9ca3af;">
+Draw your signature above
+</div>
 <?php endif; ?>
 
 </div>
+</div>
 
-<div style="margin-top:10px;">
-Date:
+<div style="margin-bottom:24px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Date:</label>
 <input type="date" id="sig_signed_date"
 style="
-width:60%;
-border:none;
-border-bottom:1px solid #000;
-margin-left:6px;
-padding:2px 4px;
+width:100%;
+border:2px solid #e5e7eb;
+border-radius:6px;
+padding:12px 16px;
+font-size:16px;
+box-sizing:border-box;
+transition:border-color 0.2s ease;
 ">
 </div>
 
-<div style="margin-top:18px;">
-<button id="clearSignature" type="button">Clear</button>
-<button id="signContract" type="button">Sign & Submit</button>
+<div style="display:flex;gap:12px;flex-wrap:wrap;">
+<button id="clearSignature" type="button" style="flex:1;background:#f3f4f6;color:#374151;border:none;">Clear Signature</button>
+<button id="signContract" type="button" style="flex:2;background:#3b82f6;color:#ffffff;border:none;">Sign & Submit Contract</button>
 <input type="hidden" id="signatureData">
+<input type="hidden" id="selected_package_code" value="">
 </div>
 
 </div>
@@ -1434,7 +1616,7 @@ function stopDraw() {
   }
 
   /* ==========================
-     SUBMIT SIGNATURE
+     SUBMIT SIGNATURE - ENHANCED VALIDATION
   ========================== */
  btnSubmit.addEventListener('click', () => {
 
@@ -1453,6 +1635,7 @@ function stopDraw() {
 
   if (!selectedRadio) {
     alert("Please select one service package under Article 7 before signing.");
+    selectedRadio?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -1495,13 +1678,41 @@ function stopDraw() {
   }
 
   /* ==========================
-     6. CAPTURE SIGNATURE
+     6. STUDENT DATA VALIDATION (FOR NEW STUDENTS)
+  ========================== */
+  const emailInput = document.getElementById('student_email');
+  const dobInput = document.getElementById('student_dob');
+  const nationalityInput = document.getElementById('student_nationality');
+  const passportInput = document.getElementById('student_passport');
+  const phoneInput = document.getElementById('student_phone');
+
+  if (!emailInput?.value.trim()) {
+    alert("Please enter your email address.");
+    emailInput?.focus();
+    return;
+  }
+
+  if (!emailInput.value.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+    alert("Please enter a valid email address.");
+    emailInput?.focus();
+    return;
+  }
+
+  /* ==========================
+     7. SHOW SUBMISSION PROGRESS
+  ========================== */
+  btnSubmit.disabled = true;
+  btnSubmit.textContent = 'Submitting...';
+  btnSubmit.style.background = '#6b7280';
+
+  /* ==========================
+     8. CAPTURE SIGNATURE
   ========================== */
   const signature = canvas.toDataURL("image/png");
   hiddenSignature.value = signature;
 
   /* ==========================
-     7. SUBMIT (FINAL)
+     9. SUBMIT (FINAL)
   ========================== */
   submitSignature(
     signature,
@@ -1569,11 +1780,22 @@ const payload = {
 };
 
 /* ==========================
-   FINAL VALIDATION
+   FINAL VALIDATION - ENHANCED
 ========================== */
 if (!payload.student_email) {
   alert("Student email is required.");
   emailInput.focus();
+  return;
+}
+
+if (!payload.student_email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
+  alert("Please enter a valid email address.");
+  emailInput.focus();
+  return;
+}
+
+if (!payload.student_name || payload.student_name.trim().length < 2) {
+  alert("Please enter your full name (at least 2 characters).");
   return;
 }
 
@@ -1595,9 +1817,17 @@ fetch("submit-signature.php", {
 .then(async res => {
   let data;
 
+  // Debug: Log the raw response before attempting to parse
+  const responseText = await res.text();
+  console.log('Raw server response:', responseText);
+  console.log('Response status:', res.status);
+  console.log('Response headers:', Object.fromEntries(res.headers.entries()));
+
   try {
-    data = await res.json();
+    data = JSON.parse(responseText);
   } catch (e) {
+    console.error('JSON parse error:', e);
+    console.error('Response text that failed to parse:', responseText);
     throw new Error("Invalid JSON response from server");
   }
 
@@ -1738,44 +1968,87 @@ function resetStudentFields() {
   }
 
   /* =====================================================
-     AUTOFILL (SAFE & CLEAN)
+     AUTOFILL (SAFE & CLEAN) - ENHANCED FOR NEW STUDENTS
   ===================================================== */
   function autofillStudent(student) {
+    console.log('autofillStudent called with:', student);
     if (!student || autofilled) return;
+
+    // Check if fields are already populated with REAL data (not placeholders)
+    const nameValue = fields.name.value.trim();
+    const dobValue = fields.dob.value;
+    const nationalityValue = fields.nationality.value.trim();
+    const phoneValue = fields.phone.value.trim();
+    const passportValue = fields.passportNumber.value.trim();
+    
+    // Check for placeholder text vs real data
+    const hasRealName = nameValue && nameValue !== 'Enter your full legal name';
+    const hasRealDob = dobValue && dobValue !== 'mm/dd/yyyy';
+    const hasRealNationality = nationalityValue && nationalityValue !== 'Select nationality';
+    const hasRealPhone = phoneValue && phoneValue !== '+250780000000'; // Basic format check
+    const hasRealPassport = passportValue && passportValue !== 'Enter your passport number';
+    
+    const hasExistingData = hasRealName || hasRealDob || hasRealNationality || hasRealPhone || hasRealPassport;
+    
+    // Only skip autofill if ALL fields have real data (not just placeholders)
+    if (hasExistingData && hasRealName && hasRealDob && hasRealNationality && hasRealPhone && hasRealPassport) {
+      console.log('All fields already populated with real data, skipping autofill');
+      autofilled = true;
+      confirmStudent();
+      return;
+    }
+    
+    console.log('Fields have placeholders or incomplete data, proceeding with autofill');
+
+    // For new students without data, don't try to autofill from empty student object
+    if (!student.email && !student.first_name && !student.last_name) {
+      console.log('No student data to autofill, allowing manual entry');
+      autofilled = true; // Mark as processed to prevent repeated attempts
+      // Don't lock fields for new students - let them enter data manually
+      return;
+    }
 
     // Always overwrite email with full DB email
     if (student.email) {
       fields.email.value = student.email;
     }
 
-    if (fields.name) {
+    // Only fill fields that are empty or have placeholder text
+    if (fields.name && (!hasRealName)) {
       const composed = (student.full_name && String(student.full_name).trim())
         || [student.first_name, student.middle_name, student.last_name]
             .map(v => (v == null ? '' : String(v).trim()))
             .filter(Boolean)
             .join(' ');
       if (composed) {
+        console.log('Setting Name:', composed, 'to field:', fields.name);
         fields.name.value = composed;
         // Sync the signature "Name" input that auto-mirrors student_name
         fields.name.dispatchEvent(new Event('input', { bubbles: true }));
       }
     }
 
-    if (fields.dob && student.dob) {
+    if (fields.dob && (!hasRealDob) && student.dob) {
+      console.log('Setting DOB:', student.dob, 'to field:', fields.dob);
       fields.dob.value = student.dob;
+      console.log('DOB field value after setting:', fields.dob.value);
     }
 
-    if (fields.nationality && student.nationality) {
+    if (fields.nationality && (!hasRealNationality) && student.nationality) {
+      console.log('Setting Nationality:', student.nationality, 'to field:', fields.nationality);
       fields.nationality.value = student.nationality;
     }
 
-    if (fields.phone && student.phone_number) {
+    if (fields.phone && (!hasRealPhone) && student.phone_number) {
+      console.log('Setting Phone:', student.phone_number, 'to field:', fields.phone);
       fields.phone.value = student.phone_number;
     }
 
     // ✅ REAL PASSPORT NUMBER (TEXT FIELD)
-    if (fields.passportNumber && student.passport_number) {
+    if (fields.passportNumber && (!hasRealPassport) && student.passport_number) {
+      console.log('Setting Passport:', student.passport_number, 'to field:', fields.passportNumber);
       fields.passportNumber.value = student.passport_number;
+      console.log('Passport field value after setting:', fields.passportNumber.value);
     }
 
     autofilled = true;
@@ -1794,7 +2067,7 @@ function resetStudentFields() {
   }
 
   /* =====================================================
-     LOCK FIELDS (EXCEPT EMAIL)
+     LOCK FIELDS (ENHANCED LOGIC)
   ===================================================== */
 function lockFields() {
   Object.entries(fields).forEach(([key, input]) => {
@@ -1804,12 +2077,15 @@ function lockFields() {
     if (!input.value || input.value.trim() === '') {
       input.readOnly = false;
       input.style.backgroundColor = '#fff';
+      input.style.borderColor = '#e5e7eb';
       return;
     }
 
-    // 🔒 Lock only autofilled fields
+    // 🔒 Lock only autofilled fields with visual feedback
     input.readOnly = true;
-    input.style.backgroundColor = '#f7f9fc';
+    input.style.backgroundColor = '#f0f9ff';
+    input.style.borderColor = '#3b82f6';
+    input.title = 'This field was auto-filled from your existing record';
   });
 }
 
@@ -1863,8 +2139,39 @@ window.showPkg = function (id) {
   const holder = document.getElementById('selected_package_code');
   if (holder) {
     holder.value = id; // e.g. "p74"
+    console.log('Package code set to:', id); // Debug logging
+  }
+  
+  // ✅ ALSO UPDATE ANY RADIO BUTTON WITH CORRESPONDING VALUE
+  const radio = document.querySelector(`input[onclick*="showPkg('${id}')"]`);
+  if (radio) {
+    radio.value = id;
+    console.log('Radio button value set to:', id);
   }
 };
+
+// ✅ INITIALIZE PACKAGE CODE ON PAGE LOAD
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('Initializing package selection...');
+  
+  // Check if any package is already selected
+  const checkedRadio = document.querySelector('input[name="package"]:checked');
+  if (checkedRadio) {
+    const onclick = checkedRadio.getAttribute('onclick');
+    const match = onclick.match(/showPkg\('([^']+)'\)/);
+    if (match) {
+      const packageId = match[1];
+      console.log('Pre-selected package found:', packageId);
+      
+      // Set the package code
+      const holder = document.getElementById('selected_package_code');
+      if (holder) {
+        holder.value = packageId;
+        console.log('Package code initialized to:', packageId);
+      }
+    }
+  }
+});
 
 
   /**
@@ -1877,182 +2184,6 @@ window.showPkg = function (id) {
     const label = selectedRadio.closest('label');
     return label ? label.textContent.trim() : null;
   };
-
-})();
-</script>
-<script>
-(function () {
-  'use strict';
-
-  const canvas = document.querySelector('.signature-canvas');
-  if (!canvas) return;
-
-  const ctx = canvas.getContext('2d');
-  const btnClear = document.getElementById('clearSignature');
-  const btnSubmit = document.getElementById('signContract');
-
-  const inputName = document.getElementById('sig_student_name');
-  const inputDate = document.getElementById('sig_signed_date');
-
-  const progressBox  = document.getElementById('signatureProgress');
-  const progressBar  = document.getElementById('signatureProgressBar');
-  const progressText = document.getElementById('signatureProgressText');
-
-  let drawing = false;
-  let progressTimer = null;
-
-  /* ============================
-     CANVAS SETUP
-  ============================ */
-  function resizeCanvas() {
-    const ratio = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * ratio;
-    canvas.height = rect.height * ratio;
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = '#111827';
-  }
-
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-
-  function pos(e) {
-    const r = canvas.getBoundingClientRect();
-    const t = e.touches ? e.touches[0] : e;
-    return { x: t.clientX - r.left, y: t.clientY - r.top };
-  }
-
-  canvas.addEventListener('mousedown', e => {
-    drawing = true;
-    const p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  });
-
-canvas.addEventListener('mousemove', e => {
-  if (!drawing) return;
-  e.preventDefault();
-
-  const p = pos(e);
-  points.push(p);
-
-  // Not enough points yet → simple line
-  if (points.length < 3) {
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    return;
-  }
-
-  // Last 3 points
-  const p0 = points[points.length - 3];
-  const p1 = points[points.length - 2];
-  const p2 = points[points.length - 1];
-
-  // Midpoint between p1 and p2
-  const midX = (p1.x + p2.x) / 2;
-  const midY = (p1.y + p2.y) / 2;
-
-  ctx.beginPath();
-  ctx.moveTo(p0.x, p0.y);
-  ctx.quadraticCurveTo(p1.x, p1.y, midX, midY);
-  ctx.stroke();
-});
-
-
-  canvas.addEventListener('mouseup', () => drawing = false);
-  canvas.addEventListener('mouseleave', () => drawing = false);
-
-  canvas.addEventListener('touchstart', e => {
-    drawing = true;
-    const p = pos(e);
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y);
-  }, { passive:false });
-
-  canvas.addEventListener('touchmove', e => {
-    if (!drawing) return;
-    e.preventDefault();
-    const p = pos(e);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-  }, { passive:false });
-
-  canvas.addEventListener('touchend', () => drawing = false);
-
-  btnClear.addEventListener('click', () => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  });
-
-  function hasSignature() {
-    return ctx.getImageData(0,0,canvas.width,canvas.height)
-      .data.some(v => v !== 0);
-  }
-
-  /* ============================
-     PROGRESS HELPERS
-  ============================ */
-  function startProgress() {
-    btnSubmit.disabled = true;
-    progressBox.style.display = 'block';
-    progressBar.style.width = '10%';
-    progressText.textContent = 'Submitting signature…';
-
-    let p = 10;
-    progressTimer = setInterval(() => {
-      p += Math.random() * 12;
-      if (p >= 90) {
-        p = 90;
-        clearInterval(progressTimer);
-      }
-      progressBar.style.width = p + '%';
-    }, 400);
-  }
-
-  function finishProgress(success) {
-    clearInterval(progressTimer);
-    progressBar.style.width = '100%';
-    progressBar.style.background = success ? '#16a34a' : '#dc2626';
-    progressText.textContent = success
-      ? 'Signature submitted successfully'
-      : 'Submission failed';
-  }
-
-  /* ============================
-     SUBMIT HANDLER
-  ============================ */
-  btnSubmit.addEventListener('click', () => {
-
-    if (!inputName.value.trim()) {
-      alert('Please enter your name.');
-      return;
-    }
-
-    if (!inputDate.value) {
-      alert('Please select a signing date.');
-      return;
-    }
-
-    if (!hasSignature()) {
-      alert('Please draw your signature.');
-      return;
-    }
-
-    startProgress();
-
-    // 👇 KEEP YOUR EXISTING submitSignature() CALL
-    submitSignature(
-      canvas.toDataURL('image/png'),
-      inputName.value.trim(),
-      inputDate.value,
-      window.getSelectedPackage?.()
-    );
-  });
-
-  // OPTIONAL: expose hooks for backend response
-  window.signatureSubmitSuccess = () => finishProgress(true);
-  window.signatureSubmitError   = () => finishProgress(false);
 
 })();
 </script>

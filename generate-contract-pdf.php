@@ -270,27 +270,30 @@ $stmt = $conn->prepare("
         c.contract_token,
         c.selected_package_code,
 
-        /* Build full legal name from first + middle + last */
-        TRIM(CONCAT_WS(' ',
-            NULLIF(TRIM(s.first_name),  ''),
-            NULLIF(TRIM(s.middle_name), ''),
-            NULLIF(TRIM(s.last_name),   '')
-        )) AS full_name,
+        /* Build full legal name from student applications data */
+        COALESCE(
+            TRIM(CONCAT_WS(' ',
+                NULLIF(TRIM(s.first_name),  ''),
+                NULLIF(TRIM(s.middle_name),  ''),
+                NULLIF(TRIM(s.last_name),   '')
+            )),
+            'Student'
+        ) AS full_name,
 
-        s.email,
-        s.dob,
+        s.email AS email,
+        s.dob AS dob,
 
         /* Resolve nationality to country NAME whether stored as id or as name */
         COALESCE(nat.name, s.nationality) AS nationality,
 
-        s.passport_number,
-        s.phone_number,
+        s.passport_number AS passport_number,
+        s.phone_number AS phone_number,
 
         sig.signed_date,
         sig.signature_image
     FROM student_contracts c
-    INNER JOIN student_applications s ON s.id = c.student_id
     INNER JOIN student_signatures sig ON sig.contract_id = c.id
+    LEFT JOIN student_applications s ON s.id = c.student_id
     LEFT JOIN countries nat
            ON nat.id   = s.nationality
            OR nat.name = s.nationality

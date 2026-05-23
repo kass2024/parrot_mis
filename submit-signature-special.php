@@ -105,7 +105,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     fail("Invalid email address", 400);
 }
 
-if (!preg_match('#^data:image/(png|jpeg);base64,#i', $signature)) {
+if (!str_starts_with($signature, 'data:image/') || !str_contains($signature, 'base64,')) {
     fail("Invalid signature format", 400);
 }
 
@@ -168,11 +168,11 @@ try {
     logMsg("Contract locked", ["contract_id" => $contractId]);
 
     /* =====================================================
-       6.2 UPSERT STUDENT (contract link, email match, or new row)
+       6.2 RESOLVE OR CREATE STUDENT
     ===================================================== */
     $studentId = !empty($contract['student_id']) ? (int)$contract['student_id'] : 0;
-
     if ($studentId <= 0) {
+        // Try to find existing student by email
         $stmt = $conn->prepare("
             SELECT id
             FROM student_applications
@@ -185,6 +185,35 @@ try {
         $stmt->close();
 
         $studentId = !empty($existing['id']) ? (int)$existing['id'] : 0;
+        
+        // If no existing student found, create new one
+        if ($studentId <= 0) {
+            $stmt = $conn->prepare("
+                INSERT INTO student_applications
+                (first_name, last_name, email, dob, nationality, passport_number, phone_number, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            
+            // Split full name into first and last name
+            $nameParts = explode(' ', $name, 2);
+            $firstName = $nameParts[0] ?? '';
+            $lastName = $nameParts[1] ?? '';
+            
+            $stmt->bind_param("sssssss", 
+                $firstName, 
+                $lastName, 
+                $email, 
+                $dob, 
+                $nationality, 
+                $passport, 
+                $phone
+            );
+            $stmt->execute();
+            $studentId = $stmt->insert_id;
+            $stmt->close();
+            
+            logMsg("Created new student record", ["student_id" => $studentId, "email" => $email]);
+        }
     }
 
     $nameParts = preg_split('/\s+/', $name, 2) ?: [];
@@ -280,7 +309,7 @@ try {
         WHERE id = ?
     ");
     $stmt->bind_param(
-        "issi",
+        "isss",
         $studentId,
         $pkgCode,
         $pkgLabel,
