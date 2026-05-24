@@ -6,12 +6,9 @@
 header('Content-Type: text/plain; charset=UTF-8');
 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require_once __DIR__ . '/PHPMailer/src/SMTP.php';
-require_once __DIR__ . '/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/helpers/mailer.php';
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\Exception as MailException;
 
 $id    = (int) ($_POST['student_id'] ?? 0);
 $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) ($_POST['table'] ?? ''));
@@ -153,30 +150,6 @@ $stmt->close();
 
 $studentName = trim($firstName . ' ' . $lastName);
 
-// Update flags — set admit=1, reset others
-$allFlags = [
-    'incomplete_app', 'submitted', 'admit', 'i20_sent', 'sevis_paid',
-    'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start',
-];
-$resetFlags = implode(', ', array_map(static fn ($f) => "`$f` = 0", $allFlags));
-$updateSQL = "UPDATE `$table` SET $resetFlags, `admit` = 1 WHERE id = ?";
-$stmtUp = $conn->prepare($updateSQL);
-if (!$stmtUp) {
-    foreach ($admissions as $a) {
-        @unlink($a['path']);
-    }
-    exit('Database update failed (prepare).');
-}
-$stmtUp->bind_param('i', $id);
-if (!$stmtUp->execute()) {
-    $stmtUp->close();
-    foreach ($admissions as $a) {
-        @unlink($a['path']);
-    }
-    exit('Database update failed.');
-}
-$stmtUp->close();
-
 $uniListHtml = '';
 foreach ($admissions as $a) {
     $uniListHtml .= '<li><strong>' . htmlspecialchars($a['name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</strong></li>';
@@ -186,18 +159,17 @@ $programHtml = $program
     ? '<p>Program context: <em>' . htmlspecialchars((string) $program, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</em></p>'
     : '';
 
-try {
-    $mail = new PHPMailer(true);
-    $mail->isSMTP();
-    $mail->Host       = 'visaconsultantcanada.com';
-    $mail->SMTPAuth   = true;
-    $mail->Username   = 'admission@visaconsultantcanada.com';
-    $mail->Password   = getenv('SMTP_PASSWORD') ?: 'Petero@1981';
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-    $mail->Port       = 465;
+xander_load_env_file();
+if (xander_env_get('SMTP_PASSWORD') === '') {
+    foreach ($admissions as $a) {
+        @unlink($a['path']);
+    }
+    error_log('Admission email failed: SMTP_PASSWORD is not set in .env');
+    exit('Email is not configured. Set SMTP_PASSWORD in .env and try again.');
+}
 
-    $mail->CharSet = 'UTF-8';
-    $mail->setFrom('admission@visaconsultantcanada.com', 'Parrot Canada Visa Consultant');
+try {
+    $mail = app_admission_mailer();
     $mail->addAddress($email, $studentName);
 
     $count = count($admissions);
@@ -205,7 +177,6 @@ try {
         ? "Your admission letters ($count universities)"
         : ('Your admission letter — ' . $admissions[0]['name']);
     $mail->Subject = '=?UTF-8?B?' . base64_encode($subjectBase) . '?=';
-    $mail->isHTML(true);
 
     $mail->Body = '
         <p>Dear ' . htmlspecialchars($studentName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . ',</p>
@@ -222,15 +193,53 @@ try {
     }
 
     $mail->send();
+
+    // Mark applicant as admitted only after the email is sent successfully.
+    $allFlags = [
+        'incomplete_app', 'submitted', 'admit', 'i20_sent', 'sevis_paid',
+        'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start',
+    ];
+    $resetFlags = implode(', ', array_map(static fn ($f) => "`$f` = 0", $allFlags));
+    $updateSQL = "UPDATE `$table` SET $resetFlags, `admit` = 1 WHERE id = ?";
+    $stmtUp = $conn->prepare($updateSQL);
+    if (!$stmtUp) {
+        foreach ($admissions as $a) {
+            @unlink($a['path']);
+        }
+        error_log('Admission email sent but DB update prepare failed: ' . $conn->error);
+        exit('Email sent, but failed to update applicant status. Please refresh and check the record.');
+    }
+    $stmtUp->bind_param('i', $id);
+    if (!$stmtUp->execute()) {
+        $stmtUp->close();
+        foreach ($admissions as $a) {
+            @unlink($a['path']);
+        }
+        error_log('Admission email sent but DB update failed: ' . $conn->error);
+        exit('Email sent, but failed to update applicant status. Please refresh and check the record.');
+    }
+    $stmtUp->close();
+
     foreach ($admissions as $a) {
         @unlink($a['path']);
     }
     echo 'ok';
-} catch (Exception $e) {
+} catch (MailException $e) {
     foreach ($admissions as $a) {
         @unlink($a['path']);
     }
-    $info = isset($mail) && $mail instanceof PHPMailer ? $mail->ErrorInfo : $e->getMessage();
+    $info = $e->getMessage();
     error_log('Admission email failed: ' . $info);
+
+    if (stripos($info, 'authenticate') !== false || stripos($info, '535') !== false) {
+        exit('Email server login failed. Update SMTP_PASSWORD in .env with the current admission@ mailbox password.');
+    }
+
+    exit('mail_error');
+} catch (Throwable $e) {
+    foreach ($admissions as $a) {
+        @unlink($a['path']);
+    }
+    error_log('Admission email failed: ' . $e->getMessage());
     exit('mail_error');
 }
