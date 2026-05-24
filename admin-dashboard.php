@@ -310,6 +310,7 @@ $cards = [
       'admin-contracts.php' => 'View students Contracts',
       'admin-contracts-special.php' => 'Special students Contracts',
       'admin-generate-student-contract-special.php' => 'Issue special contract link',
+      'admin/contract_esign.php' => 'Signed PhD Contracts',
     ]
   ],
   'partner_contracts' => [
@@ -2143,6 +2144,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('admin-generate-student-contract-special.php', 'Issue Special Contract Link')">
           <i class="bi bi-link-45deg"></i>
           Issue special contract link
+        </a>
+        <a href="#" onclick="loadInFrame('admin/contract_esign.php', 'Signed PhD Contracts')">
+          <i class="bi bi-file-earmark-arrow-down"></i>
+          Signed PhD Contracts
         </a>
       </div>
       <?php endif; ?>

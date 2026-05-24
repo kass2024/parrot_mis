@@ -5,6 +5,58 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Dompdf\Dompdf;
 use Dompdf\Options;
 
+/**
+ * Serve a signed PhD contract PDF by database id.
+ */
+if (isset($_GET['download'])) {
+    $id = (int) $_GET['download'];
+    if ($id > 0) {
+        $stmt = $conn->prepare('SELECT student_name, pdf_file FROM signed_contracts WHERE id = ? LIMIT 1');
+        if ($stmt) {
+            $stmt->bind_param('i', $id);
+            $stmt->execute();
+            $stmt->bind_result($studentName, $pdfFile);
+            if ($stmt->fetch()) {
+                $stmt->close();
+                $relative = ltrim(str_replace('\\', '/', (string) $pdfFile), '/');
+                if (preg_match('#^admin/generated_contracts/signed_phd_contract_[\w.\-]+\.pdf$#i', $relative)) {
+                    $fullPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relative);
+                    if (is_file($fullPath)) {
+                        $safeName = preg_replace('/[^\w\- ]+/', '_', trim((string) $studentName));
+                        if ($safeName === '') {
+                            $safeName = 'signed_phd_contract';
+                        }
+                        $safeName .= '.pdf';
+
+                        header('Content-Type: application/pdf');
+                        header('Content-Disposition: attachment; filename="' . $safeName . '"');
+                        header('Content-Length: ' . (string) filesize($fullPath));
+                        header('Cache-Control: private, max-age=0, must-revalidate');
+                        readfile($fullPath);
+                        exit;
+                    }
+                }
+            } else {
+                $stmt->close();
+            }
+        }
+    }
+
+    http_response_code(404);
+    exit('Contract PDF not found.');
+}
+
+$signedContracts = [];
+$contractsResult = $conn->query(
+    'SELECT id, student_name, student_title, contract_date, pdf_file, created_at
+     FROM signed_contracts
+     ORDER BY created_at DESC'
+);
+if ($contractsResult) {
+    $signedContracts = $contractsResult->fetch_all(MYSQLI_ASSOC);
+    $contractsResult->free();
+}
+
 $headerPath = __DIR__ . '/header.png';
 $footerPath = __DIR__ . '/footer.png';
 $parrotSignaturePath = __DIR__ . '/employer-signature.png';
@@ -345,6 +397,7 @@ Date: '.$data['contract_date'].'
 
 $success = false;
 $pdfLink = '';
+$lastContractId = 0;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $data = [
@@ -401,9 +454,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     );
 
     $stmt->execute();
+    $lastContractId = (int) $conn->insert_id;
 
     $success = true;
-    $pdfLink = 'generated_contracts/' . $fileName;
+    $pdfLink = 'contract_esign.php?download=' . $lastContractId;
 }
 
 $previewData = [
@@ -589,6 +643,53 @@ button,
     transform-origin: top center;
 }
 
+.signed-list {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.signed-list h3 {
+    margin: 0 0 12px;
+    color: #073b77;
+    font-size: 16px;
+}
+
+.signed-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.signed-table th,
+.signed-table td {
+    padding: 10px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: top;
+}
+
+.signed-table th {
+    color: #475569;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+.btn-download-sm {
+    display: inline-block;
+    width: auto;
+    padding: 8px 12px;
+    margin-top: 0;
+    font-size: 13px;
+    border-radius: 8px;
+}
+
+.empty-signed {
+    color: #64748b;
+    font-size: 13px;
+}
+
 @media(max-width: 1000px) {
     .layout {
         grid-template-columns: 1fr;
@@ -652,6 +753,44 @@ button,
         </form>
 
         <?php endif; ?>
+
+        <div class="signed-list">
+            <h3>Signed PhD Contracts</h3>
+            <?php if ($signedContracts === []): ?>
+                <div class="empty-signed">No signed contracts saved yet.</div>
+            <?php else: ?>
+                <table class="signed-table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Date</th>
+                            <th>Download</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($signedContracts as $contract): ?>
+                            <tr>
+                                <td>
+                                    <strong><?= clean($contract['student_name']) ?></strong><br>
+                                    <span style="color:#64748b;"><?= clean($contract['student_title']) ?></span>
+                                </td>
+                                <td><?= clean($contract['contract_date']) ?></td>
+                                <td>
+                                    <?php if (!empty($contract['pdf_file'])): ?>
+                                        <a
+                                            class="download-btn btn-download-sm"
+                                            href="contract_esign.php?download=<?= (int) $contract['id'] ?>"
+                                        >Download PDF</a>
+                                    <?php else: ?>
+                                        —
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            <?php endif; ?>
+        </div>
 
     </div>
 </div>
