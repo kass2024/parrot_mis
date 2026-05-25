@@ -69,9 +69,37 @@ button:disabled {
 .hidden { display: none; }
 
 #loading {
-  margin-top: 20px;
+  margin-top: 24px;
   text-align: center;
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  background: #e8ecef;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.progress-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #427431, #5a9a47);
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+#progressStatus {
   font-weight: bold;
+  color: #333;
+  margin: 0 0 6px;
+}
+
+#progressHint {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
 }
 
 .info {
@@ -142,7 +170,13 @@ button:disabled {
     </form>
   </div>
 
-  <div id="loading" class="hidden">⏳ Extracting transcript…</div>
+  <div id="loading" class="hidden">
+    <div class="progress-track">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <p id="progressStatus">Uploading transcript…</p>
+    <p id="progressHint">This may take up to a minute for scanned PDFs.</p>
+  </div>
 
   <!-- STEP 2 -->
   <div id="result" class="hidden">
@@ -182,9 +216,42 @@ document.addEventListener('DOMContentLoaded', () => {
   const extractBtn = document.getElementById('extractBtn');
   const generateBtn = document.getElementById('generateBtn');
   const loading = document.getElementById('loading');
+  const progressBar = document.getElementById('progressBar');
+  const progressStatus = document.getElementById('progressStatus');
   const result = document.getElementById('result');
   const error = document.getElementById('error');
   const downloads = document.getElementById('downloads');
+
+  const progressSteps = [
+    'Uploading transcript…',
+    'Preparing document…',
+    'Analyzing with OpenAI…',
+    'Extracting student details…'
+  ];
+
+  let progressTimer = null;
+  let progressIndex = 0;
+
+  function startProgress() {
+    progressIndex = 0;
+    progressBar.style.width = '8%';
+    progressStatus.textContent = progressSteps[0];
+
+    progressTimer = window.setInterval(() => {
+      progressIndex = Math.min(progressIndex + 1, progressSteps.length - 1);
+      progressStatus.textContent = progressSteps[progressIndex];
+      const pct = Math.min(92, 8 + progressIndex * 21);
+      progressBar.style.width = pct + '%';
+    }, 2200);
+  }
+
+  function stopProgress(success) {
+    if (progressTimer) {
+      clearInterval(progressTimer);
+      progressTimer = null;
+    }
+    progressBar.style.width = success ? '100%' : '0%';
+  }
 
   /* =====================
      EXTRACT
@@ -197,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loading.classList.remove('hidden');
     result.classList.add('hidden');
     error.classList.add('hidden');
+    startProgress();
 
     const formData = new FormData(form);
     selectedGender = formData.get('gender');
@@ -213,6 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         json = JSON.parse(text);
       } catch {
+        stopProgress(false);
         error.textContent = 'Invalid response from extraction service';
         error.classList.remove('hidden');
         extractBtn.disabled = false;
@@ -220,6 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
+      stopProgress(json.status === 'success');
       extractBtn.disabled = false;
       loading.classList.add('hidden');
 
@@ -231,23 +301,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
       extractedData = json.data;
 
-      document.getElementById('name').textContent = extractedData.name;
-      document.getElementById('surname').textContent = extractedData.surname;
-      document.getElementById('reg').textContent = extractedData.registration_number;
-      document.getElementById('program').textContent = extractedData.program;
-      document.getElementById('year').textContent = extractedData.academic_year_start;
-      document.getElementById('class').textContent = extractedData.class;
-      document.getElementById('dob').textContent = extractedData.date_of_birth;
+      document.getElementById('name').textContent = extractedData.name || '';
+      document.getElementById('surname').textContent = extractedData.surname || '';
+      document.getElementById('reg').textContent = extractedData.registration_number || '';
+      document.getElementById('program').textContent = extractedData.program || '';
+      document.getElementById('year').textContent = extractedData.academic_year_start || '';
+      document.getElementById('class').textContent = extractedData.class || '';
+      document.getElementById('dob').textContent = extractedData.date_of_birth || '';
       document.getElementById('gender').textContent =
         selectedGender === 'male' ? 'Male' : 'Female';
 
       result.classList.remove('hidden');
       generateBtn.disabled = false;
 
-    } catch {
+    } catch (err) {
+      stopProgress(false);
       extractBtn.disabled = false;
       loading.classList.add('hidden');
-      error.textContent = 'Server error during extraction';
+      console.error(err);
+      error.textContent = 'Server error during extraction. Check that Apache is running and OPENAI_API_KEY is set in .env.';
       error.classList.remove('hidden');
     }
   });
