@@ -284,51 +284,72 @@ let PCVC_USD_RWF_RATE = <?= json_encode((float) $pcvcFxRate) ?>;
 let PCVC_CAD_RWF_RATE = <?= json_encode((float) $pcvcCadFxRate) ?>;
 const LOCKED = <?= $locked ? 'true' : 'false' ?>;
 
-function getSelectedCurrency() {
-  return (document.getElementById('commissionCurrency')?.value || 'USD').toUpperCase();
-}
+(function initCommissionFxEdit() {
+  function boot() {
+    const amountInput = document.getElementById('amountUsd');
+    const currencySelect = document.getElementById('commissionCurrency');
+    const amountLabel = document.getElementById('amountLabel');
+    const rwfPreview = document.getElementById('rwfPreview');
+    if (!amountInput || !currencySelect || !rwfPreview) return;
 
-function getActiveFxRate() {
-  return getSelectedCurrency() === 'CAD' ? PCVC_CAD_RWF_RATE : PCVC_USD_RWF_RATE;
-}
+    function getCurrency() {
+      return String(currencySelect.value || 'USD').toUpperCase();
+    }
 
-function updateAmountLabel() {
-  const label = document.getElementById('amountLabel');
-  if (label) label.textContent = 'Amount (' + getSelectedCurrency() + ')';
-}
+    function getRate() {
+      const rate = getCurrency() === 'CAD' ? PCVC_CAD_RWF_RATE : PCVC_USD_RWF_RATE;
+      return isFinite(rate) && rate > 0 ? rate : (getCurrency() === 'CAD' ? 1050 : 1300);
+    }
 
-function updateRwf() {
-  const el = document.getElementById('amountUsd');
-  const out = document.getElementById('rwfPreview');
-  if (!el || !out) return;
-  const v = parseFloat(String(el.value).replace(',', '.'));
-  if (!isFinite(v) || v <= 0) { out.textContent = '—'; return; }
-  out.textContent = new Intl.NumberFormat().format(Math.round(v * getActiveFxRate())) + ' RWF';
-}
+    function updateAmountLabel() {
+      if (amountLabel) amountLabel.textContent = 'Amount (' + getCurrency() + ')';
+    }
 
-async function refreshFxRates() {
-  for (const cur of ['USD', 'CAD']) {
-    try {
-      const res = await fetch('payments/api/fx-rate.php?from=' + encodeURIComponent(cur), { cache: 'no-store' });
-      const data = await res.json();
-      if (data && data.ok && isFinite(data.rate) && data.rate > 50) {
-        if (cur === 'USD') PCVC_USD_RWF_RATE = Number(data.rate);
-        if (cur === 'CAD') PCVC_CAD_RWF_RATE = Number(data.rate);
+    function updateRwf() {
+      const v = parseFloat(String(amountInput.value).replace(',', '.'));
+      if (!isFinite(v) || v <= 0) {
+        rwfPreview.textContent = '—';
+        return;
       }
-    } catch (e) {}
-  }
-  updateRwf();
-}
+      rwfPreview.textContent = new Intl.NumberFormat().format(Math.round(v * getRate())) + ' RWF';
+    }
 
-document.getElementById('commissionCurrency')?.addEventListener('change', () => {
-  updateAmountLabel();
-  updateRwf();
-});
-document.getElementById('amountUsd')?.addEventListener('input', updateRwf);
-document.getElementById('amountUsd')?.addEventListener('change', updateRwf);
-updateAmountLabel();
-updateRwf();
-refreshFxRates();
+    function onCurrencyChange() {
+      updateAmountLabel();
+      updateRwf();
+    }
+
+    currencySelect.addEventListener('change', onCurrencyChange);
+    currencySelect.addEventListener('input', onCurrencyChange);
+    amountInput.addEventListener('input', updateRwf);
+    amountInput.addEventListener('keyup', updateRwf);
+    amountInput.addEventListener('change', updateRwf);
+
+    updateAmountLabel();
+    updateRwf();
+
+    const fxApiBase = new URL('payments/api/fx-rate.php', window.location.href);
+    ['USD', 'CAD'].forEach(function (cur) {
+      const fxUrl = new URL(fxApiBase.toString());
+      fxUrl.searchParams.set('from', cur);
+      fetch(fxUrl.toString(), { cache: 'no-store', credentials: 'same-origin' })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (!data || !data.ok || !isFinite(data.rate) || data.rate <= 50) return;
+          if (cur === 'USD') PCVC_USD_RWF_RATE = Number(data.rate);
+          if (cur === 'CAD') PCVC_CAD_RWF_RATE = Number(data.rate);
+          updateRwf();
+        })
+        .catch(function () {});
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+})();
 
 if (!LOCKED) {
   $('#studentSelect').select2({ theme: 'bootstrap-5', width: '100%' });
