@@ -206,11 +206,13 @@ button:disabled {
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', () => {
 
   let extractedData = null;
   let selectedGender = null;
+  let pdfJsReady = false;
 
   const form = document.getElementById('transcriptForm');
   const extractBtn = document.getElementById('extractBtn');
@@ -218,39 +220,61 @@ document.addEventListener('DOMContentLoaded', () => {
   const loading = document.getElementById('loading');
   const progressBar = document.getElementById('progressBar');
   const progressStatus = document.getElementById('progressStatus');
+  const progressHint = document.getElementById('progressHint');
   const result = document.getElementById('result');
   const error = document.getElementById('error');
   const downloads = document.getElementById('downloads');
 
-  const progressSteps = [
-    'Uploading transcript…',
-    'Preparing document…',
-    'Analyzing with OpenAI…',
-    'Extracting student details…'
-  ];
+  const EXTRACT_TIMEOUT_MS = 120000;
 
-  let progressTimer = null;
-  let progressIndex = 0;
-
-  function startProgress() {
-    progressIndex = 0;
-    progressBar.style.width = '8%';
-    progressStatus.textContent = progressSteps[0];
-
-    progressTimer = window.setInterval(() => {
-      progressIndex = Math.min(progressIndex + 1, progressSteps.length - 1);
-      progressStatus.textContent = progressSteps[progressIndex];
-      const pct = Math.min(92, 8 + progressIndex * 21);
-      progressBar.style.width = pct + '%';
-    }, 2200);
+  function setProgress(pct, status, hint) {
+    progressBar.style.width = pct + '%';
+    progressStatus.textContent = status;
+    if (hint) {
+      progressHint.textContent = hint;
+    }
   }
 
-  function stopProgress(success) {
-    if (progressTimer) {
-      clearInterval(progressTimer);
-      progressTimer = null;
+  async function ensurePdfJs() {
+    if (pdfJsReady) {
+      return;
     }
-    progressBar.style.width = success ? '100%' : '0%';
+    if (!window.pdfjsLib) {
+      throw new Error('PDF library failed to load. Check your internet connection.');
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    pdfJsReady = true;
+  }
+
+  async function pdfFirstPageToPng(file) {
+    await ensurePdfJs();
+    const data = new Uint8Array(await file.arrayBuffer());
+    const doc = await pdfjsLib.getDocument({ data }).promise;
+    const page = await doc.getPage(1);
+    const viewport = page.getViewport({ scale: 2.5 });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    const blob = await new Promise((resolve, reject) => {
+      canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Could not render PDF page'))), 'image/png', 0.92);
+    });
+
+    return new File([blob], 'transcript-page1.png', { type: 'image/png' });
+  }
+
+  async function prepareUploadFile(file) {
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (ext === 'pdf') {
+      setProgress(15, 'Converting PDF first page to image…', 'This runs in your browser — no Ghostscript needed.');
+      return pdfFirstPageToPng(file);
+    }
+    return file;
   }
 
   /* =====================
@@ -264,16 +288,27 @@ document.addEventListener('DOMContentLoaded', () => {
     loading.classList.remove('hidden');
     result.classList.add('hidden');
     error.classList.add('hidden');
-    startProgress();
+    setProgress(5, 'Starting…', 'This usually takes 15–45 seconds.');
 
     const formData = new FormData(form);
     selectedGender = formData.get('gender');
+    const originalFile = formData.get('transcript');
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), EXTRACT_TIMEOUT_MS);
 
     try {
+      const uploadFile = await prepareUploadFile(originalFile);
+      formData.set('transcript', uploadFile, uploadFile.name);
+
+      setProgress(35, 'Uploading and analyzing with OpenAI…', 'Reading transcript header from the first page.');
+
       const res = await fetch('../extract/extract_transcript.php', {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
+
+      setProgress(85, 'Extracting student details…', 'Almost done.');
 
       const text = await res.text();
       let json;
@@ -281,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         json = JSON.parse(text);
       } catch {
-        stopProgress(false);
+        setProgress(0, 'Failed', '');
         error.textContent = 'Invalid response from extraction service';
         error.classList.remove('hidden');
         extractBtn.disabled = false;
@@ -289,7 +324,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      stopProgress(json.status === 'success');
+      setProgress(json.status === 'success' ? 100 : 0, json.status === 'success' ? 'Done!' : 'Failed', '');
       extractBtn.disabled = false;
       loading.classList.add('hidden');
 
@@ -315,12 +350,18 @@ document.addEventListener('DOMContentLoaded', () => {
       generateBtn.disabled = false;
 
     } catch (err) {
-      stopProgress(false);
+      setProgress(0, 'Failed', '');
       extractBtn.disabled = false;
       loading.classList.add('hidden');
       console.error(err);
-      error.textContent = 'Server error during extraction. Check that Apache is running and OPENAI_API_KEY is set in .env.';
+      if (err && err.name === 'AbortError') {
+        error.textContent = 'Extraction timed out after 2 minutes. Try again with a smaller PDF or a JPG/PNG photo of the first page.';
+      } else {
+        error.textContent = err && err.message ? err.message : 'Server error during extraction.';
+      }
       error.classList.remove('hidden');
+    } finally {
+      clearTimeout(timeoutId);
     }
   });
 
