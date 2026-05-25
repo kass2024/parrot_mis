@@ -71,7 +71,7 @@ $labels = [
               <th>#</th>
               <th>Status</th>
               <th>Student</th>
-              <th class="text-end">USD</th>
+              <th class="text-end">Amount</th>
               <th class="text-end">RWF</th>
               <th>Submitted</th>
               <th></th>
@@ -94,7 +94,10 @@ $labels = [
                   <?php endif; ?>
                 </td>
                 <td><?= htmlspecialchars((string) ($r['recruited_name'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
-                <td class="text-end"><?= number_format((float) ($r['amount_usd'] ?? 0), 2) ?></td>
+                <td class="text-end"><?php
+                  $cur = strtoupper(trim((string) ($r['commission_currency'] ?? 'USD'))) ?: 'USD';
+                  echo htmlspecialchars($cur, ENT_QUOTES, 'UTF-8') . ' ' . number_format((float) ($r['amount_usd'] ?? 0), 2);
+                ?></td>
                 <td class="text-end"><?= number_format((float) ($r['amount_rwf'] ?? 0), 0) ?></td>
                 <td class="small"><?= htmlspecialchars((string) ($r['submission_date'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                 <td>

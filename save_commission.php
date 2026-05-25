@@ -43,13 +43,16 @@ try {
         }
     }
 
-    $amountUsd = (float) str_replace(',', '', (string) $_POST['amount_usd']);
-    if ($amountUsd <= 0) {
-        throw new RuntimeException('Commission amount (USD) must be greater than zero.');
+    $amountEntered = (float) str_replace(',', '', (string) $_POST['amount_usd']);
+    if ($amountEntered <= 0) {
+        throw new RuntimeException('Commission amount must be greater than zero.');
     }
-    $conv = pcvc_usd_to_rwf_conversion($amountUsd);
+
+    $commissionCurrency = pcvc_normalize_commission_currency((string) ($_POST['commission_currency'] ?? 'USD'));
+    $conv = pcvc_currency_to_rwf_conversion($commissionCurrency, $amountEntered);
     $amountRwf = (float) $conv['rwf'];
     $fxRate = (float) $conv['rate'];
+    $amountUsd = $amountEntered;
 
     $studentKey = trim((string) $_POST['recruited_student_id']);
     $prefix = substr($studentKey, 0, 2);
@@ -106,15 +109,15 @@ try {
         recruited_name, recruited_phone, country_applied,
         loan_status, visa_status, contract_signed,
         comments, submission_date, signature, recruited_student_id,
-        amount_usd, amount_rwf, fx_rate_used, request_status, paid_rwf_total
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
+        amount_usd, amount_rwf, fx_rate_used, commission_currency, request_status, paid_rwf_total
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)';
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
         throw new RuntimeException('Prepare failed: ' . $conn->error);
     }
 
-    $types = 'i' . str_repeat('s', 18) . 'idddsd';
+    $types = 'i' . str_repeat('s', 18) . 'idddssd';
     $stmt->bind_param(
         $types,
         $userId,
@@ -140,6 +143,7 @@ try {
         $amountUsd,
         $amountRwf,
         $fxRate,
+        $commissionCurrency,
         $requestStatus,
         $paidZero
     );
@@ -160,7 +164,8 @@ try {
         . '<p><strong>ID:</strong> ' . htmlspecialchars((string) $newId, ENT_QUOTES, 'UTF-8') . '</p>'
         . '<p><strong>Agent:</strong> ' . $safeName
         . ' &lt;' . $safeEmail . '&gt;</p>'
-        . '<p><strong>Amount:</strong> USD ' . htmlspecialchars(number_format($amountUsd, 2), ENT_QUOTES, 'UTF-8')
+        . '<p><strong>Amount:</strong> ' . htmlspecialchars($commissionCurrency, ENT_QUOTES, 'UTF-8') . ' '
+        . htmlspecialchars(number_format($amountUsd, 2), ENT_QUOTES, 'UTF-8')
         . ' → RWF ' . htmlspecialchars(number_format($amountRwf, 0), ENT_QUOTES, 'UTF-8')
         . ' (rate ' . htmlspecialchars((string) $fxRate, ENT_QUOTES, 'UTF-8') . ')</p>'
         . '<p><strong>Recruited student:</strong> ' . htmlspecialchars($recruited_name, ENT_QUOTES, 'UTF-8') . '</p>'

@@ -71,13 +71,15 @@ foreach ($required as $f) {
     }
 }
 
-$amountUsd = (float) str_replace(',', '', (string) $_POST['amount_usd']);
-if ($amountUsd <= 0) {
-    respond(['ok' => false, 'error' => 'Commission amount (USD) must be greater than zero.'], 400);
+$amountEntered = (float) str_replace(',', '', (string) $_POST['amount_usd']);
+if ($amountEntered <= 0) {
+    respond(['ok' => false, 'error' => 'Commission amount must be greater than zero.'], 400);
 }
-$conv = pcvc_usd_to_rwf_conversion($amountUsd);
+$commissionCurrency = pcvc_normalize_commission_currency((string) ($_POST['commission_currency'] ?? 'USD'));
+$conv = pcvc_currency_to_rwf_conversion($commissionCurrency, $amountEntered);
 $amountRwf = (float) $conv['rwf'];
 $fxRate = (float) $conv['rate'];
+$amountUsd = $amountEntered;
 
 $studentKey = trim((string) $_POST['recruited_student_id']);
 $prefix = substr($studentKey, 0, 2);
@@ -130,7 +132,7 @@ $sql = 'UPDATE commission_requests SET
     recruited_name = ?, recruited_phone = ?, country_applied = ?,
     loan_status = ?, visa_status = ?, contract_signed = ?,
     comments = ?, submission_date = ?, signature = ?, recruited_student_id = ?,
-    amount_usd = ?, amount_rwf = ?, fx_rate_used = ?
+    amount_usd = ?, amount_rwf = ?, fx_rate_used = ?, commission_currency = ?
     WHERE id = ? LIMIT 1';
 
 $upd = $conn->prepare($sql);
@@ -138,7 +140,7 @@ if (!$upd) {
     respond(['ok' => false, 'error' => 'Prepare failed.'], 500);
 }
 
-$types = str_repeat('s', 14) . 'idddi';
+$types = str_repeat('s', 14) . 'idddsi';
 $upd->bind_param(
     $types,
     $street_address,
@@ -159,6 +161,7 @@ $upd->bind_param(
     $amountUsd,
     $amountRwf,
     $fxRate,
+    $commissionCurrency,
     $id
 );
 

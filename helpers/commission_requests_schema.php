@@ -32,6 +32,9 @@ function pcvc_ensure_commission_requests_schema(mysqli $conn): void
     if (empty($have['fx_rate_used'])) {
         $alters[] = 'ADD COLUMN `fx_rate_used` DECIMAL(14,6) NULL DEFAULT NULL';
     }
+    if (empty($have['commission_currency'])) {
+        $alters[] = "ADD COLUMN `commission_currency` VARCHAR(3) NOT NULL DEFAULT 'USD'";
+    }
     if (empty($have['request_status'])) {
         $alters[] = "ADD COLUMN `request_status` VARCHAR(32) NOT NULL DEFAULT 'pending'";
     }

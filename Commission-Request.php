@@ -15,6 +15,8 @@ if (empty($_SESSION['username']) && empty($_SESSION['admin_id'])) {
 
 $pcvcFxSample = pcvc_usd_to_rwf_conversion(1.0);
 $pcvcFxRate = $pcvcFxSample['rate'];
+$pcvcCadSample = pcvc_cad_to_rwf_conversion(1.0);
+$pcvcCadFxRate = $pcvcCadSample['rate'];
 
 // Get current agent info from session
 $agentUsername = $_SESSION['username'] ?? '';
@@ -269,6 +271,13 @@ body {
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid #e2e8f0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+.commission-hero-bar .fx-rate-item {
+  white-space: nowrap;
 }
 
 .rwf-preview-box {
@@ -620,9 +629,13 @@ textarea.form-control {
   <div class="commission-hero-bar">
     <div>
       <strong>Request commission</strong>
-      <div class="small text-muted mt-1">Amounts are entered in USD; RWF is calculated automatically for payout.</div>
+      <div class="small text-muted mt-1">Enter the amount in USD or CAD; RWF is calculated automatically for payout.</div>
     </div>
-    <div class="fx-pill">1 USD ≈ <?= htmlspecialchars(number_format($pcvcFxRate, 2), ENT_QUOTES, 'UTF-8') ?> RWF <span class="text-muted">(live rate, same as checkout; cached daily)</span></div>
+    <div class="fx-pill" id="fxPillDisplay">
+      <span class="fx-rate-item">1 USD ≈ <strong id="fxUsdRate"><?= htmlspecialchars(number_format($pcvcFxRate, 2), ENT_QUOTES, 'UTF-8') ?></strong> RWF</span>
+      <span class="fx-rate-item">1 CAD ≈ <strong id="fxCadRate"><?= htmlspecialchars(number_format($pcvcCadFxRate, 2), ENT_QUOTES, 'UTF-8') ?></strong> RWF</span>
+      <span class="text-muted">(live rate, same as checkout; cached daily)</span>
+    </div>
   </div>
   <div class="page-header">
     <h1>Commission Request Form</h1>
@@ -680,13 +693,20 @@ textarea.form-control {
     <!-- COMMISSION AMOUNT -->
     <section class="form-section">
       <h3>Commission amount</h3>
-      <p class="section-help">Enter the commission you are requesting in US dollars (USD). RWF is estimated using the same live exchange rate as student checkout (refreshed daily).</p>
+      <p class="section-help">Enter the commission in US dollars (USD) or Canadian dollars (CAD). Estimated RWF uses the same live exchange rate as student checkout (refreshed daily).</p>
       <div class="row g-4">
-        <div class="col-md-6">
-          <label class="form-label fw-semibold">Amount requested (USD) *</label>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold">Currency *</label>
+          <select class="form-select" name="commission_currency" id="commissionCurrency" required>
+            <option value="USD">USD — US Dollar</option>
+            <option value="CAD">CAD — Canadian Dollar</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label fw-semibold" id="amountLabel">Amount requested (USD) *</label>
           <input type="number" class="form-control" name="amount_usd" id="amountUsd" min="0.01" step="0.01" placeholder="e.g. 150.00" required>
         </div>
-        <div class="col-md-6 d-flex align-items-end">
+        <div class="col-md-4 d-flex align-items-end">
           <div class="rwf-preview-box w-100">
             Estimated RWF: <span class="num" id="rwfPreview">—</span>
           </div>
@@ -857,15 +877,82 @@ textarea.form-control {
 
 <script>
 let PCVC_USD_RWF_RATE = <?= json_encode((float) $pcvcFxRate) ?>;
+let PCVC_CAD_RWF_RATE = <?= json_encode((float) $pcvcCadFxRate) ?>;
 window.PCVC_COMMISSION_SUBMIT_REDIRECT = <?= json_encode($pcvcCommissionSubmitRedirect) ?>;
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("commissionForm");
   const amountUsd = document.getElementById("amountUsd");
+  const commissionCurrency = document.getElementById("commissionCurrency");
+  const amountLabel = document.getElementById("amountLabel");
   const rwfPreview = document.getElementById("rwfPreview");
+  const fxUsdRate = document.getElementById("fxUsdRate");
+  const fxCadRate = document.getElementById("fxCadRate");
   const validationBanner = document.getElementById("formValidationBanner");
   const overlay = document.getElementById("uploadOverlay");
   const closeBtn = document.getElementById("submitOverlayClose");
+
+  function getSelectedCurrency() {
+    return (commissionCurrency?.value || "USD").toUpperCase();
+  }
+
+  function getActiveFxRate() {
+    return getSelectedCurrency() === "CAD" ? PCVC_CAD_RWF_RATE : PCVC_USD_RWF_RATE;
+  }
+
+  function formatRate(n) {
+    return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
+  }
+
+  function updateAmountLabel() {
+    if (!amountLabel) return;
+    const cur = getSelectedCurrency();
+    amountLabel.textContent = "Amount requested (" + cur + ") *";
+  }
+
+  async function refreshFxRates() {
+    for (const cur of ["USD", "CAD"]) {
+      try {
+        const res = await fetch("payments/api/fx-rate.php?from=" + encodeURIComponent(cur), { cache: "no-store" });
+        const data = await res.json();
+        if (data && data.ok && isFinite(data.rate) && data.rate > 50) {
+          if (cur === "USD") PCVC_USD_RWF_RATE = Number(data.rate);
+          if (cur === "CAD") PCVC_CAD_RWF_RATE = Number(data.rate);
+        }
+      } catch (e) {
+        /* keep server-rendered rates */
+      }
+    }
+    if (fxUsdRate) fxUsdRate.textContent = formatRate(PCVC_USD_RWF_RATE);
+    if (fxCadRate) fxCadRate.textContent = formatRate(PCVC_CAD_RWF_RATE);
+    updateRwfPreview();
+  }
+
+  function updateRwfPreview() {
+    if (!amountUsd || !rwfPreview) return;
+    const v = parseFloat(String(amountUsd.value).replace(",", "."));
+    if (!isFinite(v) || v <= 0) {
+      rwfPreview.textContent = "—";
+      return;
+    }
+    const rwf = Math.round(v * getActiveFxRate());
+    rwfPreview.textContent = new Intl.NumberFormat().format(rwf) + " RWF";
+  }
+
+  if (commissionCurrency) {
+    commissionCurrency.addEventListener("change", () => {
+      updateAmountLabel();
+      updateRwfPreview();
+    });
+    updateAmountLabel();
+  }
+
+  if (amountUsd) {
+    amountUsd.addEventListener("input", updateRwfPreview);
+    amountUsd.addEventListener("change", updateRwfPreview);
+  }
+
+  refreshFxRates();
 
   function setStudentSelectInvalid(on) {
     const sel = document.getElementById("studentSelect");
@@ -900,22 +987,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  function updateRwfPreview() {
-    if (!amountUsd || !rwfPreview) return;
-    const v = parseFloat(String(amountUsd.value).replace(",", "."));
-    if (!isFinite(v) || v <= 0) {
-      rwfPreview.textContent = "—";
-      return;
-    }
-    const rwf = Math.round(v * PCVC_USD_RWF_RATE);
-    rwfPreview.textContent = new Intl.NumberFormat().format(rwf) + " RWF";
-  }
-
-  if (amountUsd) {
-    amountUsd.addEventListener("input", updateRwfPreview);
-    amountUsd.addEventListener("change", updateRwfPreview);
-  }
-
   window.jQuery("#studentSelect").select2({
     theme: "bootstrap-5",
     placeholder: "Search for a student...",
@@ -930,18 +1001,6 @@ document.addEventListener("DOMContentLoaded", () => {
       validationBanner.textContent = "";
     }
   });
-
-  // Sync preview with same API as checkout (optional refresh if page left open)
-  const fxApiUrl = new URL("payments/api/fx-rate.php", window.location.href).href;
-  fetch(fxApiUrl + "?from=USD", { credentials: "same-origin" })
-    .then((r) => r.json())
-    .then((data) => {
-      if (data && data.ok && typeof data.rate === "number" && data.rate >= 100) {
-        PCVC_USD_RWF_RATE = data.rate;
-        updateRwfPreview();
-      }
-    })
-    .catch(() => { /* keep server-rendered rate */ });
 
   const today = new Date().toISOString().split("T")[0];
   const dateInput = document.querySelector('input[name="date"]');
@@ -1033,7 +1092,7 @@ document.addEventListener("DOMContentLoaded", () => {
       firstFocus = studentSelect;
     }
     if (!isFinite(usdVal) || usdVal <= 0) {
-      missing.push("commission amount (USD)");
+      missing.push("commission amount (" + getSelectedCurrency() + ")");
       if (amountUsd) amountUsd.classList.add("is-invalid");
       if (!firstFocus) firstFocus = amountUsd;
     }

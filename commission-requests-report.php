@@ -712,6 +712,7 @@ function pcvc_commission_step_index(string $status, array $order): int
           'comments' => $r['comments'] ?? '',
           'internal_note' => $r['internal_note'] ?? '',
           'amount_usd' => $usd,
+          'commission_currency' => strtoupper(trim((string) ($r['commission_currency'] ?? 'USD'))) ?: 'USD',
           'amount_rwf' => $rwf,
           'fx_rate_used' => $r['fx_rate_used'] ?? '',
           'paid_rwf_total' => $paid,
@@ -1099,7 +1100,7 @@ function openCommissionModal(data) {
     <div class="modal-section">
       <h4>Finance</h4>
       <div class="modal-grid">
-        <div class="modal-row"><strong>USD</strong><span>${fmtMoney(data.amount_usd, 'USD')}</span></div>
+        <div class="modal-row"><strong>Amount</strong><span>${fmtMoney(data.amount_usd, data.commission_currency || 'USD')}</span></div>
         <div class="modal-row"><strong>RWF due</strong><span>${fmtMoney(data.amount_rwf, 'RWF')}</span></div>
         <div class="modal-row"><strong>FX rate</strong><span>${escapeHtml(String(data.fx_rate_used ?? ''))}</span></div>
         <div class="modal-row"><strong>Paid</strong><span>${fmtMoney(data.paid_rwf_total, 'RWF')}</span></div>

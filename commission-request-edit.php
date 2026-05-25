@@ -113,6 +113,9 @@ $studentSelectValue = pcvc_commission_resolve_student_key($conn, $conn2, $ridNum
 
 $pcvcFxSample = pcvc_usd_to_rwf_conversion(1.0);
 $pcvcFxRate = $pcvcFxSample['rate'];
+$pcvcCadSample = pcvc_cad_to_rwf_conversion(1.0);
+$pcvcCadFxRate = $pcvcCadSample['rate'];
+$editCurrency = pcvc_normalize_commission_currency((string) ($row['commission_currency'] ?? 'USD'));
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -190,13 +193,21 @@ $dis = $locked ? 'disabled' : '';
     </div>
 
     <div class="form-section">
-      <h3 class="h5">Amount (USD) *</h3>
+      <h3 class="h5">Amount *</h3>
       <div class="row g-3 align-items-end">
-        <div class="col-md-6">
+        <div class="col-md-4">
+          <label class="form-label small">Currency</label>
+          <select class="form-select" name="commission_currency" id="commissionCurrency" required <?= $ro ?>>
+            <option value="USD" <?= $editCurrency === 'USD' ? 'selected' : '' ?>>USD — US Dollar</option>
+            <option value="CAD" <?= $editCurrency === 'CAD' ? 'selected' : '' ?>>CAD — Canadian Dollar</option>
+          </select>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small" id="amountLabel">Amount (<?= htmlspecialchars($editCurrency, ENT_QUOTES, 'UTF-8') ?>)</label>
           <input type="number" class="form-control" name="amount_usd" id="amountUsd" min="0.01" step="0.01" required
             value="<?= htmlspecialchars((string) ($row['amount_usd'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" <?= $ro ?>>
         </div>
-        <div class="col-md-6"><div class="rwf-preview-box">Estimated RWF: <span id="rwfPreview">—</span></div></div>
+        <div class="col-md-4"><div class="rwf-preview-box">Estimated RWF: <span id="rwfPreview">—</span></div></div>
       </div>
     </div>
 
@@ -269,8 +280,22 @@ $dis = $locked ? 'disabled' : '';
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-const PCVC_USD_RWF_RATE = <?= json_encode((float) $pcvcFxRate) ?>;
+let PCVC_USD_RWF_RATE = <?= json_encode((float) $pcvcFxRate) ?>;
+let PCVC_CAD_RWF_RATE = <?= json_encode((float) $pcvcCadFxRate) ?>;
 const LOCKED = <?= $locked ? 'true' : 'false' ?>;
+
+function getSelectedCurrency() {
+  return (document.getElementById('commissionCurrency')?.value || 'USD').toUpperCase();
+}
+
+function getActiveFxRate() {
+  return getSelectedCurrency() === 'CAD' ? PCVC_CAD_RWF_RATE : PCVC_USD_RWF_RATE;
+}
+
+function updateAmountLabel() {
+  const label = document.getElementById('amountLabel');
+  if (label) label.textContent = 'Amount (' + getSelectedCurrency() + ')';
+}
 
 function updateRwf() {
   const el = document.getElementById('amountUsd');
@@ -278,11 +303,32 @@ function updateRwf() {
   if (!el || !out) return;
   const v = parseFloat(String(el.value).replace(',', '.'));
   if (!isFinite(v) || v <= 0) { out.textContent = '—'; return; }
-  out.textContent = new Intl.NumberFormat().format(Math.round(v * PCVC_USD_RWF_RATE)) + ' RWF';
+  out.textContent = new Intl.NumberFormat().format(Math.round(v * getActiveFxRate())) + ' RWF';
 }
+
+async function refreshFxRates() {
+  for (const cur of ['USD', 'CAD']) {
+    try {
+      const res = await fetch('payments/api/fx-rate.php?from=' + encodeURIComponent(cur), { cache: 'no-store' });
+      const data = await res.json();
+      if (data && data.ok && isFinite(data.rate) && data.rate > 50) {
+        if (cur === 'USD') PCVC_USD_RWF_RATE = Number(data.rate);
+        if (cur === 'CAD') PCVC_CAD_RWF_RATE = Number(data.rate);
+      }
+    } catch (e) {}
+  }
+  updateRwf();
+}
+
+document.getElementById('commissionCurrency')?.addEventListener('change', () => {
+  updateAmountLabel();
+  updateRwf();
+});
 document.getElementById('amountUsd')?.addEventListener('input', updateRwf);
 document.getElementById('amountUsd')?.addEventListener('change', updateRwf);
+updateAmountLabel();
 updateRwf();
+refreshFxRates();
 
 if (!LOCKED) {
   $('#studentSelect').select2({ theme: 'bootstrap-5', width: '100%' });

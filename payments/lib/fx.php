@@ -60,12 +60,11 @@ function payments_fx_get_rate_to_rwf(string $fromCurrency): float
 
     $newCache = [
         'date' => $today,
-        'rates' => [
-            $from => (float)$rwf,
-        ],
+        'rates' => is_array($cache['rates'] ?? null) ? $cache['rates'] : [],
         'source' => 'open.er-api.com',
         'fetched_at' => date('c'),
     ];
+    $newCache['rates'][$from] = (float) $rwf;
     if (!is_dir(dirname($cachePath))) {
         @mkdir(dirname($cachePath), 0755, true);
     }
