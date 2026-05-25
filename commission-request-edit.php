@@ -138,6 +138,7 @@ $dis = $locked ? 'disabled' : '';
     .form-section { background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
     .rwf-preview-box { padding: 12px 16px; border-radius: 10px; background: rgba(66,116,49,0.08); border: 1px solid rgba(66,116,49,0.2); font-weight: 600; }
   </style>
+  <script src="js/commission_fx.js?v=2"></script>
 </head>
 <body>
 <div class="container" style="max-width: 900px;">
@@ -192,22 +193,29 @@ $dis = $locked ? 'disabled' : '';
       </select>
     </div>
 
-    <div class="form-section">
+    <div class="form-section" id="commissionAmountBlock"
+      data-usd-rwf-rate="<?= htmlspecialchars(number_format((float) $pcvcFxRate, 6, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
+      data-cad-rwf-rate="<?= htmlspecialchars(number_format((float) $pcvcCadFxRate, 6, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
+      data-label-prefix="Amount"
+      data-label-suffix="">
       <h3 class="h5">Amount *</h3>
       <div class="row g-3 align-items-end">
         <div class="col-md-4">
-          <label class="form-label small">Currency</label>
-          <select class="form-select" name="commission_currency" id="commissionCurrency" required <?= $ro ?>>
+          <label class="form-label small" for="commissionCurrency">Currency</label>
+          <select class="form-select" name="commission_currency" id="commissionCurrency" required <?= $ro ?>
+            onchange="if(window.pcvcOnCurrencyChange){window.pcvcOnCurrencyChange();}">
             <option value="USD" <?= $editCurrency === 'USD' ? 'selected' : '' ?>>USD — US Dollar</option>
             <option value="CAD" <?= $editCurrency === 'CAD' ? 'selected' : '' ?>>CAD — Canadian Dollar</option>
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label small" id="amountLabel">Amount (<?= htmlspecialchars($editCurrency, ENT_QUOTES, 'UTF-8') ?>)</label>
+          <label class="form-label small" id="amountLabel" for="amountUsd">Amount (<?= htmlspecialchars($editCurrency, ENT_QUOTES, 'UTF-8') ?>)</label>
           <input type="number" class="form-control" name="amount_usd" id="amountUsd" min="0.01" step="0.01" required
-            value="<?= htmlspecialchars((string) ($row['amount_usd'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" <?= $ro ?>>
+            value="<?= htmlspecialchars((string) ($row['amount_usd'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" <?= $ro ?>
+            oninput="if(window.pcvcUpdateRwfPreview){window.pcvcUpdateRwfPreview();}"
+            onchange="if(window.pcvcUpdateRwfPreview){window.pcvcUpdateRwfPreview();}">
         </div>
-        <div class="col-md-4"><div class="rwf-preview-box">Estimated RWF: <span id="rwfPreview">—</span></div></div>
+        <div class="col-md-4"><div class="rwf-preview-box">Estimated RWF: <span class="num" id="rwfPreview">—</span></div></div>
       </div>
     </div>
 
@@ -280,76 +288,7 @@ $dis = $locked ? 'disabled' : '';
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
-let PCVC_USD_RWF_RATE = <?= json_encode((float) $pcvcFxRate) ?>;
-let PCVC_CAD_RWF_RATE = <?= json_encode((float) $pcvcCadFxRate) ?>;
 const LOCKED = <?= $locked ? 'true' : 'false' ?>;
-
-(function initCommissionFxEdit() {
-  function boot() {
-    const amountInput = document.getElementById('amountUsd');
-    const currencySelect = document.getElementById('commissionCurrency');
-    const amountLabel = document.getElementById('amountLabel');
-    const rwfPreview = document.getElementById('rwfPreview');
-    if (!amountInput || !currencySelect || !rwfPreview) return;
-
-    function getCurrency() {
-      return String(currencySelect.value || 'USD').toUpperCase();
-    }
-
-    function getRate() {
-      const rate = getCurrency() === 'CAD' ? PCVC_CAD_RWF_RATE : PCVC_USD_RWF_RATE;
-      return isFinite(rate) && rate > 0 ? rate : (getCurrency() === 'CAD' ? 1050 : 1300);
-    }
-
-    function updateAmountLabel() {
-      if (amountLabel) amountLabel.textContent = 'Amount (' + getCurrency() + ')';
-    }
-
-    function updateRwf() {
-      const v = parseFloat(String(amountInput.value).replace(',', '.'));
-      if (!isFinite(v) || v <= 0) {
-        rwfPreview.textContent = '—';
-        return;
-      }
-      rwfPreview.textContent = new Intl.NumberFormat().format(Math.round(v * getRate())) + ' RWF';
-    }
-
-    function onCurrencyChange() {
-      updateAmountLabel();
-      updateRwf();
-    }
-
-    currencySelect.addEventListener('change', onCurrencyChange);
-    currencySelect.addEventListener('input', onCurrencyChange);
-    amountInput.addEventListener('input', updateRwf);
-    amountInput.addEventListener('keyup', updateRwf);
-    amountInput.addEventListener('change', updateRwf);
-
-    updateAmountLabel();
-    updateRwf();
-
-    const fxApiBase = new URL('payments/api/fx-rate.php', window.location.href);
-    ['USD', 'CAD'].forEach(function (cur) {
-      const fxUrl = new URL(fxApiBase.toString());
-      fxUrl.searchParams.set('from', cur);
-      fetch(fxUrl.toString(), { cache: 'no-store', credentials: 'same-origin' })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (!data || !data.ok || !isFinite(data.rate) || data.rate <= 50) return;
-          if (cur === 'USD') PCVC_USD_RWF_RATE = Number(data.rate);
-          if (cur === 'CAD') PCVC_CAD_RWF_RATE = Number(data.rate);
-          updateRwf();
-        })
-        .catch(function () {});
-    });
-  }
-
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else {
-    boot();
-  }
-})();
 
 if (!LOCKED) {
   $('#studentSelect').select2({ theme: 'bootstrap-5', width: '100%' });

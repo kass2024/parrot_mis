@@ -616,6 +616,7 @@ textarea.form-control {
 }
 .form-validation-banner.show { display: block; }
 </style>
+<script src="js/commission_fx.js?v=2"></script>
 </head>
 
 <body>
@@ -691,20 +692,25 @@ textarea.form-control {
     </section>
 
     <!-- COMMISSION AMOUNT -->
-    <section class="form-section">
+    <section class="form-section" id="commissionAmountBlock"
+      data-usd-rwf-rate="<?= htmlspecialchars(number_format((float) $pcvcFxRate, 6, '.', ''), ENT_QUOTES, 'UTF-8') ?>"
+      data-cad-rwf-rate="<?= htmlspecialchars(number_format((float) $pcvcCadFxRate, 6, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
       <h3>Commission amount</h3>
       <p class="section-help">Enter the commission in US dollars (USD) or Canadian dollars (CAD). Estimated RWF uses the same live exchange rate as student checkout (refreshed daily).</p>
       <div class="row g-4">
         <div class="col-md-4">
-          <label class="form-label fw-semibold">Currency *</label>
-          <select class="form-select" name="commission_currency" id="commissionCurrency" required>
+          <label class="form-label fw-semibold" for="commissionCurrency">Currency *</label>
+          <select class="form-select" name="commission_currency" id="commissionCurrency" required
+            onchange="if(window.pcvcOnCurrencyChange){window.pcvcOnCurrencyChange();}">
             <option value="USD">USD — US Dollar</option>
             <option value="CAD">CAD — Canadian Dollar</option>
           </select>
         </div>
         <div class="col-md-4">
-          <label class="form-label fw-semibold" id="amountLabel">Amount requested (USD) *</label>
-          <input type="number" class="form-control" name="amount_usd" id="amountUsd" min="0.01" step="0.01" placeholder="e.g. 150.00" required>
+          <label class="form-label fw-semibold" id="amountLabel" for="amountUsd">Amount requested (USD) *</label>
+          <input type="number" class="form-control" name="amount_usd" id="amountUsd" min="0.01" step="0.01" placeholder="e.g. 150.00" required
+            oninput="if(window.pcvcUpdateRwfPreview){window.pcvcUpdateRwfPreview();}"
+            onchange="if(window.pcvcUpdateRwfPreview){window.pcvcUpdateRwfPreview();}">
         </div>
         <div class="col-md-4 d-flex align-items-end">
           <div class="rwf-preview-box w-100">
@@ -874,99 +880,18 @@ textarea.form-control {
 
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
 <script>
-let PCVC_USD_RWF_RATE = <?= json_encode((float) $pcvcFxRate) ?>;
-let PCVC_CAD_RWF_RATE = <?= json_encode((float) $pcvcCadFxRate) ?>;
 window.PCVC_COMMISSION_SUBMIT_REDIRECT = <?= json_encode($pcvcCommissionSubmitRedirect) ?>;
-
-(function initCommissionFx() {
-  function bootCommissionFx() {
-    const amountInput = document.getElementById("amountUsd");
-    const currencySelect = document.getElementById("commissionCurrency");
-    const amountLabel = document.getElementById("amountLabel");
-    const rwfPreview = document.getElementById("rwfPreview");
-    if (!amountInput || !currencySelect || !rwfPreview) return;
-
-    function getCurrency() {
-      return String(currencySelect.value || "USD").toUpperCase();
-    }
-
-    function getRate() {
-      const rate = getCurrency() === "CAD" ? PCVC_CAD_RWF_RATE : PCVC_USD_RWF_RATE;
-      return isFinite(rate) && rate > 0 ? rate : (getCurrency() === "CAD" ? 1050 : 1300);
-    }
-
-    function formatRate(n) {
-      return new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n);
-    }
-
-    function updateAmountLabel() {
-      if (!amountLabel) return;
-      amountLabel.textContent = "Amount requested (" + getCurrency() + ") *";
-    }
-
-    function updateRwfPreview() {
-      const v = parseFloat(String(amountInput.value).replace(",", "."));
-      if (!isFinite(v) || v <= 0) {
-        rwfPreview.textContent = "—";
-        return;
-      }
-      const rwf = Math.round(v * getRate());
-      rwfPreview.textContent = new Intl.NumberFormat().format(rwf) + " RWF";
-    }
-
-    function onCurrencyChange() {
-      updateAmountLabel();
-      updateRwfPreview();
-    }
-
-    currencySelect.addEventListener("change", onCurrencyChange);
-    currencySelect.addEventListener("input", onCurrencyChange);
-    amountInput.addEventListener("input", updateRwfPreview);
-    amountInput.addEventListener("keyup", updateRwfPreview);
-    amountInput.addEventListener("change", updateRwfPreview);
-
-    updateAmountLabel();
-    updateRwfPreview();
-
-    window.pcvcGetSelectedCurrency = getCurrency;
-    window.pcvcGetCommissionFxRate = getRate;
-
-    const fxApiBase = new URL("payments/api/fx-rate.php", window.location.href);
-    ["USD", "CAD"].forEach(function (cur) {
-      const fxUrl = new URL(fxApiBase.toString());
-      fxUrl.searchParams.set("from", cur);
-      fetch(fxUrl.toString(), { cache: "no-store", credentials: "same-origin" })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-          if (!data || !data.ok || !isFinite(data.rate) || data.rate <= 50) return;
-          if (cur === "USD") PCVC_USD_RWF_RATE = Number(data.rate);
-          if (cur === "CAD") PCVC_CAD_RWF_RATE = Number(data.rate);
-          const fxUsdRate = document.getElementById("fxUsdRate");
-          const fxCadRate = document.getElementById("fxCadRate");
-          if (fxUsdRate && cur === "USD") fxUsdRate.textContent = formatRate(PCVC_USD_RWF_RATE);
-          if (fxCadRate && cur === "CAD") fxCadRate.textContent = formatRate(PCVC_CAD_RWF_RATE);
-          updateRwfPreview();
-        })
-        .catch(function () { /* keep server-rendered rates */ });
-    });
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", bootCommissionFx);
-  } else {
-    bootCommissionFx();
-  }
-})();
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("commissionForm");
+  if (!form) return;
+
   const amountUsd = document.getElementById("amountUsd");
   const validationBanner = document.getElementById("formValidationBanner");
   const overlay = document.getElementById("uploadOverlay");
   const closeBtn = document.getElementById("submitOverlayClose");
-  const signatureInput = form ? form.querySelector('input[name="signature"]') : null;
+  const signatureInput = form.querySelector('input[name="signature"]');
 
   function getSelectedCurrency() {
     if (typeof window.pcvcGetSelectedCurrency === "function") {
