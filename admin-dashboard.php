@@ -28,7 +28,8 @@ if ($displayName === '') {
 
 require_once __DIR__ . '/includes/staff_dashboard_stats.php';
 require_once __DIR__ . '/helpers/application_filters.php';
-$isSuperExecutive = ($role === 'superadmin');
+require_once __DIR__ . '/helpers/role.php';
+$isSuperExecutive = pcvc_is_superadmin_role($role);
 $isCatholicPortal = (strtolower(trim((string) $role)) === 'catholic university of america');
 $showStaffPersonalDashboard = !$isSuperExecutive && !$isCatholicPortal;
 $staffDashStats = [];
@@ -236,7 +237,7 @@ $cards = [
     'links' => [
       'Credit-Transfer-report.php' => 'Transfer Requests list',
       'transfer-status.php' => 'Review Status',
-      'credit-search.php' => 'credit userID'
+      'credit-search.php' => 'credit userID',
     ]
   ],
   'visit_study_visa' => [
@@ -1947,6 +1948,12 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <i class="bi bi-search"></i>
           credit userID
         </a>
+        <?php if ($isSuperExecutive): ?>
+        <a href="#" onclick="loadInFrame('special-student-payments.php', 'Record Credit Transfer / UPAFA Payment')">
+          <i class="bi bi-cash-stack"></i>
+          Record Payment (Credit Transfer / UPAFA)
+        </a>
+        <?php endif; ?>
       </div>
       <?php endif; ?>
       

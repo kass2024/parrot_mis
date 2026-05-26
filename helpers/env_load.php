@@ -135,6 +135,10 @@ function xander_env_get(string $key): string
             'WHATSAPP_PHONE_NUMBER_ID' => true,
             'WHATSAPP_DEFAULT_COUNTRY_CODE' => true,
             'META_GRAPH_VERSION' => true,
+            'SPECIAL_PAYMENT_NOTIFY_EMAIL' => true,
+            'SPECIAL_PAYMENT_NOTIFY_WHATSAPP' => true,
+            'SMTP_PASSWORD' => true,
+            'APP_PUBLIC_URL' => true,
         ];
     }
     if (isset($directKeys[$key])) {

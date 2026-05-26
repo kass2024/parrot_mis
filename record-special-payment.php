@@ -1,29 +1,27 @@
 <?php
 declare(strict_types=1);
 
-/* =====================================================
-   0. BOOTSTRAP (NO OUTPUT EVER)
-===================================================== */
+require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
-require_once __DIR__ . '/generateReceiptPdf.php';
 require_once __DIR__ . '/helpers/custom_fee_package.php';
 require_once __DIR__ . '/helpers/receipt_render.php';
 require_once __DIR__ . '/helpers/payment_receipt_recorded_by.php';
+require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/credit_transfer_static_pricing.php';
+require_once __DIR__ . '/helpers/upafa_static_pricing.php';
+require_once __DIR__ . '/helpers/async_http.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
+pcvc_require_superadmin($conn, true);
 pcvc_ensure_payment_receipt_recorded_by_schema($conn);
 
 header('Content-Type: application/json; charset=utf-8');
 
-/* =====================================================
-   1. READ & DECODE JSON INPUT
-===================================================== */
 $rawInput = file_get_contents('php://input');
-
 if ($rawInput === false || trim($rawInput) === '') {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Empty request body']);
@@ -31,16 +29,12 @@ if ($rawInput === false || trim($rawInput) === '') {
 }
 
 $data = json_decode($rawInput, true);
-
 if (!is_array($data)) {
     http_response_code(400);
     echo json_encode(['success' => false, 'message' => 'Invalid JSON payload']);
     exit;
 }
 
-/* =====================================================
-   2. SANITIZE INPUT
-===================================================== */
 $applicationId = (int) ($data['student_id'] ?? 0);
 $sourceTable   = (string) ($data['table'] ?? '');
 $packageId     = (int) ($data['package_id'] ?? 0);
@@ -53,16 +47,21 @@ $customTitle     = trim((string) ($data['custom_title'] ?? ''));
 $customItemName  = trim((string) ($data['custom_item_name'] ?? ''));
 $customCurrency  = strtoupper(trim((string) ($data['custom_currency'] ?? '')));
 $customAmount    = round((float) ($data['custom_amount'] ?? 0), 2);
+$creditTier      = trim((string) ($data['credit_transfer_tier'] ?? ''));
+$upafaTier       = trim((string) ($data['upafa_fee_tier'] ?? ''));
+$staticPayAmount = round((float) ($data['pay_amount'] ?? 0), 2);
 
-/* =====================================================
-   3. VALIDATION
-===================================================== */
-$allowedTables = [
-    'student_applications',
-    'malta_applications',
-    'turkey_applications'
-];
+// Unified 6-fee modal: accept upafa_fee_tier for both program tables
+if ($upafaTier === '' && $creditTier !== '' && pcvc_upafa_fee_tier($creditTier)) {
+    $upafaTier = $creditTier;
+}
 
+$isSpecialFeeStatic = $upafaTier !== ''
+    && pcvc_upafa_fee_tier($upafaTier) !== null
+    && in_array($sourceTable, ['credit_transfer_applications', 'upafa_registrations'], true);
+$isStaticPayment = $isSpecialFeeStatic;
+
+$allowedTables = ['credit_transfer_applications', 'upafa_registrations'];
 $allowedCurrencies = ['USD', 'CAD', 'EUR', 'GBP', 'GHS', 'RWF'];
 
 if ($applicationId <= 0 || $method === '' || !in_array($sourceTable, $allowedTables, true)) {
@@ -71,7 +70,13 @@ if ($applicationId <= 0 || $method === '' || !in_array($sourceTable, $allowedTab
     exit;
 }
 
-if ($isCustomPackage) {
+if ($isStaticPayment) {
+    if ($staticPayAmount <= 0) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'message' => 'Enter a valid payment amount']);
+        exit;
+    }
+} elseif ($isCustomPackage) {
     if (
         $customTitle === '' ||
         $customAmount <= 0 ||
@@ -94,26 +99,36 @@ if ($isCustomPackage) {
         echo json_encode(['success' => false, 'message' => 'Payment amount must be greater than zero and not exceed the proposed price']);
         exit;
     }
-} elseif (
-    $packageId <= 0 ||
-    !is_array($items) ||
-    empty($items)
-) {
+} elseif ($packageId <= 0 || !is_array($items) || empty($items)) {
     http_response_code(422);
     echo json_encode(['success' => false, 'message' => 'Invalid or missing required fields']);
     exit;
 }
 
-/* =====================================================
-   4. START TRANSACTION
-===================================================== */
 $conn->begin_transaction();
 
 try {
-
     $customItemLabel = null;
 
-    if ($isCustomPackage) {
+    if ($isSpecialFeeStatic) {
+        $pkg = pcvc_ensure_upafa_fee_package($conn, $upafaTier);
+        $packageId = $pkg['package_id'];
+        $alreadyPaid = pcvc_upafa_fee_tier_paid(
+            $conn,
+            $applicationId,
+            $packageId,
+            $sourceTable,
+            $pkg['fee_item_id']
+        );
+        $tierTotal = (float) $pkg['total'];
+
+        if (($alreadyPaid + $staticPayAmount) > $tierTotal) {
+            throw new RuntimeException('Payment exceeds remaining balance for this fee');
+        }
+
+        $customItemLabel = $pkg['item_name'];
+        $items = [$pkg['fee_item_id'] => $staticPayAmount];
+    } elseif ($isCustomPackage) {
         $created = pcvc_create_custom_fee_package(
             $conn,
             $customTitle,
@@ -126,9 +141,6 @@ try {
         $items = [$created['fee_item_id'] => $customPayTotal];
     }
 
-    /* =================================================
-       5. ENSURE PACKAGE ASSIGNMENT
-    ================================================= */
     $stmt = $conn->prepare(
         "SELECT id FROM application_packages
          WHERE application_id = ? AND source_table = ? AND package_id = ? LIMIT 1"
@@ -149,14 +161,10 @@ try {
         $stmt->close();
     }
 
-    /* =================================================
-       6. PROCESS ITEM PAYMENTS
-    ================================================= */
     $totalRecorded = 0.0;
     $receiptItems  = [];
 
     foreach ($items as $feeItemId => $amount) {
-
         $feeItemId = (int) $feeItemId;
         $amount    = round((float) $amount, 2);
 
@@ -217,23 +225,10 @@ try {
 
         $receiptItems[] = [
             'label'  => (string) $itemLabel,
-            'amount' => $amount
+            'amount' => $amount,
         ];
     }
 
-    /* =================================================
-       7. SET APP PAID (milestone — keep prior flags at 1)
-    ================================================= */
-    $stmt = $conn->prepare("UPDATE `{$sourceTable}` SET `app_paid` = 1 WHERE `id` = ? LIMIT 1");
-    if ($stmt) {
-        $stmt->bind_param('i', $applicationId);
-        $stmt->execute();
-        $stmt->close();
-    }
-
-    /* =================================================
-       8. RECEIPT RECORD
-    ================================================= */
     $receiptNo = 'RCT-' . date('Ymd-His') . '-' . random_int(100, 999);
 
     $packageTitle = 'Payment Package';
@@ -262,7 +257,7 @@ try {
         'items'          => array_map(static fn($row) => [
             'name'    => (string) ($row['label'] ?? ''),
             'amount'  => (float)  ($row['amount'] ?? 0),
-            'comment' => '',
+            'comment' => $comment,
         ], $receiptItems),
     ]);
 
@@ -293,64 +288,32 @@ try {
 
     $conn->commit();
 
-    /* =================================================
-       9. SEND RESPONSE IMMEDIATELY
-    ================================================= */
-    echo json_encode([
+    $responseBody = json_encode([
         'success'        => true,
-        'message'        => 'Payment recorded successfully',
+        'message'        => 'Payment recorded — receipt saved to dashboard. Admin notification is sending in the background.',
         'receipt_no'     => $receiptNo,
         'total_paid'     => number_format($totalRecorded, 2, '.', ''),
         'items_count'    => count($items),
-        'app_paid_set'   => true,
         'application_id' => $applicationId,
         'source_table'   => $sourceTable,
+    ], JSON_UNESCAPED_UNICODE);
+
+    pcvc_finish_http_response($responseBody !== false ? $responseBody : '{"success":true}');
+
+    pcvc_trigger_background_post('sendSpecialPaymentNotify.php', [
+        'receipt_no' => $receiptNo,
+        'secret'     => 'RCP_9fA8kKx_2026_SECURE',
     ]);
 
-    if (function_exists('fastcgi_finish_request')) {
-        fastcgi_finish_request();
-    }
-
-    /* =================================================
-       10. ASYNC BACKGROUND TASKS (must not alter JSON response)
-    ================================================= */
-    try {
-        generateReceiptPdf($receiptNo, $conn);
-
-        $emailUrl = pcvc_public_base_url() . '/sendReceiptEmail.php';
-        $payload = http_build_query([
-            'receipt_no' => $receiptNo,
-            'secret'     => 'RCP_9fA8kKx_2026_SECURE'
-        ]);
-
-        $ch = curl_init($emailUrl);
-        if ($ch !== false) {
-            curl_setopt_array($ch, [
-                CURLOPT_POST           => true,
-                CURLOPT_POSTFIELDS     => $payload,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT        => 10,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => false,
-            ]);
-            curl_exec($ch);
-            curl_close($ch);
-        }
-    } catch (Throwable $bgErr) {
-        error_log('record-payment background task failed: ' . $bgErr->getMessage());
-    }
     exit;
 
 } catch (Throwable $e) {
-
     $conn->rollback();
-
     http_response_code(500);
     echo json_encode([
         'success' => false,
         'message' => 'Payment failed',
-        'error'   => $e->getMessage()
+        'error'   => $e->getMessage(),
     ]);
     exit;
 }
-

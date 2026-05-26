@@ -69,7 +69,13 @@ if (!function_exists('pcvc_receipt_stamp_path')) {
  */
 function pcvc_receipt_customer_name(mysqli $conn, int $applicationId, string $sourceTable): string
 {
-    $allowedTables = ['student_applications', 'malta_applications', 'turkey_applications'];
+    $allowedTables = [
+        'student_applications',
+        'malta_applications',
+        'turkey_applications',
+        'credit_transfer_applications',
+        'upafa_registrations',
+    ];
     if (!in_array($sourceTable, $allowedTables, true)) {
         $sourceTable = 'student_applications';
     }
@@ -80,6 +86,12 @@ function pcvc_receipt_customer_name(mysqli $conn, int $applicationId, string $so
             break;
         case 'turkey_applications':
             $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, last_name)) AS n FROM turkey_applications WHERE id = ? LIMIT 1";
+            break;
+        case 'credit_transfer_applications':
+            $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, middle_name, last_name)) AS n FROM credit_transfer_applications WHERE id = ? LIMIT 1";
+            break;
+        case 'upafa_registrations':
+            $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, last_name)) AS n FROM upafa_registrations WHERE id = ? LIMIT 1";
             break;
         default:
             $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, last_name)) AS n FROM student_applications WHERE id = ? LIMIT 1";
@@ -131,7 +143,13 @@ function pcvc_load_receipt_data(mysqli $conn, string $receiptNo): ?array
     $packageId     = (int) $receipt['package_id'];
     $sourceTable   = (string) $receipt['source_table'];
 
-    $allowedTables = ['student_applications', 'malta_applications', 'turkey_applications'];
+    $allowedTables = [
+        'student_applications',
+        'malta_applications',
+        'turkey_applications',
+        'credit_transfer_applications',
+        'upafa_registrations',
+    ];
     if (!in_array($sourceTable, $allowedTables, true)) {
         $sourceTable = 'student_applications';
     }
@@ -146,6 +164,16 @@ function pcvc_load_receipt_data(mysqli $conn, string $receiptNo): ?array
             $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, last_name)) AS customer_name,
                            NULLIF(TRIM(email), '') AS customer_email
                     FROM turkey_applications WHERE id = ? LIMIT 1";
+            break;
+        case 'credit_transfer_applications':
+            $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, middle_name, last_name)) AS customer_name,
+                           NULLIF(TRIM(email), '') AS customer_email
+                    FROM credit_transfer_applications WHERE id = ? LIMIT 1";
+            break;
+        case 'upafa_registrations':
+            $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, last_name)) AS customer_name,
+                           NULLIF(TRIM(email), '') AS customer_email
+                    FROM upafa_registrations WHERE id = ? LIMIT 1";
             break;
         default:
             $sql = "SELECT TRIM(CONCAT_WS(' ', first_name, last_name)) AS customer_name,
@@ -185,6 +213,7 @@ function pcvc_load_receipt_data(mysqli $conn, string $receiptNo): ?array
          FROM application_payments ap
          JOIN fee_items fi ON fi.id = ap.fee_item_id
          WHERE ap.application_id = ?
+           AND ap.source_table = ?
            AND ap.status = 'PAID'
            AND fi.package_id = ?
            AND ap.paid_at BETWEEN DATE_SUB(?, INTERVAL 30 SECOND)
@@ -192,7 +221,7 @@ function pcvc_load_receipt_data(mysqli $conn, string $receiptNo): ?array
          ORDER BY ap.id ASC"
     );
     if ($stmt) {
-        $stmt->bind_param('iiss', $applicationId, $packageId, $receipt['created_at'], $receipt['created_at']);
+        $stmt->bind_param('isiss', $applicationId, $sourceTable, $packageId, $receipt['created_at'], $receipt['created_at']);
         $stmt->execute();
         $items = $stmt->get_result()->fetch_all(MYSQLI_ASSOC) ?: [];
         $stmt->close();
@@ -244,6 +273,7 @@ function pcvc_render_receipt_html(array $data, array $opts = []): string
     $opts += [
         'auto_print'           => false,
         'include_print_button' => false,
+        'embed_images'         => true,
         'company_name'         => 'PARROT CANADA VISA CONSULTANT',
         'company_sub'          => 'Official Receipt of Payment',
         'support_email'        => 'admission@visaconsultantcanada.com',
@@ -251,8 +281,13 @@ function pcvc_render_receipt_html(array $data, array $opts = []): string
         'support_website'      => 'visaconsultantcanada.com',
     ];
 
-    $logoUri  = pcvc_receipt_image_data_uri(pcvc_receipt_brand_logo_path());
-    $stampUri = pcvc_receipt_image_data_uri(pcvc_receipt_stamp_path());
+    if (!empty($opts['embed_images'])) {
+        $logoUri  = pcvc_receipt_image_data_uri(pcvc_receipt_brand_logo_path());
+        $stampUri = pcvc_receipt_image_data_uri(pcvc_receipt_stamp_path());
+    } else {
+        $logoUri  = '';
+        $stampUri = '';
+    }
 
     $h = static fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 
@@ -574,4 +609,12 @@ html, body {
 </body>
 </html>
 HTML;
+}
+
+/**
+ * Compact receipt HTML for DB storage (no embedded base64 images).
+ */
+function pcvc_render_receipt_html_for_storage(array $data): string
+{
+    return pcvc_render_receipt_html($data, ['embed_images' => false]);
 }

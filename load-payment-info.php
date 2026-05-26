@@ -21,6 +21,8 @@ $applicationId = isset($_GET['student_id'])
   ? (int) $_GET['student_id']
   : 0;
 
+$sourceTable = trim((string) ($_GET['table'] ?? ''));
+
 if ($applicationId <= 0) {
   echo json_encode([
     'packages' => [],
@@ -62,18 +64,33 @@ if ($result) {
 */
 $paid = 0.0;
 
-$stmt = $conn->prepare("
-  SELECT COALESCE(SUM(amount_paid), 0)
-  FROM application_payments
-  WHERE application_id = ?
-");
+if ($sourceTable !== '') {
+  $stmt = $conn->prepare("
+    SELECT COALESCE(SUM(amount_paid), 0)
+    FROM application_payments
+    WHERE application_id = ? AND source_table = ?
+  ");
+  if ($stmt) {
+    $stmt->bind_param("is", $applicationId, $sourceTable);
+    $stmt->execute();
+    $stmt->bind_result($paid);
+    $stmt->fetch();
+    $stmt->close();
+  }
+} else {
+  $stmt = $conn->prepare("
+    SELECT COALESCE(SUM(amount_paid), 0)
+    FROM application_payments
+    WHERE application_id = ?
+  ");
 
-if ($stmt) {
-  $stmt->bind_param("i", $applicationId);
-  $stmt->execute();
-  $stmt->bind_result($paid);
-  $stmt->fetch();
-  $stmt->close();
+  if ($stmt) {
+    $stmt->bind_param("i", $applicationId);
+    $stmt->execute();
+    $stmt->bind_result($paid);
+    $stmt->fetch();
+    $stmt->close();
+  }
 }
 
 /*

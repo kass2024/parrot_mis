@@ -10,6 +10,7 @@ header('Content-Type: application/json');
 */
 $packageId = filter_input(INPUT_GET, 'package_id', FILTER_VALIDATE_INT);
 $studentId = filter_input(INPUT_GET, 'student_id', FILTER_VALIDATE_INT);
+$sourceTable = trim((string) ($_GET['table'] ?? ''));
 
 /*
 |--------------------------------------------------------------------------
@@ -62,15 +63,28 @@ $currency     = (string) $pkg['currency'];
 | 2. CALCULATE TOTAL PAID FOR PACKAGE (STRICT SCOPE)
 |--------------------------------------------------------------------------
 */
-$stmt = $conn->prepare("
-    SELECT COALESCE(SUM(ap.amount_paid), 0) AS paid
-    FROM application_payments ap
-    INNER JOIN fee_items fi
-        ON fi.id = ap.fee_item_id
-       AND fi.package_id = ?
-    WHERE ap.application_id = ?
-");
-$stmt->bind_param("ii", $packageId, $studentId);
+if ($sourceTable !== '') {
+    $stmt = $conn->prepare("
+        SELECT COALESCE(SUM(ap.amount_paid), 0) AS paid
+        FROM application_payments ap
+        INNER JOIN fee_items fi
+            ON fi.id = ap.fee_item_id
+           AND fi.package_id = ?
+        WHERE ap.application_id = ?
+          AND ap.source_table = ?
+    ");
+    $stmt->bind_param("iis", $packageId, $studentId, $sourceTable);
+} else {
+    $stmt = $conn->prepare("
+        SELECT COALESCE(SUM(ap.amount_paid), 0) AS paid
+        FROM application_payments ap
+        INNER JOIN fee_items fi
+            ON fi.id = ap.fee_item_id
+           AND fi.package_id = ?
+        WHERE ap.application_id = ?
+    ");
+    $stmt->bind_param("ii", $packageId, $studentId);
+}
 $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
 $stmt->close();
@@ -87,21 +101,40 @@ $packagePaid = min(
 */
 $items = [];
 
-$stmt = $conn->prepare("
-    SELECT
-        fi.id,
-        fi.name,
-        fi.amount,
-        COALESCE(SUM(ap.amount_paid), 0) AS paid
-    FROM fee_items fi
-    LEFT JOIN application_payments ap
-        ON ap.fee_item_id = fi.id
-       AND ap.application_id = ?
-    WHERE fi.package_id = ?
-    GROUP BY fi.id, fi.name, fi.amount
-    ORDER BY fi.id ASC
-");
-$stmt->bind_param("ii", $studentId, $packageId);
+if ($sourceTable !== '') {
+    $stmt = $conn->prepare("
+        SELECT
+            fi.id,
+            fi.name,
+            fi.amount,
+            COALESCE(SUM(ap.amount_paid), 0) AS paid
+        FROM fee_items fi
+        LEFT JOIN application_payments ap
+            ON ap.fee_item_id = fi.id
+           AND ap.application_id = ?
+           AND ap.source_table = ?
+        WHERE fi.package_id = ?
+        GROUP BY fi.id, fi.name, fi.amount
+        ORDER BY fi.id ASC
+    ");
+    $stmt->bind_param("isi", $studentId, $sourceTable, $packageId);
+} else {
+    $stmt = $conn->prepare("
+        SELECT
+            fi.id,
+            fi.name,
+            fi.amount,
+            COALESCE(SUM(ap.amount_paid), 0) AS paid
+        FROM fee_items fi
+        LEFT JOIN application_payments ap
+            ON ap.fee_item_id = fi.id
+           AND ap.application_id = ?
+        WHERE fi.package_id = ?
+        GROUP BY fi.id, fi.name, fi.amount
+        ORDER BY fi.id ASC
+    ");
+    $stmt->bind_param("ii", $studentId, $packageId);
+}
 $stmt->execute();
 $res = $stmt->get_result();
 

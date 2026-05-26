@@ -26,3 +26,45 @@ function xander_is_superadmin_role($role): bool
 {
     return pcvc_is_superadmin_role($role);
 }
+
+/**
+ * Resolve admin role from session + DB, then enforce superadmin-only access.
+ */
+function pcvc_require_superadmin(mysqli $conn, bool $json = false): void
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $sessionRole = trim((string) ($_SESSION['role'] ?? ''));
+    $dbRole = '';
+    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+
+    if ($adminPk > 0) {
+        $st = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $adminPk);
+            $st->execute();
+            if ($row = $st->get_result()->fetch_assoc()) {
+                $dbRole = trim((string) ($row['role'] ?? ''));
+            }
+            $st->close();
+        }
+    }
+
+    if (pcvc_is_superadmin_role($dbRole) || pcvc_is_superadmin_role($sessionRole)) {
+        return;
+    }
+
+    if ($json) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'message' => 'Superadmin access required']);
+        exit;
+    }
+
+    http_response_code(403);
+    echo '<!DOCTYPE html><html><body style="font-family:sans-serif;padding:2rem;text-align:center;">'
+        . '<h2>Access denied</h2><p>This page is available to superadmin only.</p></body></html>';
+    exit;
+}
