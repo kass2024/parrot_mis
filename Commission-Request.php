@@ -103,35 +103,13 @@ $isCommissionSuperadmin = pcvc_is_superadmin_role($commissionUserRole);
 $students = [];
 $agentEmail = $_SESSION['agent_email'] ?? '';
 
+$useAjaxStudentSearch = $isCommissionSuperadmin;
+
 if ($isCommissionSuperadmin) {
-    $result1 = $conn->query('SELECT id, first_name, last_name, email FROM student_applications ORDER BY created_at DESC LIMIT 400');
-    if ($result1) {
-        while ($row = $result1->fetch_assoc()) {
-            $students[] = [
-                'id'    => 's_' . $row['id'],
-                'name'  => trim($row['first_name'] . ' ' . $row['last_name']),
-                'email' => $row['email'],
-            ];
-        }
-        $result1->free();
-    }
-    $conn2 = pcvc_commission_cyprus_mysqli();
-    if ($conn2) {
-        $result2 = @$conn2->query('SELECT id, name, email FROM applications ORDER BY created_at DESC LIMIT 200');
-        if ($result2) {
-            while ($row = $result2->fetch_assoc()) {
-                $students[] = [
-                    'id'    => 'a_' . $row['id'],
-                    'name'  => $row['name'],
-                    'email' => $row['email'],
-                ];
-            }
-            $result2->free();
-        }
-    }
+    // Do not load hundreds of rows on page open (was freezing the iframe blank).
 } elseif ($agentEmail) {
     $agentEmailKey = strtolower(trim($agentEmail));
-    $stmt1 = $conn->prepare('SELECT id, first_name, last_name, email FROM student_applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY created_at DESC');
+    $stmt1 = $conn->prepare('SELECT id, first_name, last_name, email FROM student_applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY id DESC LIMIT 120');
     $stmt1->bind_param('s', $agentEmailKey);
     $stmt1->execute();
     $result1 = $stmt1->get_result();
@@ -145,23 +123,6 @@ if ($isCommissionSuperadmin) {
     }
     $stmt1->close();
 
-    $conn2 = pcvc_commission_cyprus_mysqli();
-    if ($conn2) {
-        $stmt2 = $conn2->prepare('SELECT id, name, email FROM applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY created_at DESC');
-        if ($stmt2) {
-            $stmt2->bind_param('s', $agentEmailKey);
-            $stmt2->execute();
-            $result2 = $stmt2->get_result();
-            while ($row = $result2->fetch_assoc()) {
-                $students[] = [
-                    'id'    => 'a_' . $row['id'],
-                    'name'  => $row['name'],
-                    'email' => $row['email'],
-                ];
-            }
-            $stmt2->close();
-        }
-    }
 }
 
 if (!$agentInfo) {
@@ -736,10 +697,10 @@ textarea.form-control {
               </option>
             <?php endforeach; ?>
           </select>
-          <?php if (count($students) === 0): ?>
-          <p class="text-danger small mt-2 mb-0"><strong>No students found.</strong> Link students to your agent email in applications, or ask an administrator to submit on your behalf.</p>
-          <?php elseif ($isCommissionSuperadmin): ?>
-          <p class="text-muted small mt-2 mb-0">Superadmin view: showing recent students from all agents.</p>
+          <?php if ($useAjaxStudentSearch): ?>
+          <p class="text-muted small mt-2 mb-0">Type at least 2 characters to search all students.</p>
+          <?php elseif (count($students) === 0): ?>
+          <p class="text-danger small mt-2 mb-0"><strong>No students found.</strong> Link students to your agent email in applications.</p>
           <?php endif; ?>
         </div>
       </div>
@@ -936,6 +897,7 @@ textarea.form-control {
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 window.PCVC_COMMISSION_SUBMIT_REDIRECT = <?= json_encode($pcvcCommissionSubmitRedirect) ?>;
+window.PCVC_COMMISSION_AJAX_STUDENTS = <?= $useAjaxStudentSearch ? 'true' : 'false' ?>;
 
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("commissionForm");
@@ -988,12 +950,29 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  window.jQuery("#studentSelect").select2({
+  const submitBtn = form.querySelector("button[type='submit']");
+  const ajaxStudents = window.PCVC_COMMISSION_AJAX_STUDENTS === true;
+
+  const select2Opts = {
     theme: "bootstrap-5",
-    placeholder: "Search for a student...",
+    placeholder: ajaxStudents ? "Type to search students…" : "Search for a student...",
     width: "100%",
     allowClear: true
-  });
+  };
+  if (ajaxStudents) {
+    select2Opts.minimumInputLength = 2;
+    select2Opts.ajax = {
+      url: "api/commission-student-search.php",
+      dataType: "json",
+      delay: 250,
+      cache: true,
+      data: (params) => ({ q: params.term || "" }),
+      processResults: (data) => ({
+        results: (data && data.results) ? data.results : []
+      })
+    };
+  }
+  window.jQuery("#studentSelect").select2(select2Opts);
 
   window.jQuery("#studentSelect").on("change", () => {
     setStudentSelectInvalid(false);
@@ -1194,7 +1173,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const formData = new FormData(form);
     if (studentVal) formData.set("recruited_student_id", studentVal);
-    const submitBtn = form.querySelector("button[type='submit']");
 
     submitBtn.disabled = true;
     submitBtn.textContent = "Submitting…";

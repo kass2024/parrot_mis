@@ -18,7 +18,16 @@ function pcvc_commission_cyprus_mysqli(): ?mysqli
     $user = getenv('CYPRUS_DB_USER') ?: 'root';
     $pass = getenv('CYPRUS_DB_PASS') !== false ? (string) getenv('CYPRUS_DB_PASS') : '';
 
-    $mysqli = @new mysqli($host, $user, $pass, $db);
+    $mysqli = mysqli_init();
+    if (!$mysqli) {
+        $conn = null;
+        return null;
+    }
+    $mysqli->options(MYSQLI_OPT_CONNECT_TIMEOUT, 2);
+    if (!@$mysqli->real_connect($host, $user, $pass, $db)) {
+        $conn = null;
+        return null;
+    }
     if ($mysqli->connect_error) {
         error_log('[commission] Cyprus DB unavailable: ' . $mysqli->connect_error);
         $conn = null;
