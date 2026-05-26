@@ -8,9 +8,9 @@ error_reporting(0);
 ini_set('display_errors', '0');
 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/helpers/commission_currency.php';
 require_once __DIR__ . '/helpers/commission_requests_schema.php';
+require_once __DIR__ . '/helpers/commission_cyprus_db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/includes/commission_mail_helper.php';
 
@@ -30,8 +30,22 @@ $response = ['status' => 'error', 'message' => 'Unknown error occurred'];
 
 try {
     $userId = (int) ($_SESSION['user_id'] ?? $_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
+    if ($userId < 1 && !empty($_SESSION['username'])) {
+        $lu = $conn->prepare('SELECT id FROM admins WHERE username = ? LIMIT 1');
+        if ($lu) {
+            $uname = (string) $_SESSION['username'];
+            $lu->bind_param('s', $uname);
+            $lu->execute();
+            $lu->bind_result($foundId);
+            if ($lu->fetch()) {
+                $userId = (int) $foundId;
+                $_SESSION['user_id'] = $userId;
+            }
+            $lu->close();
+        }
+    }
     if ($userId < 1) {
-        throw new RuntimeException('Agent not logged in.');
+        throw new RuntimeException('Agent not logged in. Please refresh the page and log in again.');
     }
 
     pcvc_ensure_commission_requests_schema($conn);
@@ -64,7 +78,14 @@ try {
         $stmt = $conn->prepare('SELECT CONCAT(first_name, " ", last_name) AS name, phone_number FROM student_applications WHERE id = ?');
         $stmt->bind_param('i', $studentId);
     } elseif ($prefix === 'a_') {
+        $conn2 = pcvc_commission_cyprus_mysqli();
+        if (!$conn2) {
+            throw new RuntimeException('Cyprus student database is unavailable. Choose a student from the main list or try again later.');
+        }
         $stmt = $conn2->prepare('SELECT name FROM applications WHERE id = ?');
+        if (!$stmt) {
+            throw new RuntimeException('Student lookup failed.');
+        }
         $stmt->bind_param('i', $studentId);
     } else {
         throw new RuntimeException('Invalid student reference.');
@@ -207,12 +228,7 @@ try {
     logCommissionError($e->getMessage());
     $response = ['status' => 'error', 'message' => $e->getMessage()];
 } finally {
-    if (isset($conn) && $conn instanceof mysqli) {
-        $conn->close();
-    }
-    if (isset($conn2) && $conn2 instanceof mysqli) {
-        $conn2->close();
-    }
+    /* Keep default connection open for shutdown; avoid closing shared $conn from db.php */
 }
 
 if (ob_get_level() > 0) {

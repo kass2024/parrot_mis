@@ -5,10 +5,9 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/commission_currency.php';
 require_once __DIR__ . '/helpers/role.php';
-// Secondary database (e.g. applications from Cyprus system)
-require_once 'database.php';  // This connects to visaeofi_cyprus
+require_once __DIR__ . '/helpers/commission_cyprus_db.php';
 
-if (empty($_SESSION['username']) && empty($_SESSION['admin_id'])) {
+if (empty($_SESSION['username']) && empty($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     header('Location: admin-login.php');
     exit;
 }
@@ -64,51 +63,29 @@ if (!$agentInfo && !empty($_SESSION['admin_id'])) {
     }
 }
 
-$students = [];
-$agentEmail = $_SESSION['agent_email'] ?? '';
-
-if ($agentEmail) {
-    $agentEmailKey = strtolower(trim($agentEmail));
-    // From student_applications in the main DB
-    $stmt1 = $conn->prepare('SELECT id, first_name, last_name, email FROM student_applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY created_at DESC');
-    $stmt1->bind_param('s', $agentEmailKey);
-    $stmt1->execute();
-    $result1 = $stmt1->get_result();
-
-    while ($row = $result1->fetch_assoc()) {
-        $students[] = [
-            'id'    => 's_' . $row['id'],
-            'name'  => trim($row['first_name'] . ' ' . $row['last_name']),
-            'email' => $row['email']
-        ];
+if (!$agentInfo && !empty($_SESSION['id'])) {
+    $aid = (int) $_SESSION['id'];
+    $st3 = $conn->prepare('SELECT id, first_name, last_name, email, phone_number FROM admins WHERE id = ? LIMIT 1');
+    if ($st3) {
+        $st3->bind_param('i', $aid);
+        $st3->execute();
+        $st3->bind_result($id3, $f3, $l3, $e3, $p3);
+        if ($st3->fetch()) {
+            $_SESSION['user_id'] = (int) $id3;
+            $_SESSION['agent_email'] = $e3;
+            $agentInfo = [
+                'first_name' => trim((string) $f3),
+                'last_name'  => trim((string) $l3),
+                'email'      => trim((string) $e3),
+                'phone'      => trim((string) $p3),
+            ];
+        }
+        $st3->close();
     }
-
-    $stmt1->close();
-
-    // From applications in the Cyprus DB using $conn2
-    $stmt2 = $conn2->prepare('SELECT id, name, email FROM applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY created_at DESC');
-    $stmt2->bind_param('s', $agentEmailKey);
-    $stmt2->execute();
-    $result2 = $stmt2->get_result();
-
-    while ($row = $result2->fetch_assoc()) {
-        $students[] = [
-            'id'    => 'a_' . $row['id'],
-            'name'  => $row['name'],
-            'email' => $row['email']
-        ];
-    }
-
-    $stmt2->close();
-}
-
-if (!$agentInfo) {
-    header('Location: admin-login.php');
-    exit;
 }
 
 $commissionUserRole = '';
-$uidForRole = (int) ($_SESSION['user_id'] ?? $_SESSION['admin_id'] ?? 0);
+$uidForRole = (int) ($_SESSION['user_id'] ?? $_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 if ($uidForRole > 0) {
     $sr = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
     if ($sr) {
@@ -121,7 +98,79 @@ if ($uidForRole > 0) {
         $sr->close();
     }
 }
-$pcvcCommissionSubmitRedirect = pcvc_is_superadmin_role($commissionUserRole) ? 'commission_report' : 'dashboard';
+$isCommissionSuperadmin = pcvc_is_superadmin_role($commissionUserRole);
+
+$students = [];
+$agentEmail = $_SESSION['agent_email'] ?? '';
+
+if ($isCommissionSuperadmin) {
+    $result1 = $conn->query('SELECT id, first_name, last_name, email FROM student_applications ORDER BY created_at DESC LIMIT 400');
+    if ($result1) {
+        while ($row = $result1->fetch_assoc()) {
+            $students[] = [
+                'id'    => 's_' . $row['id'],
+                'name'  => trim($row['first_name'] . ' ' . $row['last_name']),
+                'email' => $row['email'],
+            ];
+        }
+        $result1->free();
+    }
+    $conn2 = pcvc_commission_cyprus_mysqli();
+    if ($conn2) {
+        $result2 = @$conn2->query('SELECT id, name, email FROM applications ORDER BY created_at DESC LIMIT 200');
+        if ($result2) {
+            while ($row = $result2->fetch_assoc()) {
+                $students[] = [
+                    'id'    => 'a_' . $row['id'],
+                    'name'  => $row['name'],
+                    'email' => $row['email'],
+                ];
+            }
+            $result2->free();
+        }
+    }
+} elseif ($agentEmail) {
+    $agentEmailKey = strtolower(trim($agentEmail));
+    $stmt1 = $conn->prepare('SELECT id, first_name, last_name, email FROM student_applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY created_at DESC');
+    $stmt1->bind_param('s', $agentEmailKey);
+    $stmt1->execute();
+    $result1 = $stmt1->get_result();
+
+    while ($row = $result1->fetch_assoc()) {
+        $students[] = [
+            'id'    => 's_' . $row['id'],
+            'name'  => trim($row['first_name'] . ' ' . $row['last_name']),
+            'email' => $row['email'],
+        ];
+    }
+    $stmt1->close();
+
+    $conn2 = pcvc_commission_cyprus_mysqli();
+    if ($conn2) {
+        $stmt2 = $conn2->prepare('SELECT id, name, email FROM applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY created_at DESC');
+        if ($stmt2) {
+            $stmt2->bind_param('s', $agentEmailKey);
+            $stmt2->execute();
+            $result2 = $stmt2->get_result();
+            while ($row = $result2->fetch_assoc()) {
+                $students[] = [
+                    'id'    => 'a_' . $row['id'],
+                    'name'  => $row['name'],
+                    'email' => $row['email'],
+                ];
+            }
+            $stmt2->close();
+        }
+    }
+}
+
+if (!$agentInfo) {
+    header('Location: admin-login.php');
+    exit;
+}
+
+$pcvcCommissionSubmitRedirect = $isCommissionSuperadmin ? 'commission_report' : 'dashboard';
+$agentPhoneReadonly = trim((string) ($agentInfo['phone'] ?? '')) !== '';
 
 // Generate CSRF token
 if (empty($_SESSION['csrf_token'])) {
@@ -667,7 +716,7 @@ textarea.form-control {
         </div>
         <div class="col-md-6">
           <label class="form-label fw-semibold">Phone Number</label>
-          <input class="form-control" name="phone" value="<?= htmlspecialchars($agentInfo['phone'] ?? '') ?>" readonly placeholder="Phone Number" required>
+          <input class="form-control" name="phone" value="<?= htmlspecialchars($agentInfo['phone'] ?? '') ?>" <?= $agentPhoneReadonly ? 'readonly' : '' ?> placeholder="Phone Number" required>
         </div>
       </div>
     </section>
@@ -687,6 +736,11 @@ textarea.form-control {
               </option>
             <?php endforeach; ?>
           </select>
+          <?php if (count($students) === 0): ?>
+          <p class="text-danger small mt-2 mb-0"><strong>No students found.</strong> Link students to your agent email in applications, or ask an administrator to submit on your behalf.</p>
+          <?php elseif ($isCommissionSuperadmin): ?>
+          <p class="text-muted small mt-2 mb-0">Superadmin view: showing recent students from all agents.</p>
+          <?php endif; ?>
         </div>
       </div>
     </section>
@@ -985,18 +1039,76 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   function openWorkingOverlay() {
-    if (!errorBox || !closeBtn || !successIcon || !spinner || !titleEl || !statusLine || !overlay) return;
-    errorBox.style.display = "none";
-    errorBox.textContent = "";
-    closeBtn.style.display = "none";
-    successIcon.classList.remove("show");
-    spinner.style.display = "block";
-    titleEl.textContent = "Submitting request";
+    if (!overlay) return;
+    if (errorBox) { errorBox.style.display = "none"; errorBox.textContent = ""; }
+    if (closeBtn) { closeBtn.style.display = "none"; closeBtn.textContent = "Close"; }
+    if (successIcon) successIcon.classList.remove("show");
+    if (spinner) spinner.style.display = "block";
+    if (titleEl) titleEl.textContent = "Submitting request";
     setBar(0);
     setStep(0);
-    statusLine.textContent = "Preparing your data…";
+    if (statusLine) statusLine.textContent = "Preparing your data…";
     overlay.style.display = "flex";
     overlay.setAttribute("aria-hidden", "false");
+  }
+
+  function showSubmitSuccess(data) {
+    stopProgressTimer();
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Commission Request"; }
+    setBar(100);
+    setStep(3);
+    if (spinner) spinner.style.display = "none";
+    if (successIcon) successIcon.classList.add("show");
+    if (titleEl) titleEl.textContent = "Submitted successfully!";
+    const reqId = data.id != null ? data.id : "—";
+    if (statusLine) {
+      statusLine.textContent = (data.message || "Your commission request was saved.") + " (Request #" + reqId + ")";
+    }
+    if (errorBox) errorBox.style.display = "none";
+    if (closeBtn) {
+      closeBtn.style.display = "inline-block";
+      closeBtn.textContent = "Done";
+      closeBtn.onclick = () => {
+        overlay.style.display = "none";
+        overlay.setAttribute("aria-hidden", "true");
+        const mode = window.PCVC_COMMISSION_SUBMIT_REDIRECT || "dashboard";
+        const inFrame = window.parent && window.parent !== window;
+        if (inFrame) {
+          if (mode === "commission_report" && typeof window.parent.loadInFrame === "function") {
+            window.parent.loadInFrame("commission-requests-report.php", "All Commission Requests");
+          } else if (typeof window.parent.showDashboard === "function") {
+            window.parent.showDashboard();
+          }
+        } else if (mode === "commission_report") {
+          window.location.href = "commission-requests-report.php";
+        } else {
+          window.location.href = "admin-dashboard.php";
+        }
+      };
+    }
+    if (overlay) {
+      overlay.style.display = "flex";
+      overlay.setAttribute("aria-hidden", "false");
+    }
+  }
+
+  function showSubmitError(title, line, detail) {
+    stopProgressTimer();
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Submit Commission Request"; }
+    setBar(0);
+    if (spinner) spinner.style.display = "none";
+    if (successIcon) successIcon.classList.remove("show");
+    if (titleEl) titleEl.textContent = title || "Could not submit";
+    if (statusLine) statusLine.textContent = line || "Please try again.";
+    if (errorBox) {
+      errorBox.innerHTML = detail ? String(detail).replace(/</g, "&lt;") : "";
+      errorBox.style.display = detail ? "block" : "none";
+    }
+    if (closeBtn) { closeBtn.style.display = "inline-block"; closeBtn.textContent = "Close"; }
+    if (overlay) {
+      overlay.style.display = "flex";
+      overlay.setAttribute("aria-hidden", "false");
+    }
   }
 
   let progressTimer = null;
@@ -1023,6 +1135,9 @@ document.addEventListener("DOMContentLoaded", () => {
     clearFieldErrors();
 
     const studentSelect = document.getElementById("studentSelect");
+    const studentVal = (window.jQuery && studentSelect)
+      ? String(window.jQuery(studentSelect).val() || "").trim()
+      : String(studentSelect?.value || "").trim();
     const loanStatus = form.querySelector('input[name="loan_status"]:checked');
     const visaStatus = form.querySelector('input[name="visa_status"]:checked');
     const contractStatus = form.querySelector('input[name="contract_signed"]:checked');
@@ -1033,7 +1148,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const missing = [];
     let firstFocus = null;
 
-    if (!studentSelect || !studentSelect.value) {
+    if (!studentVal) {
       missing.push("student");
       setStudentSelectInvalid(true);
       firstFocus = studentSelect;
@@ -1071,13 +1186,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (missing.length) {
       showValidationErrors(missing, firstFocus);
-      if (!studentSelect?.value && window.jQuery) {
+      if (!studentVal && window.jQuery) {
         window.jQuery("#studentSelect").select2("open");
       }
       return;
     }
 
     const formData = new FormData(form);
+    if (studentVal) formData.set("recruited_student_id", studentVal);
     const submitBtn = form.querySelector("button[type='submit']");
 
     submitBtn.disabled = true;
@@ -1087,93 +1203,35 @@ document.addEventListener("DOMContentLoaded", () => {
     startIndeterminateProgress();
 
     const saveUrl = new URL("save_commission.php", window.location.href).href;
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", saveUrl, true);
 
-    xhr.onload = () => {
-      stopProgressTimer();
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Submit Commission Request";
-
-      const raw = xhr.responseText || "";
-      let data = null;
-      try {
-        data = JSON.parse(raw);
-      } catch (err) {
-        setBar(0);
-        spinner.style.display = "none";
-        titleEl.textContent = "Something went wrong";
-        statusLine.textContent = "The server did not return valid JSON. Check logs or try again.";
-        errorBox.innerHTML = "<strong>HTTP " + xhr.status + "</strong><br>" +
-          (raw.length > 400 ? raw.slice(0, 400) + "…" : String(raw).replace(/</g, "&lt;"));
-        errorBox.style.display = "block";
-        closeBtn.style.display = "inline-block";
-        overlay.style.display = "flex";
-        overlay.setAttribute("aria-hidden", "false");
-        console.error("save_commission response:", raw);
-        return;
-      }
-
-      if (xhr.status !== 200) {
-        setBar(0);
-        spinner.style.display = "none";
-        titleEl.textContent = "Request failed";
-        statusLine.textContent = data.message || xhr.statusText || "Server error";
-        errorBox.textContent = data.message || raw || "Unknown error";
-        errorBox.style.display = "block";
-        closeBtn.style.display = "inline-block";
-        return;
-      }
-
-      if (data.status === "success") {
-        setBar(100);
-        setStep(3);
-        spinner.style.display = "none";
-        successIcon.classList.add("show");
-        titleEl.textContent = "Submitted successfully";
-        statusLine.textContent = "Request #" + (data.id != null ? data.id : "—") + " · Redirecting…";
-        setTimeout(() => {
-          const mode = window.PCVC_COMMISSION_SUBMIT_REDIRECT || "dashboard";
-          const inFrame = window.parent && window.parent !== window;
-          if (inFrame) {
-            if (mode === "commission_report" && typeof window.parent.loadInFrame === "function") {
-              window.parent.loadInFrame("commission-requests-report.php", "All Commission Requests");
-            } else if (typeof window.parent.showDashboard === "function") {
-              window.parent.showDashboard();
-            } else {
-              window.top.location.href = "admin-dashboard.php";
-            }
-          } else if (mode === "commission_report") {
-            window.location.href = "commission-requests-report.php";
-          } else {
-            window.location.href = "admin-dashboard.php";
-          }
-        }, 2000);
-      } else {
-        setBar(0);
-        spinner.style.display = "none";
-        titleEl.textContent = "Could not submit";
-        statusLine.textContent = "Please fix the issue below and try again.";
-        errorBox.textContent = data.message || "Submission failed.";
-        errorBox.style.display = "block";
-        closeBtn.style.display = "inline-block";
-      }
-    };
-
-    xhr.onerror = () => {
-      stopProgressTimer();
-      submitBtn.disabled = false;
-      submitBtn.textContent = "Submit Commission Request";
-      setBar(0);
-      spinner.style.display = "none";
-      titleEl.textContent = "Network error";
-      statusLine.textContent = "Check your connection and try again.";
-      errorBox.textContent = "No response from server.";
-      errorBox.style.display = "block";
-      closeBtn.style.display = "inline-block";
-    };
-
-    xhr.send(formData);
+    fetch(saveUrl, { method: "POST", body: formData, credentials: "same-origin" })
+      .then((res) => res.text().then((raw) => ({ res, raw })))
+      .then(({ res, raw }) => {
+        let data = null;
+        try {
+          data = JSON.parse(raw);
+        } catch (err) {
+          showSubmitError(
+            "Something went wrong",
+            "The server did not return a valid response.",
+            "<strong>HTTP " + res.status + "</strong><br>" + (raw.length > 500 ? raw.slice(0, 500) + "…" : raw)
+          );
+          console.error("save_commission response:", raw);
+          return;
+        }
+        if (data.status === "success") {
+          showSubmitSuccess(data);
+          return;
+        }
+        showSubmitError(
+          "Could not submit",
+          "Please fix the issue and try again.",
+          data.message || raw || "Submission failed."
+        );
+      })
+      .catch(() => {
+        showSubmitError("Network error", "Check your connection and try again.", "No response from server.");
+      });
   });
 
   if (signatureInput) {
