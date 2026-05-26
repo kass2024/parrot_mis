@@ -321,7 +321,8 @@ function pcvc_swl_whatsapp_upload_media(string $phoneId, string $token, string $
     }
     $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/media';
 
-    $cfile = new CURLFile($pdfAbsPath, 'application/pdf', $filename);
+    $safeName = preg_replace('/[^a-zA-Z0-9._-]+/', '_', $filename) ?: 'warning_letter.pdf';
+    $cfile = new CURLFile($pdfAbsPath, 'application/pdf', $safeName);
     $fields = [
         'messaging_product' => 'whatsapp',
         'type'              => 'application/pdf',
@@ -376,6 +377,16 @@ function pcvc_swl_whatsapp_is_language_error(array $res): bool
 {
     $msg = strtolower(pcvc_swl_whatsapp_extract_error_message($res));
     return str_contains($msg, 'language') || str_contains($msg, 'locale') || str_contains($msg, 'translation');
+}
+
+function pcvc_swl_whatsapp_is_template_structure_error(array $res): bool
+{
+    $errStruct = xander_whatsapp_extract_error($res['json'] ?? null);
+    $errMsg    = strtolower((string) ($errStruct['message'] ?? ''));
+    $errCode   = (int) ($errStruct['code'] ?? 0);
+    return $errCode === 132000 || $errCode === 132001 || $errCode === 132012 || $errCode === 132015 ||
+           str_contains($errMsg, 'parameter') || str_contains($errMsg, 'header') ||
+           str_contains($errMsg, 'components') || str_contains($errMsg, 'template');
 }
 
 /* ============================================================
@@ -439,14 +450,11 @@ function pcvc_swl_whatsapp_deliver_template_to(
 ): array {
     $result = [
         'sent' => false, 'method' => '', 'error' => '', 'not_on_whatsapp' => false,
-        'to' => $to, 'pdf_attached' => false,
+        'to' => $to, 'pdf_attached' => false, 'detail' => '',
     ];
 
     $pdfHttps = preg_match('#^https://#i', $pdfPublicUrl) === 1;
-    if ($mediaId === '' && !$pdfHttps) {
-        $result['error'] = 'Could not upload the warning letter PDF to WhatsApp. Check server logs [warning_letter].';
-        return $result;
-    }
+    $canSendPdf = $mediaId !== '' || $pdfHttps;
 
     $tplOk = static function (array $res): bool {
         return ($res['http'] >= 200 && $res['http'] < 300 && xander_whatsapp_response_has_message_id($res['json']));
@@ -461,16 +469,9 @@ function pcvc_swl_whatsapp_deliver_template_to(
                $errCode === 131051 || $errSub === 131051;
     };
 
-    $caption = 'Warning letter — ' . $subject . ' (Ref: ' . $referenceCode . ')';
-    $langs   = pcvc_swl_whatsapp_template_lang_codes($tplLang);
-    $lastErr = '';
-    $lastRes = null;
-
-    /* Step 1 — approved text-only template (no document header) */
-    foreach ($langs as $i => $lang) {
-        if ($i > 0 && $lastRes !== null && !pcvc_swl_whatsapp_is_language_error($lastRes)) {
-            break;
-        }
+    $sendTemplate = static function (array $components, string $lang) use (
+        $url, $token, $to, $tplName
+    ): array {
         $payload = [
             'messaging_product' => 'whatsapp',
             'recipient_type'    => 'individual',
@@ -479,27 +480,52 @@ function pcvc_swl_whatsapp_deliver_template_to(
             'template'          => [
                 'name'       => $tplName,
                 'language'   => ['code' => $lang],
-                'components' => [['type' => 'body', 'parameters' => $bodyParams]],
+                'components' => $components,
             ],
         ];
-        $resText = xander_whatsapp_graph_post($url, $token, $payload);
+        $res = xander_whatsapp_graph_post($url, $token, $payload);
+        error_log('[warning_letter] wa tpl to=' . $to . ' lang=' . $lang . ' HTTP ' . $res['http'] . ' body: ' . $res['body']);
+        return $res;
+    };
+
+    $attachPdfFollowUp = function () use (
+        &$result, $to, $url, $token, $mediaId, $docFilename, $pdfPublicUrl, $canSendPdf, $subject, $referenceCode
+    ): void {
+        if (!$canSendPdf) {
+            $result['error'] = 'Warning text sent. PDF could not be uploaded — set APP_PUBLIC_URL to your HTTPS site for PDF delivery.';
+            return;
+        }
+        $caption = 'Warning letter — ' . $subject . ' (Ref: ' . $referenceCode . ')';
+        usleep(600000);
+        $docOut = pcvc_swl_whatsapp_send_document_message(
+            $to, $url, $token, $mediaId, $docFilename, $pdfPublicUrl, $caption
+        );
+        if (!empty($docOut['sent'])) {
+            $result['pdf_attached'] = true;
+            $result['method']       = 'text_then_pdf';
+            return;
+        }
+        $result['error'] = 'Warning text sent; PDF failed: ' . ($docOut['error'] ?? 'unknown');
+    };
+
+    $langs   = pcvc_swl_whatsapp_template_lang_codes($tplLang);
+    $lastErr = '';
+    $lastRes = null;
+    $needsDocHeader = false;
+
+    /* Step 1 — text-only template (always try first; never block on PDF upload) */
+    foreach ($langs as $i => $lang) {
+        if ($i > 0 && $lastRes !== null && !pcvc_swl_whatsapp_is_language_error($lastRes)) {
+            break;
+        }
+        $resText = $sendTemplate([['type' => 'body', 'parameters' => $bodyParams]], $lang);
         $lastRes = $resText;
-        error_log('[warning_letter] wa text-tpl to=' . $to . ' lang=' . $lang . ' HTTP ' . $resText['http'] . ' body: ' . $resText['body']);
+        $result['detail'] = substr((string) ($resText['body'] ?? ''), 0, 500);
 
         if ($tplOk($resText)) {
             $result['sent']   = true;
             $result['method'] = 'text_then_pdf';
-
-            /* Step 2 — PDF as separate message (opens after template) */
-            usleep(600000);
-            $docOut = pcvc_swl_whatsapp_send_document_message(
-                $to, $url, $token, $mediaId, $docFilename, $pdfPublicUrl, $caption
-            );
-            if (!empty($docOut['sent'])) {
-                $result['pdf_attached'] = true;
-                return $result;
-            }
-            $result['error'] = 'Warning text sent; PDF attachment failed: ' . ($docOut['error'] ?? 'unknown error');
+            $attachPdfFollowUp();
             return $result;
         }
 
@@ -509,12 +535,76 @@ function pcvc_swl_whatsapp_deliver_template_to(
             $result['not_on_whatsapp'] = true;
             return $result;
         }
+        if (pcvc_swl_whatsapp_is_template_structure_error($resText)) {
+            $needsDocHeader = true;
+            break;
+        }
         if (!pcvc_swl_whatsapp_is_language_error($resText)) {
             break;
         }
     }
 
-    $result['error'] = 'WhatsApp text template failed: ' . ($lastErr ?: 'unknown error');
+    /* Step 2 — Meta template still has Document header (uploaded PDF in template) */
+    if ($needsDocHeader && $mediaId !== '') {
+        foreach ($langs as $i => $lang) {
+            if ($i > 0 && $lastRes !== null && !pcvc_swl_whatsapp_is_language_error($lastRes)) {
+                break;
+            }
+            $components = [
+                [
+                    'type'       => 'header',
+                    'parameters' => [[
+                        'type'     => 'document',
+                        'document' => ['id' => $mediaId, 'filename' => $docFilename],
+                    ]],
+                ],
+                ['type' => 'body', 'parameters' => $bodyParams],
+            ];
+            $resDoc = $sendTemplate($components, $lang);
+            $lastRes = $resDoc;
+            $result['detail'] = substr((string) ($resDoc['body'] ?? ''), 0, 500);
+            if ($tplOk($resDoc)) {
+                $result['sent']         = true;
+                $result['pdf_attached'] = true;
+                $result['method']       = 'template_with_pdf_header';
+                return $result;
+            }
+            $lastErr = pcvc_swl_whatsapp_extract_error_message($resDoc);
+            if ($waNotRegistered($resDoc)) {
+                $result['error'] = 'This number is not on WhatsApp — message not delivered.';
+                $result['not_on_whatsapp'] = true;
+                return $result;
+            }
+            if ($pdfHttps && pcvc_swl_whatsapp_is_template_structure_error($resDoc)) {
+                $linkComponents = [
+                    [
+                        'type'       => 'header',
+                        'parameters' => [[
+                            'type'     => 'document',
+                            'document' => ['link' => $pdfPublicUrl, 'filename' => $docFilename],
+                        ]],
+                    ],
+                    ['type' => 'body', 'parameters' => $bodyParams],
+                ];
+                $resLink = $sendTemplate($linkComponents, $lang);
+                if ($tplOk($resLink)) {
+                    $result['sent']         = true;
+                    $result['pdf_attached'] = true;
+                    $result['method']       = 'template_with_pdf_header_link';
+                    return $result;
+                }
+                $lastErr = pcvc_swl_whatsapp_extract_error_message($resLink);
+            }
+            if (!pcvc_swl_whatsapp_is_language_error($resDoc)) {
+                break;
+            }
+        }
+    }
+
+    $result['error'] = 'WhatsApp failed: ' . ($lastErr ?: 'unknown error');
+    if ($needsDocHeader && $mediaId === '') {
+        $result['error'] .= ' (Template may require a PDF header but PDF upload to Meta failed.)';
+    }
     return $result;
 }
 
@@ -588,6 +678,7 @@ function pcvc_swl_send_whatsapp(
     $result['error']            = (string) ($primary['error'] ?? '');
     $result['not_on_whatsapp']  = !empty($primary['not_on_whatsapp']);
     $result['pdf_attached']     = !empty($primary['pdf_attached']);
+    $result['detail']           = (string) ($primary['detail'] ?? '');
 
     $ccRaw = pcvc_swl_cc_whatsapp_raw();
     $ccTo  = xander_format_phone_for_whatsapp_e164($ccRaw, $defaultCc);

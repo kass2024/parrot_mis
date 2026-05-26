@@ -332,7 +332,7 @@ document.getElementById('btnSend').addEventListener('click', async () => {
             else ok.push('WhatsApp: text sent (PDF failed)');
         } else if (f.sendWa){
             if (wa.not_on_whatsapp) skip.push('WhatsApp skipped — number not on WhatsApp');
-            else skip.push('WhatsApp failed: ' + (wa.error||''));
+            else skip.push('WhatsApp failed: ' + (wa.error||'') + (wa.detail ? ' [' + wa.detail + ']' : ''));
         }
         if (f.sendWa && wa.sent && !wa.pdf_attached) skip.push(wa.error || 'PDF was not attached on WhatsApp');
         if (f.sendWa && waCc.sent) ok.push('WhatsApp CC');
