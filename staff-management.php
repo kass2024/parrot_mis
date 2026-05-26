@@ -167,6 +167,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff']) && $i
 
     if ($stmt->execute()) {
         $_SESSION['success'] = 'Staff information updated successfully';
+
+        if (!empty($_FILES['profile_photo']['name']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/uploads/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            $ext = strtolower(pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            if (in_array($ext, $allowed, true) && $_FILES['profile_photo']['size'] <= 2 * 1024 * 1024) {
+                $oldStmt = $conn->prepare('SELECT profile_photo FROM admins WHERE id = ? LIMIT 1');
+                if ($oldStmt) {
+                    $oldStmt->bind_param('i', $id);
+                    $oldStmt->execute();
+                    $oldRow = $oldStmt->get_result()->fetch_assoc();
+                    $oldStmt->close();
+                    $photoName = time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+                    if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $uploadDir . $photoName)) {
+                        $photoUpd = $conn->prepare('UPDATE admins SET profile_photo = ? WHERE id = ?');
+                        if ($photoUpd) {
+                            $photoUpd->bind_param('si', $photoName, $id);
+                            $photoUpd->execute();
+                            $photoUpd->close();
+                            $oldPhoto = trim((string) ($oldRow['profile_photo'] ?? ''));
+                            if ($oldPhoto !== '' && $oldPhoto !== 'default_avatar.png') {
+                                $oldPath = $uploadDir . basename($oldPhoto);
+                                if (is_file($oldPath)) {
+                                    @unlink($oldPath);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     } else {
         $_SESSION['error'] = 'Update failed: ' . $conn->error;
     }
@@ -544,6 +578,51 @@ unset($_SESSION['success'], $_SESSION['error']);
             margin: 0 auto;
         }
 
+        .profile-upload-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+        }
+
+        .profile-upload-wrap .profile-img-container,
+        .profile-upload-wrap .profile-placeholder {
+            width: 36px;
+            height: 36px;
+        }
+
+        .profile-upload-btn {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.55);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            font-size: 14px;
+        }
+
+        .profile-upload-wrap:hover .profile-upload-btn,
+        .profile-upload-wrap:focus-within .profile-upload-btn {
+            opacity: 1;
+        }
+
+        .profile-upload-wrap.is-uploading .profile-upload-btn {
+            opacity: 1;
+            pointer-events: none;
+        }
+
+        .profile-upload-wrap.is-uploading .profile-upload-btn i {
+            animation: spin 0.8s linear infinite;
+        }
+
         /* Role badges - compact */
         .role-badge {
             display: inline-block;
@@ -832,35 +911,58 @@ unset($_SESSION['success'], $_SESSION['error']);
                     $admins->data_seek(0);
                     while($row = $admins->fetch_assoc()): 
                         $isOwnProfile = ($row['id'] == $currentUserId);
+                        $displayName = trim((string) ($row['full_name'] ?? ''));
+                        if ($displayName === '') {
+                            $displayName = trim((string) (($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')));
+                        }
+                        if ($displayName === '') {
+                            $displayName = (string) ($row['username'] ?? '');
+                        }
+                        $searchBlob = implode(' ', array_filter([
+                            $displayName,
+                            $row['first_name'] ?? '',
+                            $row['last_name'] ?? '',
+                            $row['email'] ?? '',
+                            $row['phone_number'] ?? '',
+                            $row['username'] ?? '',
+                            $row['role'] ?? '',
+                            $row['position'] ?? '',
+                            $row['employment_type'] ?? '',
+                            $row['nationality'] ?? '',
+                            $row['place_of_birth'] ?? '',
+                            $row['national_id'] ?? '',
+                            $row['address'] ?? '',
+                        ], static fn($v) => trim((string) $v) !== ''));
                     ?>
-                    <tr data-role="<?= htmlspecialchars($row['role'] ?? 'staff') ?>">
-                        <form method="post" class="staff-form" data-id="<?= $row['id'] ?>">
+                    <tr class="staff-data-row" data-role="<?= htmlspecialchars($row['role'] ?? 'staff', ENT_QUOTES, 'UTF-8') ?>"
+                        data-search="<?= htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8') ?>">
+                        <form method="post" enctype="multipart/form-data" class="staff-form" data-id="<?= $row['id'] ?>">
                             <td class="text-center"><?= $counter++ ?></td>
                             <input type="hidden" name="id" value="<?= $row['id'] ?>">
                             
                             <td class="text-center">
-                                <?php if (!empty($row['profile_photo'])): ?>
-                                <div class="profile-img-container">
-                                    <img src="uploads/<?= htmlspecialchars($row['profile_photo'], ENT_QUOTES, 'UTF-8') ?>" 
-                                         alt="Profile" class="profile-img">
+                                <div class="profile-upload-wrap" data-staff-id="<?= (int) $row['id'] ?>">
+                                    <?php if (!empty($row['profile_photo'])): ?>
+                                    <div class="profile-img-container">
+                                        <img src="uploads/<?= htmlspecialchars($row['profile_photo'], ENT_QUOTES, 'UTF-8') ?>"
+                                             alt="Profile" class="profile-img profile-preview">
+                                    </div>
+                                    <?php else: ?>
+                                    <div class="profile-placeholder profile-preview">
+                                        <?= strtoupper(substr($row['first_name'] ?? $row['username'] ?? 'U', 0, 1)) ?>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($isSuperAdmin): ?>
+                                    <label class="profile-upload-btn" title="Upload or change photo">
+                                        <input type="file" name="profile_photo" accept="image/jpeg,image/png,image/gif,image/webp"
+                                               class="profile-photo-input" data-staff-id="<?= (int) $row['id'] ?>" hidden>
+                                        <i class="bi bi-camera-fill"></i>
+                                    </label>
+                                    <?php endif; ?>
                                 </div>
-                                <?php else: ?>
-                                <div class="profile-placeholder">
-                                    <?= strtoupper(substr($row['first_name'] ?? $row['username'] ?? 'U', 0, 1)) ?>
-                                </div>
-                                <?php endif; ?>
                             </td>
                             
                             <td>
-                                <?php
-                                $displayName = trim((string) ($row['full_name'] ?? ''));
-                                if ($displayName === '') {
-                                    $displayName = trim((string) (($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')));
-                                }
-                                if ($displayName === '') {
-                                    $displayName = (string) ($row['username'] ?? '');
-                                }
-                                ?>
                                 <?php if ($isSuperAdmin): ?>
                                 <input type="text" name="full_name" class="staff-cell-input" required
                                        value="<?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>"
@@ -1053,45 +1155,138 @@ $(function() {
         $('#loadingOverlay').fadeIn();
         return true;
     });
-});
 
-// Search functionality
-document.getElementById('searchBox').addEventListener('keyup', function() {
-    let value = this.value.toLowerCase();
-    let rows = document.querySelectorAll('#staffTable tbody tr');
-    
-    rows.forEach(row => {
-        let text = row.textContent.toLowerCase();
-        row.style.display = text.includes(value) ? '' : 'none';
+    // Instant profile photo upload (superadmin)
+    $(document).on('change', '.profile-photo-input', function() {
+        const input = this;
+        const file = input.files && input.files[0];
+        if (!file) return;
+
+        const staffId = input.dataset.staffId;
+        const wrap = input.closest('.profile-upload-wrap');
+        const preview = wrap ? wrap.querySelector('.profile-preview') : null;
+
+        const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (allowed.indexOf(file.type) === -1) {
+            alert('Please choose a JPG, PNG, GIF, or WebP image.');
+            input.value = '';
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            alert('Image must be 2MB or smaller.');
+            input.value = '';
+            return;
+        }
+
+        const fd = new FormData();
+        fd.append('staff_id', staffId);
+        fd.append('profile_photo', file);
+
+        if (wrap) wrap.classList.add('is-uploading');
+
+        fetch('api/staff-profile-photo.php', {
+            method: 'POST',
+            body: fd,
+            credentials: 'same-origin'
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.ok) {
+                alert(data.error || 'Upload failed.');
+                return;
+            }
+            if (preview && preview.tagName === 'IMG') {
+                preview.src = data.photo_url + '?t=' + Date.now();
+            } else if (preview && wrap) {
+                const img = document.createElement('img');
+                img.src = data.photo_url + '?t=' + Date.now();
+                img.alt = 'Profile';
+                img.className = 'profile-img profile-preview';
+                preview.replaceWith(img);
+            }
+        })
+        .catch(function() {
+            alert('Upload failed. Please try again.');
+        })
+        .finally(function() {
+            if (wrap) wrap.classList.remove('is-uploading');
+            input.value = '';
+        });
     });
 });
 
+// Smart live search + role filter (combined)
+let currentRoleFilter = 'all';
+let smartSearchTimer = null;
+
+function pcvcNormalizeSearchStr(str) {
+    if (!str) return '';
+    try {
+        return str
+            .toLowerCase()
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '');
+    } catch (e) {
+        return str.toLowerCase();
+    }
+}
+
+function applyStaffFilters() {
+    const query = (document.getElementById('searchBox')?.value || '').trim();
+    const norm = pcvcNormalizeSearchStr(query);
+    const tokens = norm.split(/[^a-z0-9]+/i).filter(function(t) { return t.length > 0; });
+    const rows = document.querySelectorAll('#staffTable tbody tr.staff-data-row');
+
+    rows.forEach(function(row) {
+        const rowRole = row.getAttribute('data-role') || '';
+        const roleOk = currentRoleFilter === 'all' || rowRole === currentRoleFilter;
+
+        let searchOk = true;
+        if (tokens.length > 0) {
+            let hay = row.getAttribute('data-search') || '';
+            if (!hay) {
+                hay = pcvcNormalizeSearchStr(row.textContent || '');
+            } else {
+                hay = pcvcNormalizeSearchStr(hay);
+            }
+            searchOk = tokens.every(function(t) { return hay.indexOf(t) !== -1; });
+        }
+
+        row.style.display = (roleOk && searchOk) ? '' : 'none';
+    });
+}
+
+const searchBox = document.getElementById('searchBox');
+if (searchBox) {
+    searchBox.addEventListener('keyup', function() {
+        clearTimeout(smartSearchTimer);
+        smartSearchTimer = setTimeout(applyStaffFilters, 120);
+    });
+    searchBox.addEventListener('input', function() {
+        clearTimeout(smartSearchTimer);
+        smartSearchTimer = setTimeout(applyStaffFilters, 120);
+    });
+}
+
 // Filter by role
 function filterByRole(role, el) {
-    document.querySelectorAll('.filter-badge').forEach(badge => {
+    currentRoleFilter = role;
+    document.querySelectorAll('.filter-badge').forEach(function(badge) {
         badge.classList.remove('active');
     });
     if (el) {
         el.classList.add('active');
     }
-    
-    let rows = document.querySelectorAll('#staffTable tbody tr');
-    
-    rows.forEach(row => {
-        if (role === 'all') {
-            row.style.display = '';
-        } else {
-            let rowRole = row.getAttribute('data-role');
-            row.style.display = rowRole === role ? '' : 'none';
-        }
-    });
+    applyStaffFilters();
 }
+
+applyStaffFilters();
 
 // Sort table by column
 function sortTable(columnIndex) {
     let table = document.getElementById('staffTable');
     let tbody = table.querySelector('tbody');
-    let rows = Array.from(tbody.querySelectorAll('tr'));
+    let rows = Array.from(tbody.querySelectorAll('tr.staff-data-row'));
     
     // Toggle sort order
     if (!table.sortDirection) {
@@ -1112,6 +1307,7 @@ function sortTable(columnIndex) {
     
     // Reorder rows
     rows.forEach(row => tbody.appendChild(row));
+    applyStaffFilters();
 }
 
 // Confirm delete
