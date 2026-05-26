@@ -255,6 +255,21 @@ function pcvc_swl_render_pdf(string $html, int $staffId, string $referenceCode):
 }
 
 /* ============================================================
+   CC DEFAULTS (override via .env)
+============================================================ */
+function pcvc_swl_cc_email(): string
+{
+    $v = trim((string) xander_env_get('STAFF_WARNING_LETTER_CC_EMAIL'));
+    return $v !== '' ? $v : 'infos@visaconsultantcanada.com';
+}
+
+function pcvc_swl_cc_whatsapp_raw(): string
+{
+    $v = trim((string) xander_env_get('STAFF_WARNING_LETTER_CC_WHATSAPP'));
+    return $v !== '' ? $v : '+1 (438) 290-6688';
+}
+
+/* ============================================================
    EMAIL WITH PDF ATTACHMENT
 ============================================================ */
 function pcvc_swl_send_email(string $toEmail, string $toName, string $subject, string $contentHtml, string $pdfAbsPath, string $pdfFilename): array
@@ -263,6 +278,10 @@ function pcvc_swl_send_email(string $toEmail, string $toName, string $subject, s
         require_once __DIR__ . '/mailer.php';
         $mail = app_mailer();
         $mail->addAddress($toEmail, $toName ?: $toEmail);
+        $ccEmail = pcvc_swl_cc_email();
+        if ($ccEmail !== '' && filter_var($ccEmail, FILTER_VALIDATE_EMAIL)) {
+            $mail->addCC($ccEmail, 'Parrot Canada Visa Consultant');
+        }
         $mail->Subject = 'Warning Letter — ' . $subject;
         $safeName = htmlspecialchars($toName, ENT_QUOTES, 'UTF-8');
         $safeSubj = htmlspecialchars($subject, ENT_QUOTES, 'UTF-8');
@@ -336,76 +355,23 @@ function pcvc_swl_whatsapp_upload_media(string $phoneId, string $token, string $
 }
 
 /* ============================================================
-   WHATSAPP — TEMPLATE WITH DOCUMENT HEADER
-   - Uploads the PDF to Meta /media → gets media_id
-   - Sends the approved template with a HEADER component of
-     type=document {id: media_id, filename}. The PDF is part of
-     the template message itself (works outside the 24h window
-     because templates always do).
-   - If the template doesn't have a media header in Meta, we
-     gracefully retry without the header so the intro still
-     arrives, and surface a clear error so HR can re-approve the
-     template with a "Document" header.
-
-   IMPORTANT — your template must be approved with a HEADER of
-   type "Document" for the PDF to attach. In Meta Business
-   Manager → WhatsApp Manager → Message templates → edit
-   pcvc_warning_letter → Header → Media → Document → submit.
+   WHATSAPP — deliver template (one recipient)
 ============================================================ */
-function pcvc_swl_send_whatsapp(
-    string $phoneRaw,
+function pcvc_swl_whatsapp_deliver_template_to(
+    string $to,
     string $staffName,
     string $subject,
-    string $pdfPublicUrl,
     string $referenceCode,
-    string $pdfAbsPath = ''
+    string $mediaId,
+    string $docFilename,
+    string $url,
+    string $token,
+    string $tplName,
+    string $tplLang,
+    array $bodyParams
 ): array {
-    $token   = trim((string) xander_env_get('WHATSAPP_ACCESS_TOKEN'));
-    if ($token === '') $token = trim((string) xander_env_get('WHATSAPP_TOKEN'));
-    $phoneId = trim((string) xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
+    $result = ['sent' => false, 'method' => '', 'error' => '', 'not_on_whatsapp' => false, 'to' => $to];
 
-    $result = ['sent' => false, 'method' => '', 'error' => '', 'not_on_whatsapp' => false];
-    if ($token === '' || $phoneId === '') {
-        $result['error'] = 'WhatsApp is not configured (token/phone-id missing).';
-        return $result;
-    }
-
-    $dcc       = trim((string) xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE'));
-    $defaultCc = $dcc !== '' ? $dcc : null;
-    $to        = xander_format_phone_for_whatsapp_e164($phoneRaw, $defaultCc);
-    if ($to === null || $to === '') {
-        $result['error'] = 'Staff phone number is missing or invalid.';
-        return $result;
-    }
-
-    $version = trim((string) xander_env_get('META_GRAPH_VERSION')) ?: 'v19.0';
-    $url     = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
-
-    $tplName = trim((string) xander_env_get('WHATSAPP_WARNING_LETTER_TEMPLATE_NAME')) ?: 'pcvc_warning_letter';
-    $tplLang = trim((string) xander_env_get('WHATSAPP_WARNING_LETTER_TEMPLATE_LANG')) ?: 'en';
-    $docFilename = 'Warning_Letter_' . $referenceCode . '.pdf';
-
-    /* ---------- 1) Upload the PDF to Meta media (so we have a media_id) ---------- */
-    $mediaId = '';
-    if ($pdfAbsPath !== '' && is_file($pdfAbsPath)) {
-        $upload = pcvc_swl_whatsapp_upload_media($phoneId, $token, $version, $pdfAbsPath, $docFilename);
-        if ($upload['id'] !== '') {
-            $mediaId = $upload['id'];
-        } else {
-            error_log('[warning_letter] PDF upload to Meta failed (HTTP ' . $upload['http'] . ').');
-        }
-    } else {
-        error_log('[warning_letter] PDF file missing at: ' . $pdfAbsPath);
-    }
-
-    /* ---------- 2) Build template body params (always 3) ---------- */
-    $bodyParams = [
-        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($staffName ?: 'Colleague')],
-        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($subject)],
-        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($referenceCode)],
-    ];
-
-    /* ---------- 3) Send template WITH document header (preferred) ---------- */
     $sendTemplate = function (array $components) use ($url, $token, $to, $tplName, $tplLang) {
         $payload = [
             'messaging_product' => 'whatsapp',
@@ -413,13 +379,13 @@ function pcvc_swl_send_whatsapp(
             'to'                => $to,
             'type'              => 'template',
             'template'          => [
-                'name'     => $tplName,
-                'language' => ['code' => $tplLang],
+                'name'       => $tplName,
+                'language'   => ['code' => $tplLang],
                 'components' => $components,
             ],
         ];
         $res = xander_whatsapp_graph_post($url, $token, $payload);
-        error_log('[warning_letter] wa tpl HTTP ' . $res['http'] . ' body: ' . $res['body']);
+        error_log('[warning_letter] wa tpl to=' . $to . ' HTTP ' . $res['http'] . ' body: ' . $res['body']);
         return $res;
     };
 
@@ -439,7 +405,6 @@ function pcvc_swl_send_whatsapp(
     $res = $sendTemplate($componentsWithHeader);
     $ok  = ($res['http'] >= 200 && $res['http'] < 300 && xander_whatsapp_response_has_message_id($res['json']));
 
-    /* Detect "not on WhatsApp" */
     if (!$ok) {
         $errStruct = xander_whatsapp_extract_error($res['json']);
         $errMsg    = $errStruct['message'] ?? '';
@@ -454,8 +419,6 @@ function pcvc_swl_send_whatsapp(
             return $result;
         }
 
-        /* If template structure mismatch (template has no document header),
-           retry without the header so the intro at least arrives. */
         $isFormatErr = ($errCode === 132000 || $errCode === 132001 || $errCode === 132012 ||
                         stripos($errMsg, 'parameter') !== false ||
                         stripos($errMsg, 'header') !== false ||
@@ -481,12 +444,111 @@ function pcvc_swl_send_whatsapp(
         return $result;
     }
 
-    /* SUCCESS */
     $result['sent']   = true;
     $result['method'] = $hasMedia ? 'template_with_pdf_header' : 'template_only';
     if (!$hasMedia) {
         $result['error'] = 'PDF could not be uploaded to Meta — template intro delivered without attachment.';
     }
+    return $result;
+}
+
+/* ============================================================
+   WHATSAPP — TEMPLATE WITH DOCUMENT HEADER (+ CC copy)
+   - Uploads the PDF to Meta /media once → reuses media_id for staff + CC
+   - Sends the approved template with a HEADER component of
+     type=document {id: media_id, filename}.
+
+   IMPORTANT — your template must be approved with a HEADER of
+   type "Document" for the PDF to attach. In Meta Business
+   Manager → WhatsApp Manager → Message templates → edit
+   pcvc_warning_letter → Header → Media → Document → submit.
+============================================================ */
+function pcvc_swl_send_whatsapp(
+    string $phoneRaw,
+    string $staffName,
+    string $subject,
+    string $pdfPublicUrl,
+    string $referenceCode,
+    string $pdfAbsPath = ''
+): array {
+    $token   = trim((string) xander_env_get('WHATSAPP_ACCESS_TOKEN'));
+    if ($token === '') $token = trim((string) xander_env_get('WHATSAPP_TOKEN'));
+    $phoneId = trim((string) xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
+
+    $result = ['sent' => false, 'method' => '', 'error' => '', 'not_on_whatsapp' => false, 'cc' => ['sent' => false, 'error' => '', 'to' => '']];
+    if ($token === '' || $phoneId === '') {
+        $result['error'] = 'WhatsApp is not configured (token/phone-id missing).';
+        return $result;
+    }
+
+    $dcc       = trim((string) xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE'));
+    $defaultCc = $dcc !== '' ? $dcc : null;
+    $to        = xander_format_phone_for_whatsapp_e164($phoneRaw, $defaultCc);
+    if ($to === null || $to === '') {
+        $result['error'] = 'Staff phone number is missing or invalid.';
+        return $result;
+    }
+
+    $version = trim((string) xander_env_get('META_GRAPH_VERSION')) ?: 'v19.0';
+    $url     = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
+
+    $tplName = trim((string) xander_env_get('WHATSAPP_WARNING_LETTER_TEMPLATE_NAME')) ?: 'pcvc_warning_letter';
+    $tplLang = trim((string) xander_env_get('WHATSAPP_WARNING_LETTER_TEMPLATE_LANG')) ?: 'en';
+    $docFilename = 'Warning_Letter_' . $referenceCode . '.pdf';
+
+    $mediaId = '';
+    if ($pdfAbsPath !== '' && is_file($pdfAbsPath)) {
+        $upload = pcvc_swl_whatsapp_upload_media($phoneId, $token, $version, $pdfAbsPath, $docFilename);
+        if ($upload['id'] !== '') {
+            $mediaId = $upload['id'];
+        } else {
+            error_log('[warning_letter] PDF upload to Meta failed (HTTP ' . $upload['http'] . ').');
+        }
+    } else {
+        error_log('[warning_letter] PDF file missing at: ' . $pdfAbsPath);
+    }
+
+    $bodyParams = [
+        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($staffName ?: 'Colleague')],
+        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($subject)],
+        ['type' => 'text', 'text' => pcvc_brochure_wa_sanitize_param($referenceCode)],
+    ];
+
+    $primary = pcvc_swl_whatsapp_deliver_template_to(
+        $to, $staffName, $subject, $referenceCode, $mediaId, $docFilename,
+        $url, $token, $tplName, $tplLang, $bodyParams
+    );
+    $result['sent']             = !empty($primary['sent']);
+    $result['method']           = (string) ($primary['method'] ?? '');
+    $result['error']            = (string) ($primary['error'] ?? '');
+    $result['not_on_whatsapp']  = !empty($primary['not_on_whatsapp']);
+
+    $ccRaw = pcvc_swl_cc_whatsapp_raw();
+    $ccTo  = xander_format_phone_for_whatsapp_e164($ccRaw, $defaultCc);
+    $result['cc']['to'] = $ccTo ?? '';
+    if ($ccTo === null || $ccTo === '') {
+        $result['cc']['error'] = 'CC WhatsApp number is missing or invalid.';
+        return $result;
+    }
+    if ($ccTo === $to) {
+        $result['cc']['sent']  = $result['sent'];
+        $result['cc']['error'] = '';
+        return $result;
+    }
+
+    $ccOut = pcvc_swl_whatsapp_deliver_template_to(
+        $ccTo, $staffName, $subject, $referenceCode, $mediaId, $docFilename,
+        $url, $token, $tplName, $tplLang, $bodyParams
+    );
+    $result['cc']['sent']   = !empty($ccOut['sent']);
+    $result['cc']['error']  = (string) ($ccOut['error'] ?? '');
+    $result['cc']['method'] = (string) ($ccOut['method'] ?? '');
+
+    if ($result['sent'] && !$result['cc']['sent']) {
+        $ccErr = $result['cc']['error'] !== '' ? $result['cc']['error'] : 'CC delivery failed';
+        $result['error'] = trim($result['error'] . ' Staff notified; CC WhatsApp (' . $ccTo . ') failed: ' . $ccErr);
+    }
+
     return $result;
 }
 

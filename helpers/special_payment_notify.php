@@ -126,36 +126,37 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
     $emailSent = false;
     $errors    = [];
 
+    $recipients = [];
+    $seen = [];
+    foreach ([$notifyEmail, $mailFrom = (xander_env_get('SMTP_FROM_EMAIL') ?: 'admission@visaconsultantcanada.com')] as $addr) {
+        $addr = trim(strtolower($addr));
+        if ($addr === '' || isset($seen[$addr])) {
+            continue;
+        }
+        $seen[$addr] = true;
+        $recipients[] = $addr;
+    }
+
     pcvc_special_payment_notify_log('Sending admin email', [
-        'to'      => $notifyEmail,
-        'student' => $studentName,
-        'receipt' => $receiptNo,
+        'recipients' => $recipients,
+        'student'    => $studentName,
+        'receipt'    => $receiptNo,
     ]);
 
-    try {
-        $mail = pcvc_special_payment_smtp_mailer();
-        $mail->addAddress($notifyEmail, 'Finance Admin');
+    $h = static fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 
-        $fromEmail = $mail->From;
-        if (strcasecmp($fromEmail, $notifyEmail) !== 0) {
-            $mail->addBCC($fromEmail, 'Finance Office Copy');
-        }
+    $subject = "Payment Recorded — {$programLabel} — {$receiptNo}";
 
-        $h = static fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $plainBody = "New payment recorded\n\n"
+        . "Program: {$programLabel}\n"
+        . "Student: {$studentName}\n"
+        . "Receipt: {$receiptNo}\n"
+        . "Package: {$package}\n"
+        . "Amount: {$currency} {$totalPaid}\n"
+        . "Method: {$method}\n\n"
+        . "The student was NOT emailed. Receipt is in the dashboard.";
 
-        $subject = "Payment Recorded — {$programLabel} — {$receiptNo}";
-        $mail->Subject = $subject;
-
-        $plainBody = "New payment recorded\n\n"
-            . "Program: {$programLabel}\n"
-            . "Student: {$studentName}\n"
-            . "Receipt: {$receiptNo}\n"
-            . "Package: {$package}\n"
-            . "Amount: {$currency} {$totalPaid}\n"
-            . "Method: {$method}\n\n"
-            . "The student was NOT emailed. Receipt is in the dashboard.";
-
-        $mail->Body = '
+    $htmlBody = '
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2933;max-width:640px;">
       <div style="background:#0b3c5d;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">
         <div style="font-size:18px;font-weight:800;">New Payment — ' . $h($programLabel) . '</div>
@@ -172,24 +173,34 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
         <p style="font-size:12px;color:#6b7280;">Receipt is available in the dashboard under Check payment Receipt.</p>
       </div>
     </div>';
-        $mail->AltBody = $plainBody;
 
-        if (is_file($pdfPath)) {
-            $mail->addAttachment($pdfPath, $receiptNo . '.pdf');
+    foreach ($recipients as $recipient) {
+        try {
+            $mail = pcvc_special_payment_smtp_mailer();
+            $mail->addAddress($recipient, 'Finance Admin');
+            $mail->Subject = $subject;
+            $mail->Body = $htmlBody;
+            $mail->AltBody = $plainBody;
+
+            if (is_file($pdfPath)) {
+                $mail->addAttachment($pdfPath, $receiptNo . '.pdf');
+            }
+
+            $mail->send();
+            $emailSent = true;
+            pcvc_special_payment_notify_log('Admin email SMTP accepted', [
+                'to'         => $recipient,
+                'from'       => $mail->From,
+                'subject'    => $subject,
+                'message_id' => $mail->getLastMessageID(),
+            ]);
+        } catch (Throwable $e) {
+            $errors[] = 'email(' . $recipient . '): ' . $e->getMessage();
+            pcvc_special_payment_notify_log('Admin email failed', [
+                'to'    => $recipient,
+                'error' => $e->getMessage(),
+            ]);
         }
-
-        $mail->send();
-        $emailSent = true;
-        pcvc_special_payment_notify_log('Admin email SMTP accepted', [
-            'to'         => $notifyEmail,
-            'from'       => $mail->From,
-            'bcc'        => strcasecmp($fromEmail, $notifyEmail) !== 0 ? $fromEmail : '',
-            'subject'    => $subject,
-            'message_id' => $mail->getLastMessageID(),
-        ]);
-    } catch (Throwable $e) {
-        $errors[] = 'email: ' . $e->getMessage();
-        pcvc_special_payment_notify_log('Admin email failed', $e->getMessage());
     }
 
     return [
