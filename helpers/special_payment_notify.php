@@ -4,8 +4,10 @@ declare(strict_types=1);
 require_once __DIR__ . '/env_load.php';
 require_once __DIR__ . '/receipt_render.php';
 require_once __DIR__ . '/mailer.php';
-require_once __DIR__ . '/student_status_notify.php';
 require_once dirname(__DIR__) . '/generateReceiptPdf.php';
+require_once dirname(__DIR__) . '/PHPMailer/src/PHPMailer.php';
+require_once dirname(__DIR__) . '/PHPMailer/src/SMTP.php';
+require_once dirname(__DIR__) . '/PHPMailer/src/Exception.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 
@@ -24,7 +26,65 @@ function pcvc_special_payment_notify_log(string $msg, $data = null): void
 }
 
 /**
- * Email + WhatsApp admin after a special-program payment. Returns result summary.
+ * Resolve admin notify email from .env (SPECIAL_PAYMENT_NOTIFY_EMAIL).
+ */
+function pcvc_special_payment_notify_email(): string
+{
+    xander_load_env_file();
+
+    $email = trim(xander_env_get('SPECIAL_PAYMENT_NOTIFY_EMAIL'));
+    if ($email === '') {
+        $email = trim(xander_env_get_from_dotenv_file('SPECIAL_PAYMENT_NOTIFY_EMAIL'));
+    }
+    if ($email === '') {
+        $email = 'hatheo75@gmail.com';
+    }
+
+    return $email;
+}
+
+/**
+ * Build PHPMailer using the same SMTP settings as sendReceiptEmail.php.
+ */
+function pcvc_special_payment_smtp_mailer(): PHPMailer
+{
+    xander_load_env_file();
+
+    $host = xander_env_get('SMTP_HOST') ?: 'visaconsultantcanada.com';
+    $username = xander_env_get('SMTP_USERNAME') ?: 'admission@visaconsultantcanada.com';
+    $password = xander_env_get('SMTP_PASSWORD');
+    if ($password === '') {
+        $password = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
+    }
+    if ($password === '') {
+        $fromGetenv = getenv('SMTP_PASSWORD');
+        $password = ($fromGetenv !== false && trim((string) $fromGetenv) !== '')
+            ? trim((string) $fromGetenv)
+            : 'Petero@1981';
+    }
+
+    $portStr = xander_env_get('SMTP_PORT');
+    $port = $portStr !== '' ? (int) $portStr : 465;
+    $fromEmail = xander_env_get('SMTP_FROM_EMAIL') ?: 'admission@visaconsultantcanada.com';
+
+    $mail = new PHPMailer(true);
+    $mail->isSMTP();
+    $mail->Host = $host;
+    $mail->SMTPAuth = true;
+    $mail->Username = $username;
+    $mail->Password = $password;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+    $mail->Port = $port > 0 ? $port : 465;
+    $mail->CharSet = 'UTF-8';
+    $mail->isHTML(true);
+    $mail->setFrom($fromEmail, 'Parrot Canada Visa Consultant – Finance');
+    $mail->addReplyTo($fromEmail, 'Parrot Canada Finance');
+
+    return $mail;
+}
+
+/**
+ * Email admin after a special-program payment (email only — WhatsApp disabled).
  */
 function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): array
 {
@@ -39,25 +99,8 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
         return ['status' => 'error', 'reason' => 'not_found'];
     }
 
-    xander_load_env_file();
-
-    $notifyEmail = trim(xander_env_get('SPECIAL_PAYMENT_NOTIFY_EMAIL'));
-    if ($notifyEmail === '') {
-        $notifyEmail = trim(xander_env_get_from_dotenv_file('SPECIAL_PAYMENT_NOTIFY_EMAIL'));
-    }
-    if ($notifyEmail === '') {
-        $notifyEmail = 'hatheo75@gmail.com';
-    }
-
-    $notifyPhone = trim(xander_env_get('SPECIAL_PAYMENT_NOTIFY_WHATSAPP'));
-    if ($notifyPhone === '') {
-        $notifyPhone = trim(xander_env_get_from_dotenv_file('SPECIAL_PAYMENT_NOTIFY_WHATSAPP'));
-    }
-    if ($notifyPhone === '') {
-        $notifyPhone = '+250783314265';
-    }
-
-    pcvc_special_payment_notify_log('Notify targets', ['email' => $notifyEmail, 'whatsapp' => $notifyPhone]);
+    $notifyEmail = pcvc_special_payment_notify_email();
+    pcvc_special_payment_notify_log('Notify email target', $notifyEmail);
 
     $programLabel = match ($data['source_table'] ?? '') {
         'credit_transfer_applications' => 'Credit Transfer',
@@ -81,7 +124,6 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
     }
 
     $emailSent = false;
-    $waSent    = false;
     $errors    = [];
 
     pcvc_special_payment_notify_log('Sending admin email', [
@@ -91,12 +133,28 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
     ]);
 
     try {
-        $mail = pcvc_finance_smtp_mailer('Parrot Canada Visa Consultant – Finance');
+        $mail = pcvc_special_payment_smtp_mailer();
         $mail->addAddress($notifyEmail, 'Finance Admin');
+
+        $fromEmail = $mail->From;
+        if (strcasecmp($fromEmail, $notifyEmail) !== 0) {
+            $mail->addBCC($fromEmail, 'Finance Office Copy');
+        }
 
         $h = static fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
 
-        $mail->Subject = "Payment Recorded — {$programLabel} — {$receiptNo}";
+        $subject = "Payment Recorded — {$programLabel} — {$receiptNo}";
+        $mail->Subject = $subject;
+
+        $plainBody = "New payment recorded\n\n"
+            . "Program: {$programLabel}\n"
+            . "Student: {$studentName}\n"
+            . "Receipt: {$receiptNo}\n"
+            . "Package: {$package}\n"
+            . "Amount: {$currency} {$totalPaid}\n"
+            . "Method: {$method}\n\n"
+            . "The student was NOT emailed. Receipt is in the dashboard.";
+
         $mail->Body = '
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#1f2933;max-width:640px;">
       <div style="background:#0b3c5d;color:#fff;padding:16px 20px;border-radius:8px 8px 0 0;">
@@ -114,6 +172,7 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
         <p style="font-size:12px;color:#6b7280;">Receipt is available in the dashboard under Check payment Receipt.</p>
       </div>
     </div>';
+        $mail->AltBody = $plainBody;
 
         if (is_file($pdfPath)) {
             $mail->addAttachment($pdfPath, $receiptNo . '.pdf');
@@ -121,61 +180,22 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
 
         $mail->send();
         $emailSent = true;
-        pcvc_special_payment_notify_log('Admin email sent', $notifyEmail);
+        pcvc_special_payment_notify_log('Admin email SMTP accepted', [
+            'to'         => $notifyEmail,
+            'from'       => $mail->From,
+            'bcc'        => strcasecmp($fromEmail, $notifyEmail) !== 0 ? $fromEmail : '',
+            'subject'    => $subject,
+            'message_id' => $mail->getLastMessageID(),
+        ]);
     } catch (Throwable $e) {
         $errors[] = 'email: ' . $e->getMessage();
         pcvc_special_payment_notify_log('Admin email failed', $e->getMessage());
     }
 
-    $waBody = "New payment recorded\n\n"
-        . "Program: {$programLabel}\n"
-        . "Student: {$studentName}\n"
-        . "Receipt: {$receiptNo}\n"
-        . "Package: {$package}\n"
-        . "Amount: {$currency} {$totalPaid}\n"
-        . "Method: {$method}\n\n"
-        . "Student was NOT emailed. Receipt is in the dashboard.";
-
-    $token   = xander_env_get('WHATSAPP_ACCESS_TOKEN');
-    $phoneId = xander_env_get('WHATSAPP_PHONE_NUMBER_ID');
-    $version = xander_env_get('META_GRAPH_VERSION') ?: 'v19.0';
-
-    if ($token !== '' && $phoneId !== '') {
-        $defaultCountry = xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE') ?: 'RW';
-        $toE164 = xander_format_phone_for_whatsapp_e164($notifyPhone, $defaultCountry);
-
-        if ($toE164) {
-            $url = "https://graph.facebook.com/{$version}/{$phoneId}/messages";
-            $waResult = xander_whatsapp_send_template_or_session(
-                $toE164,
-                $url,
-                $token,
-                '',
-                'en_US',
-                0,
-                [],
-                $waBody
-            );
-            $waSent = !empty($waResult['sent']);
-            if ($waSent) {
-                pcvc_special_payment_notify_log('WhatsApp sent', $notifyPhone);
-            } else {
-                $errors[] = 'whatsapp: ' . ($waResult['error'] ?? 'failed');
-                pcvc_special_payment_notify_log('WhatsApp failed', $waResult);
-            }
-        } else {
-            $errors[] = 'whatsapp: invalid phone number';
-            pcvc_special_payment_notify_log('Invalid WhatsApp number', $notifyPhone);
-        }
-    } else {
-        $errors[] = 'whatsapp: not configured';
-        pcvc_special_payment_notify_log('WhatsApp credentials missing');
-    }
-
     return [
-        'status'        => ($emailSent || $waSent) ? 'ok' : 'partial',
+        'status'        => $emailSent ? 'ok' : 'error',
         'email_sent'    => $emailSent,
-        'whatsapp_sent' => $waSent,
+        'whatsapp_sent' => false,
         'errors'        => $errors,
     ];
 }
