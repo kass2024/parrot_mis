@@ -1,15 +1,40 @@
 <?php
 declare(strict_types=1);
 
-session_start();
-header('Content-Type: application/json; charset=UTF-8');
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+ob_start();
+error_reporting(0);
+ini_set('display_errors', '0');
 
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/helpers/role.php';
 
 $userId = (int) ($_SESSION['user_id'] ?? $_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
+if ($userId < 1 && !empty($_SESSION['username'])) {
+    $lu = $conn->prepare('SELECT id FROM admins WHERE username = ? LIMIT 1');
+    if ($lu) {
+        $uname = (string) $_SESSION['username'];
+        $lu->bind_param('s', $uname);
+        $lu->execute();
+        $lu->bind_result($foundId);
+        if ($lu->fetch()) {
+            $userId = (int) $foundId;
+            $_SESSION['user_id'] = $userId;
+        }
+        $lu->close();
+    }
+}
+
+$payload = ['results' => []];
+
 if ($userId < 1) {
-    echo json_encode(['results' => [], 'error' => 'Unauthorized']);
+    $payload['error'] = 'Unauthorized';
+    ob_end_clean();
+    header('Content-Type: application/json; charset=UTF-8');
+    echo json_encode($payload);
     exit;
 }
 
@@ -33,6 +58,8 @@ $isSuper = pcvc_is_superadmin_role($role);
 $agentKey = strtolower(trim($agentEmail));
 
 if (!$isSuper && $q === '') {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=UTF-8');
     echo json_encode(['results' => []]);
     exit;
 }
@@ -101,4 +128,6 @@ if ($isSuper && $q === '' && $agentKey !== '') {
     }
 }
 
+ob_end_clean();
+header('Content-Type: application/json; charset=UTF-8');
 echo json_encode(['results' => $items]);

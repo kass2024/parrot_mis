@@ -689,14 +689,16 @@ textarea.form-control {
           <label class="form-label fw-semibold">Select Student *</label>
           <select id="studentSelect" class="form-select" name="recruited_student_id" required>
             <option value="">-- Select Student --</option>
+            <?php if (!$useAjaxStudentSearch): ?>
             <?php foreach ($students as $s): ?>
               <option value="<?= htmlspecialchars($s['id']) ?>">
                 <?= htmlspecialchars($s['name']) ?> - <?= htmlspecialchars($s['email']) ?>
               </option>
             <?php endforeach; ?>
+            <?php endif; ?>
           </select>
           <?php if ($useAjaxStudentSearch): ?>
-          <p class="text-muted small mt-2 mb-0"><?= count($students) > 0 ? 'Your recruited students are listed above.' : 'No recruited students linked to your email yet.' ?> Type at least 2 characters to search all students.</p>
+          <p class="text-muted small mt-2 mb-0">Open the dropdown to see your recruited students, or type to search all students.</p>
           <?php elseif (count($students) === 0): ?>
           <p class="text-danger small mt-2 mb-0"><strong>No students found.</strong> Link students to your agent email in applications.</p>
           <?php endif; ?>
@@ -950,27 +952,48 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const submitBtn = form.querySelector("button[type='submit']");
   const ajaxStudents = window.PCVC_COMMISSION_AJAX_STUDENTS === true;
+  const $studentSelect = window.jQuery("#studentSelect");
+  const studentSearchUrl = new URL("api/commission-student-search.php", window.location.href).href;
 
   const select2Opts = {
     theme: "bootstrap-5",
-    placeholder: ajaxStudents ? "Type to search students…" : "Search for a student...",
+    placeholder: ajaxStudents ? "Select or search students…" : "Search for a student…",
     width: "100%",
-    allowClear: true
+    allowClear: true,
+    dropdownParent: $studentSelect.parent()
   };
+
   if (ajaxStudents) {
-    select2Opts.minimumInputLength = 2;
+    select2Opts.minimumInputLength = 0;
     select2Opts.ajax = {
-      url: "api/commission-student-search.php",
+      url: studentSearchUrl,
       dataType: "json",
-      delay: 250,
+      delay: 300,
       cache: true,
-      data: (params) => ({ q: params.term || "" }),
-      processResults: (data) => ({
-        results: (data && data.results) ? data.results : []
-      })
+      data: function (params) {
+        return { q: params.term || "" };
+      },
+      processResults: function (data) {
+        var list = (data && Array.isArray(data.results)) ? data.results : [];
+        return { results: list };
+      },
+      transport: function (params, success, failure) {
+        var request = window.jQuery.ajax(params);
+        request.then(success);
+        request.fail(function () {
+          failure();
+        });
+        return request;
+      }
+    };
+    select2Opts.language = {
+      searching: function () { return "Searching…"; },
+      noResults: function () { return "No students found"; },
+      errorLoading: function () { return "Could not load students — try again"; }
     };
   }
-  window.jQuery("#studentSelect").select2(select2Opts);
+
+  $studentSelect.select2(select2Opts);
 
   window.jQuery("#studentSelect").on("change", () => {
     setStudentSelectInvalid(false);
