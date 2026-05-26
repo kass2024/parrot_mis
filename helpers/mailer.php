@@ -10,6 +10,17 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 
 /**
+ * Improve deliverability: correct EHLO hostname, envelope sender, Message-ID domain.
+ */
+function pcvc_smtp_apply_deliverability(PHPMailer $mail, string $fromEmail): void
+{
+    $domain = substr(strrchr($fromEmail, '@'), 1) ?: 'visaconsultantcanada.com';
+    $mail->Hostname = $domain;
+    $mail->Sender = $fromEmail;
+    $mail->XMailer = 'Parrot-MIS-Finance';
+}
+
+/**
  * Central SMTP settings for PHPMailer across the project.
  * Credentials are read from project-root .env (SMTP_* keys).
  */
@@ -83,6 +94,7 @@ function pcvc_finance_smtp_mailer(?string $fromNameOverride = null): PHPMailer
     $mail->SMTPDebug = SMTP::DEBUG_OFF;
     $mail->isHTML(true);
     $mail->setFrom($fromEmail, $fromName);
+    pcvc_smtp_apply_deliverability($mail, $fromEmail);
 
     return $mail;
 }

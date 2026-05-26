@@ -137,6 +137,8 @@ function xander_env_get(string $key): string
             'META_GRAPH_VERSION' => true,
             'SPECIAL_PAYMENT_NOTIFY_EMAIL' => true,
             'SPECIAL_PAYMENT_NOTIFY_WHATSAPP' => true,
+            'SPECIAL_PAYMENT_SMTP_DEBUG' => true,
+            'SMTP_TEST_GMAIL' => true,
             'SMTP_HOST' => true,
             'SMTP_PORT' => true,
             'SMTP_USERNAME' => true,

@@ -53,38 +53,60 @@ function run(mysqli $conn, string $sql, string $stage): mysqli_result {
     return $res;
 }
 
-/* =====================================================
-   UNIFIED STUDENTS SOURCE (SCHEMA-AWARE)
-   — LOGIC SAFE —
-===================================================== */
-$studentsSource = "
-(
-    SELECT
-        id,
-        email,
-        first_name,
-        last_name
-    FROM student_applications
+/**
+ * SQL LEFT JOINs to resolve applicant name by application_packages / payment_receipts source_table.
+ */
+function pcvc_dashboard_student_joins_sql(string $applicationIdCol, string $sourceTableCol): string
+{
+    return "
+        LEFT JOIN credit_transfer_applications pcvc_cta
+            ON {$sourceTableCol} = 'credit_transfer_applications'
+           AND pcvc_cta.id = {$applicationIdCol}
+        LEFT JOIN upafa_registrations pcvc_ur
+            ON {$sourceTableCol} = 'upafa_registrations'
+           AND pcvc_ur.id = {$applicationIdCol}
+        LEFT JOIN student_applications pcvc_sta
+            ON ({$sourceTableCol} = 'student_applications'
+                OR {$sourceTableCol} IS NULL
+                OR {$sourceTableCol} = '')
+           AND pcvc_sta.id = {$applicationIdCol}
+        LEFT JOIN malta_applications pcvc_ma
+            ON {$sourceTableCol} = 'malta_applications'
+           AND pcvc_ma.id = {$applicationIdCol}
+        LEFT JOIN turkey_applications pcvc_ta
+            ON {$sourceTableCol} = 'turkey_applications'
+           AND pcvc_ta.id = {$applicationIdCol}
+    ";
+}
 
-    UNION ALL
+/**
+ * SQL expression for display name matched to source_table (avoids id collisions across tables).
+ */
+function pcvc_dashboard_student_name_sql(string $sourceTableCol): string
+{
+    return "
+        NULLIF(TRIM(CASE {$sourceTableCol}
+            WHEN 'credit_transfer_applications' THEN CONCAT_WS(' ', pcvc_cta.first_name, pcvc_cta.middle_name, pcvc_cta.last_name)
+            WHEN 'upafa_registrations'            THEN CONCAT_WS(' ', pcvc_ur.first_name, pcvc_ur.last_name)
+            WHEN 'malta_applications'             THEN CONCAT_WS(' ', pcvc_ma.name, pcvc_ma.surname)
+            WHEN 'turkey_applications'            THEN CONCAT_WS(' ', pcvc_ta.first_name, pcvc_ta.last_name)
+            ELSE CONCAT_WS(' ', pcvc_sta.first_name, pcvc_sta.last_name)
+        END), '')
+    ";
+}
 
-    SELECT
-        id,
-        email,
-        name    AS first_name,
-        surname AS last_name
-    FROM malta_applications
-
-    UNION ALL
-
-    SELECT
-        id,
-        email,
-        first_name,
-        last_name
-    FROM turkey_applications
-) sa
-";
+function pcvc_dashboard_student_email_sql(string $sourceTableCol): string
+{
+    return "
+        NULLIF(TRIM(CASE {$sourceTableCol}
+            WHEN 'credit_transfer_applications' THEN pcvc_cta.email
+            WHEN 'upafa_registrations'            THEN pcvc_ur.email
+            WHEN 'malta_applications'             THEN pcvc_ma.email
+            WHEN 'turkey_applications'            THEN pcvc_ta.email
+            ELSE pcvc_sta.email
+        END), '')
+    ";
+}
 
 /* =====================================================
    KPI LIST MODE (MODAL)
@@ -103,8 +125,9 @@ if ($statusFilter !== null) {
     $sql = "
         SELECT
             ap.application_id,
-            sa.email,
-            CONCAT_WS(' ', sa.first_name, sa.last_name) AS student_name,
+            ap.source_table,
+            " . pcvc_dashboard_student_email_sql('ap.source_table') . " AS email,
+            COALESCE(" . pcvc_dashboard_student_name_sql('ap.source_table') . ", 'Unknown Student') AS student_name,
 
             COUNT(fi.id) AS total_items,
 
@@ -133,20 +156,21 @@ if ($statusFilter !== null) {
         LEFT JOIN (
             SELECT
                 application_id,
+                source_table,
                 fee_item_id,
                 SUM(amount_paid) AS paid_amount,
                 MAX(paid_at) AS last_payment
             FROM application_payments
             WHERE status = 'PAID'
-            GROUP BY application_id, fee_item_id
+            GROUP BY application_id, source_table, fee_item_id
         ) pi
             ON pi.application_id = ap.application_id
+           AND pi.source_table = ap.source_table
            AND pi.fee_item_id = fi.id
 
-        LEFT JOIN {$studentsSource}
-            ON sa.id = ap.application_id
+        " . pcvc_dashboard_student_joins_sql('ap.application_id', 'ap.source_table') . "
 
-        GROUP BY ap.application_id
+        GROUP BY ap.application_id, ap.source_table
     ";
 
     $res = run($conn, $sql, 'kpi_list');
@@ -312,15 +336,17 @@ $statusSql = "
         LEFT JOIN (
             SELECT
                 application_id,
+                source_table,
                 fee_item_id,
                 SUM(amount_paid) AS paid_amount
             FROM application_payments
             WHERE status = 'PAID'
-            GROUP BY application_id, fee_item_id
+            GROUP BY application_id, source_table, fee_item_id
         ) pi
             ON pi.application_id = ap.application_id
+           AND pi.source_table = ap.source_table
            AND pi.fee_item_id = fi.id
-        GROUP BY ap.application_id
+        GROUP BY ap.application_id, ap.source_table
     ) x
 ";
 $status = run($conn, $statusSql, 'status')->fetch_assoc();
@@ -356,15 +382,14 @@ while ($row = $res->fetch_assoc()) {
 ===================================================== */
 $recentSql = "
     SELECT
-        CONCAT_WS(' ', sa.first_name, sa.last_name) AS student,
+        COALESCE(" . pcvc_dashboard_student_name_sql('pr.source_table') . ", 'Unknown Student') AS student,
         pr.total_amount AS amount_paid,
         pr.payment_method,
         pr.created_at AS paid_at,
         COALESCE(fp.currency, '') AS currency
     FROM payment_receipts pr
     LEFT JOIN fee_packages fp ON fp.id = pr.package_id
-    LEFT JOIN {$studentsSource}
-        ON sa.id = pr.application_id
+    " . pcvc_dashboard_student_joins_sql('pr.application_id', 'pr.source_table') . "
     WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
     ORDER BY pr.created_at DESC
     LIMIT 10

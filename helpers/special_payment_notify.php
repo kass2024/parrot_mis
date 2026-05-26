@@ -5,11 +5,9 @@ require_once __DIR__ . '/env_load.php';
 require_once __DIR__ . '/receipt_render.php';
 require_once __DIR__ . '/mailer.php';
 require_once dirname(__DIR__) . '/generateReceiptPdf.php';
-require_once dirname(__DIR__) . '/PHPMailer/src/PHPMailer.php';
-require_once dirname(__DIR__) . '/PHPMailer/src/SMTP.php';
-require_once dirname(__DIR__) . '/PHPMailer/src/Exception.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\SMTP;
 
 function pcvc_special_payment_notify_log(string $msg, $data = null): void
 {
@@ -44,43 +42,55 @@ function pcvc_special_payment_notify_email(): string
 }
 
 /**
- * Build PHPMailer using the same SMTP settings as sendReceiptEmail.php.
+ * Build PHPMailer using shared finance SMTP settings (.env SMTP_*).
  */
 function pcvc_special_payment_smtp_mailer(): PHPMailer
 {
-    xander_load_env_file();
-
-    $host = xander_env_get('SMTP_HOST') ?: 'visaconsultantcanada.com';
-    $username = xander_env_get('SMTP_USERNAME') ?: 'admission@visaconsultantcanada.com';
-    $password = xander_env_get('SMTP_PASSWORD');
-    if ($password === '') {
-        $password = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
-    }
-    if ($password === '') {
-        $fromGetenv = getenv('SMTP_PASSWORD');
-        $password = ($fromGetenv !== false && trim((string) $fromGetenv) !== '')
-            ? trim((string) $fromGetenv)
-            : 'Petero@1981';
-    }
-
-    $portStr = xander_env_get('SMTP_PORT');
-    $port = $portStr !== '' ? (int) $portStr : 465;
-    $fromEmail = xander_env_get('SMTP_FROM_EMAIL') ?: 'admission@visaconsultantcanada.com';
-
-    $mail = new PHPMailer(true);
-    $mail->isSMTP();
-    $mail->Host = $host;
-    $mail->SMTPAuth = true;
-    $mail->Username = $username;
-    $mail->Password = $password;
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
-    $mail->Port = $port > 0 ? $port : 465;
-    $mail->CharSet = 'UTF-8';
-    $mail->isHTML(true);
-    $mail->setFrom($fromEmail, 'Parrot Canada Visa Consultant – Finance');
+    $mail = pcvc_finance_smtp_mailer('Parrot Canada Visa Consultant – Finance');
+    $fromEmail = $mail->From;
     $mail->addReplyTo($fromEmail, 'Parrot Canada Finance');
 
     return $mail;
+}
+
+function pcvc_special_payment_smtp_debug_enabled(): bool
+{
+    xander_load_env_file();
+    $v = strtolower(trim(xander_env_get('SPECIAL_PAYMENT_SMTP_DEBUG')));
+    if ($v === '') {
+        $v = strtolower(trim(xander_env_get_from_dotenv_file('SPECIAL_PAYMENT_SMTP_DEBUG')));
+    }
+
+    return in_array($v, ['1', 'true', 'yes', 'on'], true);
+}
+
+function pcvc_special_payment_smtp_debug_line(string $line): void
+{
+    $line = trim($line);
+    if ($line === '') {
+        return;
+    }
+    $logDir = dirname(__DIR__) . '/logs';
+    if (!is_dir($logDir)) {
+        @mkdir($logDir, 0755, true);
+    }
+    @file_put_contents(
+        $logDir . '/special_payment_smtp.log',
+        '[' . date('Y-m-d H:i:s') . '] ' . $line . PHP_EOL,
+        FILE_APPEND
+    );
+}
+
+/** Extract Exim queue id from SMTP "250 OK id=..." response. */
+function pcvc_special_payment_smtp_queue_id(array $transcript): string
+{
+    foreach ($transcript as $line) {
+        if (preg_match('/250 OK id=([^\s]+)/i', $line, $m)) {
+            return $m[1];
+        }
+    }
+
+    return '';
 }
 
 /**
@@ -170,24 +180,48 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
       </div>
     </div>';
 
+    $smtpDebug = pcvc_special_payment_smtp_debug_enabled();
+    $smtpTranscript = [];
+
     try {
-        $mail = pcvc_special_payment_smtp_mailer();
+        $mail = pcvc_special_payment_smtp_mailer(false);
+        // Always capture server lines so we can log Exim queue id; full log only when debug on.
+        $mail->SMTPDebug = SMTP::DEBUG_SERVER;
+        $mail->Debugoutput = static function (string $str, int $level) use (&$smtpTranscript, $smtpDebug): void {
+            $line = trim($str);
+            if ($line === '') {
+                return;
+            }
+            $smtpTranscript[] = $line;
+            if ($smtpDebug) {
+                pcvc_special_payment_smtp_debug_line($line);
+            }
+        };
+
         $mail->addAddress($recipient, 'Finance Admin');
         $mail->Subject = $subject;
         $mail->Body = $htmlBody;
         $mail->AltBody = $plainBody;
 
+        $pdfAttached = false;
         if (is_file($pdfPath)) {
             $mail->addAttachment($pdfPath, $receiptNo . '.pdf');
+            $pdfAttached = true;
         }
 
         $mail->send();
         $emailSent = true;
+        $queueId = pcvc_special_payment_smtp_queue_id($smtpTranscript);
         pcvc_special_payment_notify_log('Admin email SMTP accepted', [
-            'to'         => $recipient,
-            'from'       => $mail->From,
-            'subject'    => $subject,
-            'message_id' => $mail->getLastMessageID(),
+            'to'           => $recipient,
+            'from'         => $mail->From,
+            'hostname'     => $mail->Hostname,
+            'subject'      => $subject,
+            'message_id'   => $mail->getLastMessageID(),
+            'exim_queue'   => $queueId !== '' ? $queueId : null,
+            'pdf_attached' => $pdfAttached,
+            'pdf_size'     => $pdfAttached ? filesize($pdfPath) : 0,
+            'note'         => 'SMTP 250 OK means queued on mail server — check inbox/spam or hosting mail queue for final delivery',
         ]);
     } catch (Throwable $e) {
         $errors[] = 'email: ' . $e->getMessage();
