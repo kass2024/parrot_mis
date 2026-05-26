@@ -105,9 +105,8 @@ $agentEmail = $_SESSION['agent_email'] ?? '';
 
 $useAjaxStudentSearch = $isCommissionSuperadmin;
 
-if ($isCommissionSuperadmin) {
-    // Do not load hundreds of rows on page open (was freezing the iframe blank).
-} elseif ($agentEmail) {
+// Always preload recruited students for the logged-in agent (including superadmin).
+if ($agentEmail) {
     $agentEmailKey = strtolower(trim($agentEmail));
     $stmt1 = $conn->prepare('SELECT id, first_name, last_name, email FROM student_applications WHERE LOWER(TRIM(agent_email)) = ? ORDER BY id DESC LIMIT 120');
     $stmt1->bind_param('s', $agentEmailKey);
@@ -122,7 +121,6 @@ if ($isCommissionSuperadmin) {
         ];
     }
     $stmt1->close();
-
 }
 
 if (!$agentInfo) {
@@ -698,7 +696,7 @@ textarea.form-control {
             <?php endforeach; ?>
           </select>
           <?php if ($useAjaxStudentSearch): ?>
-          <p class="text-muted small mt-2 mb-0">Type at least 2 characters to search all students.</p>
+          <p class="text-muted small mt-2 mb-0"><?= count($students) > 0 ? 'Your recruited students are listed above.' : 'No recruited students linked to your email yet.' ?> Type at least 2 characters to search all students.</p>
           <?php elseif (count($students) === 0): ?>
           <p class="text-danger small mt-2 mb-0"><strong>No students found.</strong> Link students to your agent email in applications.</p>
           <?php endif; ?>
@@ -866,7 +864,7 @@ textarea.form-control {
 <div class="pcvc-commission-footer">
   <p>© <?= date('Y') ?> <?= htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') ?>. All rights reserved.</p>
   <p>For support, contact: <?php
-    $pcvcSe = PCVC_SUPPORT_EMAIL;
+    $pcvcSe = defined('PCVC_SUPPORT_EMAIL') ? (string) PCVC_SUPPORT_EMAIL : PCVC_COMPANY_SUPPORT_EMAIL;
     echo $pcvcSe !== '' ? htmlspecialchars($pcvcSe, ENT_QUOTES, 'UTF-8') : 'your administrator';
   ?></p>
 </div>
