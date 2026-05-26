@@ -75,7 +75,7 @@ $appRoot = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')),
     <div class="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
             <h1 class="text-2xl font-bold text-rose-700">Staff Warning Letters</h1>
-            <p class="text-sm text-slate-600">Issue an official warning letter with letterhead. Sent to staff via Email and WhatsApp. CC: infos@visaconsultantcanada.com and +1 (438) 290-6688.</p>
+            <p class="text-sm text-slate-600">Issue an official warning letter with letterhead. WhatsApp sends the notice text, then the PDF below it. CC: infos@visaconsultantcanada.com and +1 (438) 290-6688.</p>
         </div>
         <button id="btnRefreshHistory" type="button" class="btn btn-secondary">
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path d="M4 4v5h.582m15.418 7v-5h-.581M5.59 9.001A7.5 7.5 0 0 1 17.5 11M14.41 14.999A7.5 7.5 0 0 1 2.5 13" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
@@ -305,7 +305,7 @@ document.getElementById('btnSend').addEventListener('click', async () => {
 
     const stages = [{title:'Preparing letter…', hint:'Embedding letterhead and footer'}, {title:'Rendering PDF…', hint:'Creating attachment'}];
     if (f.sendEm) stages.push({title:'Sending email…', hint:'Dispatching to ' + f.overEm});
-    if (f.sendWa) stages.push({title:'Checking WhatsApp number…', hint:'Verifying ' + f.overPh + ' is on WhatsApp'}, {title:'Sending WhatsApp…', hint:'Delivering template + PDF document'});
+    if (f.sendWa) stages.push({title:'Checking WhatsApp number…', hint:'Verifying ' + f.overPh + ' is on WhatsApp'}, {title:'Sending WhatsApp text…', hint:'Delivering notice template'}, {title:'Sending PDF…', hint:'Attaching warning letter file'});
     stages.push({title:'Finalising…', hint:'Just a moment'});
     showSpinner(stages);
 
@@ -327,11 +327,14 @@ document.getElementById('btnSend').addEventListener('click', async () => {
         const waCc = wa.cc || {};
         const ok=[], skip=[];
         if (em.sent) ok.push('Email (CC: infos@visaconsultantcanada.com)'); else if (f.sendEm) skip.push('Email failed: ' + (em.error||''));
-        if (wa.sent) ok.push(`WhatsApp (${wa.method||'sent'})`);
-        else if (f.sendWa){
+        if (wa.sent) {
+            if (wa.pdf_attached) ok.push('WhatsApp: text + PDF sent');
+            else ok.push('WhatsApp: text sent (PDF failed)');
+        } else if (f.sendWa){
             if (wa.not_on_whatsapp) skip.push('WhatsApp skipped — number not on WhatsApp');
             else skip.push('WhatsApp failed: ' + (wa.error||''));
         }
+        if (f.sendWa && wa.sent && !wa.pdf_attached) skip.push(wa.error || 'PDF was not attached on WhatsApp');
         if (f.sendWa && waCc.sent) ok.push('WhatsApp CC');
         else if (f.sendWa && wa.sent && !waCc.sent && waCc.to) skip.push('WhatsApp CC failed: ' + (waCc.error||''));
         let tone = 'text-emerald-700';
