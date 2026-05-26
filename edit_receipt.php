@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/receipt_render.php';
 /* =====================================================
    INPUT
 ===================================================== */
@@ -43,34 +44,9 @@ if ($receipt['status'] === 'CANCELED') {
 }
 
 /* =====================================================
-   HELPERS (UNCHANGED BUSINESS LOGIC)
+   HELPERS
 ===================================================== */
-function getCustomerName(mysqli $conn, int $appId): string
-{
-    $sql = "
-    SELECT first_name, last_name FROM (
-        SELECT id, first_name, last_name FROM student_applications
-        UNION ALL
-        SELECT id, name AS first_name, surname AS last_name FROM malta_applications
-        UNION ALL
-        SELECT id, first_name, last_name FROM turkey_applications
-    ) x WHERE id = ? LIMIT 1";
-
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $appId);
-    $stmt->execute();
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    return $row
-        ? trim($row['first_name'].' '.$row['last_name'])
-        : 'Unknown';
-}
-
-/* =====================================================
-   LOAD ALL PACKAGE ITEMS + CURRENT PAID
-===================================================== */
-function getReceiptItems(mysqli $conn, int $appId, int $packageId): array
+function getReceiptItems(mysqli $conn, int $appId, string $sourceTable, int $packageId): array
 {
     $stmt = $conn->prepare("
         SELECT
@@ -82,12 +58,13 @@ function getReceiptItems(mysqli $conn, int $appId, int $packageId): array
         LEFT JOIN application_payments ap
           ON ap.fee_item_id = fi.id
          AND ap.application_id = ?
+         AND ap.source_table = ?
          AND ap.status = 'PAID'
         WHERE fi.package_id = ?
         GROUP BY fi.id
         ORDER BY fi.id
     ");
-    $stmt->bind_param("ii", $appId, $packageId);
+    $stmt->bind_param("isi", $appId, $sourceTable, $packageId);
     $stmt->execute();
     $items = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
@@ -192,11 +169,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 /* =====================================================
    LOAD DATA FOR VIEW
 ===================================================== */
-$customerName = getCustomerName($conn, (int)$receipt['application_id']);
+$customerName = pcvc_receipt_customer_name(
+    $conn,
+    (int) $receipt['application_id'],
+    (string) ($receipt['source_table'] ?? 'student_applications')
+);
 $items = getReceiptItems(
     $conn,
-    (int)$receipt['application_id'],
-    (int)$receipt['package_id']
+    (int) $receipt['application_id'],
+    (string) ($receipt['source_table'] ?? 'student_applications'),
+    (int) $receipt['package_id']
 );
 ?>
 <!DOCTYPE html>

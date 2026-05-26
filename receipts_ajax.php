@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/payment_receipt_recorded_by.php';
+require_once __DIR__ . '/helpers/receipt_render.php';
 
 pcvc_ensure_payment_receipt_recorded_by_schema($conn);
 /* =====================================================
@@ -72,11 +73,19 @@ if ($customer !== '') {
         UNION
         SELECT id FROM turkey_applications
         WHERE CONCAT(first_name,' ',last_name) LIKE ?
+        UNION
+        SELECT id FROM credit_transfer_applications
+        WHERE CONCAT_WS(' ', first_name, middle_name, last_name) LIKE ?
+           OR email LIKE ?
+        UNION
+        SELECT id FROM upafa_registrations
+        WHERE CONCAT(first_name,' ',last_name) LIKE ?
+           OR email LIKE ?
     )";
 
     $like   = "%{$customer}%";
-    $params = [$like, $like, $like];
-    $types  = 'sss';
+    $params = [$like, $like, $like, $like, $like, $like, $like];
+    $types  = 'sssssss';
 }
 
 /* =====================================================
@@ -114,53 +123,6 @@ $stmt->close();
 /* =====================================================
    HELPERS
 ===================================================== */
-function getCustomerName(mysqli $conn, int $appId): string
-{
-    $sql = "
-    SELECT first_name, last_name FROM (
-        SELECT id, first_name, last_name FROM student_applications
-        UNION ALL
-        SELECT id, name, surname FROM malta_applications
-        UNION ALL
-        SELECT id, first_name, last_name FROM turkey_applications
-    ) x
-    WHERE id = ?
-    LIMIT 1
-    ";
-
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param('i', $appId);
-    $stmt->execute();
-
-    $row = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-
-    return $row
-        ? trim($row['first_name'] . ' ' . $row['last_name'])
-        : 'Unknown';
-}
-
-function getReceiptItems(mysqli $conn, int $appId, string $date): array
-{
-    $stmt = $conn->prepare("
-        SELECT
-            fi.name,
-            ap.amount_paid
-        FROM application_payments ap
-        JOIN fee_items fi ON fi.id = ap.fee_item_id
-        WHERE ap.application_id = ?
-          AND ap.status = 'PAID'
-          AND ap.paid_at >= ?
-    ");
-
-    $stmt->bind_param('is', $appId, $date);
-    $stmt->execute();
-
-    $items = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-
-    return $items;
-}
 
 /* =====================================================
    EMPTY STATE
@@ -175,9 +137,15 @@ if (empty($receipts)) {
 ===================================================== */
 foreach ($receipts as $r):
 
-    $appId  = (int)$r['application_id'];
-    $items  = getReceiptItems($conn, $appId, $r['created_at']);
-    $name   = getCustomerName($conn, $appId);
+    $receiptData = pcvc_load_receipt_data($conn, (string) $r['receipt_no']);
+    $name   = (string) ($receiptData['customer_name'] ?? 'Unknown');
+    $items  = [];
+    foreach (($receiptData['items'] ?? []) as $it) {
+        $items[] = [
+            'name'        => (string) ($it['name'] ?? ''),
+            'amount_paid' => (float) ($it['amount'] ?? 0),
+        ];
+    }
     $cancel = ($r['status'] === 'CANCELED');
     $doneBy = pcvc_receipt_recorded_by_display(
         $conn,

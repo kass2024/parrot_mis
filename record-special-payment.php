@@ -13,6 +13,7 @@ require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/credit_transfer_static_pricing.php';
 require_once __DIR__ . '/helpers/upafa_static_pricing.php';
 require_once __DIR__ . '/helpers/async_http.php';
+require_once __DIR__ . '/helpers/special_payment_notify.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -306,10 +307,11 @@ try {
 
     pcvc_finish_http_response($responseBody !== false ? $responseBody : '{"success":true}');
 
-    pcvc_trigger_background_post('sendSpecialPaymentNotify.php', [
-        'receipt_no' => $receiptNo,
-        'secret'     => 'RCP_9fA8kKx_2026_SECURE',
-    ]);
+    try {
+        pcvc_send_special_payment_notify($conn, $receiptNo);
+    } catch (Throwable $notifyErr) {
+        error_log('record-special-payment notify failed: ' . $notifyErr->getMessage());
+    }
 
     exit;
 
