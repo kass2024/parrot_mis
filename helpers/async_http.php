@@ -34,13 +34,13 @@ function pcvc_finish_http_response(string $body, int $statusCode = 200): void
 }
 
 /**
- * Hand off a POST request to another endpoint without waiting for it to finish (email, WhatsApp, PDF).
+ * POST to another endpoint after the client response (email, WhatsApp). Returns true if HTTP accepted.
  */
-function pcvc_trigger_background_post(string $relativeScript, array $postFields, int $timeoutMs = 900): void
+function pcvc_trigger_background_post(string $relativeScript, array $postFields, int $timeoutSec = 15): bool
 {
     if (!function_exists('curl_init')) {
         error_log('pcvc_trigger_background_post: curl extension missing');
-        return;
+        return false;
     }
 
     if (!function_exists('pcvc_public_base_url')) {
@@ -52,24 +52,39 @@ function pcvc_trigger_background_post(string $relativeScript, array $postFields,
 
     $ch = curl_init($url);
     if ($ch === false) {
-        return;
+        return false;
     }
 
     curl_setopt_array($ch, [
-        CURLOPT_POST              => true,
-        CURLOPT_POSTFIELDS        => $payload,
-        CURLOPT_RETURNTRANSFER    => true,
-        CURLOPT_HEADER            => false,
-        CURLOPT_TIMEOUT_MS        => max(300, $timeoutMs),
-        CURLOPT_CONNECTTIMEOUT_MS => 500,
-        CURLOPT_NOSIGNAL          => true,
-        CURLOPT_FRESH_CONNECT     => true,
-        CURLOPT_FORBID_REUSE      => true,
-        CURLOPT_SSL_VERIFYPEER    => false,
-        CURLOPT_SSL_VERIFYHOST    => 0,
-        CURLOPT_HTTPHEADER        => ['Connection: Close'],
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => false,
+        CURLOPT_TIMEOUT        => max(5, $timeoutSec),
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_NOSIGNAL       => true,
+        CURLOPT_FRESH_CONNECT  => true,
+        CURLOPT_FORBID_REUSE   => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTPHEADER     => ['Connection: Close'],
     ]);
 
-    @curl_exec($ch);
+    $response = curl_exec($ch);
+    $errno    = curl_errno($ch);
+    $error    = curl_error($ch);
+    $httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
+
+    if ($errno !== 0) {
+        error_log("pcvc_trigger_background_post curl error [{$errno}] {$error} url={$url}");
+        return false;
+    }
+
+    if ($httpCode >= 400) {
+        error_log("pcvc_trigger_background_post HTTP {$httpCode} url={$url} body=" . substr((string) $response, 0, 200));
+        return false;
+    }
+
+    return true;
 }

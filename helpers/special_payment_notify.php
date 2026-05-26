@@ -84,8 +84,14 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
     $waSent    = false;
     $errors    = [];
 
+    pcvc_special_payment_notify_log('Sending admin email', [
+        'to'      => $notifyEmail,
+        'student' => $studentName,
+        'receipt' => $receiptNo,
+    ]);
+
     try {
-        $mail = app_mailer('Parrot Canada Visa Consultant – Finance');
+        $mail = pcvc_finance_smtp_mailer('Parrot Canada Visa Consultant – Finance');
         $mail->addAddress($notifyEmail, 'Finance Admin');
 
         $h = static fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');

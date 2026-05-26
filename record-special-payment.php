@@ -6,6 +6,7 @@ ob_start();
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
+require_once __DIR__ . '/generateReceiptPdf.php';
 require_once __DIR__ . '/helpers/custom_fee_package.php';
 require_once __DIR__ . '/helpers/receipt_render.php';
 require_once __DIR__ . '/helpers/payment_receipt_recorded_by.php';
@@ -308,9 +309,23 @@ try {
     pcvc_finish_http_response($responseBody !== false ? $responseBody : '{"success":true}');
 
     try {
-        pcvc_send_special_payment_notify($conn, $receiptNo);
+        generateReceiptPdf($receiptNo, $conn);
+
+        $posted = pcvc_trigger_background_post('sendSpecialPaymentNotify.php', [
+            'receipt_no' => $receiptNo,
+            'secret'     => 'RCP_9fA8kKx_2026_SECURE',
+        ]);
+
+        if (!$posted) {
+            pcvc_send_special_payment_notify($conn, $receiptNo);
+        }
     } catch (Throwable $notifyErr) {
         error_log('record-special-payment notify failed: ' . $notifyErr->getMessage());
+        try {
+            pcvc_send_special_payment_notify($conn, $receiptNo);
+        } catch (Throwable $fallbackErr) {
+            error_log('record-special-payment notify fallback failed: ' . $fallbackErr->getMessage());
+        }
     }
 
     exit;

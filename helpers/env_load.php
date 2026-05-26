@@ -137,7 +137,12 @@ function xander_env_get(string $key): string
             'META_GRAPH_VERSION' => true,
             'SPECIAL_PAYMENT_NOTIFY_EMAIL' => true,
             'SPECIAL_PAYMENT_NOTIFY_WHATSAPP' => true,
+            'SMTP_HOST' => true,
+            'SMTP_PORT' => true,
+            'SMTP_USERNAME' => true,
             'SMTP_PASSWORD' => true,
+            'SMTP_FROM_EMAIL' => true,
+            'SMTP_FROM_NAME' => true,
             'APP_PUBLIC_URL' => true,
         ];
     }

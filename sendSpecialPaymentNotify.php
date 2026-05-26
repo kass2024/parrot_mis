@@ -29,6 +29,8 @@ if ($receiptNo === '') {
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/special_payment_notify.php';
 
+pcvc_special_payment_notify_log('HTTP notify endpoint hit', $receiptNo);
+
 $result = pcvc_send_special_payment_notify($conn, $receiptNo);
 echo json_encode($result, JSON_UNESCAPED_UNICODE);
 
