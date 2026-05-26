@@ -352,8 +352,46 @@ pcvc_require_superadmin($conn, false);
 
   function showToast(msg) {
     const toast = document.getElementById('successToast');
+    if (!toast) return;
     toast.querySelector('.toast-body').textContent = msg;
     bootstrap.Toast.getOrCreateInstance(toast).show();
+  }
+
+  function parsePaymentResponse(text) {
+    if (!text) return null;
+    const trimmed = String(text).trim();
+    try {
+      return JSON.parse(trimmed);
+    } catch (ignore) {
+      const start = trimmed.indexOf('{"success"');
+      if (start >= 0) {
+        try {
+          return JSON.parse(trimmed.slice(start));
+        } catch (ignore2) {}
+      }
+    }
+    return null;
+  }
+
+  function handlePaymentSuccess(resp) {
+    isSubmitting = false;
+    finishPaymentProgress(true);
+    hideLoading();
+
+    const modal = bootstrap.Modal.getInstance(modalEl);
+    if (modal) modal.hide();
+
+    showToast('Payment recorded successfully. Receipt saved to dashboard.');
+
+    if (resp && resp.receipt_no) {
+      setTimeout(function () {
+        const printUrl = 'printReceipt.php?receipt_no=' + encodeURIComponent(resp.receipt_no);
+        const win = window.open(printUrl, '_blank');
+        if (!win) {
+          showToast('Allow popups to open the receipt.');
+        }
+      }, 400);
+    }
   }
 
   function escHtml(s) {
@@ -624,16 +662,8 @@ pcvc_require_superadmin($conn, false);
       contentType: 'application/json',
       dataType: 'json',
       success: function (resp) {
-        if (resp && resp.success) {
-          finishPaymentProgress(true);
-          hideLoading();
-          showToast(resp.message || 'Payment recorded');
-          bootstrap.Modal.getInstance(modalEl).hide();
-          if (resp.receipt_no) {
-            setTimeout(function () {
-              window.open('printReceipt.php?receipt_no=' + encodeURIComponent(resp.receipt_no), '_blank');
-            }, 300);
-          }
+        if (resp && resp.success === true) {
+          handlePaymentSuccess(resp);
           return;
         }
         isSubmitting = false;
@@ -642,19 +672,18 @@ pcvc_require_superadmin($conn, false);
         alert(resp?.message || 'Payment failed');
       },
       error: function (xhr) {
+        const recovered = parsePaymentResponse(xhr.responseText || '');
+        if (recovered && recovered.success === true) {
+          handlePaymentSuccess(recovered);
+          return;
+        }
         isSubmitting = false;
         finishPaymentProgress(false);
         hideLoading();
-        let msg = 'Server error';
-        try {
-          const j = JSON.parse(xhr.responseText || '{}');
-          if (j.message) msg = j.message;
-          if (j.error) msg += ': ' + j.error;
-        } catch (e) {
-          if (xhr.responseText && xhr.responseText.length < 300) {
-            msg = xhr.responseText;
-          }
-        }
+        let msg = 'Server error. Please try again.';
+        const fail = parsePaymentResponse(xhr.responseText || '');
+        if (fail && fail.message) msg = fail.message;
+        else if (fail && fail.error) msg = fail.error;
         alert(msg);
       }
     });

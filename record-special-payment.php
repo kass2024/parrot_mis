@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+ob_start();
+
 require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
@@ -290,13 +292,17 @@ try {
 
     $responseBody = json_encode([
         'success'        => true,
-        'message'        => 'Payment recorded — receipt saved to dashboard. Admin notification is sending in the background.',
+        'message'        => 'Payment recorded successfully',
         'receipt_no'     => $receiptNo,
         'total_paid'     => number_format($totalRecorded, 2, '.', ''),
         'items_count'    => count($items),
         'application_id' => $applicationId,
         'source_table'   => $sourceTable,
     ], JSON_UNESCAPED_UNICODE);
+
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
 
     pcvc_finish_http_response($responseBody !== false ? $responseBody : '{"success":true}');
 
@@ -309,6 +315,9 @@ try {
 
 } catch (Throwable $e) {
     $conn->rollback();
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
     http_response_code(500);
     echo json_encode([
         'success' => false,
