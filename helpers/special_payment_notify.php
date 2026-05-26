@@ -126,21 +126,17 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
     $emailSent = false;
     $errors    = [];
 
-    $recipients = [];
-    $seen = [];
-    foreach ([$notifyEmail, $mailFrom = (xander_env_get('SMTP_FROM_EMAIL') ?: 'admission@visaconsultantcanada.com')] as $addr) {
-        $addr = trim(strtolower($addr));
-        if ($addr === '' || isset($seen[$addr])) {
-            continue;
-        }
-        $seen[$addr] = true;
-        $recipients[] = $addr;
+    // Only the .env address — never the student email from receipt data.
+    $recipient = trim(strtolower($notifyEmail));
+    if ($recipient === '') {
+        pcvc_special_payment_notify_log('No notify email configured');
+        return ['status' => 'error', 'email_sent' => false, 'whatsapp_sent' => false, 'errors' => ['email: not configured']];
     }
 
     pcvc_special_payment_notify_log('Sending admin email', [
-        'recipients' => $recipients,
-        'student'    => $studentName,
-        'receipt'    => $receiptNo,
+        'to'      => $recipient,
+        'student' => $studentName,
+        'receipt' => $receiptNo,
     ]);
 
     $h = static fn($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
@@ -174,33 +170,31 @@ function pcvc_send_special_payment_notify(mysqli $conn, string $receiptNo): arra
       </div>
     </div>';
 
-    foreach ($recipients as $recipient) {
-        try {
-            $mail = pcvc_special_payment_smtp_mailer();
-            $mail->addAddress($recipient, 'Finance Admin');
-            $mail->Subject = $subject;
-            $mail->Body = $htmlBody;
-            $mail->AltBody = $plainBody;
+    try {
+        $mail = pcvc_special_payment_smtp_mailer();
+        $mail->addAddress($recipient, 'Finance Admin');
+        $mail->Subject = $subject;
+        $mail->Body = $htmlBody;
+        $mail->AltBody = $plainBody;
 
-            if (is_file($pdfPath)) {
-                $mail->addAttachment($pdfPath, $receiptNo . '.pdf');
-            }
-
-            $mail->send();
-            $emailSent = true;
-            pcvc_special_payment_notify_log('Admin email SMTP accepted', [
-                'to'         => $recipient,
-                'from'       => $mail->From,
-                'subject'    => $subject,
-                'message_id' => $mail->getLastMessageID(),
-            ]);
-        } catch (Throwable $e) {
-            $errors[] = 'email(' . $recipient . '): ' . $e->getMessage();
-            pcvc_special_payment_notify_log('Admin email failed', [
-                'to'    => $recipient,
-                'error' => $e->getMessage(),
-            ]);
+        if (is_file($pdfPath)) {
+            $mail->addAttachment($pdfPath, $receiptNo . '.pdf');
         }
+
+        $mail->send();
+        $emailSent = true;
+        pcvc_special_payment_notify_log('Admin email SMTP accepted', [
+            'to'         => $recipient,
+            'from'       => $mail->From,
+            'subject'    => $subject,
+            'message_id' => $mail->getLastMessageID(),
+        ]);
+    } catch (Throwable $e) {
+        $errors[] = 'email: ' . $e->getMessage();
+        pcvc_special_payment_notify_log('Admin email failed', [
+            'to'    => $recipient,
+            'error' => $e->getMessage(),
+        ]);
     }
 
     return [

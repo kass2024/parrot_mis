@@ -66,6 +66,17 @@ if (!$data || empty($data['customer_email'])) {
     exit;
 }
 
+// Credit Transfer / UPAFA receipts are admin-notify only — never email the student.
+$sourceTable = (string) ($data['source_table'] ?? '');
+if (in_array($sourceTable, ['credit_transfer_applications', 'upafa_registrations'], true)) {
+    logMsg('Blocked student email for special program receipt', [
+        'receipt' => $receiptNo,
+        'table'   => $sourceTable,
+    ]);
+    echo json_encode(['status' => 'skipped', 'reason' => 'special_program_no_student_email']);
+    exit;
+}
+
 $pdfPath = __DIR__ . '/receipts/' . $receiptNo . '.pdf';
 if (!is_file($pdfPath)) {
     try {

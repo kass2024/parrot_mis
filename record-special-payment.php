@@ -310,22 +310,11 @@ try {
 
     try {
         generateReceiptPdf($receiptNo, $conn);
-
-        $posted = pcvc_trigger_background_post('sendSpecialPaymentNotify.php', [
-            'receipt_no' => $receiptNo,
-            'secret'     => 'RCP_9fA8kKx_2026_SECURE',
-        ]);
-
-        if (!$posted) {
-            pcvc_send_special_payment_notify($conn, $receiptNo);
-        }
+        // Always notify inline after the HTTP response — do not rely on a self-HTTP
+        // callback (unreliable on XAMPP/mod_php when the client disconnects).
+        pcvc_send_special_payment_notify($conn, $receiptNo);
     } catch (Throwable $notifyErr) {
         error_log('record-special-payment notify failed: ' . $notifyErr->getMessage());
-        try {
-            pcvc_send_special_payment_notify($conn, $receiptNo);
-        } catch (Throwable $fallbackErr) {
-            error_log('record-special-payment notify fallback failed: ' . $fallbackErr->getMessage());
-        }
     }
 
     exit;
