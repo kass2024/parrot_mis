@@ -1,18 +1,22 @@
 <?php
 declare(strict_types=1);
 
-ob_start();
+@set_time_limit(600);
+@ini_set('max_execution_time', '600');
+@ignore_user_abort(true);
+
 session_start();
 header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/helpers/load_env.php';
-pcvc_load_dotenv(__DIR__);
+require_once __DIR__ . '/helpers/env_bootstrap.php';
 
 $ENV_PATH = __DIR__ . '/.env';
-$MODEL = 'gpt-4.1-mini';
+$MODEL = pcvc_env('OPENAI_MODEL', 'gpt-4o-mini');
 $LOG_FILE = __DIR__ . '/upload_debug.log';
 $TEMP_ROOT = __DIR__ . '/temp/autofill/';
+$MAX_SCAN_PAGES = 4;
+$SCAN_DPI = 144;
 
 function json_exit(array $payload, int $statusCode = 200): void
 {
@@ -417,7 +421,7 @@ function flatten_uploaded_files(string $key): array
     return $out;
 }
 
-function scanned_pdf_to_images(string $pdfPath, string $outDir): array
+function scanned_pdf_to_images(string $pdfPath, string $outDir, int $maxPages = 4, int $dpi = 144): array
 {
     if (!class_exists('Imagick')) {
         throw new RuntimeException('Scanned PDF support requires Imagick on the server.');
@@ -425,21 +429,36 @@ function scanned_pdf_to_images(string $pdfPath, string $outDir): array
 
     $images = [];
     $im = new Imagick();
-    $im->setResolution(200, 200);
+    $im->setResolution($dpi, $dpi);
     $im->readImage($pdfPath);
 
+    $pageCount = 0;
     foreach ($im as $i => $page) {
+        if ($pageCount >= $maxPages) {
+            break;
+        }
         $page->setImageFormat('jpeg');
-        $page->setImageCompressionQuality(90);
+        $page->setImageCompressionQuality(82);
         $out = $outDir . 'page_' . ($i + 1) . '_' . bin2hex(random_bytes(3)) . '.jpg';
         $page->writeImage($out);
         $images[] = $out;
+        $pageCount++;
     }
 
     $im->clear();
     $im->destroy();
 
     return $images;
+}
+
+function openai_curl_options(): array
+{
+    return [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 30,
+        CURLOPT_TIMEOUT => 240,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    ];
 }
 
 function is_scanned_pdf(string $pdfPath): bool
@@ -455,8 +474,7 @@ function is_scanned_pdf(string $pdfPath): bool
 function upload_openai_file(string $filePath, string $mime, string $fileName, string $apiKey): string
 {
     $ch = curl_init('https://api.openai.com/v1/files');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
+    curl_setopt_array($ch, openai_curl_options() + [
         CURLOPT_HTTPHEADER => ["Authorization: Bearer {$apiKey}"],
         CURLOPT_POST => true,
         CURLOPT_POSTFIELDS => [
@@ -485,8 +503,7 @@ function call_responses_api(array $payload, string $apiKey, int $maxRetries = 3,
 {
     for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
         $ch = curl_init('https://api.openai.com/v1/responses');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
+        curl_setopt_array($ch, openai_curl_options() + [
             CURLOPT_HTTPHEADER => [
                 "Authorization: Bearer {$apiKey}",
                 'Content-Type: application/json'
@@ -555,7 +572,7 @@ function decode_json_response(string $text): array
     return is_array($decoded) ? $decoded : [];
 }
 
-function build_document_content(string $tmpPath, string $originalName, string $apiKey, array &$cleanup): array
+function build_document_content(string $tmpPath, string $originalName, string $apiKey, array &$cleanup, int $maxScanPages = 4, int $scanDpi = 144): array
 {
     $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
     $mime = mime_content_type($tmpPath) ?: 'application/octet-stream';
@@ -602,7 +619,7 @@ function build_document_content(string $tmpPath, string $originalName, string $a
             ensure_dir($scanDir);
             $cleanup[] = rtrim($scanDir, '/');
 
-            $images = scanned_pdf_to_images($tmpPath, $scanDir);
+            $images = scanned_pdf_to_images($tmpPath, $scanDir, $maxScanPages, $scanDpi);
             $content = [];
 
             foreach ($images as $imagePath) {
@@ -724,7 +741,7 @@ if (empty($_SESSION['user_id'])) {
     ], 401);
 }
 
-$apiKey = trim((string)(getenv('OPENAI_API_KEY') ?: ''));
+$apiKey = pcvc_env('OPENAI_API_KEY');
 if ($apiKey === '') {
     $debug['api_key_status'] = 'missing';
     add_stage($debug, 'prepare', 'OPENAI_API_KEY not found in .env.');
@@ -789,50 +806,123 @@ Rules:
 8. Return the strongest real applicant email address visible in the document, not a school or company address unless it is clearly the applicant contact.
 9. Ignore sample, placeholder, dummy, or template contact details.
 10. Return JSON only.
+11. You will receive multiple documents in one request. Analyze every document and return one entry per document in the same order.
 
 JSON schema:
 {
-  "document_type": "valid_passport|degree_transcripts|high_school_degree|cv_resume|recommendation_letters|personal_statement|english_certificate|birth_certificate|payment_proof|unknown",
-  "confidence": 0.0,
-  "summary": "short summary",
-  "fields": {
-    "first_name": "",
-    "last_name": "",
-    "email": "",
-    "phone_international": "",
-    "dob": "",
-    "gender": "",
-    "passport_number": "",
-    "student_national_id": "",
-    "country_of_birth": "",
-    "city_of_birth": "",
-    "nationality": "",
-    "second_nationality": "",
-    "address_line1": "",
-    "address_line2": "",
-    "city": "",
-    "state_province": "",
-    "postal_code": "",
-    "previous_institution_name": "",
-    "previous_institution_city": "",
-    "previous_institution_province": "",
-    "previous_institution_country": "",
-    "previous_institution_post_code": "",
-    "previous_study_start": "",
-    "previous_study_graduation": "",
-    "language_of_instruction": "",
-    "father_first_name": "",
-    "father_last_name": "",
-    "mother_first_name": "",
-    "mother_last_name": ""
-  }
+  "documents": [
+    {
+      "file_index": 0,
+      "document_type": "valid_passport|degree_transcripts|high_school_degree|cv_resume|recommendation_letters|personal_statement|english_certificate|birth_certificate|payment_proof|unknown",
+      "confidence": 0.0,
+      "summary": "short summary",
+      "fields": {
+        "first_name": "",
+        "last_name": "",
+        "email": "",
+        "phone_international": "",
+        "dob": "",
+        "gender": "",
+        "passport_number": "",
+        "student_national_id": "",
+        "country_of_birth": "",
+        "city_of_birth": "",
+        "nationality": "",
+        "second_nationality": "",
+        "address_line1": "",
+        "address_line2": "",
+        "city": "",
+        "state_province": "",
+        "postal_code": "",
+        "previous_institution_name": "",
+        "previous_institution_city": "",
+        "previous_institution_province": "",
+        "previous_institution_country": "",
+        "previous_institution_post_code": "",
+        "previous_study_start": "",
+        "previous_study_graduation": "",
+        "language_of_instruction": "",
+        "father_first_name": "",
+        "father_last_name": "",
+        "mother_first_name": "",
+        "mother_last_name": ""
+      }
+    }
+  ]
 }
 PROMPT;
+
+function document_instruction_from_name(string $originalName): string
+{
+    $fileNameHint = strtolower($originalName);
+    $docInstruction = 'Classify this document and extract applicant fields.';
+    if (str_contains($fileNameHint, 'cv') || str_contains($fileNameHint, 'resume')) {
+        $docInstruction .= ' This file is likely a CV/resume, so prioritize extracting applicant email, phone, address, nationality, and education history.';
+    } elseif (str_contains($fileNameHint, 'passport')) {
+        $docInstruction .= ' This file may be a passport, so prioritize legal identity fields like first name, last name, date of birth, nationality, and passport number.';
+    } elseif (str_contains($fileNameHint, 'birth')) {
+        $docInstruction .= ' This file may be a birth certificate, so prioritize legal identity fields and parent names.';
+    } elseif (str_contains($fileNameHint, 'transcript') || str_contains($fileNameHint, 'degree') || str_contains($fileNameHint, 'academic')) {
+        $docInstruction .= ' This file may be an academic record, so prioritize previous institution, study dates, and language of instruction.';
+    }
+
+    return $docInstruction;
+}
+
+function process_ai_document_result(
+    array $ai,
+    array $preparedDoc,
+    array $fieldLabels,
+    string $lang,
+    mysqli $conn,
+    array &$mergedFields,
+    array &$fieldScores,
+    array &$documents,
+    array &$warnings
+): void {
+    $originalName = $preparedDoc['original_name'];
+    $clientIndex = $preparedDoc['client_index'];
+
+    if (!$ai || empty($ai['document_type'])) {
+        $warnings[] = $originalName . ': AI returned an invalid extraction result.';
+        return;
+    }
+
+    $documentType = (string)$ai['document_type'];
+    $confidence = max(0.0, min(1.0, (float)($ai['confidence'] ?? 0)));
+    $summary = normalize_text((string)($ai['summary'] ?? ''));
+
+    if (!array_key_exists($documentType, $fieldLabels) || $confidence < 0.45) {
+        $documents[] = [
+            'client_index' => $clientIndex,
+            'original_name' => $originalName,
+            'field' => '',
+            'field_label' => '',
+            'confidence' => $confidence,
+            'summary' => $summary
+        ];
+        $warnings[] = $originalName . ': the document could not be matched confidently to a supported attachment field.';
+        return;
+    }
+
+    $normalized = normalize_fields((array)($ai['fields'] ?? []), $lang, $conn);
+    merge_candidate_fields($mergedFields, $fieldScores, $normalized, $documentType, $confidence);
+
+    $documents[] = [
+        'client_index' => $clientIndex,
+        'original_name' => $originalName,
+        'field' => $documentType,
+        'field_label' => $fieldLabels[$documentType],
+        'confidence' => $confidence,
+        'summary' => $summary
+    ];
+}
 
 $mergedFields = [];
 $fieldScores = [];
 $documents = [];
 $warnings = [];
+$preparedDocs = [];
 
 foreach ($uploadedFiles as $file) {
     $originalName = basename((string)($file['name'] ?? 'document'));
@@ -865,87 +955,128 @@ foreach ($uploadedFiles as $file) {
 
     try {
         add_stage($debug, 'extract', 'Preparing ' . $originalName . ' for AI.');
-        $fileNameHint = strtolower($originalName);
-        $docInstruction = 'Classify this document and extract applicant fields.';
-        if (str_contains($fileNameHint, 'cv') || str_contains($fileNameHint, 'resume')) {
-            $docInstruction .= ' This file is likely a CV/resume, so prioritize extracting applicant email, phone, address, nationality, and education history.';
-        } elseif (str_contains($fileNameHint, 'passport')) {
-            $docInstruction .= ' This file may be a passport, so prioritize legal identity fields like first name, last name, date of birth, nationality, and passport number.';
-        } elseif (str_contains($fileNameHint, 'transcript') || str_contains($fileNameHint, 'degree')) {
-            $docInstruction .= ' This file may be an academic record, so prioritize previous institution, study dates, and language of instruction.';
-        }
         $content = [
             [
                 'type' => 'input_text',
-                'text' => 'File name: ' . $originalName . "\n" . $docInstruction
+                'text' => 'File name: ' . $originalName . "\n" . document_instruction_from_name($originalName)
             ]
         ];
-        $content = array_merge($content, build_document_content($tempPath, $originalName, $apiKey, $cleanup));
+        $content = array_merge(
+            $content,
+            build_document_content($tempPath, $originalName, $apiKey, $cleanup, $MAX_SCAN_PAGES, $SCAN_DPI)
+        );
 
-        $payload = [
-            'model' => $MODEL,
-            'input' => [
-                [
-                    'role' => 'system',
-                    'content' => [[
-                        'type' => 'input_text',
-                        'text' => $systemPrompt
-                    ]]
-                ],
-                [
-                    'role' => 'user',
-                    'content' => $content
-                ]
-            ],
-            'text' => ['format' => ['type' => 'json_object']]
-        ];
-
-        add_stage($debug, 'ai', 'Sending ' . $originalName . ' to OpenAI.');
-        $response = call_responses_api($payload, $apiKey);
-        if (isset($response['error'])) {
-            throw new RuntimeException((string)($response['error']['message'] ?? 'AI extraction failed.'));
-        }
-
-        $ai = decode_json_response(response_text($response));
-        if (!$ai || empty($ai['document_type'])) {
-            throw new RuntimeException('AI returned an invalid extraction result.');
-        }
-
-        $documentType = (string)$ai['document_type'];
-        $confidence = max(0.0, min(1.0, (float)($ai['confidence'] ?? 0)));
-        $summary = normalize_text((string)($ai['summary'] ?? ''));
-
-        if (!array_key_exists($documentType, $fieldLabels) || $confidence < 0.45) {
-            $documents[] = [
-                'client_index' => $clientIndex,
-                'original_name' => $originalName,
-                'field' => '',
-                'field_label' => '',
-                'confidence' => $confidence,
-                'summary' => $summary
-            ];
-            $warnings[] = $originalName . ': the document could not be matched confidently to a supported attachment field.';
-            cleanup_paths($cleanup);
-            continue;
-        }
-
-        $normalized = normalize_fields((array)($ai['fields'] ?? []), $lang, $conn);
-        merge_candidate_fields($mergedFields, $fieldScores, $normalized, $documentType, $confidence);
-
-        $documents[] = [
+        $preparedDocs[] = [
+            'file_index' => count($preparedDocs),
             'client_index' => $clientIndex,
             'original_name' => $originalName,
-            'field' => $documentType,
-            'field_label' => $fieldLabels[$documentType],
-            'confidence' => $confidence,
-            'summary' => $summary
+            'content' => $content,
+            'cleanup' => $cleanup
         ];
-        add_stage($debug, 'parse', 'Parsed ' . $originalName . ' as ' . $documentType . '.');
     } catch (Throwable $e) {
         $warnings[] = $originalName . ': ' . $e->getMessage();
+        cleanup_paths($cleanup);
+    }
+}
+
+if (!$preparedDocs) {
+    add_stage($debug, 'parse', 'No usable documents were prepared for analysis.');
+    json_exit([
+        'status' => 'error',
+        'message' => 'No document could be prepared for analysis. Please check file types and sizes.',
+        'warnings' => $warnings,
+        'debug' => $debug
+    ], 422);
+}
+
+$userContent = [[
+    'type' => 'input_text',
+    'text' => 'Analyze ALL ' . count($preparedDocs) . ' documents below. Return one JSON object with a "documents" array containing exactly one result per document, using file_index to match the order shown.'
+]];
+
+foreach ($preparedDocs as $preparedDoc) {
+    $userContent[] = [
+        'type' => 'input_text',
+        'text' => '=== Document file_index ' . $preparedDoc['file_index'] . ' (client_index ' . $preparedDoc['client_index'] . '): ' . $preparedDoc['original_name'] . ' ==='
+    ];
+    $userContent = array_merge($userContent, $preparedDoc['content']);
+}
+
+$payload = [
+    'model' => $MODEL,
+    'input' => [
+        [
+            'role' => 'system',
+            'content' => [[
+                'type' => 'input_text',
+                'text' => $systemPrompt
+            ]]
+        ],
+        [
+            'role' => 'user',
+            'content' => $userContent
+        ]
+    ],
+    'text' => ['format' => ['type' => 'json_object']]
+];
+
+add_stage($debug, 'ai', 'Sending ' . count($preparedDocs) . ' document(s) to OpenAI in one batch.');
+$response = call_responses_api($payload, $apiKey, 4, 1200);
+
+if (isset($response['error'])) {
+    foreach ($preparedDocs as $preparedDoc) {
+        cleanup_paths($preparedDoc['cleanup']);
+    }
+    add_stage($debug, 'ai', 'Batch AI call failed: ' . (string)($response['error']['message'] ?? 'unknown error'));
+    json_exit([
+        'status' => 'error',
+        'message' => 'AI extraction failed: ' . (string)($response['error']['message'] ?? 'Please try again with clearer documents.'),
+        'warnings' => $warnings,
+        'debug' => $debug
+    ], 502);
+}
+
+$batch = decode_json_response(response_text($response));
+$batchResults = [];
+
+if (!empty($batch['documents']) && is_array($batch['documents'])) {
+    $batchResults = $batch['documents'];
+} elseif (!empty($batch['document_type'])) {
+    $batchResults = [$batch + ['file_index' => 0]];
+}
+
+$resultsByIndex = [];
+foreach ($batchResults as $result) {
+    if (!is_array($result)) {
+        continue;
+    }
+    $idx = (int)($result['file_index'] ?? count($resultsByIndex));
+    $resultsByIndex[$idx] = $result;
+}
+
+foreach ($preparedDocs as $preparedDoc) {
+    $idx = $preparedDoc['file_index'];
+    $ai = $resultsByIndex[$idx] ?? ($batchResults[$idx] ?? null);
+
+    if (!is_array($ai)) {
+        $warnings[] = $preparedDoc['original_name'] . ': no AI result returned for this document.';
+        cleanup_paths($preparedDoc['cleanup']);
+        continue;
     }
 
-    cleanup_paths($cleanup);
+    process_ai_document_result(
+        $ai,
+        $preparedDoc,
+        $fieldLabels,
+        $lang,
+        $conn,
+        $mergedFields,
+        $fieldScores,
+        $documents,
+        $warnings
+    );
+    add_stage($debug, 'parse', 'Parsed ' . $preparedDoc['original_name'] . ' as ' . ($ai['document_type'] ?? 'unknown') . '.');
+    cleanup_paths($preparedDoc['cleanup']);
 }
 
 file_put_contents(

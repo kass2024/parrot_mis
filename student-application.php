@@ -4634,7 +4634,14 @@ function startValidationSimulation(progress) {
 
       const analysisResponse = await fetch("student_ai_autofill.php", {
         method: "POST",
-        body: formData
+        body: formData,
+        credentials: "same-origin"
+      }).catch(fetchErr => {
+        throw new Error(
+          fetchErr && fetchErr.message === "Failed to fetch"
+            ? "Document analysis timed out or lost connection to the server. Please try again — fewer documents at once can also help."
+            : (fetchErr && fetchErr.message ? fetchErr.message : texts.error)
+        );
       });
 
       let analysisData = null;
@@ -4667,7 +4674,7 @@ function startValidationSimulation(progress) {
           : "Routing recognized documents into the existing attachment fields."
       );
       const routeResult = await routeQueuedDocuments(queue, files, {
-        concurrency: batchUploadToken ? 3 : 2,
+        concurrency: batchUploadToken ? 4 : 3,
         smartAutofillBatchToken: batchUploadToken
       });
       warnings.push(...routeResult.warnings);
@@ -4714,9 +4721,10 @@ function startValidationSimulation(progress) {
 
       setStage("submit", texts.success, "success", texts.submitDone);
     } catch (err) {
-      setStage("batch", err && err.message ? err.message : texts.error, "danger", "The queued documents were kept so you can adjust them and try again.");
-      if (typeof showApplicationSaveError === "function" && err && err.message) {
-        showApplicationSaveError(err.message);
+      const message = err && err.message ? err.message : texts.error;
+      setStage("batch", message, "danger", "The queued documents were kept so you can adjust them and try again.");
+      if (typeof showApplicationSaveError === "function") {
+        showApplicationSaveError(message, { title: "Document analysis failed" });
       }
     } finally {
       isProcessing = false;
