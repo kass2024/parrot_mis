@@ -29,12 +29,63 @@ function pcvc_commission_whatsapp_template_config(): array
     if ($lang === '') {
         $lang = 'en';
     }
-    $params = (int) trim(xander_env_get('WHATSAPP_COMMISSION_TEMPLATE_PARAMS'));
-    if ($params < 1) {
-        $params = 4;
+    // pcvc_commission_update in Meta is always 4 body variables (see .env.example).
+    $requested = (int) trim(xander_env_get('WHATSAPP_COMMISSION_TEMPLATE_PARAMS'));
+    $params = 4;
+    if ($requested >= 1 && $requested <= 4 && $name !== 'pcvc_commission_update') {
+        $params = $requested;
     }
 
     return ['name' => $name, 'lang' => $lang, 'params' => $params];
+}
+
+/**
+ * Flatten text for a single WhatsApp template variable (Meta rejects some newline-heavy payloads).
+ */
+function pcvc_commission_whatsapp_flat_var(string $text, int $maxLen = PCVC_COMMISSION_WA_VAR_MAX): string
+{
+    $t = trim(preg_replace('/[\r\n]+/', ' ', $text) ?? '');
+    $t = preg_replace('/\s{2,}/', ' ', $t) ?? $t;
+    if ($t === '') {
+        $t = '-';
+    }
+
+    return xander_whatsapp_sanitize_user_text(xander_notify_text_clip($t, $maxLen));
+}
+
+/**
+ * Build exactly 4 body parameters for pcvc_commission_update Meta template.
+ *
+ * {{1}} agent name, {{2}} #request id, {{3}} status, {{4}} student + reason/update (one line)
+ *
+ * @return list<string>
+ */
+function pcvc_commission_whatsapp_body_params_4(
+    string $name,
+    int $requestId,
+    string $statusLabel,
+    string $recruitedName,
+    string $extraMessage
+): array {
+    $detailParts = [];
+    $student = trim($recruitedName);
+    if ($student !== '') {
+        $detailParts[] = 'Student: ' . $student;
+    }
+    $comment = trim($extraMessage);
+    if ($comment !== '') {
+        $detailParts[] = (stripos($statusLabel, 'reject') !== false ? 'Reason: ' : 'Update: ') . $comment;
+    }
+    if ($detailParts === []) {
+        $detailParts[] = 'Status updated to ' . trim($statusLabel) . '.';
+    }
+
+    return [
+        pcvc_commission_whatsapp_flat_var($name !== '' ? $name : 'Agent'),
+        pcvc_commission_whatsapp_flat_var('#' . (int) $requestId),
+        pcvc_commission_whatsapp_flat_var($statusLabel),
+        pcvc_commission_whatsapp_flat_var(implode(' ', $detailParts)),
+    ];
 }
 
 function pcvc_commission_comment_parts_for_whatsapp(string $comment, int $partCount = 2, int $maxLen = PCVC_COMMISSION_WA_VAR_MAX): array
@@ -108,23 +159,13 @@ function pcvc_commission_whatsapp_template_body_texts(
     $comment = trim($extraMessage);
 
     if ($paramCount <= 4) {
-        $detailLines = [];
-        if (trim($recruitedName) !== '') {
-            $detailLines[] = 'Student: ' . trim($recruitedName);
-        }
-        if ($comment !== '') {
-            $detailLines[] = (stripos($statusLabel, 'reject') !== false ? 'Reason: ' : 'Message: ') . $comment;
-        }
-        $detailBlock = $detailLines !== [] ? implode("\n", $detailLines) : 'No additional details.';
-
-        return [
-            $safeName,
-            $safeRef,
-            $safeStatus,
-            xander_whatsapp_sanitize_user_text(
-                xander_notify_text_clip($detailBlock, PCVC_COMMISSION_WA_VAR_MAX)
-            ),
-        ];
+        return pcvc_commission_whatsapp_body_params_4(
+            $name,
+            $requestId,
+            $statusLabel,
+            $recruitedName,
+            $extraMessage
+        );
     }
 
     if ($paramCount === 5) {
@@ -323,6 +364,10 @@ function pcvc_send_commission_status_whatsapp(
         $extraMessage,
         $tpl['params']
     );
+    while (count($templateBodyTexts) < $tpl['params']) {
+        $templateBodyTexts[] = '-';
+    }
+    $templateBodyTexts = array_slice($templateBodyTexts, 0, $tpl['params']);
 
     $version = xander_env_get('META_GRAPH_VERSION') ?: 'v19.0';
     $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
@@ -339,6 +384,9 @@ function pcvc_send_commission_status_whatsapp(
         $fallback
     );
     $r['to'] = $to;
+    $r['template'] = $tpl['name'];
+    $r['template_lang'] = $tpl['lang'];
+    $r['template_params'] = $tpl['params'];
     if (!$r['sent'] && ($r['error'] === '' || $r['error'] === 'Unknown error')) {
         $decoded = is_string($r['detail'] ?? null) ? json_decode($r['detail'], true) : null;
         $hint = xander_whatsapp_user_hint(xander_whatsapp_extract_error($decoded) ?? ['message' => '']);
@@ -420,6 +468,8 @@ function pcvc_notify_commission_request_change(
             $waOut['method'] = $r['method'];
             $waOut['error'] = $r['error'];
             $waOut['to'] = $r['to'] ?? '';
+            $waOut['template'] = $r['template'] ?? pcvc_commission_whatsapp_template_config()['name'];
+            $waOut['template_params'] = $r['template_params'] ?? 4;
         } catch (Throwable $e) {
             $waOut['sent'] = false;
             $waOut['error'] = 'WhatsApp: ' . $e->getMessage();

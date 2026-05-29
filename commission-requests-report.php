@@ -579,6 +579,42 @@ function pcvc_commission_step_index(string $status, array $order): int
       font-weight: 700;
       cursor: pointer;
     }
+    .commission-notify-confirm:disabled,
+    .commission-notify-cancel:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .commission-save-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100050;
+      background: rgba(15, 23, 42, 0.5);
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .commission-save-overlay.show-flex { display: flex !important; }
+    .commission-save-card {
+      background: #fff;
+      padding: 28px 36px;
+      border-radius: 16px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+      min-width: 220px;
+    }
+    .commission-save-spin {
+      width: 42px;
+      height: 42px;
+      border: 3px solid #e2e8f0;
+      border-top-color: <?= $colors['navy'] ?>;
+      border-radius: 50%;
+      animation: commissionSaveSpin 0.75s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes commissionSaveSpin { to { transform: rotate(360deg); } }
+    .commission-save-card p { margin: 0; font-weight: 700; color: <?= $colors['navy'] ?>; font-size: 0.95rem; }
+    #mSaveStatus:disabled { opacity: 0.65; cursor: not-allowed; }
     #momoPhonePreviewOverlay {
       display: none;
       position: fixed;
@@ -822,8 +858,15 @@ function pcvc_commission_step_index(string $status, array $order): int
     </div>
     <div class="commission-notify-footer">
       <button type="button" class="commission-notify-cancel" id="commissionNotifyCancel">Cancel</button>
-      <button type="button" class="commission-notify-confirm" id="commissionNotifyConfirm">Save</button>
+      <button type="button" class="commission-notify-confirm" id="commissionNotifyConfirm"><i class="fas fa-save" id="commissionNotifyConfirmIcon"></i> <span id="commissionNotifyConfirmLabel">Save</span></button>
     </div>
+  </div>
+</div>
+
+<div id="commissionSaveOverlay" class="commission-save-overlay" aria-hidden="true">
+  <div class="commission-save-card">
+    <div class="commission-save-spin" aria-hidden="true"></div>
+    <p id="commissionSaveOverlayText">Saving…</p>
   </div>
 </div>
 
@@ -923,20 +966,55 @@ function commissionNotifyToastFromResponse(j, ne, nw) {
   }
   if (n && n.whatsapp && n.whatsapp.requested) {
     if (n.whatsapp.sent) {
-      parts.push(n.whatsapp.method === 'text' ? 'WhatsApp sent (session)' : 'WhatsApp sent');
+      parts.push(n.whatsapp.method === 'template'
+        ? 'WhatsApp sent (pcvc_commission_update)'
+        : (n.whatsapp.method === 'text' ? 'WhatsApp sent (session)' : 'WhatsApp sent'));
     } else {
       anyFail = true;
-      parts.push('WhatsApp failed' + (n.whatsapp.error ? ': ' + n.whatsapp.error : ''));
+      let waLine = 'WhatsApp failed' + (n.whatsapp.error ? ': ' + n.whatsapp.error : '');
+      if (n.whatsapp.template) {
+        waLine += ' [' + n.whatsapp.template + ', ' + (n.whatsapp.template_params || 4) + ' vars]';
+      }
+      parts.push(waLine);
     }
   }
   if (!ne && !nw) {
     parts.length = 1;
     parts[0] = 'Status saved (no notification)';
   }
-  showToast(parts.join(' · '), anyFail ? 4200 : 3200);
+  showToast(parts.join(' · '), anyFail ? 5200 : 3200);
 }
 
 let commissionNotifyPending = null;
+let commissionStatusSaving = false;
+
+function setCommissionStatusSaving(active, text) {
+  commissionStatusSaving = active;
+  const ov = document.getElementById('commissionSaveOverlay');
+  const txt = document.getElementById('commissionSaveOverlayText');
+  if (ov) {
+    ov.classList.toggle('show-flex', active);
+    ov.style.display = active ? 'flex' : 'none';
+    ov.setAttribute('aria-hidden', active ? 'false' : 'true');
+  }
+  if (txt && text) txt.textContent = text;
+  ['commissionNotifyConfirm', 'commissionNotifyCancel', 'commissionNotifyCloseX'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = active;
+  });
+  const icon = document.getElementById('commissionNotifyConfirmIcon');
+  const label = document.getElementById('commissionNotifyConfirmLabel');
+  if (icon) icon.className = active ? 'fas fa-spinner fa-spin' : 'fas fa-save';
+  if (label) label.textContent = active ? 'Saving…' : 'Save';
+}
+
+function setManageSaveButtonSaving(btn, active) {
+  if (!btn) return;
+  btn.disabled = active;
+  btn.innerHTML = active
+    ? '<i class="fas fa-spinner fa-spin"></i> Saving…'
+    : '<i class="fas fa-save"></i> Save status';
+}
 
 function syncCommissionNotifyMessageWrap() {
   const wrap = document.getElementById('commissionNotifyMessageWrap');
@@ -959,6 +1037,7 @@ function openCommissionNotifyModal() {
   syncCommissionNotifyMessageWrap();
 }
 function closeCommissionNotifyModal() {
+  if (commissionStatusSaving) return;
   const el = document.getElementById('commissionStatusNotifyModal');
   if (!el) return;
   el.classList.remove('show-flex');
@@ -988,11 +1067,10 @@ async function commissionSubmitStatusChange(sel, id, statusKey, prevKey, ne, nw,
       })
     });
     const j = await r.json();
-    sel.disabled = false;
     if (!j.ok) {
       alert(j.error || 'Update failed');
       sel.value = prevKey;
-      return;
+      return j;
     }
     sel.value = statusKey;
     sel.dataset.prev = statusKey;
@@ -1028,10 +1106,12 @@ async function commissionSubmitStatusChange(sel, id, statusKey, prevKey, ne, nw,
         btn.setAttribute('data-commission', JSON.stringify(d));
       } catch (e2) {}
     }
+    return j;
   } catch (e) {
-    sel.disabled = false;
     sel.value = prevKey;
-    alert('Network error');
+    throw e;
+  } finally {
+    sel.disabled = false;
   }
 }
 
@@ -1053,7 +1133,8 @@ document.getElementById('commissionStatusNotifyModal').addEventListener('click',
   if (ev.target.id === 'commissionStatusNotifyModal') closeCommissionNotifyModal();
 });
 
-document.getElementById('commissionNotifyConfirm').addEventListener('click', function() {
+document.getElementById('commissionNotifyConfirm').addEventListener('click', async function() {
+  if (commissionStatusSaving) return;
   const p = commissionNotifyPending;
   if (!p || !p.sel) return;
   const active = document.querySelector('#commissionInlineNotifyGrid .commission-notify-channel.active');
@@ -1066,8 +1147,16 @@ document.getElementById('commissionNotifyConfirm').addEventListener('click', fun
     return;
   }
   const payloadMsg = p.newKey === 'rejected' ? msgTrim : '';
-  closeCommissionNotifyModal();
-  commissionSubmitStatusChange(p.sel, p.id, p.newKey, p.prevKey, ne, nw, payloadMsg);
+  const savingText = (ne || nw) ? 'Saving & sending notifications…' : 'Saving status…';
+  setCommissionStatusSaving(true, savingText);
+  try {
+    const j = await commissionSubmitStatusChange(p.sel, p.id, p.newKey, p.prevKey, ne, nw, payloadMsg);
+    if (j && j.ok) closeCommissionNotifyModal();
+  } catch (e) {
+    alert('Network error — could not save. Try again.');
+  } finally {
+    setCommissionStatusSaving(false);
+  }
 });
 
 document.addEventListener('focusin', function(e) {
@@ -1203,8 +1292,10 @@ function openCommissionModal(data) {
   syncManageRejectionNote();
 
   document.getElementById('mSaveStatus').onclick = async () => {
+    if (commissionStatusSaving) return;
+    const saveBtn = document.getElementById('mSaveStatus');
     const msg = document.getElementById('mSaveMsg');
-    msg.textContent = 'Saving…';
+    msg.textContent = '';
     const st = document.getElementById('mStatus').value;
     const active = document.querySelector('#mNotifyGrid .commission-notify-channel.active');
     const ne = active ? parseInt(active.getAttribute('data-ne'), 10) || 0 : 0;
@@ -1216,6 +1307,11 @@ function openCommissionModal(data) {
       msg.style.color = '#b91c1c';
       return;
     }
+    const savingText = (ne || nw) ? 'Saving & sending notifications…' : 'Saving status…';
+    setCommissionStatusSaving(true, savingText);
+    setManageSaveButtonSaving(saveBtn, true);
+    msg.textContent = 'Saving…';
+    msg.style.color = '#64748b';
     try {
       const r = await fetch('api/commission-admin-update.php', {
         method: 'POST',
@@ -1248,6 +1344,9 @@ function openCommissionModal(data) {
     } catch (e) {
       msg.textContent = 'Network error';
       msg.style.color = '#b91c1c';
+    } finally {
+      setCommissionStatusSaving(false);
+      setManageSaveButtonSaving(saveBtn, false);
     }
   };
 
