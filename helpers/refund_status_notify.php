@@ -287,10 +287,13 @@ function pcvc_send_refund_status_whatsapp(
     string $adminComment
 ): array {
     $empty = ['sent' => false, 'method' => '', 'error' => '', 'detail' => ''];
-    $token = xander_env_get('WHATSAPP_ACCESS_TOKEN');
-    $phoneId = xander_env_get('WHATSAPP_PHONE_NUMBER_ID');
+    $token = trim(xander_env_get('WHATSAPP_ACCESS_TOKEN'));
+    if ($token === '') {
+        $token = trim(xander_env_get('WHATSAPP_TOKEN'));
+    }
+    $phoneId = trim(xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
     if ($token === '' || $phoneId === '') {
-        $empty['error'] = 'WhatsApp is not configured (missing token or phone number ID).';
+        $empty['error'] = 'WhatsApp is not configured (set WHATSAPP_ACCESS_TOKEN or WHATSAPP_TOKEN, and WHATSAPP_PHONE_NUMBER_ID in .env).';
 
         return $empty;
     }
@@ -420,6 +423,9 @@ function pcvc_notify_refund_request_change(
         $waOut['sent'] = $r['sent'];
         $waOut['method'] = $r['method'];
         $waOut['error'] = $r['error'];
+        if (!empty($r['detail'])) {
+            $waOut['detail'] = $r['detail'];
+        }
     }
 
     return ['email' => $emailOut, 'whatsapp' => $waOut];

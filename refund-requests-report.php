@@ -8,6 +8,9 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/refund_requests_schema.php';
 require_once __DIR__ . '/includes/company_branding.php';
+require_once __DIR__ . '/helpers/urls.php';
+
+$refundAdminApiUrl = pcvc_url('/api/refund-admin-update.php');
 
 $adminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 if ($adminId < 1) {
@@ -107,9 +110,35 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
     .btn-manage { background: <?= $colors['navy'] ?>; color: #fff; }
     .btn-proof { background: <?= $colors['blue'] ?>; color: #fff; text-decoration: none; }
     .empty { text-align: center; padding: 60px 20px; color: #64748b; }
-    .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.5); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
+    .overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 16px; }
     .overlay.show { display: flex; }
-    .modal { background: #fff; border-radius: 16px; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,0.2); }
+    .modal { position: relative; background: #fff; border-radius: 16px; max-width: 560px; width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 60px rgba(0,0,0,0.2); }
+    .modal-saving {
+      position: absolute; inset: 0; z-index: 10;
+      background: rgba(255,255,255,0.88);
+      display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+      border-radius: 16px; backdrop-filter: blur(2px);
+    }
+    .modal-saving.show { display: flex; }
+    .modal-saving .spin {
+      width: 44px; height: 44px;
+      border: 4px solid rgba(66,116,49,0.2);
+      border-top-color: <?= $colors['navy'] ?>;
+      border-radius: 50%;
+      animation: refundSpin 0.75s linear infinite;
+    }
+    @keyframes refundSpin { to { transform: rotate(360deg); } }
+    .modal-saving p { margin: 0; font-weight: 700; color: <?= $colors['navy'] ?>; font-size: 0.95rem; }
+    .save-feedback {
+      margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 0.85rem; line-height: 1.45;
+      display: none;
+    }
+    .save-feedback.show { display: block; }
+    .save-feedback.ok { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
+    .save-feedback.warn { background: #fffbeb; border: 1px solid #fcd34d; color: #92400e; }
+    .save-feedback.err { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .btn-save:disabled { opacity: 0.65; cursor: not-allowed; }
+    .contact-hint { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
     .modal-head { padding: 18px 20px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: flex-start; }
     .modal-head h3 { font-size: 1.1rem; }
     .modal-close { background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #64748b; line-height: 1; }
@@ -121,7 +150,7 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
     .notify-btn { padding: 10px; border: 2px solid #e2e8f0; border-radius: 10px; background: #fff; cursor: pointer; font-size: 0.82rem; font-weight: 700; text-align: center; }
     .notify-btn.active { border-color: <?= $colors['navy'] ?>; background: rgba(66,116,49,0.08); color: <?= $colors['navy'] ?>; }
     .notify-btn span { display: block; font-weight: 400; font-size: 0.72rem; color: #64748b; margin-top: 2px; }
-    .modal-foot { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-foot { padding: 14px 20px; border-top: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; align-items: center; }
     .btn-save { background: <?= $colors['gold'] ?>; color: #fff; }
     .btn-cancel { background: #e2e8f0; color: #334155; }
     .log-list { margin-top: 12px; max-height: 160px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px; font-size: 0.8rem; }
@@ -210,10 +239,14 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
 </div>
 
 <div class="overlay" id="refundModal">
-  <div class="modal" role="dialog">
+  <div class="modal" role="dialog" aria-labelledby="modalTitle">
+    <div class="modal-saving" id="modalSaving" aria-hidden="true">
+      <div class="spin" aria-hidden="true"></div>
+      <p id="modalSavingText">Saving &amp; sending notifications…</p>
+    </div>
     <div class="modal-head">
-      <div><h3 id="modalTitle">Manage refund</h3><p style="font-size:0.82rem;color:#64748b;margin-top:4px;" id="modalSub"></p></div>
-      <button type="button" class="modal-close" id="modalClose">&times;</button>
+      <div><h3 id="modalTitle">Manage refund</h3><p style="font-size:0.82rem;color:#64748b;margin-top:4px;" id="modalSub"></p><p class="contact-hint" id="modalContact"></p></div>
+      <button type="button" class="modal-close" id="modalClose" aria-label="Close">&times;</button>
     </div>
     <div class="modal-body">
       <div class="fld"><label>Reason (student submitted)</label><div id="modalReason" style="font-size:0.88rem;background:#f8fafc;padding:10px;border-radius:8px;"></div></div>
@@ -246,8 +279,9 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
       <div class="fld"><label>Activity log</label><div class="log-list" id="modalLogs"></div></div>
     </div>
     <div class="modal-foot">
+      <div id="modalSaveFeedback" class="save-feedback" role="status" style="flex:1;margin:0;"></div>
       <button type="button" class="btn btn-cancel" id="modalCancel">Cancel</button>
-      <button type="button" class="btn btn-save" id="modalSave"><i class="fas fa-save"></i> Save</button>
+      <button type="button" class="btn btn-save" id="modalSave"><i class="fas fa-save" id="modalSaveIcon"></i> <span id="modalSaveLabel">Save</span></button>
     </div>
   </div>
 </div>
@@ -257,16 +291,69 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
 <script>
 window.REFUND_CSRF = <?= json_encode($refundCsrf, JSON_UNESCAPED_UNICODE) ?>;
 window.REFUND_STATUS_LABELS = <?= json_encode($statusLabels, JSON_UNESCAPED_UNICODE) ?>;
+window.REFUND_API_URL = <?= json_encode($refundAdminApiUrl, JSON_UNESCAPED_UNICODE) ?>;
 
 let currentId = 0;
 let notifyEmail = 0, notifyWhatsapp = 0;
+let isSaving = false;
 const overlay = document.getElementById('refundModal');
+const modalSaving = document.getElementById('modalSaving');
+const modalSaveFeedback = document.getElementById('modalSaveFeedback');
+const modalSaveBtn = document.getElementById('modalSave');
+const modalSaveLabel = document.getElementById('modalSaveLabel');
+const modalSaveIcon = document.getElementById('modalSaveIcon');
 
 function showToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('show');
-  setTimeout(function () { t.classList.remove('show'); }, 3500);
+  setTimeout(function () { t.classList.remove('show'); }, 4500);
+}
+
+function setSaveFeedback(msg, type) {
+  modalSaveFeedback.textContent = msg;
+  modalSaveFeedback.className = 'save-feedback show ' + (type || 'ok');
+}
+
+function clearSaveFeedback() {
+  modalSaveFeedback.className = 'save-feedback';
+  modalSaveFeedback.textContent = '';
+}
+
+function setSaving(active, text) {
+  isSaving = active;
+  modalSaving.classList.toggle('show', active);
+  if (text) document.getElementById('modalSavingText').textContent = text;
+  modalSaveBtn.disabled = active;
+  document.getElementById('modalCancel').disabled = active;
+  document.getElementById('modalClose').disabled = active;
+  modalSaveLabel.textContent = active ? 'Saving…' : 'Save';
+  modalSaveIcon.className = active ? 'fas fa-spinner fa-spin' : 'fas fa-save';
+}
+
+function formatNotifyResult(notify, ne, nw) {
+  if (!notify) return '';
+  const parts = [];
+  if (ne && notify.email) {
+    parts.push('Email: ' + (notify.email.sent ? 'sent ✓' : ('failed — ' + (notify.email.error || 'check SMTP in .env'))));
+  }
+  if (nw && notify.whatsapp) {
+    const wa = notify.whatsapp;
+    let line = 'WhatsApp: ';
+    if (wa.sent) line += 'sent ✓ (' + (wa.method || 'ok') + ')';
+    else line += 'failed — ' + (wa.error || 'check template / .env');
+    parts.push(line);
+  }
+  return parts.join(' · ');
+}
+
+async function parseJsonResponse(res) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error('Server returned an invalid response (HTTP ' + res.status + '). Reload the page and try again.');
+  }
 }
 
 document.getElementById('clientSearch').addEventListener('input', function () {
@@ -282,8 +369,13 @@ document.querySelectorAll('.open-refund-modal').forEach(function (btn) {
     let data;
     try { data = JSON.parse(btn.getAttribute('data-refund')); } catch (e) { return; }
     currentId = data.id;
+    clearSaveFeedback();
+    setSaving(false);
     document.getElementById('modalTitle').textContent = data.name;
     document.getElementById('modalSub').textContent = data.reference_id + ' · ' + data.email;
+    document.getElementById('modalContact').textContent =
+      (data.phone ? 'Phone: ' + data.phone + ' · ' : '') +
+      (data.email ? 'Email: ' + data.email : '');
     document.getElementById('modalReason').textContent = data.reason || '—';
     document.getElementById('modalStatus').value = data.status || 'pending';
     document.getElementById('modalComment').value = data.admin_comment || '';
@@ -304,50 +396,82 @@ document.querySelectorAll('.open-refund-modal').forEach(function (btn) {
 
 document.querySelectorAll('#notifyGrid .notify-btn').forEach(function (b) {
   b.addEventListener('click', function () {
-    notifyEmail = parseInt(b.getAttribute('data-ne'), 10);
-    notifyWhatsapp = parseInt(b.getAttribute('data-nw'), 10);
+    if (isSaving) return;
+    notifyEmail = parseInt(b.getAttribute('data-ne'), 10) || 0;
+    notifyWhatsapp = parseInt(b.getAttribute('data-nw'), 10) || 0;
     document.querySelectorAll('#notifyGrid .notify-btn').forEach(function (x) { x.classList.remove('active'); });
     b.classList.add('active');
+    clearSaveFeedback();
   });
 });
 
-function closeModal() { overlay.classList.remove('show'); currentId = 0; }
+function closeModal() {
+  if (isSaving) return;
+  overlay.classList.remove('show');
+  currentId = 0;
+  clearSaveFeedback();
+}
 document.getElementById('modalClose').addEventListener('click', closeModal);
 document.getElementById('modalCancel').addEventListener('click', closeModal);
-overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(); });
+overlay.addEventListener('click', function (e) { if (e.target === overlay && !isSaving) closeModal(); });
 
-document.getElementById('modalSave').addEventListener('click', async function () {
-  if (!currentId) return;
-  const btn = document.getElementById('modalSave');
-  btn.disabled = true;
+modalSaveBtn.addEventListener('click', async function () {
+  if (!currentId || isSaving) return;
+
+  const ne = notifyEmail === 1;
+  const nw = notifyWhatsapp === 1;
+  const status = document.getElementById('modalStatus').value;
+  const comment = document.getElementById('modalComment').value.trim();
+
+  if (status === 'rejected' && (ne || nw) && comment === '') {
+    setSaveFeedback('Enter a comment to the student before notifying about a rejection.', 'err');
+    document.getElementById('modalComment').focus();
+    return;
+  }
+
+  clearSaveFeedback();
+  setSaving(true, ne || nw ? 'Saving & sending notifications…' : 'Saving…');
+
   try {
-    const res = await fetch('api/refund-admin-update.php', {
+    const res = await fetch(window.REFUND_API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
       body: JSON.stringify({
         csrf: window.REFUND_CSRF,
         id: currentId,
-        request_status: document.getElementById('modalStatus').value,
-        admin_comment: document.getElementById('modalComment').value.trim(),
+        request_status: status,
+        admin_comment: comment,
         internal_note: document.getElementById('modalInternal').value.trim(),
-        notify_email: notifyEmail === 1,
-        notify_whatsapp: notifyWhatsapp === 1,
-        notify_message: document.getElementById('modalComment').value.trim()
+        notify_email: ne,
+        notify_whatsapp: nw,
+        notify_message: comment
       })
     });
-    const data = await res.json();
-    if (!data.ok) { alert(data.error || 'Save failed'); return; }
-    let msg = 'Saved.';
-    if (data.notify) {
-      if (data.notify.email && data.notify.email.requested) msg += ' Email: ' + (data.notify.email.sent ? 'sent' : 'failed');
-      if (data.notify.whatsapp && data.notify.whatsapp.requested) msg += ' WhatsApp: ' + (data.notify.whatsapp.sent ? ('sent (' + (data.notify.whatsapp.method || 'ok') + ')') : 'failed');
+
+    const data = await parseJsonResponse(res);
+
+    if (data.csrf) {
+      window.REFUND_CSRF = data.csrf;
     }
-    showToast(msg);
-    setTimeout(function () { location.reload(); }, 1200);
+
+    if (!data.ok) {
+      setSaving(false);
+      setSaveFeedback(data.error || 'Save failed.', 'err');
+      return;
+    }
+
+    const notifyLine = formatNotifyResult(data.notify, ne, nw);
+    const allOk = data.notify_all_ok !== false;
+    const mainMsg = data.message || 'Saved successfully.';
+    setSaveFeedback(mainMsg + (notifyLine ? ' ' + notifyLine : ''), allOk ? 'ok' : 'warn');
+    showToast(mainMsg);
+
+    setSaving(false);
+    setTimeout(function () { location.reload(); }, allOk ? 1400 : 3500);
   } catch (e) {
-    alert('Network error.');
-  } finally {
-    btn.disabled = false;
+    setSaving(false);
+    setSaveFeedback(e.message || 'Network error. Check your connection and try again.', 'err');
   }
 });
 
