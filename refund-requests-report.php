@@ -8,9 +8,6 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/refund_requests_schema.php';
 require_once __DIR__ . '/includes/company_branding.php';
-require_once __DIR__ . '/helpers/urls.php';
-
-$refundAdminApiUrl = pcvc_url('/api/refund-admin-update.php');
 
 $adminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 if ($adminId < 1) {
@@ -131,7 +128,7 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
     .modal-saving p { margin: 0; font-weight: 700; color: <?= $colors['navy'] ?>; font-size: 0.95rem; }
     .save-feedback {
       margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 0.85rem; line-height: 1.45;
-      display: none;
+      display: none; max-height: 160px; overflow-y: auto; word-break: break-word;
     }
     .save-feedback.show { display: block; }
     .save-feedback.ok { background: #f0fdf4; border: 1px solid #86efac; color: #166534; }
@@ -291,7 +288,7 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
 <script>
 window.REFUND_CSRF = <?= json_encode($refundCsrf, JSON_UNESCAPED_UNICODE) ?>;
 window.REFUND_STATUS_LABELS = <?= json_encode($statusLabels, JSON_UNESCAPED_UNICODE) ?>;
-window.REFUND_API_URL = <?= json_encode($refundAdminApiUrl, JSON_UNESCAPED_UNICODE) ?>;
+window.REFUND_API_URL = 'api/refund-admin-update.php';
 
 let currentId = 0;
 let notifyEmail = 0, notifyWhatsapp = 0;
@@ -310,14 +307,40 @@ function showToast(msg) {
   setTimeout(function () { t.classList.remove('show'); }, 4500);
 }
 
-function setSaveFeedback(msg, type) {
-  modalSaveFeedback.textContent = msg;
+function setSaveFeedback(msg, type, htmlDetail) {
   modalSaveFeedback.className = 'save-feedback show ' + (type || 'ok');
+  const main = esc(msg);
+  modalSaveFeedback.innerHTML = htmlDetail ? (main + '<br><br>' + htmlDetail) : main;
+}
+
+function formatNotifyResult(notify, ne, nw) {
+  if (!notify) return '';
+  const lines = [];
+  if (ne && notify.email) {
+    const e = notify.email;
+    lines.push('<strong>Email</strong> ' + esc(e.to || '(no address on record)'));
+    if (e.sent) lines.push('✓ Sent successfully');
+    else lines.push('✗ ' + esc(e.error || 'Send failed — check SMTP_* in .env'));
+  }
+  if (nw && notify.whatsapp) {
+    const wa = notify.whatsapp;
+    lines.push('<strong>WhatsApp</strong> ' + esc(wa.to || '(phone missing or invalid)'));
+    if (wa.sent) lines.push('✓ Sent via ' + esc(wa.method || 'template'));
+    else lines.push('✗ ' + esc(wa.error || 'Send failed — check WHATSAPP_* in .env'));
+  }
+  const anyFail = (ne && notify.email && !notify.email.sent) || (nw && notify.whatsapp && !notify.whatsapp.sent);
+  if (anyFail && notify.env && typeof notify.env === 'object') {
+    lines.push('<strong>.env configuration</strong>');
+    Object.keys(notify.env).forEach(function (k) {
+      lines.push(esc(k) + ': ' + esc(notify.env[k]));
+    });
+  }
+  return lines.join('<br>');
 }
 
 function clearSaveFeedback() {
   modalSaveFeedback.className = 'save-feedback';
-  modalSaveFeedback.textContent = '';
+  modalSaveFeedback.innerHTML = '';
 }
 
 function setSaving(active, text) {
@@ -329,22 +352,6 @@ function setSaving(active, text) {
   document.getElementById('modalClose').disabled = active;
   modalSaveLabel.textContent = active ? 'Saving…' : 'Save';
   modalSaveIcon.className = active ? 'fas fa-spinner fa-spin' : 'fas fa-save';
-}
-
-function formatNotifyResult(notify, ne, nw) {
-  if (!notify) return '';
-  const parts = [];
-  if (ne && notify.email) {
-    parts.push('Email: ' + (notify.email.sent ? 'sent ✓' : ('failed — ' + (notify.email.error || 'check SMTP in .env'))));
-  }
-  if (nw && notify.whatsapp) {
-    const wa = notify.whatsapp;
-    let line = 'WhatsApp: ';
-    if (wa.sent) line += 'sent ✓ (' + (wa.method || 'ok') + ')';
-    else line += 'failed — ' + (wa.error || 'check template / .env');
-    parts.push(line);
-  }
-  return parts.join(' · ');
 }
 
 async function parseJsonResponse(res) {
@@ -464,14 +471,19 @@ modalSaveBtn.addEventListener('click', async function () {
     const notifyLine = formatNotifyResult(data.notify, ne, nw);
     const allOk = data.notify_all_ok !== false;
     const mainMsg = data.message || 'Saved successfully.';
-    setSaveFeedback(mainMsg + (notifyLine ? ' ' + notifyLine : ''), allOk ? 'ok' : 'warn');
+    setSaveFeedback(mainMsg, allOk ? 'ok' : 'warn', notifyLine || '');
     showToast(mainMsg);
 
     setSaving(false);
-    setTimeout(function () { location.reload(); }, allOk ? 1400 : 3500);
+    setTimeout(function () { location.reload(); }, allOk ? 1400 : 6000);
   } catch (e) {
     setSaving(false);
-    setSaveFeedback(e.message || 'Network error. Check your connection and try again.', 'err');
+    const errMsg = (e && e.message) ? e.message : 'Network error';
+    setSaveFeedback(
+      'Could not reach api/refund-admin-update.php',
+      'err',
+      esc(errMsg) + '<br><br>If this says "Failed to fetch", the server may have timed out during email/WhatsApp. Check Apache/PHP error log, then try "Record only" to confirm save works.'
+    );
   }
 });
 

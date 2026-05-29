@@ -84,6 +84,9 @@ function pcvc_ensure_commission_requests_schema(mysqli $conn): void
     if (empty($have['internal_note'])) {
         $alters[] = 'ADD COLUMN `internal_note` TEXT NULL';
     }
+    if (empty($have['rejection_reason'])) {
+        $alters[] = 'ADD COLUMN `rejection_reason` TEXT NULL';
+    }
     if (empty($have['last_momo_transaction_id'])) {
         $alters[] = 'ADD COLUMN `last_momo_transaction_id` VARCHAR(96) NULL DEFAULT NULL';
     }

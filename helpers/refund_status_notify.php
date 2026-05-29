@@ -2,50 +2,17 @@
 declare(strict_types=1);
 
 /**
- * Refund request notifications (email + WhatsApp template).
- *
- * WhatsApp template (Utility) — register in Meta Business Manager:
- *   WHATSAPP_REFUND_TEMPLATE_NAME=pcvc_refund_update
- *   WHATSAPP_REFUND_TEMPLATE_LANG=en
- *   WHATSAPP_REFUND_TEMPLATE_PARAMS=7
- *
- * Body placeholders (exact order, 7 variables):
- *   {{1}} Student name
- *   {{2}} Reference ID (e.g. REF2026ABC12345)
- *   {{3}} Status label (e.g. Under review, Approved)
- *   {{4}} Service paid for
- *   {{5}} Amount with currency (e.g. 250.00 USD)
- *   {{6}} Admin comment — part 1 (primary message, up to ~900 chars)
- *   {{7}} Admin comment — part 2 (continuation, or "—" if not needed)
- *
- * Copy-paste Meta template body:
- * ---
- * Hello {{1}},
- *
- * Update on your refund request *{{2}}*.
- *
- * Status: *{{3}}*
- * Service: {{4}}
- * Amount: {{5}}
- *
- * *Message from our team:*
- * {{6}}
- *
- * {{7}}
- *
- * — Parrot Canada Visa Consultant
- * ---
- *
- * Legacy 4-param template (WHATSAPP_REFUND_TEMPLATE_PARAMS=4) is still supported:
- *   {{1}} name, {{2}} reference, {{3}} status, {{4}} full comment (single block, clipped)
+ * Refund request notifications — uses project .env SMTP_* and WHATSAPP_* (same as commission / student status).
  */
 
 require_once __DIR__ . '/env_load.php';
+require_once __DIR__ . '/mail_smtp.php';
 require_once __DIR__ . '/student_status_notify.php';
-require_once __DIR__ . '/../includes/commission_mail_helper.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 
-/** Max chars per WhatsApp template body variable (Meta limit 1024; leave headroom). */
+use PHPMailer\PHPMailer\Exception as MailerException;
+use PHPMailer\PHPMailer\PHPMailer;
+
 const PCVC_REFUND_WA_VAR_MAX = 900;
 
 function pcvc_refund_whatsapp_template_config(): array
@@ -68,10 +35,36 @@ function pcvc_refund_whatsapp_template_config(): array
 }
 
 /**
- * Split a long admin comment across WhatsApp template variables.
+ * Non-secret .env readiness check (shown in admin UI when notify fails).
  *
- * @return list<string> Always returns $partCount entries; empty slots are "—"
+ * @return array<string, string>
  */
+function pcvc_refund_notify_env_diagnosis(): array
+{
+    xander_load_env_file();
+    $envPath = dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    $token = trim(xander_env_get('WHATSAPP_ACCESS_TOKEN'));
+    if ($token === '') {
+        $token = trim(xander_env_get('WHATSAPP_TOKEN'));
+    }
+
+    return [
+        'env_file' => is_readable($envPath) ? 'OK — .env found' : 'MISSING — create .env in parrot_mis root',
+        'smtp_host' => xander_env_get('SMTP_HOST') !== '' ? 'OK' : 'MISSING SMTP_HOST',
+        'smtp_user' => xander_env_get('SMTP_USERNAME') !== '' ? 'OK' : 'MISSING SMTP_USERNAME',
+        'smtp_pass' => xander_env_get('SMTP_PASSWORD') !== '' ? 'OK (set)' : 'MISSING SMTP_PASSWORD',
+        'smtp_from' => xander_env_get('SMTP_FROM_EMAIL') !== '' ? 'OK' : 'MISSING SMTP_FROM_EMAIL (will use SMTP_USERNAME)',
+        'whatsapp_token' => $token !== '' ? 'OK (' . strlen($token) . ' chars)' : 'MISSING WHATSAPP_ACCESS_TOKEN or WHATSAPP_TOKEN',
+        'whatsapp_phone_id' => xander_env_get('WHATSAPP_PHONE_NUMBER_ID') !== '' ? 'OK' : 'MISSING WHATSAPP_PHONE_NUMBER_ID',
+        'whatsapp_country_code' => xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE') !== ''
+            ? ('OK (' . xander_env_get('WHATSAPP_DEFAULT_COUNTRY_CODE') . ')')
+            : 'optional — set WHATSAPP_DEFAULT_COUNTRY_CODE=250 for local numbers',
+        'whatsapp_template' => pcvc_refund_whatsapp_template_config()['name']
+            . ' (' . pcvc_refund_whatsapp_template_config()['params'] . ' params, lang '
+            . pcvc_refund_whatsapp_template_config()['lang'] . ')',
+    ];
+}
+
 function pcvc_refund_comment_parts_for_whatsapp(string $comment, int $partCount = 2, int $maxLen = PCVC_REFUND_WA_VAR_MAX): array
 {
     $partCount = max(1, min(3, $partCount));
@@ -180,7 +173,6 @@ function pcvc_refund_whatsapp_template_body_texts(
         ];
     }
 
-    // Default: 7+ params — two dedicated comment slots
     $commentParts = pcvc_refund_comment_parts_for_whatsapp($comment, 2);
     $texts = [
         $safeName,
@@ -275,7 +267,52 @@ function pcvc_refund_notify_whatsapp_fallback(
 }
 
 /**
- * @return array{sent:bool,method:string,error:string,detail:string}
+ * Send refund email via app_mailer / SMTP_* in .env (same stack as student status emails).
+ *
+ * @return array{sent: bool, error: string}
+ */
+function pcvc_refund_send_email(string $toEmail, string $toName, string $subject, string $htmlBody): array
+{
+    xander_load_env_file();
+    $out = ['sent' => false, 'error' => ''];
+
+    if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        $out['error'] = 'Invalid recipient email.';
+
+        return $out;
+    }
+
+    $host = xander_env_get('SMTP_HOST');
+    if ($host === '') {
+        $out['error'] = 'SMTP_HOST is not set in .env';
+
+        return $out;
+    }
+
+    $mail = null;
+    try {
+        $mail = xander_create_phpmailer();
+        $mail->addAddress($toEmail, $toName !== '' ? $toName : $toEmail);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlBody;
+        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
+        $out['sent'] = $mail->send();
+        if (!$out['sent']) {
+            $info = $mail->ErrorInfo ?? '';
+            $out['error'] = $info !== '' ? ('SMTP: ' . $info) : 'SMTP send returned false.';
+        }
+    } catch (MailerException $e) {
+        $info = ($mail instanceof PHPMailer) ? (string) ($mail->ErrorInfo ?? '') : '';
+        $out['error'] = 'Email: ' . $e->getMessage() . ($info !== '' ? ' (' . $info . ')' : '');
+    } catch (Throwable $e) {
+        $out['error'] = 'Email: ' . $e->getMessage();
+    }
+
+    return $out;
+}
+
+/**
+ * @return array{sent:bool,method:string,error:string,detail:string,to:string}
  */
 function pcvc_send_refund_status_whatsapp(
     string $phoneRaw,
@@ -286,14 +323,24 @@ function pcvc_send_refund_status_whatsapp(
     string $amountLine,
     string $adminComment
 ): array {
-    $empty = ['sent' => false, 'method' => '', 'error' => '', 'detail' => ''];
+    $empty = ['sent' => false, 'method' => '', 'error' => '', 'detail' => '', 'to' => ''];
     $token = trim(xander_env_get('WHATSAPP_ACCESS_TOKEN'));
     if ($token === '') {
         $token = trim(xander_env_get('WHATSAPP_TOKEN'));
     }
     $phoneId = trim(xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
-    if ($token === '' || $phoneId === '') {
-        $empty['error'] = 'WhatsApp is not configured (set WHATSAPP_ACCESS_TOKEN or WHATSAPP_TOKEN, and WHATSAPP_PHONE_NUMBER_ID in .env).';
+    if ($token === '') {
+        $empty['error'] = 'WHATSAPP_ACCESS_TOKEN / WHATSAPP_TOKEN not set in .env';
+
+        return $empty;
+    }
+    if ($phoneId === '') {
+        $empty['error'] = 'WHATSAPP_PHONE_NUMBER_ID not set in .env';
+
+        return $empty;
+    }
+    if (trim($phoneRaw) === '') {
+        $empty['error'] = 'No phone number on this refund request.';
 
         return $empty;
     }
@@ -301,12 +348,13 @@ function pcvc_send_refund_status_whatsapp(
     $defaultCcOrNull = $defaultCc !== '' ? $defaultCc : null;
     $to = xander_format_phone_for_whatsapp_e164($phoneRaw, $defaultCcOrNull);
     if ($to === null) {
-        $empty['error'] = 'Invalid phone number for WhatsApp.';
+        $empty['error'] = 'Invalid phone for WhatsApp: "' . $phoneRaw . '". Use +250… or set WHATSAPP_DEFAULT_COUNTRY_CODE=250 in .env';
 
         return $empty;
     }
+    $empty['to'] = $to;
     if (!function_exists('curl_init')) {
-        $empty['error'] = 'Server has no cURL.';
+        $empty['error'] = 'Server has no cURL extension.';
 
         return $empty;
     }
@@ -323,7 +371,7 @@ function pcvc_send_refund_status_whatsapp(
     );
 
     $version = xander_env_get('META_GRAPH_VERSION') ?: 'v19.0';
-    $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode((string) $phoneId) . '/messages';
+    $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
     $fallback = pcvc_refund_notify_whatsapp_fallback(
         $name,
         $referenceId,
@@ -333,7 +381,7 @@ function pcvc_send_refund_status_whatsapp(
         $adminComment
     );
 
-    return xander_whatsapp_send_template_or_session(
+    $r = xander_whatsapp_send_template_or_session(
         $to,
         $url,
         $token,
@@ -343,10 +391,21 @@ function pcvc_send_refund_status_whatsapp(
         $templateBodyTexts,
         $fallback
     );
+    $r['to'] = $to;
+    if (!$r['sent'] && ($r['error'] === '' || $r['error'] === 'Unknown error')) {
+        $hint = xander_whatsapp_user_hint(xander_whatsapp_extract_error(
+            is_string($r['detail'] ?? null) ? json_decode($r['detail'], true) : null
+        ) ?? ['message' => '']);
+        if ($hint !== '') {
+            $r['error'] = $hint;
+        }
+    }
+
+    return $r;
 }
 
 /**
- * @return array{email: array<string, mixed>, whatsapp: array<string, mixed>}|null
+ * @return array{email: array<string, mixed>, whatsapp: array<string, mixed>, env: array<string, string>}|null
  */
 function pcvc_notify_refund_request_change(
     mysqli $conn,
@@ -361,16 +420,17 @@ function pcvc_notify_refund_request_change(
     }
 
     xander_load_env_file();
+    $envDiag = pcvc_refund_notify_env_diagnosis();
 
-    $emailOut = ['requested' => $sendEmail, 'sent' => null, 'error' => ''];
-    $waOut = ['requested' => $sendWhatsapp, 'sent' => null, 'method' => '', 'error' => ''];
+    $emailOut = ['requested' => $sendEmail, 'sent' => null, 'error' => '', 'to' => ''];
+    $waOut = ['requested' => $sendWhatsapp, 'sent' => null, 'method' => '', 'error' => '', 'to' => ''];
 
     $stmt = $conn->prepare(
         'SELECT id, reference_id, first_name, last_name, email, phone, service_paid_for, amount, currency
          FROM refund_requests WHERE id = ? LIMIT 1'
     );
     if (!$stmt) {
-        return ['email' => $emailOut, 'whatsapp' => $waOut];
+        return ['email' => $emailOut, 'whatsapp' => $waOut, 'env' => $envDiag];
     }
     $stmt->bind_param('i', $id);
     $stmt->execute();
@@ -386,7 +446,7 @@ function pcvc_notify_refund_request_change(
             $waOut['error'] = 'Request not found.';
         }
 
-        return ['email' => $emailOut, 'whatsapp' => $waOut];
+        return ['email' => $emailOut, 'whatsapp' => $waOut, 'env' => $envDiag];
     }
 
     $name = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
@@ -397,36 +457,43 @@ function pcvc_notify_refund_request_change(
 
     if ($sendEmail) {
         $to = trim((string) ($row['email'] ?? ''));
+        $emailOut['to'] = $to;
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
             $emailOut['sent'] = false;
-            $emailOut['error'] = 'No valid email on file.';
+            $emailOut['error'] = 'No valid email on this refund request.';
         } else {
             $html = pcvc_refund_notify_email_html($name, $ref, $statusLabel, $service, $amountLine, $adminComment);
             $subj = 'Refund request ' . $ref . ' — ' . $statusLabel;
-            $ok = pcvc_send_commission_html_mail([$to], $subj, $html);
-            $emailOut['sent'] = $ok;
-            $emailOut['error'] = $ok ? '' : 'Email could not be sent.';
+            $em = pcvc_refund_send_email($to, $name, $subj, $html);
+            $emailOut['sent'] = $em['sent'];
+            $emailOut['error'] = $em['error'];
         }
     }
 
     if ($sendWhatsapp) {
         $phone = trim((string) ($row['phone'] ?? ''));
-        $r = pcvc_send_refund_status_whatsapp(
-            $phone,
-            $name,
-            $ref,
-            $statusLabel,
-            $service,
-            $amountLine,
-            $adminComment
-        );
-        $waOut['sent'] = $r['sent'];
-        $waOut['method'] = $r['method'];
-        $waOut['error'] = $r['error'];
-        if (!empty($r['detail'])) {
-            $waOut['detail'] = $r['detail'];
+        try {
+            $r = pcvc_send_refund_status_whatsapp(
+                $phone,
+                $name,
+                $ref,
+                $statusLabel,
+                $service,
+                $amountLine,
+                $adminComment
+            );
+            $waOut['sent'] = $r['sent'];
+            $waOut['method'] = $r['method'];
+            $waOut['error'] = $r['error'];
+            $waOut['to'] = $r['to'] ?? '';
+            if (!empty($r['detail'])) {
+                $waOut['detail'] = $r['detail'];
+            }
+        } catch (Throwable $e) {
+            $waOut['sent'] = false;
+            $waOut['error'] = 'WhatsApp: ' . $e->getMessage();
         }
     }
 
-    return ['email' => $emailOut, 'whatsapp' => $waOut];
+    return ['email' => $emailOut, 'whatsapp' => $waOut, 'env' => $envDiag];
 }

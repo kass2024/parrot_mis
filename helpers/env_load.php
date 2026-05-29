@@ -145,6 +145,13 @@ function xander_env_get(string $key): string
             'SMTP_PASSWORD' => true,
             'SMTP_FROM_EMAIL' => true,
             'SMTP_FROM_NAME' => true,
+            'WHATSAPP_TOKEN' => true,
+            'WHATSAPP_REFUND_TEMPLATE_NAME' => true,
+            'WHATSAPP_REFUND_TEMPLATE_LANG' => true,
+            'WHATSAPP_REFUND_TEMPLATE_PARAMS' => true,
+            'WHATSAPP_COMMISSION_TEMPLATE_NAME' => true,
+            'WHATSAPP_COMMISSION_TEMPLATE_LANG' => true,
+            'WHATSAPP_COMMISSION_TEMPLATE_PARAMS' => true,
             'APP_PUBLIC_URL' => true,
         ];
     }

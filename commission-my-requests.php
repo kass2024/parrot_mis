@@ -21,7 +21,7 @@ pcvc_ensure_commission_requests_schema($conn);
 
 $uidStr = (string) $userId;
 $stmt = $conn->prepare(
-    'SELECT id, request_status, recruited_name, amount_usd, amount_rwf, submission_date, created_at, comments
+    'SELECT id, request_status, recruited_name, amount_usd, amount_rwf, submission_date, created_at, comments, rejection_reason
      FROM commission_requests
      WHERE user_id = ? OR CAST(user_id AS UNSIGNED) = ?
      ORDER BY id DESC'
@@ -86,9 +86,14 @@ $labels = [
               <tr>
                 <td class="font-monospace"><?= $rid ?></td>
                 <td>
-                  <span class="badge <?= $locked ? 'bg-warning text-dark' : 'bg-secondary' ?>">
+                  <span class="badge <?= $st === 'rejected' ? 'bg-danger' : ($locked ? 'bg-warning text-dark' : 'bg-secondary') ?>">
                     <?= htmlspecialchars($labels[$st] ?? $st, ENT_QUOTES, 'UTF-8') ?>
                   </span>
+                  <?php if ($st === 'rejected' && trim((string) ($r['rejection_reason'] ?? '')) !== ''): ?>
+                    <div class="small text-danger mt-1" style="max-width:280px;line-height:1.35;">
+                      <strong>Reason:</strong> <?= nl2br(htmlspecialchars((string) $r['rejection_reason'], ENT_QUOTES, 'UTF-8')) ?>
+                    </div>
+                  <?php endif; ?>
                   <?php if ($locked): ?>
                     <span class="small text-muted d-block">Editing locked</span>
                   <?php endif; ?>

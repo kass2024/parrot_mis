@@ -1,8 +1,10 @@
 <?php
 declare(strict_types=1);
 
+ob_start();
 session_start();
 header('Content-Type: application/json; charset=UTF-8');
+@set_time_limit(90);
 
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/helpers/role.php';
@@ -10,6 +12,9 @@ require_once dirname(__DIR__) . '/helpers/refund_requests_schema.php';
 
 function refund_admin_respond(array $data, int $code = 200): void
 {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     http_response_code($code);
     echo json_encode($data, JSON_UNESCAPED_UNICODE);
     exit;
@@ -149,14 +154,36 @@ try {
     $notifyResult = null;
     if ($notifyEmail || $notifyWhatsapp) {
         require_once dirname(__DIR__) . '/helpers/refund_status_notify.php';
-        $notifyResult = pcvc_notify_refund_request_change(
-            $conn,
-            $id,
-            $label,
-            $notifyEmail,
-            $notifyWhatsapp,
-            $commentForStudent
-        );
+        try {
+            $notifyResult = pcvc_notify_refund_request_change(
+                $conn,
+                $id,
+                $label,
+                $notifyEmail,
+                $notifyWhatsapp,
+                $commentForStudent
+            );
+        } catch (Throwable $notifyEx) {
+            error_log('[refund-admin-update] notify: ' . $notifyEx->getMessage());
+            $notifyResult = [
+                'email' => [
+                    'requested' => $notifyEmail,
+                    'sent' => $notifyEmail ? false : null,
+                    'error' => $notifyEmail ? ('Notify error: ' . $notifyEx->getMessage()) : '',
+                    'to' => '',
+                ],
+                'whatsapp' => [
+                    'requested' => $notifyWhatsapp,
+                    'sent' => $notifyWhatsapp ? false : null,
+                    'method' => '',
+                    'error' => $notifyWhatsapp ? ('Notify error: ' . $notifyEx->getMessage()) : '',
+                    'to' => '',
+                ],
+                'env' => function_exists('pcvc_refund_notify_env_diagnosis')
+                    ? pcvc_refund_notify_env_diagnosis()
+                    : [],
+            ];
+        }
     }
 
     $_SESSION['refund_admin_csrf'] = bin2hex(random_bytes(32));
@@ -182,6 +209,9 @@ try {
 
     refund_admin_respond($out);
 } catch (Throwable $e) {
-    error_log('[refund-admin-update] ' . $e->getMessage());
-    refund_admin_respond(['ok' => false, 'error' => 'Server error while saving. Please try again.'], 500);
+    error_log('[refund-admin-update] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    refund_admin_respond([
+        'ok' => false,
+        'error' => 'Server error while saving: ' . $e->getMessage(),
+    ], 500);
 }

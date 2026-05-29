@@ -711,6 +711,7 @@ function pcvc_commission_step_index(string $status, array $order): int
           'submission_date' => $r['submission_date'] ?? '',
           'comments' => $r['comments'] ?? '',
           'internal_note' => $r['internal_note'] ?? '',
+          'rejection_reason' => $r['rejection_reason'] ?? '',
           'amount_usd' => $usd,
           'commission_currency' => strtoupper(trim((string) ($r['commission_currency'] ?? 'USD'))) ?: 'USD',
           'amount_rwf' => $rwf,
@@ -730,6 +731,9 @@ function pcvc_commission_step_index(string $status, array $order): int
             <div class="process-panel-title"><i class="fas fa-route"></i> Request progress</div>
             <div class="commission-rejected-banner" style="display: <?= $isRejected ? 'block' : 'none' ?>;">
               <div class="status-pill rejected" style="margin-bottom:10px;"><i class="fas fa-times-circle"></i> Rejected</div>
+              <?php if ($isRejected && trim((string) ($r['rejection_reason'] ?? '')) !== ''): ?>
+                <p style="font-size:0.82rem;color:#64748b;margin:0;line-height:1.45;"><strong>Reason:</strong> <?= htmlspecialchars((string) $r['rejection_reason'], ENT_QUOTES, 'UTF-8') ?></p>
+              <?php endif; ?>
             </div>
             <div class="process-tracker" style="display: <?= $isRejected ? 'none' : 'flex' ?>;">
                 <?php foreach ($commissionStepOrder as $i => $stepKey):
@@ -811,8 +815,9 @@ function pcvc_commission_step_index(string $status, array $order): int
       </div>
       <div class="form-fld" id="commissionNotifyMessageWrap" style="display:none;margin-top:14px;margin-bottom:4px;">
         <label style="display:block;font-size:0.78rem;font-weight:700;color:#64748b;margin-bottom:4px;">Rejection reason</label>
-        <textarea id="commissionNotifyMessage" rows="3" maxlength="2000" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.9rem;resize:vertical;" placeholder="Explain why the request was rejected — included in email / WhatsApp"></textarea>
-        <p style="margin:6px 0 0;font-size:0.75rem;color:#64748b;">Shown only when status is <strong>Rejected</strong> and you send Email or WhatsApp (same flow as job applications).</p>
+        <textarea id="commissionNotifyMessage" rows="3" maxlength="2000" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.9rem;resize:vertical;" placeholder="Explain why this commission request was rejected…"></textarea>
+        <p style="margin:6px 0 0;font-size:0.75rem;color:#64748b;">Required when you choose <strong>Email</strong>, <strong>WhatsApp</strong>, or <strong>Both</strong>. Saved on the request even with “Record only”.</p>
+        <p style="margin:6px 0 0;font-size:0.72rem;color:#94a3b8;">WhatsApp uses Meta template <strong>pcvc_commission_update</strong> (4 variables) — see .env.example.</p>
       </div>
     </div>
     <div class="commission-notify-footer">
@@ -937,10 +942,7 @@ function syncCommissionNotifyMessageWrap() {
   const wrap = document.getElementById('commissionNotifyMessageWrap');
   if (!wrap) return;
   const p = commissionNotifyPending;
-  const active = document.querySelector('#commissionInlineNotifyGrid .commission-notify-channel.active');
-  const ne = active ? parseInt(active.getAttribute('data-ne'), 10) || 0 : 0;
-  const nw = active ? parseInt(active.getAttribute('data-nw'), 10) || 0 : 0;
-  const show = p && p.newKey === 'rejected' && (ne || nw);
+  const show = p && p.newKey === 'rejected';
   wrap.style.display = show ? 'block' : 'none';
   if (!show) {
     const ta = document.getElementById('commissionNotifyMessage');
@@ -996,12 +998,33 @@ async function commissionSubmitStatusChange(sel, id, statusKey, prevKey, ne, nw,
     sel.dataset.prev = statusKey;
     const card = sel.closest('.applicant-card');
     updateCommissionCardProcessUI(card, statusKey);
+    if (statusKey === 'rejected' && msg) {
+      const banner = card ? card.querySelector('.commission-rejected-banner') : null;
+      if (banner) {
+        let reasonEl = banner.querySelector('.commission-rejection-reason');
+        if (!reasonEl && msg.trim() !== '') {
+          reasonEl = document.createElement('p');
+          reasonEl.className = 'commission-rejection-reason';
+          reasonEl.style.cssText = 'font-size:0.82rem;color:#64748b;margin:0;line-height:1.45;';
+          banner.appendChild(reasonEl);
+        }
+        if (reasonEl) {
+          if (msg.trim() !== '') {
+            reasonEl.innerHTML = '<strong>Reason:</strong> ' + escapeHtml(msg.trim());
+            reasonEl.style.display = '';
+          } else {
+            reasonEl.style.display = 'none';
+          }
+        }
+      }
+    }
     commissionNotifyToastFromResponse(j, ne, nw);
     const btn = card.querySelector('.open-commission-modal');
     if (btn) {
       try {
         const d = JSON.parse(btn.getAttribute('data-commission'));
         d.request_status = statusKey;
+        if (statusKey === 'rejected') d.rejection_reason = msg || '';
         btn.setAttribute('data-commission', JSON.stringify(d));
       } catch (e2) {}
     }
@@ -1039,10 +1062,10 @@ document.getElementById('commissionNotifyConfirm').addEventListener('click', fun
   const msg = (document.getElementById('commissionNotifyMessage') || {}).value || '';
   const msgTrim = String(msg).trim();
   if (p.newKey === 'rejected' && (ne || nw) && msgTrim === '') {
-    alert('Please enter a message before notifying the agent about a rejection.');
+    alert('Please enter a rejection reason before sending Email or WhatsApp.');
     return;
   }
-  const payloadMsg = (p.newKey === 'rejected' && (ne || nw)) ? msgTrim : '';
+  const payloadMsg = p.newKey === 'rejected' ? msgTrim : '';
   closeCommissionNotifyModal();
   commissionSubmitStatusChange(p.sel, p.id, p.newKey, p.prevKey, ne, nw, payloadMsg);
 });
@@ -1066,7 +1089,18 @@ document.addEventListener('change', function(e) {
   document.getElementById('commissionNotifyStatusLabel').textContent = labels[newKey] || newKey;
   document.querySelectorAll('#commissionInlineNotifyGrid .commission-notify-channel').forEach((b, i) => b.classList.toggle('active', i === 0));
   const ta = document.getElementById('commissionNotifyMessage');
-  if (ta) ta.value = '';
+  if (ta) {
+    const card = sel.closest('.applicant-card');
+    const btn = card ? card.querySelector('.open-commission-modal') : null;
+    let existingReason = '';
+    if (btn) {
+      try {
+        const d = JSON.parse(btn.getAttribute('data-commission'));
+        existingReason = (d.rejection_reason || '').trim();
+      } catch (e2) {}
+    }
+    ta.value = newKey === 'rejected' ? existingReason : '';
+  }
   commissionNotifyPending = { sel, id, newKey, prevKey };
   openCommissionNotifyModal();
   syncCommissionNotifyMessageWrap();
@@ -1128,7 +1162,8 @@ function openCommissionModal(data) {
       </div>
       <div class="form-fld" id="mNotifyRejectionWrap" style="display:none;margin-top:12px;">
         <label style="display:block;font-size:0.78rem;font-weight:700;color:#64748b;margin-bottom:4px;">Rejection reason</label>
-        <textarea id="mNotifyMsg" rows="3" maxlength="2000" placeholder="Required when status is Rejected and you send Email or WhatsApp"></textarea>
+        <textarea id="mNotifyMsg" rows="3" maxlength="2000" placeholder="Explain why this commission request was rejected…">${escapeHtml(data.rejection_reason || '')}</textarea>
+        <p style="margin:6px 0 0;font-size:0.75rem;color:#64748b;">Required when status is <strong>Rejected</strong> and you send Email or WhatsApp. WhatsApp template: <strong>pcvc_commission_update</strong>.</p>
       </div>
       <button type="button" class="search-btn" id="mSaveStatus" style="border:none;margin-top:14px;"><i class="fas fa-save"></i> Save status</button>
       <p id="mSaveMsg" style="margin-top:10px;font-size:0.85rem;color:#64748b;"></p>
@@ -1148,10 +1183,7 @@ function openCommissionModal(data) {
   function syncManageRejectionNote() {
     const wrap = document.getElementById('mNotifyRejectionWrap');
     const st = document.getElementById('mStatus').value;
-    const active = document.querySelector('#mNotifyGrid .commission-notify-channel.active');
-    const ne = active ? parseInt(active.getAttribute('data-ne'), 10) || 0 : 0;
-    const nw = active ? parseInt(active.getAttribute('data-nw'), 10) || 0 : 0;
-    const show = st === 'rejected' && (ne || nw);
+    const show = st === 'rejected';
     if (wrap) wrap.style.display = show ? 'block' : 'none';
     if (!show) {
       const ta = document.getElementById('mNotifyMsg');
@@ -1178,9 +1210,9 @@ function openCommissionModal(data) {
     const ne = active ? parseInt(active.getAttribute('data-ne'), 10) || 0 : 0;
     const nw = active ? parseInt(active.getAttribute('data-nw'), 10) || 0 : 0;
     const nmsgRaw = (document.getElementById('mNotifyMsg').value || '').trim();
-    const nmsg = (st === 'rejected' && (ne || nw)) ? nmsgRaw : '';
+    const nmsg = st === 'rejected' ? nmsgRaw : '';
     if (st === 'rejected' && (ne || nw) && nmsgRaw === '') {
-      msg.textContent = 'Enter a message before notifying on rejection.';
+      msg.textContent = 'Enter a rejection reason before sending Email or WhatsApp.';
       msg.style.color = '#b91c1c';
       return;
     }
@@ -1201,6 +1233,7 @@ function openCommissionModal(data) {
       const j = await r.json();
       if (j.ok) {
         data.request_status = j.request_status;
+        if (st === 'rejected') data.rejection_reason = nmsgRaw;
         msg.textContent = 'Saved.';
         msg.style.color = '#065f46';
         commissionNotifyToastFromResponse(j, ne, nw);

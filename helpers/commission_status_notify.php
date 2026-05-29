@@ -2,15 +2,160 @@
 declare(strict_types=1);
 
 /**
- * Commission status email + WhatsApp — same delivery model as job applications:
- * @see helpers/application_status_notify.php (xander_whatsapp_send_template_or_session)
- * WhatsApp: tries Meta template when configured; otherwise free-form text inside the 24h session window.
+ * Commission status email + WhatsApp — uses .env SMTP_* and WHATSAPP_* (Meta template when configured).
+ *
+ * WhatsApp template (default pcvc_commission_update): register in Meta Business → WhatsApp → Message templates.
+ * See .env.example for Meta copy-paste body (default 4 variables — passes Meta length rules).
  */
 
 require_once __DIR__ . '/env_load.php';
+require_once __DIR__ . '/mail_smtp.php';
 require_once __DIR__ . '/student_status_notify.php';
-require_once __DIR__ . '/../includes/commission_mail_helper.php';
 require_once __DIR__ . '/../includes/company_branding.php';
+
+use PHPMailer\PHPMailer\Exception as MailerException;
+use PHPMailer\PHPMailer\PHPMailer;
+
+const PCVC_COMMISSION_WA_VAR_MAX = 900;
+
+function pcvc_commission_whatsapp_template_config(): array
+{
+    xander_load_env_file();
+    $name = trim(xander_env_get('WHATSAPP_COMMISSION_TEMPLATE_NAME'));
+    if ($name === '') {
+        $name = 'pcvc_commission_update';
+    }
+    $lang = trim(xander_env_get('WHATSAPP_COMMISSION_TEMPLATE_LANG'));
+    if ($lang === '') {
+        $lang = 'en';
+    }
+    $params = (int) trim(xander_env_get('WHATSAPP_COMMISSION_TEMPLATE_PARAMS'));
+    if ($params < 1) {
+        $params = 4;
+    }
+
+    return ['name' => $name, 'lang' => $lang, 'params' => $params];
+}
+
+function pcvc_commission_comment_parts_for_whatsapp(string $comment, int $partCount = 2, int $maxLen = PCVC_COMMISSION_WA_VAR_MAX): array
+{
+    $partCount = max(1, min(3, $partCount));
+    $text = trim(preg_replace("/\r\n|\r/", "\n", $comment) ?? '');
+    $out = [];
+
+    if ($text === '') {
+        for ($i = 0; $i < $partCount; $i++) {
+            $out[] = '—';
+        }
+
+        return $out;
+    }
+
+    $remaining = $text;
+    for ($i = 0; $i < $partCount; $i++) {
+        if ($remaining === '') {
+            $out[] = '—';
+            continue;
+        }
+        if (strlen($remaining) <= $maxLen) {
+            $out[] = $remaining;
+            $remaining = '';
+            continue;
+        }
+        $chunk = substr($remaining, 0, $maxLen);
+        $breakAt = strrpos($chunk, "\n");
+        if ($breakAt === false || $breakAt < (int) ($maxLen * 0.5)) {
+            $breakAt = strrpos($chunk, ' ');
+        }
+        if ($breakAt !== false && $breakAt > (int) ($maxLen * 0.4)) {
+            $piece = substr($remaining, 0, $breakAt);
+            $remaining = ltrim(substr($remaining, $breakAt));
+        } else {
+            $piece = $chunk;
+            $remaining = ltrim(substr($remaining, $maxLen));
+        }
+        $out[] = $piece;
+    }
+
+    if ($remaining !== '' && $partCount > 0) {
+        $last = count($out) - 1;
+        $merged = trim($out[$last] . ' ' . $remaining);
+        $out[$last] = xander_notify_text_clip($merged, $maxLen);
+    }
+
+    while (count($out) < $partCount) {
+        $out[] = '—';
+    }
+
+    return array_slice($out, 0, $partCount);
+}
+
+/**
+ * @return list<string>
+ */
+function pcvc_commission_whatsapp_template_body_texts(
+    string $name,
+    int $requestId,
+    string $statusLabel,
+    string $recruitedName,
+    string $extraMessage,
+    int $paramCount
+): array {
+    $safeName = xander_whatsapp_sanitize_user_text($name !== '' ? $name : 'Agent');
+    $safeRef = xander_whatsapp_sanitize_user_text('#' . (int) $requestId);
+    $safeStatus = xander_whatsapp_sanitize_user_text($statusLabel);
+    $safeStudent = xander_whatsapp_sanitize_user_text(trim($recruitedName) !== '' ? trim($recruitedName) : '—');
+    $comment = trim($extraMessage);
+
+    if ($paramCount <= 4) {
+        $detailLines = [];
+        if (trim($recruitedName) !== '') {
+            $detailLines[] = 'Student: ' . trim($recruitedName);
+        }
+        if ($comment !== '') {
+            $detailLines[] = (stripos($statusLabel, 'reject') !== false ? 'Reason: ' : 'Message: ') . $comment;
+        }
+        $detailBlock = $detailLines !== [] ? implode("\n", $detailLines) : 'No additional details.';
+
+        return [
+            $safeName,
+            $safeRef,
+            $safeStatus,
+            xander_whatsapp_sanitize_user_text(
+                xander_notify_text_clip($detailBlock, PCVC_COMMISSION_WA_VAR_MAX)
+            ),
+        ];
+    }
+
+    if ($paramCount === 5) {
+        return [
+            $safeName,
+            $safeRef,
+            $safeStatus,
+            $safeStudent,
+            xander_whatsapp_sanitize_user_text(
+                xander_notify_text_clip($comment !== '' ? $comment : '—', PCVC_COMMISSION_WA_VAR_MAX)
+            ),
+        ];
+    }
+
+    $commentParts = pcvc_commission_comment_parts_for_whatsapp($comment, 2);
+    $texts = [
+        $safeName,
+        $safeRef,
+        $safeStatus,
+        $safeStudent,
+        xander_whatsapp_sanitize_user_text($commentParts[0]),
+        xander_whatsapp_sanitize_user_text($commentParts[1]),
+    ];
+
+    if ($paramCount > 6) {
+        $extraParts = pcvc_commission_comment_parts_for_whatsapp($comment, 3);
+        $texts[] = xander_whatsapp_sanitize_user_text($extraParts[2]);
+    }
+
+    return array_slice($texts, 0, $paramCount);
+}
 
 function pcvc_commission_notify_email_html(
     string $name,
@@ -27,9 +172,16 @@ function pcvc_commission_notify_email_html(
     $msgBlock = '';
     if ($msg !== '') {
         $safeM = nl2br(htmlspecialchars($msg, ENT_QUOTES | ENT_HTML5, 'UTF-8'));
-        $msgBlock = '<div style="margin:16px 0;padding:14px 16px;background:#f0fdf4;border-left:4px solid #427431;border-radius:8px;">'
-            . '<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#166534;">Message from our team</p>'
-            . '<p style="margin:0;font-size:15px;line-height:1.55;color:#1e293b;">' . $safeM . '</p></div>';
+        $isReject = stripos($statusLabel, 'reject') !== false;
+        if ($isReject) {
+            $msgBlock = '<div style="margin:16px 0;padding:14px 16px;background:#fef2f2;border-left:4px solid #b91c1c;border-radius:8px;">'
+                . '<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#991b1b;">Reason for rejection</p>'
+                . '<p style="margin:0;font-size:15px;line-height:1.55;color:#1e293b;">' . $safeM . '</p></div>';
+        } else {
+            $msgBlock = '<div style="margin:16px 0;padding:14px 16px;background:#f0fdf4;border-left:4px solid #427431;border-radius:8px;">'
+                . '<p style="margin:0 0 6px;font-size:12px;font-weight:700;color:#166534;">Message from our team</p>'
+                . '<p style="margin:0;font-size:15px;line-height:1.55;color:#1e293b;">' . $safeM . '</p></div>';
+        }
     }
 
     return '<div style="font-family:Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;">'
@@ -68,7 +220,7 @@ function pcvc_commission_notify_whatsapp_body(
     $msg = trim($extraMessage);
     if ($msg !== '') {
         $parts[] = '';
-        $parts[] = '*Message from our team*';
+        $parts[] = stripos($statusLabel, 'reject') !== false ? '*Reason for rejection*' : '*Message from our team*';
         $parts[] = xander_whatsapp_sanitize_user_text($msg);
     }
     $parts[] = '';
@@ -78,7 +230,50 @@ function pcvc_commission_notify_whatsapp_body(
 }
 
 /**
- * @return array{sent:bool,method:string,error:string,detail:string}
+ * @return array{sent: bool, error: string}
+ */
+function pcvc_commission_send_email(string $toEmail, string $toName, string $subject, string $htmlBody): array
+{
+    xander_load_env_file();
+    $out = ['sent' => false, 'error' => ''];
+
+    if ($toEmail === '' || !filter_var($toEmail, FILTER_VALIDATE_EMAIL)) {
+        $out['error'] = 'Invalid recipient email.';
+
+        return $out;
+    }
+
+    $host = xander_env_get('SMTP_HOST');
+    if ($host === '') {
+        $out['error'] = 'SMTP_HOST is not set in .env';
+
+        return $out;
+    }
+
+    $mail = null;
+    try {
+        $mail = xander_create_phpmailer();
+        $mail->addAddress($toEmail, $toName !== '' ? $toName : $toEmail);
+        $mail->Subject = $subject;
+        $mail->Body = $htmlBody;
+        $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));
+        $out['sent'] = $mail->send();
+        if (!$out['sent']) {
+            $info = $mail->ErrorInfo ?? '';
+            $out['error'] = $info !== '' ? ('SMTP: ' . $info) : 'SMTP send returned false.';
+        }
+    } catch (MailerException $e) {
+        $info = ($mail instanceof PHPMailer) ? (string) ($mail->ErrorInfo ?? '') : '';
+        $out['error'] = 'Email: ' . $e->getMessage() . ($info !== '' ? ' (' . $info . ')' : '');
+    } catch (Throwable $e) {
+        $out['error'] = 'Email: ' . $e->getMessage();
+    }
+
+    return $out;
+}
+
+/**
+ * @return array{sent:bool,method:string,error:string,detail:string,to:string}
  */
 function pcvc_send_commission_status_whatsapp(
     string $phoneRaw,
@@ -88,11 +283,19 @@ function pcvc_send_commission_status_whatsapp(
     string $recruitedName,
     string $extraMessage
 ): array {
-    $empty = ['sent' => false, 'method' => '', 'error' => '', 'detail' => ''];
-    $token = xander_env_get('WHATSAPP_ACCESS_TOKEN');
-    $phoneId = xander_env_get('WHATSAPP_PHONE_NUMBER_ID');
-    if ($token === '' || $phoneId === '') {
-        $empty['error'] = 'WhatsApp is not configured (missing token or phone number ID).';
+    $empty = ['sent' => false, 'method' => '', 'error' => '', 'detail' => '', 'to' => ''];
+    $token = trim(xander_env_get('WHATSAPP_ACCESS_TOKEN'));
+    if ($token === '') {
+        $token = trim(xander_env_get('WHATSAPP_TOKEN'));
+    }
+    $phoneId = trim(xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
+    if ($token === '') {
+        $empty['error'] = 'WHATSAPP_ACCESS_TOKEN / WHATSAPP_TOKEN not set in .env';
+
+        return $empty;
+    }
+    if ($phoneId === '') {
+        $empty['error'] = 'WHATSAPP_PHONE_NUMBER_ID not set in .env';
 
         return $empty;
     }
@@ -100,30 +303,51 @@ function pcvc_send_commission_status_whatsapp(
     $defaultCcOrNull = $defaultCc !== '' ? $defaultCc : null;
     $to = xander_format_phone_for_whatsapp_e164($phoneRaw, $defaultCcOrNull);
     if ($to === null) {
-        $empty['error'] = 'Invalid phone number for WhatsApp.';
+        $empty['error'] = 'Invalid phone for WhatsApp: "' . $phoneRaw . '". Use +250… or set WHATSAPP_DEFAULT_COUNTRY_CODE=250 in .env';
 
         return $empty;
     }
+    $empty['to'] = $to;
     if (!function_exists('curl_init')) {
-        $empty['error'] = 'Server has no cURL.';
+        $empty['error'] = 'Server has no cURL extension.';
 
         return $empty;
     }
+
+    $tpl = pcvc_commission_whatsapp_template_config();
+    $templateBodyTexts = pcvc_commission_whatsapp_template_body_texts(
+        $name,
+        $requestId,
+        $statusLabel,
+        $recruitedName,
+        $extraMessage,
+        $tpl['params']
+    );
 
     $version = xander_env_get('META_GRAPH_VERSION') ?: 'v19.0';
-    $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode((string) $phoneId) . '/messages';
-    $body = pcvc_commission_notify_whatsapp_body($name, $requestId, $statusLabel, $recruitedName, $extraMessage);
+    $url = 'https://graph.facebook.com/' . rawurlencode($version) . '/' . rawurlencode($phoneId) . '/messages';
+    $fallback = pcvc_commission_notify_whatsapp_body($name, $requestId, $statusLabel, $recruitedName, $extraMessage);
 
-    return xander_whatsapp_send_template_or_session(
+    $r = xander_whatsapp_send_template_or_session(
         $to,
         $url,
         $token,
-        '',
-        'en_US',
-        0,
-        [],
-        $body
+        $tpl['name'],
+        $tpl['lang'],
+        $tpl['params'],
+        $templateBodyTexts,
+        $fallback
     );
+    $r['to'] = $to;
+    if (!$r['sent'] && ($r['error'] === '' || $r['error'] === 'Unknown error')) {
+        $decoded = is_string($r['detail'] ?? null) ? json_decode($r['detail'], true) : null;
+        $hint = xander_whatsapp_user_hint(xander_whatsapp_extract_error($decoded) ?? ['message' => '']);
+        if ($hint !== '') {
+            $r['error'] = $hint;
+        }
+    }
+
+    return $r;
 }
 
 /**
@@ -144,8 +368,8 @@ function pcvc_notify_commission_request_change(
 
     xander_load_env_file();
 
-    $emailOut = ['requested' => $sendEmail, 'sent' => null, 'error' => ''];
-    $waOut = ['requested' => $sendWhatsapp, 'sent' => null, 'method' => '', 'error' => ''];
+    $emailOut = ['requested' => $sendEmail, 'sent' => null, 'error' => '', 'to' => ''];
+    $waOut = ['requested' => $sendWhatsapp, 'sent' => null, 'method' => '', 'error' => '', 'to' => ''];
 
     $stmt = $conn->prepare(
         'SELECT id, first_name, last_name, email, phone, recruited_name FROM commission_requests WHERE id = ? LIMIT 1'
@@ -175,24 +399,31 @@ function pcvc_notify_commission_request_change(
 
     if ($sendEmail) {
         $to = trim((string) ($row['email'] ?? ''));
+        $emailOut['to'] = $to;
         if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
             $emailOut['sent'] = false;
             $emailOut['error'] = 'No valid email on file.';
         } else {
             $html = pcvc_commission_notify_email_html($name, $id, $statusLabel, $recruited, $notifyMessage);
             $subj = 'Commission request #' . $id . ' — ' . $statusLabel;
-            $ok = pcvc_send_commission_html_mail([$to], $subj, $html);
-            $emailOut['sent'] = $ok;
-            $emailOut['error'] = $ok ? '' : 'Email could not be sent.';
+            $em = pcvc_commission_send_email($to, $name, $subj, $html);
+            $emailOut['sent'] = $em['sent'];
+            $emailOut['error'] = $em['error'];
         }
     }
 
     if ($sendWhatsapp) {
         $phone = trim((string) ($row['phone'] ?? ''));
-        $r = pcvc_send_commission_status_whatsapp($phone, $name, $id, $statusLabel, $recruited, $notifyMessage);
-        $waOut['sent'] = $r['sent'];
-        $waOut['method'] = $r['method'];
-        $waOut['error'] = $r['error'];
+        try {
+            $r = pcvc_send_commission_status_whatsapp($phone, $name, $id, $statusLabel, $recruited, $notifyMessage);
+            $waOut['sent'] = $r['sent'];
+            $waOut['method'] = $r['method'];
+            $waOut['error'] = $r['error'];
+            $waOut['to'] = $r['to'] ?? '';
+        } catch (Throwable $e) {
+            $waOut['sent'] = false;
+            $waOut['error'] = 'WhatsApp: ' . $e->getMessage();
+        }
     }
 
     return ['email' => $emailOut, 'whatsapp' => $waOut];

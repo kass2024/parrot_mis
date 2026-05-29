@@ -64,6 +64,9 @@ if (!empty($input['notify_requester']) && !isset($input['notify_email']) && !iss
 $notifyMessage = isset($input['notify_message']) && is_string($input['notify_message'])
     ? trim($input['notify_message'])
     : '';
+if ($notifyMessage === '' && isset($input['rejection_reason']) && is_string($input['rejection_reason'])) {
+    $notifyMessage = trim($input['rejection_reason']);
+}
 
 $newStatus = isset($input['request_status']) && is_string($input['request_status'])
     ? trim($input['request_status'])
@@ -79,7 +82,7 @@ if ($touchInternal && is_string($input['internal_note'])) {
 }
 
 if ($newStatus === 'rejected' && ($notifyEmail || $notifyWhatsapp) && $notifyMessage === '') {
-    respond(['ok' => false, 'error' => 'Enter a short message for the agent before sending email or WhatsApp for a rejected request.'], 400);
+    respond(['ok' => false, 'error' => 'Enter a rejection reason before sending email or WhatsApp.'], 400);
 }
 
 $q = $conn->prepare(
@@ -94,13 +97,41 @@ if (!$row) {
 }
 
 if ($touchInternal) {
-    $upd = $conn->prepare(
-        'UPDATE commission_requests SET request_status = ?, internal_note = NULLIF(?, "") WHERE id = ? LIMIT 1'
-    );
-    $upd->bind_param('ssi', $newStatus, $internal, $id);
+    if ($newStatus === 'rejected') {
+        $upd = $conn->prepare(
+            'UPDATE commission_requests SET request_status = ?, internal_note = NULLIF(?, ""), rejection_reason = NULLIF(?, "") WHERE id = ? LIMIT 1'
+        );
+        if (!$upd) {
+            respond(['ok' => false, 'error' => 'Database prepare failed.'], 500);
+        }
+        $upd->bind_param('sssi', $newStatus, $internal, $notifyMessage, $id);
+    } else {
+        $upd = $conn->prepare(
+            'UPDATE commission_requests SET request_status = ?, internal_note = NULLIF(?, ""), rejection_reason = NULL WHERE id = ? LIMIT 1'
+        );
+        if (!$upd) {
+            respond(['ok' => false, 'error' => 'Database prepare failed.'], 500);
+        }
+        $upd->bind_param('ssi', $newStatus, $internal, $id);
+    }
 } else {
-    $upd = $conn->prepare('UPDATE commission_requests SET request_status = ? WHERE id = ? LIMIT 1');
-    $upd->bind_param('si', $newStatus, $id);
+    if ($newStatus === 'rejected') {
+        $upd = $conn->prepare(
+            'UPDATE commission_requests SET request_status = ?, rejection_reason = NULLIF(?, "") WHERE id = ? LIMIT 1'
+        );
+        if (!$upd) {
+            respond(['ok' => false, 'error' => 'Database prepare failed.'], 500);
+        }
+        $upd->bind_param('ssi', $newStatus, $notifyMessage, $id);
+    } else {
+        $upd = $conn->prepare(
+            'UPDATE commission_requests SET request_status = ?, rejection_reason = NULL WHERE id = ? LIMIT 1'
+        );
+        if (!$upd) {
+            respond(['ok' => false, 'error' => 'Database prepare failed.'], 500);
+        }
+        $upd->bind_param('si', $newStatus, $id);
+    }
 }
 if (!$upd->execute()) {
     $upd->close();
