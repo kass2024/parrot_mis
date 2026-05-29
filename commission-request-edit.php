@@ -135,7 +135,10 @@ $dis = $locked ? 'disabled' : '';
   <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5.min.css" rel="stylesheet">
   <style>
     body { background: #f8fafc; font-family: Inter, system-ui, sans-serif; padding: 20px; }
-    .form-section { background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 20px; border: 1px solid #e2e8f0; }
+    .form-section { background: #fff; border-radius: 16px; padding: 24px; margin-bottom: 20px; border: 1px solid #e2e8f0; position: relative; overflow: visible; }
+    .form-section-student-select.select2-section-open { z-index: 100; }
+    .select2-container--open { z-index: 2000 !important; }
+    .select2-dropdown { z-index: 2001 !important; box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16); }
     .rwf-preview-box { padding: 12px 16px; border-radius: 10px; background: rgba(66,116,49,0.08); border: 1px solid rgba(66,116,49,0.2); font-weight: 600; }
   </style>
   <script src="js/commission_fx.js?v=2"></script>
@@ -167,7 +170,7 @@ $dis = $locked ? 'disabled' : '';
       </div>
     </div>
 
-    <div class="form-section">
+    <div class="form-section form-section-student-select" id="studentSelectionSection">
       <h3 class="h5">Student *</h3>
       <select id="studentSelect" class="form-select" name="recruited_student_id" required <?= $dis ?>>
         <option value="">— Select —</option>
@@ -291,7 +294,19 @@ $dis = $locked ? 'disabled' : '';
 const LOCKED = <?= $locked ? 'true' : 'false' ?>;
 
 if (!LOCKED) {
-  $('#studentSelect').select2({ theme: 'bootstrap-5', width: '100%' });
+  const $studentSelect = $('#studentSelect');
+  $studentSelect.select2({
+    theme: 'bootstrap-5',
+    width: '100%',
+    dropdownParent: $(document.body)
+  });
+  const studentSection = document.getElementById('studentSelectionSection');
+  $studentSelect.on('select2:open', function () {
+    if (studentSection) studentSection.classList.add('select2-section-open');
+  });
+  $studentSelect.on('select2:close', function () {
+    if (studentSection) studentSection.classList.remove('select2-section-open');
+  });
   document.getElementById('commissionEditForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const btn = document.getElementById('saveBtn');

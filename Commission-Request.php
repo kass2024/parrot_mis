@@ -223,6 +223,11 @@ body {
   margin-bottom: 32px;
   box-shadow: 0 8px 25px rgba(15, 23, 42, 0.06);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+  overflow: visible;
+}
+
+.form-section-student-select.select2-section-open {
+  z-index: 100;
 }
 
 .form-section:hover {
@@ -330,6 +335,20 @@ body {
   font-size: 15px;
   border-radius: 12px;
   border: 1px solid #dbe2ea;
+}
+
+/* Select2 dropdown must sit above following form cards */
+.select2-container--open {
+  z-index: 2000 !important;
+}
+.select2-dropdown {
+  z-index: 2001 !important;
+  border-radius: 12px;
+  border-color: #dbe2ea;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.16);
+}
+.select2-container--bootstrap-5 .select2-dropdown .select2-results__option--highlighted {
+  background-color: #427431;
 }
 
 /* ===== RADIO BUTTONS ===== */
@@ -681,7 +700,7 @@ textarea.form-control {
     </section>
 
     <!-- STUDENT SELECTION -->
-    <section class="form-section">
+    <section class="form-section form-section-student-select" id="studentSelectionSection">
       <h3>Student Selection</h3>
       <p class="section-help">Select the student for whom you're requesting commission from the list below.</p>
       <div class="row g-4">
@@ -960,7 +979,7 @@ document.addEventListener("DOMContentLoaded", () => {
     placeholder: ajaxStudents ? "Select or search students…" : "Search for a student…",
     width: "100%",
     allowClear: true,
-    dropdownParent: $studentSelect.parent()
+    dropdownParent: window.jQuery(document.body)
   };
 
   if (ajaxStudents) {
@@ -994,6 +1013,14 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   $studentSelect.select2(select2Opts);
+
+  const studentSection = document.getElementById("studentSelectionSection");
+  $studentSelect.on("select2:open", function () {
+    if (studentSection) studentSection.classList.add("select2-section-open");
+  });
+  $studentSelect.on("select2:close", function () {
+    if (studentSection) studentSection.classList.remove("select2-section-open");
+  });
 
   window.jQuery("#studentSelect").on("change", () => {
     setStudentSelectInvalid(false);
