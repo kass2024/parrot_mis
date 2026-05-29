@@ -296,6 +296,13 @@ $cards = [
       'canada-medical-exams-applications.php' => 'View Applications',
     ]
   ],
+  'refund_requests' => [
+    'title' => 'Refund Requests',
+    'icon' => 'bi-cash-stack',
+    'links' => [
+      'refund-requests-report.php' => 'All Refund Requests',
+    ]
+  ],
   'platform' => [
     'title' => 'Platforms management',
     'icon' => 'bi-diagram-3',
@@ -338,7 +345,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'platform', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'refund_requests', 'platform', 'contracts', 'partner_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -2107,6 +2114,37 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           Approved
         </a>
         <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=rejected', 'Rejected')">
+          <i class="bi bi-x-circle"></i>
+          Rejected
+        </a>
+      </div>
+      <?php endif; ?>
+      
+      <?php if (in_array('refund_requests', $allowedSidebarItems)): ?>
+      <!-- Refund Requests (superadmin) -->
+      <a href="#refund_requests" class="sidebar-link" onclick="toggleSidebarMenu('refund_requests')">
+        <i class="bi bi-cash-stack"></i>
+        <span>Refund Requests</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_refund_requests">
+        <a href="#" onclick="loadInFrame('refund-requests-report.php', 'Refund Requests')">
+          <i class="bi bi-list-ul"></i>
+          All Refund Requests
+        </a>
+        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=pending', 'Pending Refunds')">
+          <i class="bi bi-clock"></i>
+          Pending
+        </a>
+        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=under_review', 'Under Review')">
+          <i class="bi bi-eye"></i>
+          Under Review
+        </a>
+        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=approved', 'Approved Refunds')">
+          <i class="bi bi-check-circle"></i>
+          Approved
+        </a>
+        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=rejected', 'Rejected Refunds')">
           <i class="bi bi-x-circle"></i>
           Rejected
         </a>

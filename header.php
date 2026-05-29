@@ -45,6 +45,9 @@ $header_translations = [
         'nav_blog' => 'Blog',
         'nav_payment' => 'Payment',
         'nav_pay_service' => 'Payments Hub',
+        'nav_student' => 'Student',
+        'nav_student_login' => 'Student Login',
+        'nav_request_refund' => 'Request Refund',
         'nav_other_payment' => 'Smart Checkout',
         'nav_mtn_momo' => 'MTN Mobile Money',
         'nav_stripe' => 'Stripe Card Payment',
@@ -70,6 +73,9 @@ $header_translations = [
         'nav_blog' => 'Blog',
         'nav_payment' => 'Paiement',
         'nav_pay_service' => 'Centre de Paiement',
+        'nav_student' => 'Étudiant',
+        'nav_student_login' => 'Connexion Étudiant',
+        'nav_request_refund' => 'Demande de remboursement',
         'nav_other_payment' => 'Paiement Intelligent',
         'nav_mtn_momo' => 'Mobile Money MTN',
         'nav_stripe' => 'Paiement Carte Stripe',
@@ -766,6 +772,20 @@ nav a:hover::after {
     <a href="testimonials.php"><?php echo ht('nav_testimonials'); ?></a>
     <a href="contact.php"><?php echo ht('nav_contact'); ?></a>
    <a href="https://visaconsultantcanada.com/" target="_blank" rel="noopener">E-Learning</a>
+
+    <div class="dropdown" id="navStudentDropdown">
+      <button type="button" class="dropbtn" id="studentDropdownBtn" aria-expanded="false" aria-haspopup="true" aria-controls="studentDropdownMenu">
+        <i class="fas fa-user-graduate"></i> <?php echo ht('nav_student'); ?> <i class="fas fa-chevron-down" aria-hidden="true"></i>
+      </button>
+      <div class="dropdown-content" id="studentDropdownMenu" role="menu">
+        <a href="student-login.php" role="menuitem">
+          <i class="fas fa-sign-in-alt"></i> <?php echo ht('nav_student_login'); ?>
+        </a>
+        <a href="refund-request.php" role="menuitem">
+          <i class="fas fa-undo"></i> <?php echo ht('nav_request_refund'); ?>
+        </a>
+      </div>
+    </div>
     
     <div class="dropdown" id="navPaymentDropdown">
       <button type="button" class="dropbtn" id="paymentDropdownBtn" aria-expanded="false" aria-haspopup="true" aria-controls="paymentDropdownMenu">
@@ -938,6 +958,35 @@ if (portalToggle && portalDropdown) {
 
   document.addEventListener('click', function (e) {
     if (!payWrap.contains(e.target)) setOpen(false);
+  });
+})();
+
+// Student dropdown
+(function () {
+  const wrap = document.getElementById('navStudentDropdown');
+  const btn = document.getElementById('studentDropdownBtn');
+  const menu = document.getElementById('studentDropdownMenu');
+  if (!wrap || !btn || !menu) return;
+
+  function setOpen(open) {
+    wrap.classList.toggle('is-open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    setOpen(!wrap.classList.contains('is-open'));
+  });
+
+  menu.querySelectorAll('a[role="menuitem"]').forEach(function (link) {
+    link.addEventListener('click', function () {
+      setOpen(false);
+    });
+  });
+
+  document.addEventListener('click', function (e) {
+    if (!wrap.contains(e.target)) setOpen(false);
   });
 })();
 

@@ -130,6 +130,8 @@ if (isset($conn) && ($conn instanceof mysqli) && $studentEmail !== '') {
             <a class="nav-link <?= pcvc_student_nav_active('/student/edit_profile.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/edit_profile.php'), ENT_QUOTES, 'UTF-8') ?>">Track my infos</a>
             <a class="nav-link <?= pcvc_student_nav_active('/student/materials.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/materials.php'), ENT_QUOTES, 'UTF-8') ?>">Upload materials</a>
           <?php endif; ?>
+          <a class="nav-link <?= pcvc_student_nav_active('/student/refund-request.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/refund-request.php'), ENT_QUOTES, 'UTF-8') ?>">Request refund</a>
+          <a class="nav-link <?= pcvc_student_nav_active('/student/refund-requests.php') ?>" href="<?= htmlspecialchars(pcvc_url('/student/refund-requests.php'), ENT_QUOTES, 'UTF-8') ?>">My refund requests</a>
         </nav>
       </aside>
       <main class="col-12 col-lg-10 p-3 p-lg-4">
