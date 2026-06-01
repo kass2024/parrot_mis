@@ -572,13 +572,7 @@ function pcvc_docvision_supplement_fields_from_text(array $fields, string $text,
     }
 
     if (empty($fields['passport_number'])) {
-        if (preg_match('/\b(?:passport|passeport|document)\s*(?:no|number|#)?\s*[:\-]?\s*([A-Z0-9]{6,12})\b/i', $text, $pm)) {
-            $fields['passport_number'] = strtoupper($pm[1]);
-        } elseif (preg_match('/\b[A-Z]{1,2}\d{6,9}\b/', $text, $pm)) {
-            $fields['passport_number'] = $pm[0];
-        } elseif (preg_match('/\bPC\d{7}\b/i', $text, $pm)) {
-            $fields['passport_number'] = strtoupper($pm[0]);
-        }
+        $fields['passport_number'] = pcvc_docvision_extract_passport_number_from_text($text);
     }
 
     if (empty($fields['student_national_id']) && preg_match('/\b\d{16}\b/', $text, $nid)) {
@@ -604,8 +598,118 @@ function pcvc_docvision_supplement_fields_from_text(array $fields, string $text,
 }
 
 /**
- * Focused contact extraction when full document parse missed email/phone.
+ * Parse passport / travel document number from OCR text or MRZ (ICAO TD3).
+ */
+function pcvc_docvision_extract_passport_number_from_text(string $text): string
+{
+    $text = trim($text);
+    if ($text === '') {
+        return '';
+    }
+
+    $upper = strtoupper($text);
+    $compact = preg_replace('/\s+/', '', $upper) ?? $upper;
+
+    // MRZ line 2: 9-char document number, check digit, then nationality (e.g. RWA)
+    if (preg_match('/([A-Z0-9<]{9})<\d[A-Z]{3}\d{7}[MF<]/', $compact, $mrz)) {
+        $candidate = strtoupper(rtrim(str_replace('<', '', $mrz[1]), '<'));
+        if (pcvc_docvision_is_plausible_passport_number($candidate)) {
+            return $candidate;
+        }
+    }
+
+    // MRZ line 2 at start of a line (OCR often preserves line breaks)
+    foreach (preg_split('/\R+/', $upper) ?: [] as $line) {
+        $lineCompact = preg_replace('/\s+/', '', $line) ?? $line;
+        if (preg_match('/^([A-Z0-9<]{9})<\d[A-Z]{3}\d{7}[MF<]/', $lineCompact, $lineMrz)) {
+            $candidate = strtoupper(rtrim(str_replace('<', '', $lineMrz[1]), '<'));
+            if (pcvc_docvision_is_plausible_passport_number($candidate)) {
+                return $candidate;
+            }
+        }
+    }
+
+    // Rwanda format: PC1234567 followed by MRZ filler / nationality
+    if (preg_match('/\b(PC\d{7})\b/i', $text, $rw)) {
+        return strtoupper($rw[1]);
+    }
+    if (preg_match('/(PC\d{7})<\d?RWA/i', $compact, $rwMrz)) {
+        return strtoupper($rwMrz[1]);
+    }
+    if (preg_match('/PC\s*(\d{7})\b/i', $text, $rwSpaced)) {
+        return 'PC' . $rwSpaced[1];
+    }
+
+    // Labeled passport number fields (visual zone)
+    $labelPatterns = [
+        '/\b(?:passport|passeport|travel\s*document)\s*(?:no|number|num|#|n[o°]\s*)\s*[:\.\-]?\s*([A-Z0-9]{6,12})\b/i',
+        '/\b(?:document|doc)\s*(?:no|number|#)\s*[:\.\-]?\s*([A-Z0-9]{6,12})\b/i',
+        '/\bno\.?\s*du\s*passeport\s*[:\.\-]?\s*([A-Z0-9]{6,12})\b/i',
+    ];
+    foreach ($labelPatterns as $pattern) {
+        if (preg_match($pattern, $text, $m)) {
+            $candidate = strtoupper(preg_replace('/\s+/', '', $m[1]) ?? $m[1]);
+            if (pcvc_docvision_is_plausible_passport_number($candidate)) {
+                return $candidate;
+            }
+        }
+    }
+
+    // Generic ICAO-style numbers (exclude pure 16-digit national IDs)
+    if (preg_match_all('/\b([A-Z]{1,3}\d{6,9})\b/', $upper, $all)) {
+        foreach ($all[1] as $candidate) {
+            if (pcvc_docvision_is_plausible_passport_number($candidate)) {
+                return $candidate;
+            }
+        }
+    }
+
+    return '';
+}
+
+function pcvc_docvision_is_plausible_passport_number(string $value): bool
+{
+    $value = strtoupper(trim($value));
+    if ($value === '' || strlen($value) < 6 || strlen($value) > 12) {
+        return false;
+    }
+    if (ctype_digit($value) && strlen($value) >= 14) {
+        return false;
+    }
+    if (!preg_match('/^[A-Z0-9]+$/', $value)) {
+        return false;
+    }
+    if (preg_match('/^\d+$/', $value)) {
+        return strlen($value) >= 6 && strlen($value) <= 10;
+    }
+
+    return (bool)preg_match('/[A-Z]/', $value) && (bool)preg_match('/\d/', $value);
+}
+
+/**
+ * Laser-focused passport number extraction (MRZ + visual zone).
  *
+ * @param array<int, array<string, string>> $userContent
+ */
+function pcvc_docvision_extract_passport_from_content(array $userContent): array
+{
+    $system = <<<'PROMPT'
+You are reading a passport or travel document image/PDF.
+Return JSON only: {"passport_number":""}
+
+CRITICAL instructions:
+1. Read the MRZ machine-readable zone (two lines of <<< at the bottom of the bio page).
+2. On MRZ line 2, the FIRST 9 characters (before the first "<" check digit) are the passport/document number.
+3. Also check the visual "Passport No" / "N° du passeport" field on the photo page.
+4. Rwanda passports often look like PC1234567 (PC + 7 digits).
+5. Return ONLY the document number — not the 16-digit national ID.
+6. Empty string only if truly unreadable.
+PROMPT;
+
+    return pcvc_docvision_generate_json($system, $userContent, 2, 500);
+}
+
+/**
  * @param array<int, array<string, string>> $userContent
  */
 function pcvc_docvision_extract_contact_from_content(array $userContent): array

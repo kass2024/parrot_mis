@@ -315,6 +315,10 @@ function normalize_fields(array $fields, string $lang, mysqli $conn): array
         'e_mail' => 'email',
         'email_address' => 'email',
         'mail' => 'email',
+        'document_number' => 'passport_number',
+        'passport_no' => 'passport_number',
+        'passport_num' => 'passport_number',
+        'travel_document_number' => 'passport_number',
     ];
     foreach ($aliases as $from => $to) {
         if (!empty($fields[$from]) && empty($fields[$to])) {
@@ -389,6 +393,9 @@ function normalize_fields(array $fields, string $lang, mysqli $conn): array
 
     if (!empty($normalized['passport_number'])) {
         $normalized['passport_number'] = strtoupper(preg_replace('/\s+/', '', $normalized['passport_number']));
+        if (!pcvc_docvision_is_plausible_passport_number($normalized['passport_number'])) {
+            unset($normalized['passport_number']);
+        }
     }
 
     if (!empty($normalized['student_national_id'])) {
@@ -733,6 +740,15 @@ function process_ai_document_result(
         $rawFields = pcvc_docvision_supplement_fields_from_text($rawFields, $rawText, $nameHints);
     }
 
+    $isPassportDoc = $documentType === 'valid_passport'
+        || (bool)preg_match('/\b(passport|passeport)\b/i', $originalName);
+    if ($isPassportDoc && empty($rawFields['passport_number'])) {
+        $fromRaw = pcvc_docvision_extract_passport_number_from_text($rawText);
+        if ($fromRaw !== '') {
+            $rawFields['passport_number'] = $fromRaw;
+        }
+    }
+
     if (!array_key_exists($documentType, $fieldLabels) || $confidence < 0.30) {
         $documents[] = [
             'client_index' => $clientIndex,
@@ -816,6 +832,86 @@ function autofill_harvest_contact_fields(
         $mergedFields = pcvc_docvision_merge_contact_fields($mergedFields, $patch);
 
         if (!empty($mergedFields['email']) && !empty($mergedFields['phone_number'])) {
+            return;
+        }
+    }
+}
+
+function autofill_harvest_passport_number(
+    array &$mergedFields,
+    array $jobs,
+    array $responses,
+    string $lang,
+    mysqli $conn
+): void {
+    if (!empty($mergedFields['passport_number'])) {
+        return;
+    }
+
+    $passportJobs = [];
+    foreach ($jobs as $idx => $job) {
+        $hint = strtolower((string)($job['original_name'] ?? ''));
+        $response = $responses[$idx] ?? null;
+        $docType = is_array($response)
+            ? strtolower((string)(($response['json']['document_type'] ?? '') ?: ''))
+            : '';
+        $isPassport = preg_match('/\b(passport|passeport)\b/', $hint) || $docType === 'valid_passport';
+        if (!$isPassport) {
+            continue;
+        }
+        $passportJobs[$idx] = $job;
+    }
+
+    if ($passportJobs === []) {
+        foreach ($jobs as $idx => $job) {
+            $hint = strtolower((string)($job['original_name'] ?? ''));
+            $response = $responses[$idx] ?? null;
+            $docType = is_array($response)
+                ? strtolower((string)(($response['json']['document_type'] ?? '') ?: ''))
+                : '';
+            if (
+                preg_match('/\b(passport|passeport|birth[\s_-]?cert|id|identity)\b/', $hint)
+                || in_array($docType, ['valid_passport', 'birth_certificate'], true)
+            ) {
+                $passportJobs[$idx] = $job;
+            }
+        }
+    }
+
+    foreach ($passportJobs as $idx => $job) {
+        $response = $responses[$idx] ?? null;
+        $rawText = is_array($response) ? (string)($response['raw_text'] ?? '') : '';
+        if ($rawText !== '') {
+            $fromText = pcvc_docvision_extract_passport_number_from_text($rawText);
+            if ($fromText !== '') {
+                $mergedFields['passport_number'] = strtoupper($fromText);
+                return;
+            }
+            $supplemented = pcvc_docvision_supplement_fields_from_text(
+                $mergedFields,
+                $rawText,
+                array_filter([
+                    (string)($mergedFields['first_name'] ?? ''),
+                    (string)($mergedFields['last_name'] ?? ''),
+                ])
+            );
+            if (!empty($supplemented['passport_number'])) {
+                $mergedFields['passport_number'] = strtoupper((string)$supplemented['passport_number']);
+                return;
+            }
+        }
+
+        $passport = pcvc_docvision_extract_passport_from_content($job['user']);
+        if (isset($passport['error'])) {
+            continue;
+        }
+
+        $num = trim((string)(($passport['json']['passport_number'] ?? '') ?: ''));
+        if ($num === '' && !empty($passport['raw_text'])) {
+            $num = pcvc_docvision_extract_passport_number_from_text((string)$passport['raw_text']);
+        }
+        if ($num !== '' && pcvc_docvision_is_plausible_passport_number($num)) {
+            $mergedFields['passport_number'] = strtoupper(preg_replace('/\s+/', '', $num));
             return;
         }
     }
@@ -959,26 +1055,45 @@ if (!$jobs) {
 }
 
 $contactOnly = (string)($_POST['contact_only'] ?? '') === '1';
-if ($contactOnly && count($jobs) === 1) {
+$passportOnly = (string)($_POST['passport_only'] ?? '') === '1';
+if (($contactOnly || $passportOnly) && count($jobs) === 1) {
     $job = $jobs[0];
-    add_stage($debug, 'ai', 'Contact-only extraction for ' . $job['original_name'] . '.');
-    $contact = pcvc_docvision_extract_contact_from_content($job['user']);
+    add_stage($debug, 'ai', ($passportOnly ? 'Passport-only' : 'Contact-only') . ' extraction for ' . $job['original_name'] . '.');
     $mergedFields = [];
     $fieldScores = [];
-    if (!isset($contact['error'])) {
-        $raw = (array)($contact['json'] ?? []);
-        if (!empty($contact['raw_text'])) {
-            $raw = pcvc_docvision_supplement_fields_from_text($raw, (string)$contact['raw_text']);
+
+    if ($passportOnly) {
+        $passport = pcvc_docvision_extract_passport_from_content($job['user']);
+        if (!isset($passport['error'])) {
+            $num = trim((string)(($passport['json']['passport_number'] ?? '') ?: ''));
+            if ($num === '' && !empty($passport['raw_text'])) {
+                $num = pcvc_docvision_extract_passport_number_from_text((string)$passport['raw_text']);
+            }
+            if ($num !== '' && pcvc_docvision_is_plausible_passport_number($num)) {
+                $mergedFields['passport_number'] = strtoupper(preg_replace('/\s+/', '', $num));
+            }
+            add_stage($debug, 'parse', 'Passport-only result: ' . ($mergedFields['passport_number'] ?? '(none)'));
+        } else {
+            $warnings[] = $job['original_name'] . ': ' . (string)($passport['error']['message'] ?? 'Passport extraction failed.');
         }
-        $mergedFields = normalize_fields($raw, $lang, $conn);
-        add_stage($debug, 'parse', 'Contact-only result: email=' . ($mergedFields['email'] ?? '(none)'));
     } else {
-        $warnings[] = $job['original_name'] . ': ' . (string)($contact['error']['message'] ?? 'Contact extraction failed.');
+        $contact = pcvc_docvision_extract_contact_from_content($job['user']);
+        if (!isset($contact['error'])) {
+            $raw = (array)($contact['json'] ?? []);
+            if (!empty($contact['raw_text'])) {
+                $raw = pcvc_docvision_supplement_fields_from_text($raw, (string)$contact['raw_text']);
+            }
+            $mergedFields = normalize_fields($raw, $lang, $conn);
+            add_stage($debug, 'parse', 'Contact-only result: email=' . ($mergedFields['email'] ?? '(none)'));
+        } else {
+            $warnings[] = $job['original_name'] . ': ' . (string)($contact['error']['message'] ?? 'Contact extraction failed.');
+        }
     }
+
     cleanup_paths($job['cleanup']);
     json_exit([
         'status' => 'success',
-        'message' => 'Contact details extracted.',
+        'message' => $passportOnly ? 'Passport number extracted.' : 'Contact details extracted.',
         'fields' => $mergedFields,
         'documents' => [],
         'warnings' => $warnings,
@@ -1046,6 +1161,7 @@ foreach ($jobs as $idx => $job) {
 }
 
 autofill_harvest_contact_fields($mergedFields, $jobs, $responses, $lang, $conn);
+autofill_harvest_passport_number($mergedFields, $jobs, $responses, $lang, $conn);
 autofill_harvest_identity_fields($mergedFields, $jobs, $responses, $lang, $conn);
 add_stage(
     $debug,

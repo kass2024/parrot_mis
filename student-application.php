@@ -4357,62 +4357,50 @@ function startValidationSimulation(progress) {
 
   const pendingFiles = [];
   let isProcessing = false;
-  let waitAnimationStop = null;
+  let autofillTimerId = null;
+  let autofillStartedAt = 0;
+
+  function stopAutofillTimer() {
+    if (autofillTimerId != null) {
+      window.clearInterval(autofillTimerId);
+      autofillTimerId = null;
+    }
+  }
+
+  function startAutofillTimer() {
+    stopAutofillTimer();
+    autofillStartedAt = Date.now();
+    progressBarWrap.classList.remove("d-none");
+    progressBar.style.width = "2%";
+    elapsedEl.textContent = "0:00";
+
+    autofillTimerId = window.setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - autofillStartedAt) / 1000);
+      const mins = Math.floor(elapsedSec / 60);
+      const secs = elapsedSec % 60;
+      elapsedEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
+    }, 1000);
+  }
+
+  function setAutofillProgress(pct, statusText) {
+    progressBar.style.width = `${Math.min(100, Math.max(0, Math.round(pct)))}%`;
+    if (statusText) {
+      liveStatusEl.textContent = statusText;
+    }
+  }
 
   function stopWaitAnimation(successMessage) {
-    if (typeof waitAnimationStop === "function") {
-      waitAnimationStop(successMessage);
-      waitAnimationStop = null;
+    if (successMessage) {
+      liveStatusEl.textContent = successMessage;
     }
   }
 
   function startWaitAnimation(files) {
-    stopWaitAnimation();
-    progressBarWrap.classList.remove("d-none");
-    progressBar.style.width = "4%";
-    elapsedEl.textContent = "0:00";
-    liveStatusEl.textContent = `Sending ${files.length} file(s) to Gemini in parallel…`;
-
-    const startedAt = Date.now();
-    const estimateMs = Math.max(35000, Math.min(120000, files.length * 18000));
-    const liveMessages = [
-      "Reading passport and ID pages…",
-      "Extracting names, dates, and nationality…",
-      "Scanning CV for email and phone…",
-      "Pulling academic history from transcripts…",
-      "Matching documents to form fields…",
-      "Almost there — merging extracted details…"
-    ];
-    let messageIndex = 0;
-    let fileIndex = 0;
-
-    const timer = window.setInterval(() => {
-      const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
-      const mins = Math.floor(elapsedSec / 60);
-      const secs = elapsedSec % 60;
-      elapsedEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
-
-      const pct = Math.min(94, 4 + Math.round((elapsedSec / (estimateMs / 1000)) * 90));
-      progressBar.style.width = `${pct}%`;
-
-      const currentFile = files[fileIndex % files.length];
-      liveStatusEl.textContent = `${currentFile?.name || "Document"} — ${liveMessages[messageIndex % liveMessages.length]}`;
-
-      if (elapsedSec > 0 && elapsedSec % 4 === 0) {
-        fileIndex += 1;
-      }
-      if (elapsedSec > 0 && elapsedSec % 6 === 0) {
-        messageIndex += 1;
-      }
-    }, 1000);
-
-    waitAnimationStop = (successMessage) => {
-      window.clearInterval(timer);
-      progressBar.style.width = "100%";
-      if (successMessage) {
-        liveStatusEl.textContent = successMessage;
-      }
-    };
+    startAutofillTimer();
+    setAutofillProgress(
+      4,
+      `Sending ${files.length} file(s) to Gemini in parallel…`
+    );
   }
 
   function fileKey(file) {
@@ -4475,6 +4463,7 @@ function startValidationSimulation(progress) {
   }
 
   function resetProgress() {
+    stopAutofillTimer();
     stopWaitAnimation();
     progressWrap.className = "smart-autofill-progress-panel";
     progressText.textContent = "Ready";
@@ -4760,6 +4749,62 @@ function startValidationSimulation(progress) {
     return ranked[0]?.file || null;
   }
 
+  function pickPassportRefineFile(files) {
+    const ranked = files
+      .map((file, index) => ({ file, index, name: String(file.name || "").toLowerCase() }))
+      .filter(entry => /\b(passport|passeport|travel|id|identity)\b/.test(entry.name))
+      .sort((a, b) => {
+        const score = (name) => (/\b(passport|passeport)\b/.test(name) ? 2 : 1);
+        return score(b.name) - score(a.name);
+      });
+    return ranked[0]?.file || null;
+  }
+
+  async function refineMissingPassportField(files, applicationId, merged) {
+    if (String(merged.fields?.passport_number || "").trim()) return;
+
+    const passportFile = pickPassportRefineFile(files);
+    if (!passportFile) return;
+
+    liveStatusEl.textContent = `${passportFile.name} — smart passport number extraction…`;
+
+    const formData = new FormData();
+    formData.append("documents[]", passportFile);
+    formData.append("document_client_index", String(files.indexOf(passportFile)));
+    formData.append("application_id", applicationId);
+    formData.append("lang", document.documentElement.lang || "en");
+    formData.append("passport_only", "1");
+
+    try {
+      const res = await fetch("student_ai_autofill.php", {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin"
+      });
+      const data = await res.json();
+      if (!res.ok || !data || data.status !== "success") return;
+
+      mergeAutofillFields(merged.fields, {
+        ...(data.fields || {}),
+        __documentType: "valid_passport",
+        __confidence: 0.95
+      });
+      if (data.fields && typeof window.applyAutofillFields === "function") {
+        window.applyAutofillFields(data.fields);
+      }
+      if (Array.isArray(data.warnings)) {
+        merged.warnings.push(...data.warnings);
+      }
+      if (data.debug) {
+        renderAutofillDebug(data.debug);
+      }
+    } catch (err) {
+      merged.warnings.push(
+        `${passportFile.name}: passport refinement failed (${err?.message || "error"}).`
+      );
+    }
+  }
+
   async function refineMissingContactFields(files, applicationId, merged) {
     const needsEmail = !String(merged.fields?.email || "").trim();
     const needsPhone = !String(merged.fields?.phone_number || "").trim();
@@ -4811,11 +4856,6 @@ function startValidationSimulation(progress) {
     const ANALYSIS_CONCURRENCY = 2;
     const ANALYSIS_TIMEOUT_MS = 120000;
     let finished = 0;
-
-    progressBarWrap.classList.remove("d-none");
-    progressBar.style.width = "0%";
-    elapsedEl.textContent = "0:00";
-    const batchStarted = Date.now();
 
     renderAutofillDebug(null, [
       ["Mode", `Analyzing ${files.length} file(s), ${ANALYSIS_CONCURRENCY} at a time`],
@@ -4898,21 +4938,22 @@ function startValidationSimulation(progress) {
       } finally {
         window.clearTimeout(timeoutId);
         finished += 1;
-        const elapsedSec = Math.floor((Date.now() - batchStarted) / 1000);
-        const mins = Math.floor(elapsedSec / 60);
-        const secs = elapsedSec % 60;
-        elapsedEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
-        progressBar.style.width = `${Math.round((finished / files.length) * 100)}%`;
-        liveStatusEl.textContent = finished >= files.length
-          ? "All documents analyzed — routing files next…"
-          : `${finished}/${files.length} done — continuing…`;
+        const analysisPct = 8 + Math.round((finished / files.length) * 47);
+        setAutofillProgress(
+          analysisPct,
+          finished >= files.length
+            ? "All documents analyzed — refining extracted details…"
+            : `${finished}/${files.length} analyzed — continuing…`
+        );
       }
     }
 
     const taskFactories = files.map((file, index) => () => analyzeOne(file, index));
     await runTasksWithPool(taskFactories, ANALYSIS_CONCURRENCY);
 
+    setAutofillProgress(58, "Checking for missing email, phone, and passport number…");
     await refineMissingContactFields(files, applicationId, merged);
+    await refineMissingPassportField(files, applicationId, merged);
 
     if (typeof window.applyAutofillFields === "function") {
       const cleanFields = { ...merged.fields };
@@ -4920,7 +4961,7 @@ function startValidationSimulation(progress) {
       window.applyAutofillFields(cleanFields);
     }
 
-    stopWaitAnimation("Analysis complete — routing files…");
+    setAutofillProgress(60, "Analysis complete — routing files next…");
 
     if (!merged.documents.length && !Object.keys(merged.fields).length) {
       throw new Error(merged.warnings[0] || "No document could be analyzed successfully.");
@@ -5020,6 +5061,8 @@ function startValidationSimulation(progress) {
     const warnings = [];
     let attachFailures = 0;
     let nextIndex = 0;
+    let routed = 0;
+    const total = queue.length;
     const concurrency = Math.max(
       1,
       Math.min(Number(options.concurrency) || 1, 3, queue.length || 1)
@@ -5037,8 +5080,14 @@ function startValidationSimulation(progress) {
 
         if (!file) {
           warnings.push(`Original file missing for ${doc?.original_name || "document"}.`);
+          routed += 1;
           continue;
         }
+
+        setAutofillProgress(
+          62 + Math.round((routed / Math.max(total, 1)) * 23),
+          `Attaching ${doc.original_name} → ${doc.field_label || doc.field} (${Math.min(routed + 1, total)}/${total})…`
+        );
 
         try {
           await uploadSingleFile(doc.field, file, {
@@ -5048,6 +5097,14 @@ function startValidationSimulation(progress) {
         } catch (err) {
           attachFailures++;
           warnings.push(`Failed to attach ${doc.original_name} to ${doc.field_label || doc.field}.`);
+        } finally {
+          routed += 1;
+          setAutofillProgress(
+            62 + Math.round((routed / Math.max(total, 1)) * 23),
+            routed >= total
+              ? "All recognized documents attached — saving form data next…"
+              : `Attached ${routed}/${total} — continuing…`
+          );
         }
       }
     }
@@ -5109,12 +5166,15 @@ function startValidationSimulation(progress) {
     updateSmartAutofillAvailability();
 
     try {
+      startAutofillTimer();
+      setAutofillProgress(4, "Preparing application draft…");
       setStage("draft", <?php echo json_encode($t['smart_autofill_stage_draft'], JSON_UNESCAPED_UNICODE); ?>, "info", "Preparing your application draft for document routing.");
       const applicationId = await ensureDraftExists();
 
       const files = [...pendingFiles];
 
       setStage("batch", texts.processing, "info", texts.analysisIntro);
+      setAutofillProgress(8, texts.analysisIntro);
       const analysisData = await analyzeDocumentsBatch(files, applicationId);
 
       setStage(
@@ -5130,6 +5190,12 @@ function startValidationSimulation(progress) {
         ? analysisData.upload_token
         : "";
 
+      setAutofillProgress(
+        62,
+        queue.length
+          ? `Routing ${queue.length} file(s) to attachment fields…`
+          : "No files to route — saving extracted data next…"
+      );
       const routeResult = await routeQueuedDocuments(queue, files, {
         concurrency: batchUploadToken ? 4 : 3,
         smartAutofillBatchToken: batchUploadToken
@@ -5138,6 +5204,7 @@ function startValidationSimulation(progress) {
       const attachFailures = routeResult.attachFailures;
 
       setStage("save", <?php echo json_encode($t['smart_autofill_stage_save'], JSON_UNESCAPED_UNICODE); ?>, "info", "Saving extracted student details and current study choices.");
+      setAutofillProgress(88, "Saving extracted student details…");
       try {
         if (typeof window.persistAutofillDraftData === "function") {
           const saveFields = { ...analysisData.fields };
@@ -5152,6 +5219,7 @@ function startValidationSimulation(progress) {
       clearPendingFiles();
 
       if (!hasCoreApplicantInfo(analysisData.fields || {})) {
+        setAutofillProgress(100, texts.draftOnly);
         setStage("save", texts.draftOnly, "warning", "You can add more documents later and run the analysis again.");
         return;
       }
@@ -5162,6 +5230,7 @@ function startValidationSimulation(progress) {
       }
 
       setStage("submit", texts.submitAttempt, "info", "Continuing automatically to the final submission even if only one identity document was provided.");
+      setAutofillProgress(94, texts.submitAttempt);
       const submitted = await submitForm({
         autoAssignDefaultAgent: true,
         identityOnlySubmit: true,
@@ -5179,14 +5248,16 @@ function startValidationSimulation(progress) {
       }
 
       setStage("submit", texts.success, "success", texts.submitDone);
+      setAutofillProgress(100, texts.submitDone);
     } catch (err) {
-      stopWaitAnimation("Analysis stopped.");
+      stopWaitAnimation("Process stopped.");
       const message = err && err.message ? err.message : texts.error;
       setStage("batch", message, "danger", "The queued documents were kept so you can adjust them and try again.");
       if (typeof showApplicationSaveError === "function") {
         showApplicationSaveError(message, { title: "Document analysis failed" });
       }
     } finally {
+      stopAutofillTimer();
       isProcessing = false;
       updateSmartAutofillAvailability();
     }
