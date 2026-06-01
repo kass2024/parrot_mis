@@ -13,13 +13,16 @@ declare(strict_types=1);
 ob_start();
 session_start();
 require_once __DIR__ . '/helpers/env_bootstrap.php';
+require_once __DIR__ . '/helpers/document_vision_gemini.php';
 require_once __DIR__ . '/db.php';
 header('Content-Type: application/json');
 
 // =========================================
 // CONFIG
 // =========================================
-$API_KEY  = pcvc_env('OPENAI_API_KEY');
+if (!pcvc_docvision_is_configured()) {
+    exit(json_encode(['status' => 'error', 'message' => 'Set GEMINI_API_KEY in .env for document validation.']));
+}
 $LOG_FILE = __DIR__ . '/upload_budapest_debug.log';
 $TEMP_DIR = __DIR__ . '/temp/';
 $UPLOAD_DIR = __DIR__ . '/uploads/';
@@ -67,28 +70,18 @@ $ext  = strtolower(pathinfo($fileName, PATHINFO_EXTENSION));
 // =========================================
 // HANDLE IMAGE / PDF
 // =========================================
-$fileId = null;
 $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tiff']);
 
 if ($isImage) {
     $imageData = base64_encode(file_get_contents($tmpPath));
     $dataUrl = 'data:' . $mime . ';base64,' . $imageData;
 } else {
-    $ch = curl_init('https://api.openai.com/v1/files');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer $API_KEY"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => ['purpose' => 'assistants', 'file' => new CURLFile($tmpPath, $mime, $fileName)]
-    ]);
-    $resp = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
-
-    if ($err) exit(json_encode(['status' => 'error', 'message' => "File upload error: $err"]));
-    $data = json_decode($resp, true);
-    if (empty($data['id'])) exit(json_encode(['status' => 'error', 'message' => 'File upload failed']));
-    $fileId = $data['id'];
+    $pdfData = base64_encode((string)file_get_contents($tmpPath));
+    $pdfInline = [
+        'type' => 'input_pdf',
+        'mime' => 'application/pdf',
+        'data' => $pdfData,
+    ];
 }
 
 // =========================================
@@ -232,43 +225,9 @@ case 'payment_proof':
 // =========================================
 $content = $isImage
     ? [["type" => "input_text", "text" => $userPrompt], ["type" => "input_image", "image_url" => $dataUrl]]
-    : [["type" => "input_text", "text" => $userPrompt], ["type" => "input_file", "file_id" => $fileId]];
+    : [["type" => "input_text", "text" => $userPrompt], $pdfInline];
 
-// =========================================
-// API CALL FUNCTION
-// =========================================
-function callResponsesApi(array $payload, string $key): array {
-    $ch = curl_init('https://api.openai.com/v1/responses');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => [
-            "Authorization: Bearer {$key}",
-            "Content-Type: application/json"
-        ],
-        CURLOPT_POST => true,
-        CURLOPT_TIMEOUT => 90,
-        CURLOPT_POSTFIELDS => json_encode($payload)
-    ]);
-    $r = curl_exec($ch);
-    $e = curl_error($ch);
-    curl_close($ch);
-    if ($e) return ['error' => ['message' => $e]];
-    return json_decode($r, true);
-}
-
-// =========================================
-// SEND TO GPT
-// =========================================
-$payload = [
-    "model" => "gpt-4.1-mini",
-    "input" => [
-        ["role" => "system", "content" => [["type" => "input_text", "text" => $systemPrompt]]],
-        ["role" => "user", "content" => $content]
-    ],
-    "text" => ["format" => ["type" => "json_object"]]
-];
-
-$data = callResponsesApi($payload, $API_KEY);
+$data = pcvc_docvision_generate_json($systemPrompt, $content);
 
 // =========================================
 // LOG + PARSE
@@ -280,12 +239,12 @@ file_put_contents(
     FILE_APPEND
 );
 
-if (isset($data['error'])) exit(json_encode(['status' => 'error', 'message' => $data['error']['message']]));
+if (isset($data['error'])) {
+    exit(json_encode(['status' => 'error', 'message' => $data['error']['message']]));
+}
 
-$aiText = $data['output'][0]['content'][0]['text']
-    ?? $data['output'][0]['content'][0]['value']
-    ?? '';
-$ai = json_decode($aiText, true);
+$ai = $data['json'] ?? [];
+$aiText = $data['raw_text'] ?? '';
 
 if (!$ai || !isset($ai['valid']))
     exit(json_encode(['status' => 'error', 'message' => 'Invalid AI response', 'debug' => substr($aiText ?: json_encode($data), 0, 400)]));

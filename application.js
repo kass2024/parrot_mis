@@ -486,20 +486,35 @@ function setFieldValueByName(name, value) {
 function applyAutofillFields(fields) {
   if (!fields || typeof fields !== "object") return;
 
-  Object.entries(fields).forEach(([name, value]) => {
+  const payload = { ...fields };
+  if (
+    payload.phone_international &&
+    (!payload.area_code || !payload.phone_number)
+  ) {
+    const raw = String(payload.phone_international).trim();
+    const digits = raw.replace(/[^\d+]/g, "");
+    const match = digits.match(/^\+(\d{1,4})(\d{6,14})$/);
+    if (match) {
+      payload.area_code = `+${match[1]}`;
+      payload.phone_number = match[2];
+    }
+  }
+
+  Object.entries(payload).forEach(([name, value]) => {
+    if (name === "phone_international") return;
     setFieldValueByName(name, value);
   });
 
   restorePhoneInputsFromData({
-    area_code: form.querySelector('[name="area_code"]')?.value || fields.area_code,
+    area_code: form.querySelector('[name="area_code"]')?.value || payload.area_code,
     phone_number:
-      form.querySelector('[name="phone_number"]')?.value || fields.phone_number,
+      form.querySelector('[name="phone_number"]')?.value || payload.phone_number,
     emergency_area_code:
       form.querySelector('[name="emergency_area_code"]')?.value ||
-      fields.emergency_area_code,
+      payload.emergency_area_code,
     emergency_phone_number:
       form.querySelector('[name="emergency_phone_number"]')?.value ||
-      fields.emergency_phone_number,
+      payload.emergency_phone_number,
   });
 }
 

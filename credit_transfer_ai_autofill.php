@@ -7,10 +7,11 @@ header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/load_env.php';
+require_once __DIR__ . '/helpers/document_vision_router.php';
 pcvc_load_dotenv(__DIR__);
 
 $ENV_PATH = __DIR__ . '/.env';
-$MODEL = 'gpt-4o-mini';
+$MODEL = pcvc_docvision_model();
 $LOG_FILE = __DIR__ . '/upload_debug.log';
 $TEMP_ROOT = __DIR__ . '/temp/autofill/';
 
@@ -417,310 +418,6 @@ function flatten_uploaded_files(string $key): array
     return $out;
 }
 
-function scanned_pdf_to_images(string $pdfPath, string $outDir, int $maxPages = 6): array
-{
-    if (!class_exists('Imagick')) {
-        throw new RuntimeException('Scanned PDF support requires Imagick on the server.');
-    }
-
-    $images = [];
-    $im = new Imagick();
-    $im->setResolution(165, 165);
-    $im->readImage($pdfPath);
-
-    $n = 0;
-    foreach ($im as $i => $page) {
-        if ($n >= $maxPages) {
-            break;
-        }
-        $page->setImageFormat('jpeg');
-        $page->setImageCompressionQuality(76);
-        $out = $outDir . 'page_' . ($i + 1) . '_' . bin2hex(random_bytes(3)) . '.jpg';
-        $page->writeImage($out);
-        $images[] = $out;
-        $n++;
-    }
-
-    $im->clear();
-    $im->destroy();
-
-    return $images;
-}
-
-function is_scanned_pdf(string $pdfPath): bool
-{
-    $sample = @file_get_contents($pdfPath, false, null, 0, 5000);
-    if ($sample === false || $sample === '') {
-        return true;
-    }
-
-    return !preg_match('/[A-Za-z]{4,}/', $sample);
-}
-
-function upload_openai_file(string $filePath, string $mime, string $fileName, string $apiKey): string
-{
-    $ch = curl_init('https://api.openai.com/v1/files');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$apiKey}"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => [
-            'purpose' => 'assistants',
-            'file' => new CURLFile($filePath, $mime, $fileName)
-        ],
-        CURLOPT_TIMEOUT => 300,
-        CURLOPT_CONNECTTIMEOUT => 20,
-    ]);
-
-    $response = curl_exec($ch);
-    $error = curl_error($ch);
-    curl_close($ch);
-
-    if ($error) {
-        throw new RuntimeException('OpenAI file upload failed: ' . $error);
-    }
-
-    $data = json_decode((string)$response, true);
-    if (!is_array($data) || empty($data['id'])) {
-        throw new RuntimeException('OpenAI file upload did not return a file id.');
-    }
-
-    return (string)$data['id'];
-}
-
-function call_responses_api(array $payload, string $apiKey, int $maxRetries = 2, int $delayMs = 350): array
-{
-    for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
-        $ch = curl_init('https://api.openai.com/v1/responses');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer {$apiKey}",
-                'Content-Type: application/json'
-            ],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE),
-            CURLOPT_TIMEOUT => 240,
-            CURLOPT_CONNECTTIMEOUT => 15,
-        ]);
-
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($error) {
-            return ['error' => ['message' => $error]];
-        }
-
-        $data = json_decode((string)$response, true);
-        if (!isset($data['error'])) {
-            return is_array($data) ? $data : ['error' => ['message' => 'Invalid API response']];
-        }
-
-        $message = strtolower((string)($data['error']['message'] ?? ''));
-        if (str_contains($message, 'ownership') && $attempt < ($maxRetries - 1)) {
-            usleep($delayMs * 1000);
-            continue;
-        }
-
-        return $data;
-    }
-
-    return ['error' => ['message' => 'AI extraction failed after retries.']];
-}
-
-/**
- * Run multiple /v1/responses calls concurrently (faster than sequential when uploading several files).
- *
- * @param array<int, array<string, mixed>> $payloads
- * @return array<int, array<string, mixed>>
- */
-function call_responses_api_multi(array $payloads, string $apiKey): array
-{
-    if ($payloads === []) {
-        return [];
-    }
-
-    $mh = curl_multi_init();
-    if ($mh === false) {
-        $results = [];
-        foreach ($payloads as $i => $payload) {
-            $results[$i] = call_responses_api($payload, $apiKey);
-        }
-        return $results;
-    }
-
-    $handles = [];
-    $encoded = [];
-    foreach ($payloads as $i => $payload) {
-        $encoded[$i] = json_encode($payload, JSON_UNESCAPED_UNICODE);
-        $ch = curl_init('https://api.openai.com/v1/responses');
-        if ($ch === false) {
-            continue;
-        }
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer {$apiKey}",
-                'Content-Type: application/json'
-            ],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $encoded[$i],
-            CURLOPT_TIMEOUT => 240,
-            CURLOPT_CONNECTTIMEOUT => 15,
-        ]);
-        curl_multi_add_handle($mh, $ch);
-        $handles[$i] = $ch;
-    }
-
-    $running = null;
-    do {
-        $mrc = curl_multi_exec($mh, $running);
-        if ($mrc === CURLM_OK && $running > 0) {
-            curl_multi_select($mh, 0.12);
-        }
-    } while ($running > 0);
-
-    $results = [];
-    foreach ($handles as $i => $ch) {
-        $errno = curl_errno($ch);
-        $cerr = curl_error($ch);
-        $raw = curl_multi_getcontent($ch);
-        curl_multi_remove_handle($mh, $ch);
-        curl_close($ch);
-        if ($errno !== 0) {
-            $results[$i] = ['error' => ['message' => $cerr !== '' ? $cerr : ('curl error ' . $errno)]];
-            continue;
-        }
-        $data = json_decode((string)$raw, true);
-        $results[$i] = is_array($data) ? $data : ['error' => ['message' => 'Invalid API response']];
-    }
-    curl_multi_close($mh);
-
-    $n = count($payloads);
-    for ($i = 0; $i < $n; $i++) {
-        if (!isset($results[$i])) {
-            $results[$i] = ['error' => ['message' => 'Request was not executed']];
-        }
-    }
-
-    return $results;
-}
-
-function response_text(array $data): string
-{
-    if (!empty($data['output_text']) && is_string($data['output_text'])) {
-        return $data['output_text'];
-    }
-
-    if (!empty($data['output']) && is_array($data['output'])) {
-        foreach ($data['output'] as $entry) {
-            if (empty($entry['content']) || !is_array($entry['content'])) {
-                continue;
-            }
-
-            foreach ($entry['content'] as $content) {
-                if (!empty($content['text']) && is_string($content['text'])) {
-                    return $content['text'];
-                }
-            }
-        }
-    }
-
-    return '';
-}
-
-function decode_json_response(string $text): array
-{
-    $trimmed = trim($text);
-    if ($trimmed === '') {
-        return [];
-    }
-
-    $trimmed = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $trimmed);
-    $decoded = json_decode((string)$trimmed, true);
-    return is_array($decoded) ? $decoded : [];
-}
-
-function build_document_content(string $tmpPath, string $originalName, string $apiKey, array &$cleanup): array
-{
-    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-    $mime = mime_content_type($tmpPath) ?: 'application/octet-stream';
-    $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tif', 'tiff'], true);
-
-    if ($isImage) {
-        $imageData = @file_get_contents($tmpPath);
-        if ($imageData === false) {
-            throw new RuntimeException('Unable to read image data.');
-        }
-
-        return [[
-            'type' => 'input_image',
-            'image_url' => 'data:' . $mime . ';base64,' . base64_encode($imageData)
-        ]];
-    }
-
-    if ($ext === 'docx') {
-        $zip = new ZipArchive();
-        if ($zip->open($tmpPath) !== true) {
-            throw new RuntimeException('Unable to read DOCX document.');
-        }
-
-        $xml = $zip->getFromName('word/document.xml');
-        $zip->close();
-        if (!$xml) {
-            throw new RuntimeException('DOCX document is empty.');
-        }
-
-        $text = normalize_text(strip_tags($xml));
-        if ($text === '') {
-            throw new RuntimeException('DOCX text could not be extracted.');
-        }
-
-        return [[
-            'type' => 'input_text',
-            'text' => "Document text:\n" . mb_substr($text, 0, 12000, 'UTF-8')
-        ]];
-    }
-
-    if ($ext === 'pdf') {
-        if (is_scanned_pdf($tmpPath)) {
-            $scanDir = dirname($tmpPath) . '/scan_' . bin2hex(random_bytes(4)) . '/';
-            ensure_dir($scanDir);
-            $cleanup[] = rtrim($scanDir, '/');
-
-            $images = scanned_pdf_to_images($tmpPath, $scanDir, 6);
-            $content = [];
-
-            foreach ($images as $imagePath) {
-                $cleanup[] = $imagePath;
-                $imageData = @file_get_contents($imagePath);
-                if ($imageData === false) {
-                    continue;
-                }
-                $content[] = [
-                    'type' => 'input_image',
-                    'image_url' => 'data:image/jpeg;base64,' . base64_encode($imageData)
-                ];
-            }
-
-            if (!$content) {
-                throw new RuntimeException('Scanned PDF pages could not be prepared for OCR.');
-            }
-
-            return $content;
-        }
-
-        $fileId = upload_openai_file($tmpPath, $mime, basename($originalName), $apiKey);
-        return [[
-            'type' => 'input_file',
-            'file_id' => $fileId
-        ]];
-    }
-
-    throw new RuntimeException('Unsupported file type. Please use PDF, DOCX, JPG, JPEG, PNG, or WEBP.');
-}
-
 function cleanup_paths(array $paths): void
 {
     rsort($paths);
@@ -882,13 +579,12 @@ if ($applicationId === '' || $creditSessionId === '' || !hash_equals($creditSess
     ], 401);
 }
 
-$apiKey = trim((string)(getenv('OPENAI_API_KEY') ?: ''));
-if ($apiKey === '') {
+if (!pcvc_docvision_autofill_ready()) {
     $debug['api_key_status'] = 'missing';
-    add_stage($debug, 'prepare', 'OPENAI_API_KEY not found in .env.');
+    add_stage($debug, 'prepare', 'No document AI API key in .env.');
     json_exit([
         'status' => 'error',
-        'message' => 'AI document autofill is not configured. Set OPENAI_API_KEY in .env on the server.',
+        'message' => 'AI document autofill is not configured. Set GEMINI_API_KEY and/or ANTHROPIC_API_KEY in .env.',
         'debug' => $debug
     ], 500);
 }
@@ -993,7 +689,6 @@ $mergedFields = [];
 $fieldScores = [];
 $documents = [];
 $warnings = [];
-
 $jobs = [];
 
 foreach ($uploadedFiles as $file) {
@@ -1036,34 +731,18 @@ foreach ($uploadedFiles as $file) {
         } elseif (str_contains($fileNameHint, 'transcript') || str_contains($fileNameHint, 'degree')) {
             $docInstruction .= ' This file may be an academic record, so prioritize previous institution, study dates, and language of instruction.';
         }
-        $content = [
-            [
-                'type' => 'input_text',
-                'text' => 'File name: ' . $originalName . "\n" . $docInstruction
-            ]
-        ];
-        $content = array_merge($content, build_document_content($tempPath, $originalName, $apiKey, $cleanup));
-
-        $payload = [
-            'model' => $MODEL,
-            'input' => [
-                [
-                    'role' => 'system',
-                    'content' => [[
-                        'type' => 'input_text',
-                        'text' => $systemPrompt
-                    ]]
-                ],
-                [
-                    'role' => 'user',
-                    'content' => $content
-                ]
-            ],
-            'text' => ['format' => ['type' => 'json_object']]
-        ];
+        $content = pcvc_docvision_build_api_only_content(
+            $tempPath,
+            $originalName,
+            $cleanup,
+            $docInstruction,
+            6,
+            165
+        );
 
         $jobs[] = [
-            'payload' => $payload,
+            'system' => $systemPrompt,
+            'user' => $content,
             'cleanup' => $cleanup,
             'originalName' => $originalName,
             'clientIndex' => $clientIndex,
@@ -1075,9 +754,12 @@ foreach ($uploadedFiles as $file) {
 }
 
 if ($jobs !== []) {
-    add_stage($debug, 'ai', 'Sending ' . (string)count($jobs) . ' document(s) to OpenAI in parallel.');
-    $payloads = array_column($jobs, 'payload');
-    $responses = call_responses_api_multi($payloads, $apiKey);
+    add_stage($debug, 'ai', 'Sending ' . (string)count($jobs) . ' document(s) via API (Gemini/Claude).');
+    $apiRequests = array_map(static fn(array $job): array => [
+        'system' => $job['system'],
+        'user' => $job['user'],
+    ], $jobs);
+    $responses = pcvc_docvision_analyze_parallel($apiRequests);
 
     foreach ($jobs as $idx => $job) {
         $originalName = $job['originalName'];
@@ -1092,7 +774,7 @@ if ($jobs !== []) {
         }
 
         try {
-            $ai = decode_json_response(response_text($response));
+            $ai = $response['json'] ?? [];
             if (!$ai || empty($ai['document_type'])) {
                 throw new RuntimeException('AI returned an invalid extraction result.');
             }

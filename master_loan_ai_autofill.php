@@ -7,10 +7,11 @@ header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/load_env.php';
+require_once __DIR__ . '/helpers/document_vision_router.php';
 pcvc_load_dotenv(__DIR__);
 
 $ENV_PATH = __DIR__ . '/.env';
-$MODEL = 'gpt-4.1-mini';
+$MODEL = pcvc_docvision_model();
 $LOG_FILE = __DIR__ . '/upload_debug.log';
 $TEMP_ROOT = __DIR__ . '/temp/autofill/';
 
@@ -417,223 +418,6 @@ function flatten_uploaded_files(string $key): array
     return $out;
 }
 
-function scanned_pdf_to_images(string $pdfPath, string $outDir): array
-{
-    if (!class_exists('Imagick')) {
-        throw new RuntimeException('Scanned PDF support requires Imagick on the server.');
-    }
-
-    $images = [];
-    $im = new Imagick();
-    $im->setResolution(200, 200);
-    $im->readImage($pdfPath);
-
-    foreach ($im as $i => $page) {
-        $page->setImageFormat('jpeg');
-        $page->setImageCompressionQuality(90);
-        $out = $outDir . 'page_' . ($i + 1) . '_' . bin2hex(random_bytes(3)) . '.jpg';
-        $page->writeImage($out);
-        $images[] = $out;
-    }
-
-    $im->clear();
-    $im->destroy();
-
-    return $images;
-}
-
-function is_scanned_pdf(string $pdfPath): bool
-{
-    $sample = @file_get_contents($pdfPath, false, null, 0, 5000);
-    if ($sample === false || $sample === '') {
-        return true;
-    }
-
-    return !preg_match('/[A-Za-z]{4,}/', $sample);
-}
-
-function upload_openai_file(string $filePath, string $mime, string $fileName, string $apiKey): string
-{
-    $ch = curl_init('https://api.openai.com/v1/files');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer {$apiKey}"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => [
-            'purpose' => 'assistants',
-            'file' => new CURLFile($filePath, $mime, $fileName)
-        ]
-    ]);
-
-    $response = curl_exec($ch);
-    $error = curl_error($ch);
-    curl_close($ch);
-
-    if ($error) {
-        throw new RuntimeException('OpenAI file upload failed: ' . $error);
-    }
-
-    $data = json_decode((string)$response, true);
-    if (!is_array($data) || empty($data['id'])) {
-        throw new RuntimeException('OpenAI file upload did not return a file id.');
-    }
-
-    return (string)$data['id'];
-}
-
-function call_responses_api(array $payload, string $apiKey, int $maxRetries = 3, int $delayMs = 800): array
-{
-    for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
-        $ch = curl_init('https://api.openai.com/v1/responses');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer {$apiKey}",
-                'Content-Type: application/json'
-            ],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_UNICODE)
-        ]);
-
-        $response = curl_exec($ch);
-        $error = curl_error($ch);
-        curl_close($ch);
-
-        if ($error) {
-            return ['error' => ['message' => $error]];
-        }
-
-        $data = json_decode((string)$response, true);
-        if (!isset($data['error'])) {
-            return is_array($data) ? $data : ['error' => ['message' => 'Invalid API response']];
-        }
-
-        $message = strtolower((string)($data['error']['message'] ?? ''));
-        if (str_contains($message, 'ownership') && $attempt < ($maxRetries - 1)) {
-            usleep($delayMs * 1000);
-            continue;
-        }
-
-        return $data;
-    }
-
-    return ['error' => ['message' => 'AI extraction failed after retries.']];
-}
-
-function response_text(array $data): string
-{
-    if (!empty($data['output_text']) && is_string($data['output_text'])) {
-        return $data['output_text'];
-    }
-
-    if (!empty($data['output']) && is_array($data['output'])) {
-        foreach ($data['output'] as $entry) {
-            if (empty($entry['content']) || !is_array($entry['content'])) {
-                continue;
-            }
-
-            foreach ($entry['content'] as $content) {
-                if (!empty($content['text']) && is_string($content['text'])) {
-                    return $content['text'];
-                }
-            }
-        }
-    }
-
-    return '';
-}
-
-function decode_json_response(string $text): array
-{
-    $trimmed = trim($text);
-    if ($trimmed === '') {
-        return [];
-    }
-
-    $trimmed = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', $trimmed);
-    $decoded = json_decode((string)$trimmed, true);
-    return is_array($decoded) ? $decoded : [];
-}
-
-function build_document_content(string $tmpPath, string $originalName, string $apiKey, array &$cleanup): array
-{
-    $ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-    $mime = mime_content_type($tmpPath) ?: 'application/octet-stream';
-    $isImage = in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tif', 'tiff'], true);
-
-    if ($isImage) {
-        $imageData = @file_get_contents($tmpPath);
-        if ($imageData === false) {
-            throw new RuntimeException('Unable to read image data.');
-        }
-
-        return [[
-            'type' => 'input_image',
-            'image_url' => 'data:' . $mime . ';base64,' . base64_encode($imageData)
-        ]];
-    }
-
-    if ($ext === 'docx') {
-        $zip = new ZipArchive();
-        if ($zip->open($tmpPath) !== true) {
-            throw new RuntimeException('Unable to read DOCX document.');
-        }
-
-        $xml = $zip->getFromName('word/document.xml');
-        $zip->close();
-        if (!$xml) {
-            throw new RuntimeException('DOCX document is empty.');
-        }
-
-        $text = normalize_text(strip_tags($xml));
-        if ($text === '') {
-            throw new RuntimeException('DOCX text could not be extracted.');
-        }
-
-        return [[
-            'type' => 'input_text',
-            'text' => "Document text:\n" . mb_substr($text, 0, 18000, 'UTF-8')
-        ]];
-    }
-
-    if ($ext === 'pdf') {
-        if (is_scanned_pdf($tmpPath)) {
-            $scanDir = dirname($tmpPath) . '/scan_' . bin2hex(random_bytes(4)) . '/';
-            ensure_dir($scanDir);
-            $cleanup[] = rtrim($scanDir, '/');
-
-            $images = scanned_pdf_to_images($tmpPath, $scanDir);
-            $content = [];
-
-            foreach ($images as $imagePath) {
-                $cleanup[] = $imagePath;
-                $imageData = @file_get_contents($imagePath);
-                if ($imageData === false) {
-                    continue;
-                }
-                $content[] = [
-                    'type' => 'input_image',
-                    'image_url' => 'data:image/jpeg;base64,' . base64_encode($imageData)
-                ];
-            }
-
-            if (!$content) {
-                throw new RuntimeException('Scanned PDF pages could not be prepared for OCR.');
-            }
-
-            return $content;
-        }
-
-        $fileId = upload_openai_file($tmpPath, $mime, basename($originalName), $apiKey);
-        return [[
-            'type' => 'input_file',
-            'file_id' => $fileId
-        ]];
-    }
-
-    throw new RuntimeException('Unsupported file type. Please use PDF, DOCX, JPG, JPEG, PNG, or WEBP.');
-}
-
 function cleanup_paths(array $paths): void
 {
     rsort($paths);
@@ -797,13 +581,12 @@ if ($applicationId === '' || $loanSessionId === '' || !hash_equals($loanSessionI
     ], 401);
 }
 
-$apiKey = trim((string)(getenv('OPENAI_API_KEY') ?: ''));
-if ($apiKey === '') {
+if (!pcvc_docvision_autofill_ready()) {
     $debug['api_key_status'] = 'missing';
-    add_stage($debug, 'prepare', 'OPENAI_API_KEY not found in .env.');
+    add_stage($debug, 'prepare', 'No document AI API key in .env.');
     json_exit([
         'status' => 'error',
-        'message' => 'AI document autofill is not configured. Set OPENAI_API_KEY in .env on the server.',
+        'message' => 'AI document autofill is not configured. Set GEMINI_API_KEY and/or ANTHROPIC_API_KEY in .env.',
         'debug' => $debug
     ], 500);
 }
@@ -908,6 +691,7 @@ $mergedFields = [];
 $fieldScores = [];
 $documents = [];
 $warnings = [];
+$jobs = [];
 
 foreach ($uploadedFiles as $file) {
     $originalName = basename((string)($file['name'] ?? 'document'));
@@ -949,93 +733,100 @@ foreach ($uploadedFiles as $file) {
         } elseif (str_contains($fileNameHint, 'transcript') || str_contains($fileNameHint, 'degree')) {
             $docInstruction .= ' This file may be an academic record, so prioritize previous institution, study dates, and language of instruction.';
         }
-        $content = [
-            [
-                'type' => 'input_text',
-                'text' => 'File name: ' . $originalName . "\n" . $docInstruction
-            ]
-        ];
-        $content = array_merge($content, build_document_content($tempPath, $originalName, $apiKey, $cleanup));
+        $content = pcvc_docvision_build_api_only_content(
+            $tempPath,
+            $originalName,
+            $cleanup,
+            $docInstruction,
+            3,
+            168
+        );
 
-        $payload = [
-            'model' => $MODEL,
-            'input' => [
-                [
-                    'role' => 'system',
-                    'content' => [[
-                        'type' => 'input_text',
-                        'text' => $systemPrompt
-                    ]]
-                ],
-                [
-                    'role' => 'user',
-                    'content' => $content
-                ]
-            ],
-            'text' => ['format' => ['type' => 'json_object']]
-        ];
-
-        add_stage($debug, 'ai', 'Sending ' . $originalName . ' to OpenAI.');
-        $response = call_responses_api($payload, $apiKey);
-        if (isset($response['error'])) {
-            throw new RuntimeException((string)($response['error']['message'] ?? 'AI extraction failed.'));
-        }
-
-        $ai = decode_json_response(response_text($response));
-        if (!$ai || empty($ai['document_type'])) {
-            throw new RuntimeException('AI returned an invalid extraction result.');
-        }
-
-        $documentType = (string)$ai['document_type'];
-        $confidence = max(0.0, min(1.0, (float)($ai['confidence'] ?? 0)));
-        $summary = normalize_text((string)($ai['summary'] ?? ''));
-
-        if (!array_key_exists($documentType, $fieldLabels) || $confidence < 0.45) {
-            $documents[] = [
-                'client_index' => $clientIndex,
-                'original_name' => $originalName,
-                'field' => '',
-                'field_label' => '',
-                'confidence' => $confidence,
-                'summary' => $summary
-            ];
-            $warnings[] = $originalName . ': the document could not be matched confidently to a supported attachment field.';
-            cleanup_paths($cleanup);
-            continue;
-        }
-
-        $targetField = map_student_document_to_loan_attachment($documentType);
-        if ($targetField === '' || !array_key_exists($targetField, $loanAttachmentLabels)) {
-            $documents[] = [
-                'client_index' => $clientIndex,
-                'original_name' => $originalName,
-                'field' => '',
-                'field_label' => '',
-                'confidence' => $confidence,
-                'summary' => $summary
-            ];
-            $warnings[] = $originalName . ': this document type is not used on the loan application form.';
-            cleanup_paths($cleanup);
-            continue;
-        }
-
-        $normalized = normalize_fields((array)($ai['fields'] ?? []), $lang, $conn);
-        merge_candidate_fields($mergedFields, $fieldScores, $normalized, $documentType, $confidence);
-
-        $documents[] = [
+        $jobs[] = [
+            'system' => $systemPrompt,
+            'user' => $content,
+            'cleanup' => $cleanup,
             'client_index' => $clientIndex,
             'original_name' => $originalName,
-            'field' => $targetField,
-            'field_label' => $loanAttachmentLabels[$targetField],
-            'confidence' => $confidence,
-            'summary' => $summary
         ];
-        add_stage($debug, 'parse', 'Parsed ' . $originalName . ' as ' . $documentType . ' -> ' . $targetField . '.');
     } catch (Throwable $e) {
         $warnings[] = $originalName . ': ' . $e->getMessage();
+        cleanup_paths($cleanup);
     }
+}
 
-    cleanup_paths($cleanup);
+if ($jobs !== []) {
+    add_stage($debug, 'ai', 'Sending ' . (string)count($jobs) . ' document(s) via API (Gemini/Claude).');
+    $apiRequests = array_map(static fn(array $job): array => [
+        'system' => $job['system'],
+        'user' => $job['user'],
+    ], $jobs);
+    $responses = pcvc_docvision_analyze_parallel($apiRequests);
+
+    foreach ($jobs as $idx => $job) {
+        $originalName = $job['original_name'];
+        $clientIndex = $job['client_index'];
+        cleanup_paths($job['cleanup']);
+
+        $response = $responses[$idx] ?? ['error' => ['message' => 'No API response']];
+        if (isset($response['error'])) {
+            $warnings[] = $originalName . ': ' . (string)($response['error']['message'] ?? 'AI extraction failed.');
+            continue;
+        }
+
+        try {
+            $ai = $response['json'] ?? [];
+            if (!$ai || empty($ai['document_type'])) {
+                throw new RuntimeException('AI returned an invalid extraction result.');
+            }
+
+            $documentType = (string)$ai['document_type'];
+            $confidence = max(0.0, min(1.0, (float)($ai['confidence'] ?? 0)));
+            $summary = normalize_text((string)($ai['summary'] ?? ''));
+
+            if (!array_key_exists($documentType, $fieldLabels) || $confidence < 0.45) {
+                $documents[] = [
+                    'client_index' => $clientIndex,
+                    'original_name' => $originalName,
+                    'field' => '',
+                    'field_label' => '',
+                    'confidence' => $confidence,
+                    'summary' => $summary
+                ];
+                $warnings[] = $originalName . ': the document could not be matched confidently to a supported attachment field.';
+                continue;
+            }
+
+            $targetField = map_student_document_to_loan_attachment($documentType);
+            if ($targetField === '' || !array_key_exists($targetField, $loanAttachmentLabels)) {
+                $documents[] = [
+                    'client_index' => $clientIndex,
+                    'original_name' => $originalName,
+                    'field' => '',
+                    'field_label' => '',
+                    'confidence' => $confidence,
+                    'summary' => $summary
+                ];
+                $warnings[] = $originalName . ': this document type is not used on the loan application form.';
+                continue;
+            }
+
+            $normalized = normalize_fields((array)($ai['fields'] ?? []), $lang, $conn);
+            merge_candidate_fields($mergedFields, $fieldScores, $normalized, $documentType, $confidence);
+
+            $documents[] = [
+                'client_index' => $clientIndex,
+                'original_name' => $originalName,
+                'field' => $targetField,
+                'field_label' => $loanAttachmentLabels[$targetField],
+                'confidence' => $confidence,
+                'summary' => $summary
+            ];
+            add_stage($debug, 'parse', 'Parsed ' . $originalName . ' as ' . $documentType . ' -> ' . $targetField . '.');
+        } catch (Throwable $e) {
+            $warnings[] = $originalName . ': ' . $e->getMessage();
+        }
+    }
 }
 
 file_put_contents(

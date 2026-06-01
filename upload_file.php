@@ -52,24 +52,24 @@ if (!$appId) {
 }
 
 require_once __DIR__ . '/helpers/load_env.php';
+require_once __DIR__ . '/helpers/document_vision_gemini.php';
 pcvc_load_dotenv(__DIR__);
 
 $ENV_PATH = __DIR__ . '/.env';
 $LOG_FILE = __DIR__ . '/upload_debug.log';
 $TEMP_DIR = __DIR__ . '/temp/';
 $UPLOAD_DIR = __DIR__ . '/uploads/';
-$MODEL = 'gpt-4.1-mini';
+$MODEL = pcvc_docvision_model();
 foreach ([$TEMP_DIR, $UPLOAD_DIR] as $dir)
     if (!is_dir($dir)) mkdir($dir, 0755, true);
 
 // =========================================
-// CONFIG (never commit API keys — use .env OPENAI_API_KEY)
+// CONFIG (document OCR/validation uses GEMINI_API_KEY in .env)
 // =========================================
-$API_KEY = trim((string) (getenv('OPENAI_API_KEY') ?: ''));
-if ($API_KEY === '') {
+if (!pcvc_docvision_is_configured()) {
     echo json_encode([
         'status'  => 'error',
-        'message' => 'Document verification is not configured. Set OPENAI_API_KEY in .env on the server.',
+        'message' => 'Document verification is not configured. Set GEMINI_API_KEY in .env on the server.',
         'debug'   => [
             'api_key_status' => 'missing',
             'env_path' => $ENV_PATH,
@@ -574,26 +574,13 @@ elseif ($ext === 'docx') {
         $tmpPath = $pdfPath;
         $fileName = basename($pdfPath);
         $mime = 'application/pdf';
+        $isPdf = true;
+        $isScannedPdf = false;
     } else {
         exit(json_encode(['status'=>'error','message'=>'Failed to read DOCX']));
     }
 
-    // Upload the PDF
-    $ch = curl_init('https://api.openai.com/v1/files');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer $API_KEY"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => ['purpose'=>'assistants','file'=>new CURLFile($tmpPath,$mime,$fileName)]
-    ]);
-    $resp = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
-    if ($err) exit(json_encode(['status'=>'error','message'=>$err]));
-    $data = json_decode($resp,true);
-    if (empty($data['id'])) exit(json_encode(['status'=>'error','message'=>'File upload failed']));
-    $fileId = $data['id'];
-    file_put_contents($LOG_FILE, "\n✅ DOCX converted & uploaded: $fileId ($fileName)\n", FILE_APPEND);
+    file_put_contents($LOG_FILE, "\n✅ DOCX converted to PDF for Gemini: $fileName\n", FILE_APPEND);
 }
 
 elseif ($isPdf && $isScannedPdf) {
@@ -614,47 +601,9 @@ elseif ($isPdf && $isScannedPdf) {
     appendDebugStage($debug, 'extract', 'Scanned PDF converted to images for OCR.');
 }
  else {
-    $debug['processing_mode'] = 'text_pdf_file_upload';
-    appendDebugStage($debug, 'extract', 'Text PDF detected, uploading file to OpenAI.');
-    // ---------- NORMAL TEXT PDF ----------
-
-    $ch = curl_init('https://api.openai.com/v1/files');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_HTTPHEADER => ["Authorization: Bearer $API_KEY"],
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => [
-            'purpose' => 'assistants',
-            'file'    => new CURLFile($tmpPath, $mime, $fileName)
-        ]
-    ]);
-
-    $resp = curl_exec($ch);
-    $err  = curl_error($ch);
-    curl_close($ch);
-
-    if ($err) {
-        exit(json_encode([
-            'status'  => 'error',
-            'message' => "File upload error: $err"
-        ]));
-    }
-
-    $data = json_decode($resp, true);
-    if (empty($data['id'])) {
-        exit(json_encode([
-            'status'  => 'error',
-            'message' => 'File upload failed'
-        ]));
-    }
-
-    $fileId = $data['id'];
-
-    file_put_contents(
-        $LOG_FILE,
-        "\n✅ Text PDF uploaded: $fileId ($fileName)\n",
-        FILE_APPEND
-    );
+    $debug['processing_mode'] = 'text_pdf_inline';
+    appendDebugStage($debug, 'extract', 'Text PDF detected, preparing inline PDF for Gemini.');
+    file_put_contents($LOG_FILE, "\n✅ Text PDF ready for Gemini: $fileName\n", FILE_APPEND);
 }
 
 
@@ -717,7 +666,7 @@ Return ONLY JSON in this format:
 PROMPT;
 
 
-if ($fileId || $isImage || $isScannedPdf) {
+if ($isImage || $isScannedPdf || $isPdf) {
     appendDebugStage($debug, 'ai', 'Preparing AI request payload.');
 
     $nameInstruction = $fullName
@@ -786,55 +735,23 @@ if ($isImage) {
         ];
     }
 
-} elseif ($fileId) {
+} elseif ($isPdf && !$isScannedPdf) {
 
+    $pdfData = base64_encode((string)file_get_contents($tmpPath));
     $content = [
         ["type" => "input_text", "text" => $userPrompt],
-        ["type" => "input_file", "file_id" => $fileId]
+        ["type" => "input_pdf", "mime" => "application/pdf", "data" => $pdfData],
     ];
 }
 
 }
 
 // =========================================
-// STEP 3️⃣ API CALL
+// STEP 3️⃣ API CALL (Gemini)
 // =========================================
-function callResponsesApi(array $payload, string $key, int $max=3, int $delay=800): array {
-    for ($i=0; $i<$max; $i++) {
-        $ch = curl_init('https://api.openai.com/v1/responses');
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                "Authorization: Bearer {$key}",
-                "Content-Type: application/json"
-            ],
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode($payload)
-        ]);
-        $r = curl_exec($ch);
-        $e = curl_error($ch);
-        curl_close($ch);
-        if ($e) return ['error'=>['message'=>$e]];
-        $d = json_decode($r,true);
-        if (!isset($d['error'])) return $d;
-        if (str_contains(strtolower($d['error']['message']), 'ownership') && $i < $max-1) {
-            usleep($delay*1000); continue;
-        }
-        return $d;
-    }
-    return ['error'=>['message'=>'Validation failed after retries']];
-}
-
-$payload = [
-  "model" => $MODEL,
-  "input" => [
-    ["role" => "system", "content" => [["type" => "input_text", "text" => $systemPrompt]]],
-    ["role" => "user", "content" => $content]
-  ],
-  "text" => ["format" => ["type" => "json_object"]]
-];
-appendDebugStage($debug, 'ai', 'Sending request to OpenAI Responses API.');
-$data = callResponsesApi($payload, $API_KEY);
+appendDebugStage($debug, 'ai', 'Sending request to Gemini.');
+$geminiResult = pcvc_docvision_generate_json($systemPrompt, $content);
+$data = $geminiResult;
 
 // =========================================
 // STEP 4️⃣ LOG & PARSE
@@ -845,17 +762,17 @@ file_put_contents(
   FILE_APPEND
 );
 if (isset($data['error'])) {
-    appendDebugStage($debug, 'ai', 'OpenAI request failed: ' . ($data['error']['message'] ?? 'unknown error'));
+    appendDebugStage($debug, 'ai', 'Gemini request failed: ' . ($data['error']['message'] ?? 'unknown error'));
     exit(json_encode([
         'status'=>'error',
         'message'=>$data['error']['message'],
         'debug' => $debug
     ]));
 }
-appendDebugStage($debug, 'ai', 'OpenAI response received.');
+appendDebugStage($debug, 'ai', 'Gemini response received.');
 
-$aiText = $data['output'][0]['content'][0]['text'] ?? '';
-$ai = json_decode($aiText, true);
+$ai = $data['json'] ?? [];
+$aiText = $data['raw_text'] ?? '';
 if (!$ai || !isset($ai['valid']))
     exit(json_encode([
         'status'=>'error',

@@ -4,9 +4,9 @@
 (function (global) {
   "use strict";
 
-  const MAX_PDF_PAGES = 5;
-  const MAX_TEXT_LEN = 24000;
-  const PDF_OCR_SCALE = 3.2;
+  const MAX_PDF_PAGES = 4;
+  const MAX_TEXT_LEN = 20000;
+  const PDF_OCR_SCALE = 2.8;
   let libsLoaded = false;
   let loadPromise = null;
   let ocrWorker = null;
@@ -221,16 +221,18 @@
 
   async function extractAll(files, onProgress) {
     await ensureLibs();
-    var texts = [];
-    for (var i = 0; i < files.length; i++) {
-      var file = files[i];
-      try {
-        texts[i] = await extractFile(file, onProgress);
-      } catch (err) {
-        console.warn("Smart autofill client extract failed:", file.name, err);
-        texts[i] = "";
-      }
-    }
+    var texts = await Promise.all(
+      files.map(function (file, i) {
+        return extractFile(file, function (name) {
+          if (typeof onProgress === "function") {
+            onProgress(name, i + 1, files.length);
+          }
+        }).catch(function (err) {
+          console.warn("Smart autofill client extract failed:", file.name, err);
+          return "";
+        });
+      })
+    );
     try {
       if (ocrWorker) {
         await ocrWorker.terminate();

@@ -133,6 +133,8 @@ $text = [
         'smart_autofill_stage_route' => 'Routing files to existing fields',
         'smart_autofill_stage_save' => 'Saving extracted form data',
         'smart_autofill_stage_submit' => 'Submitting application',
+        'smart_autofill_analyzing_doc' => 'Analyzing document {current} of {total}: {name}…',
+        'smart_autofill_analysis_intro' => 'Each document is analyzed separately (2 at a time). Progress updates as each file finishes, then files are routed automatically.',
         'smart_autofill_debug_title' => 'Batch debug details',
         'first_name' => 'First Name',
         'last_name' => 'Last Name',
@@ -344,6 +346,8 @@ $text = [
         'smart_autofill_stage_route' => 'Routage vers les champs existants',
         'smart_autofill_stage_save' => 'Enregistrement des donnees du formulaire',
         'smart_autofill_stage_submit' => 'Soumission de la demande',
+        'smart_autofill_analyzing_doc' => 'Analyse du document {current} sur {total} : {name}…',
+        'smart_autofill_analysis_intro' => 'Jusqu a 5 documents en parallele sur l API Gemini — en general moins de 90 secondes.',
         'smart_autofill_debug_title' => 'Details de debug du lot',
         'first_name' => 'Prénom',
         'last_name' => 'Nom',
@@ -1930,6 +1934,49 @@ body {
   background: #dc2626;
 }
 
+.smart-autofill-bar-wrap {
+  margin-top: 14px;
+  width: 100%;
+}
+
+.smart-autofill-bar-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.smart-autofill-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #06b6d4, #8b5cf6);
+  background-size: 200% 100%;
+  animation: smartAutofillBarShimmer 1.4s linear infinite;
+  transition: width 0.6s ease;
+}
+
+.smart-autofill-bar-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+#smartAutofillLiveStatus {
+  text-align: right;
+  flex: 1;
+  color: #334155;
+  font-weight: 600;
+}
+
+@keyframes smartAutofillBarShimmer {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
 @keyframes smartAutofillSpin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -2614,6 +2661,15 @@ class="list-group mt-2 d-none"></div>
             <strong id="smartAutofillProgressLabel"><?php echo htmlspecialchars($t['smart_autofill_processing'], ENT_QUOTES, 'UTF-8'); ?></strong>
             <small id="smartAutofillProgressSubtext"><?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?></small>
             <div id="smartAutofillStagePills" class="smart-autofill-stage-pills"></div>
+            <div id="smartAutofillProgressBarWrap" class="smart-autofill-bar-wrap d-none">
+              <div class="smart-autofill-bar-track">
+                <div id="smartAutofillProgressBar" class="smart-autofill-bar-fill"></div>
+              </div>
+              <div class="smart-autofill-bar-meta">
+                <span id="smartAutofillElapsed">0:00</span>
+                <span id="smartAutofillLiveStatus">Starting parallel analysis…</span>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2629,6 +2685,13 @@ class="list-group mt-2 d-none"></div>
             </div>
             <ul id="smartAutofillWarnings" class="smart-autofill-results"></ul>
           </div>
+        </div>
+
+        <div id="smartAutofillDebugWrap" class="doc-debug-wrap d-none mt-3">
+          <div class="small fw-semibold text-body mb-2">
+            <?php echo htmlspecialchars($t['smart_autofill_debug_title'], ENT_QUOTES, 'UTF-8'); ?>
+          </div>
+          <ul id="smartAutofillDebugList" class="doc-debug-list"></ul>
         </div>
       </div>
 
@@ -4248,11 +4311,18 @@ function startValidationSimulation(progress) {
   const resultsEl = document.getElementById("smartAutofillResults");
   const warningsWrapEl = document.getElementById("smartAutofillWarningsWrap");
   const warningsEl = document.getElementById("smartAutofillWarnings");
+  const debugWrapEl = document.getElementById("smartAutofillDebugWrap");
+  const debugListEl = document.getElementById("smartAutofillDebugList");
+  const progressBarWrap = document.getElementById("smartAutofillProgressBarWrap");
+  const progressBar = document.getElementById("smartAutofillProgressBar");
+  const elapsedEl = document.getElementById("smartAutofillElapsed");
+  const liveStatusEl = document.getElementById("smartAutofillLiveStatus");
 
   if (
     !trigger || !startButton || !input || !statusEl || !queueWrap || !queueHint || !queueEl ||
     !progressWrap || !progressText || !progressLabel || !progressSubtext || !stagePillsEl ||
-    !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl
+    !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl || !debugWrapEl || !debugListEl ||
+    !progressBarWrap || !progressBar || !elapsedEl || !liveStatusEl
   ) {
     return;
   }
@@ -4269,6 +4339,8 @@ function startValidationSimulation(progress) {
     queueEmpty: <?php echo json_encode($t['smart_autofill_queue_empty'], JSON_UNESCAPED_UNICODE); ?>,
     queueReady: <?php echo json_encode($t['smart_autofill_queue_ready'], JSON_UNESCAPED_UNICODE); ?>,
     queueCount: <?php echo json_encode($t['smart_autofill_queue_count'], JSON_UNESCAPED_UNICODE); ?>,
+    analyzingDoc: <?php echo json_encode($t['smart_autofill_analyzing_doc'], JSON_UNESCAPED_UNICODE); ?>,
+    analysisIntro: <?php echo json_encode($t['smart_autofill_analysis_intro'], JSON_UNESCAPED_UNICODE); ?>,
     submitDone: "Application submitted successfully. Any missing details can be edited later from retrieval or the student portal.",
     draftOnly: "Draft saved. No strong personal identity details were found yet, so the application was not submitted.",
     submitAttempt: "Submitting application, sending email, and creating student portal access..."
@@ -4285,6 +4357,63 @@ function startValidationSimulation(progress) {
 
   const pendingFiles = [];
   let isProcessing = false;
+  let waitAnimationStop = null;
+
+  function stopWaitAnimation(successMessage) {
+    if (typeof waitAnimationStop === "function") {
+      waitAnimationStop(successMessage);
+      waitAnimationStop = null;
+    }
+  }
+
+  function startWaitAnimation(files) {
+    stopWaitAnimation();
+    progressBarWrap.classList.remove("d-none");
+    progressBar.style.width = "4%";
+    elapsedEl.textContent = "0:00";
+    liveStatusEl.textContent = `Sending ${files.length} file(s) to Gemini in parallel…`;
+
+    const startedAt = Date.now();
+    const estimateMs = Math.max(35000, Math.min(120000, files.length * 18000));
+    const liveMessages = [
+      "Reading passport and ID pages…",
+      "Extracting names, dates, and nationality…",
+      "Scanning CV for email and phone…",
+      "Pulling academic history from transcripts…",
+      "Matching documents to form fields…",
+      "Almost there — merging extracted details…"
+    ];
+    let messageIndex = 0;
+    let fileIndex = 0;
+
+    const timer = window.setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+      const mins = Math.floor(elapsedSec / 60);
+      const secs = elapsedSec % 60;
+      elapsedEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
+
+      const pct = Math.min(94, 4 + Math.round((elapsedSec / (estimateMs / 1000)) * 90));
+      progressBar.style.width = `${pct}%`;
+
+      const currentFile = files[fileIndex % files.length];
+      liveStatusEl.textContent = `${currentFile?.name || "Document"} — ${liveMessages[messageIndex % liveMessages.length]}`;
+
+      if (elapsedSec > 0 && elapsedSec % 4 === 0) {
+        fileIndex += 1;
+      }
+      if (elapsedSec > 0 && elapsedSec % 6 === 0) {
+        messageIndex += 1;
+      }
+    }, 1000);
+
+    waitAnimationStop = (successMessage) => {
+      window.clearInterval(timer);
+      progressBar.style.width = "100%";
+      if (successMessage) {
+        liveStatusEl.textContent = successMessage;
+      }
+    };
+  }
 
   function fileKey(file) {
     return [file.name, file.size, file.lastModified].join("::");
@@ -4295,14 +4424,67 @@ function startValidationSimulation(progress) {
     warningsEl.innerHTML = "";
     panelsEl.classList.add("d-none");
     warningsWrapEl.classList.add("d-none");
+    renderAutofillDebug(null);
+  }
+
+  function renderAutofillDebug(debug, extraRows = []) {
+    if (!debugWrapEl || !debugListEl) return;
+
+    const rows = Array.isArray(extraRows) ? extraRows.slice() : [];
+    if (debug && typeof debug === "object") {
+      if (Array.isArray(debug.providers) && debug.providers.length) {
+        rows.push(["AI providers", debug.providers.join(", ")]);
+      }
+      if (debug.model) rows.push(["Gemini model", debug.model]);
+      if (debug.fast_mode != null) rows.push(["Fast mode", debug.fast_mode ? "on" : "off"]);
+      if (debug.dual_provider != null) rows.push(["Dual provider", debug.dual_provider ? "on" : "off"]);
+      if (debug.concurrency != null) rows.push(["Concurrency", String(debug.concurrency)]);
+      if (debug.documents_received != null) {
+        rows.push(["Documents received", String(debug.documents_received)]);
+      }
+      if (debug.api_key_status) rows.push(["API keys", debug.api_key_status]);
+      if (debug.log_file) rows.push(["Server log", debug.log_file]);
+      if (Array.isArray(debug.stages) && debug.stages.length) {
+        debug.stages.forEach(stage => {
+          const label = stage && stage.stage ? String(stage.stage) : "stage";
+          const detail = stage && stage.detail ? String(stage.detail) : "";
+          const time = stage && stage.time ? String(stage.time) : "";
+          rows.push([label, time ? `${detail} (${time})` : detail]);
+        });
+      }
+    }
+
+    debugListEl.innerHTML = "";
+    if (!rows.length) {
+      debugWrapEl.classList.add("d-none");
+      return;
+    }
+
+    rows.forEach(([label, value]) => {
+      const li = document.createElement("li");
+      const left = document.createElement("span");
+      const right = document.createElement("span");
+      left.textContent = label;
+      right.textContent = value == null ? "" : String(value);
+      li.appendChild(left);
+      li.appendChild(right);
+      debugListEl.appendChild(li);
+    });
+
+    debugWrapEl.classList.remove("d-none");
   }
 
   function resetProgress() {
+    stopWaitAnimation();
     progressWrap.className = "smart-autofill-progress-panel";
     progressText.textContent = "Ready";
     progressLabel.textContent = texts.processing;
     progressSubtext.textContent = <?php echo json_encode($t['smart_autofill_hint'], JSON_UNESCAPED_UNICODE); ?>;
     stagePillsEl.innerHTML = "";
+    progressBarWrap.classList.add("d-none");
+    progressBar.style.width = "0%";
+    elapsedEl.textContent = "0:00";
+    liveStatusEl.textContent = "";
   }
 
   function setStatus(kind, message) {
@@ -4503,14 +4685,282 @@ function startValidationSimulation(progress) {
     return data.application_id;
   }
 
-  function buildUploadQueue(documents) {
+  const attachmentFieldLabels = {
+    degree_transcripts: <?php echo json_encode($t['degree_transcripts'] ?? 'Degree / Academic Transcripts', JSON_UNESCAPED_UNICODE); ?>,
+    high_school_degree: <?php echo json_encode($t['high_school_degree'] ?? 'High School Certificate', JSON_UNESCAPED_UNICODE); ?>,
+    valid_passport: <?php echo json_encode($t['valid_passport'] ?? 'Valid Passport', JSON_UNESCAPED_UNICODE); ?>,
+    recommendation_letters: <?php echo json_encode($t['recommendation_letters'] ?? 'Recommendation Letter(s)', JSON_UNESCAPED_UNICODE); ?>,
+    personal_statement: <?php echo json_encode($t['personal_statement'] ?? 'Personal Statement', JSON_UNESCAPED_UNICODE); ?>,
+    cv_resume: <?php echo json_encode($t['cv_resume'] ?? 'CV / Resume', JSON_UNESCAPED_UNICODE); ?>,
+    english_certificate: <?php echo json_encode($t['english_certificate'] ?? 'English Certificate', JSON_UNESCAPED_UNICODE); ?>,
+    birth_certificate: <?php echo json_encode($t['birth_certificate'] ?? 'Birth Certificate', JSON_UNESCAPED_UNICODE); ?>,
+    payment_proof: <?php echo json_encode($t['payment_proof'] ?? 'Payment Proof', JSON_UNESCAPED_UNICODE); ?>
+  };
+
+  function guessAttachmentFieldFromFilename(name) {
+    const n = String(name || "").toLowerCase();
+    if (/\b(passport|passeport)\b/.test(n)) return "valid_passport";
+    if (/\b(cv|resume|curriculum|vitae)\b/.test(n)) return "cv_resume";
+    if (/\b(transcript|releve|relevé|academic|grade|diploma|degree)\b/.test(n)) return "degree_transcripts";
+    if (/\b(high[\s_-]?school|lycee|lycée|baccalaureat|secondary)\b/.test(n)) return "high_school_degree";
+    if (/\b(birth[\s_-]?cert|naissance)\b/.test(n)) return "birth_certificate";
+    if (/\b(ielts|toefl|english|anglais)\b/.test(n)) return "english_certificate";
+    return "";
+  }
+
+  function mergeAutofillFields(target, incoming) {
+    if (!incoming || typeof incoming !== "object") return;
+    const priority = {
+      first_name: ["valid_passport", "birth_certificate", "cv_resume"],
+      last_name: ["valid_passport", "birth_certificate", "cv_resume"],
+      passport_number: ["valid_passport"],
+      student_national_id: ["valid_passport", "birth_certificate"],
+      dob: ["valid_passport", "birth_certificate"],
+      gender: ["valid_passport", "birth_certificate"],
+      nationality: ["valid_passport", "birth_certificate", "cv_resume"],
+      country_of_birth: ["valid_passport", "birth_certificate"],
+      city_of_birth: ["valid_passport", "birth_certificate"],
+      email: ["cv_resume", "personal_statement"],
+      area_code: ["cv_resume", "personal_statement"],
+      phone_number: ["cv_resume", "personal_statement"],
+      address_line1: ["cv_resume", "valid_passport", "personal_statement"],
+      address_line2: ["cv_resume", "valid_passport"],
+      city: ["cv_resume", "valid_passport"],
+      state_province: ["cv_resume", "valid_passport"],
+      postal_code: ["cv_resume", "valid_passport"]
+    };
+    if (!target.__mergeScores) target.__mergeScores = {};
+
+    Object.entries(incoming).forEach(([key, value]) => {
+      if (value === null || value === undefined || String(value).trim() === "") return;
+      const source = incoming.__documentType || "unknown";
+      const conf = Number(incoming.__confidence || 0.7);
+      const prefs = priority[key] || [];
+      const rank = prefs.indexOf(source);
+      const score = (rank >= 0 ? (prefs.length - rank) * 100 : 0) + conf * 100;
+      const prev = Number(target.__mergeScores[key] || -1);
+      if (!target[key] || score >= prev) {
+        target[key] = value;
+        target.__mergeScores[key] = score;
+      }
+    });
+  }
+
+  function pickContactRefineFile(files) {
+    const ranked = files
+      .map((file, index) => ({ file, index, name: String(file.name || "").toLowerCase() }))
+      .sort((a, b) => {
+        const score = (name) => {
+          if (/\b(cv|resume|curriculum|vitae)\b/.test(name)) return 3;
+          if (/\b(passport|passeport)\b/.test(name)) return 2;
+          return 1;
+        };
+        return score(b.name) - score(a.name);
+      });
+    return ranked[0]?.file || null;
+  }
+
+  async function refineMissingContactFields(files, applicationId, merged) {
+    const needsEmail = !String(merged.fields?.email || "").trim();
+    const needsPhone = !String(merged.fields?.phone_number || "").trim();
+    if (!needsEmail && !needsPhone) return;
+
+    const contactFile = pickContactRefineFile(files);
+    if (!contactFile) return;
+
+    liveStatusEl.textContent = `${contactFile.name} — smart contact extraction (email & phone)…`;
+
+    const formData = new FormData();
+    formData.append("documents[]", contactFile);
+    formData.append("document_client_index", String(files.indexOf(contactFile)));
+    formData.append("application_id", applicationId);
+    formData.append("lang", document.documentElement.lang || "en");
+    formData.append("contact_only", "1");
+
+    try {
+      const res = await fetch("student_ai_autofill.php", {
+        method: "POST",
+        body: formData,
+        credentials: "same-origin"
+      });
+      const data = await res.json();
+      if (!res.ok || !data || data.status !== "success") return;
+
+      mergeAutofillFields(merged.fields, data.fields || {});
+      if (data.fields && typeof window.applyAutofillFields === "function") {
+        window.applyAutofillFields(data.fields);
+      }
+      if (Array.isArray(data.warnings)) {
+        merged.warnings.push(...data.warnings);
+      }
+    } catch (err) {
+      merged.warnings.push(
+        `${contactFile.name}: contact refinement failed (${err?.message || "error"}).`
+      );
+    }
+  }
+
+  async function analyzeDocumentsBatch(files, applicationId) {
+    const merged = {
+      status: "success",
+      fields: {},
+      documents: [],
+      warnings: [],
+      upload_token: ""
+    };
+    const ANALYSIS_CONCURRENCY = 2;
+    const ANALYSIS_TIMEOUT_MS = 120000;
+    let finished = 0;
+
+    progressBarWrap.classList.remove("d-none");
+    progressBar.style.width = "0%";
+    elapsedEl.textContent = "0:00";
+    const batchStarted = Date.now();
+
+    renderAutofillDebug(null, [
+      ["Mode", `Analyzing ${files.length} file(s), ${ANALYSIS_CONCURRENCY} at a time`],
+      ["Files", files.map(file => file.name).join(", ")]
+    ]);
+
+    async function analyzeOne(file, index) {
+      const label = `Document ${index + 1} of ${files.length}: ${file.name}`;
+      setStage("batch", texts.processing, "info", label);
+      liveStatusEl.textContent = `${file.name} — sending to Gemini…`;
+
+      const formData = new FormData();
+      formData.append("documents[]", file);
+      formData.append("document_client_index", String(index));
+      formData.append("application_id", applicationId);
+      formData.append("lang", document.documentElement.lang || "en");
+
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), ANALYSIS_TIMEOUT_MS);
+
+      try {
+        const analysisResponse = await fetch("student_ai_autofill.php", {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin",
+          signal: controller.signal
+        });
+
+        let analysisData = null;
+        try {
+          analysisData = await analysisResponse.json();
+        } catch (parseErr) {
+          throw new Error(`${file.name}: invalid server response`);
+        }
+
+        if (!analysisResponse.ok || !analysisData || analysisData.status !== "success") {
+          merged.warnings.push(`${file.name}: ${analysisData?.message || texts.error}`);
+          if (analysisData?.debug) {
+            renderAutofillDebug(analysisData.debug);
+          }
+          return null;
+        }
+
+        if (analysisData.fields && typeof window.applyAutofillFields === "function") {
+          window.applyAutofillFields(analysisData.fields);
+        }
+
+        const docMeta = (analysisData.documents && analysisData.documents[0]) || {};
+        const fieldsWithMeta = {
+          ...(analysisData.fields || {}),
+          __documentType: docMeta.field || guessAttachmentFieldFromFilename(file.name) || "unknown",
+          __confidence: Number(docMeta.confidence || 0.75)
+        };
+        mergeAutofillFields(merged.fields, fieldsWithMeta);
+        (analysisData.documents || []).forEach(doc => {
+          merged.documents.push({
+            ...doc,
+            client_index: index,
+            original_name: doc.original_name || file.name
+          });
+        });
+        merged.warnings.push(...(analysisData.warnings || []));
+        if (analysisData.upload_token) {
+          merged.upload_token = analysisData.upload_token;
+        }
+
+        if (analysisData.debug) {
+          renderAutofillDebug(analysisData.debug, [
+            ["Progress", `${finished + 1}/${files.length} complete`]
+          ]);
+        }
+
+        return analysisData;
+      } catch (err) {
+        const msg = err && err.name === "AbortError"
+          ? `${file.name}: timed out after 2 minutes.`
+          : `${file.name}: ${err && err.message ? err.message : texts.error}`;
+        merged.warnings.push(msg);
+        return null;
+      } finally {
+        window.clearTimeout(timeoutId);
+        finished += 1;
+        const elapsedSec = Math.floor((Date.now() - batchStarted) / 1000);
+        const mins = Math.floor(elapsedSec / 60);
+        const secs = elapsedSec % 60;
+        elapsedEl.textContent = `${mins}:${String(secs).padStart(2, "0")}`;
+        progressBar.style.width = `${Math.round((finished / files.length) * 100)}%`;
+        liveStatusEl.textContent = finished >= files.length
+          ? "All documents analyzed — routing files next…"
+          : `${finished}/${files.length} done — continuing…`;
+      }
+    }
+
+    const taskFactories = files.map((file, index) => () => analyzeOne(file, index));
+    await runTasksWithPool(taskFactories, ANALYSIS_CONCURRENCY);
+
+    await refineMissingContactFields(files, applicationId, merged);
+
+    if (typeof window.applyAutofillFields === "function") {
+      const cleanFields = { ...merged.fields };
+      delete cleanFields.__mergeScores;
+      window.applyAutofillFields(cleanFields);
+    }
+
+    stopWaitAnimation("Analysis complete — routing files…");
+
+    if (!merged.documents.length && !Object.keys(merged.fields).length) {
+      throw new Error(merged.warnings[0] || "No document could be analyzed successfully.");
+    }
+
+    return merged;
+  }
+
+  async function runTasksWithPool(taskFactories, concurrency) {
+    const results = new Array(taskFactories.length);
+    let nextIndex = 0;
+    const workerCount = Math.max(1, Math.min(concurrency, taskFactories.length));
+
+    async function worker() {
+      while (nextIndex < taskFactories.length) {
+        const current = nextIndex++;
+        results[current] = await taskFactories[current]();
+      }
+    }
+
+    await Promise.all(Array.from({ length: workerCount }, () => worker()));
+    return results;
+  }
+
+  function buildUploadQueue(documents, files = []) {
     const multiFieldSet = new Set(["degree_transcripts", "recommendation_letters"]);
     const grouped = new Map();
     const warnings = [];
     const queue = [];
 
     (Array.isArray(documents) ? documents : []).forEach(doc => {
-      if (!doc || !doc.field) return;
+      if (!doc) return;
+      const filenameGuess = guessAttachmentFieldFromFilename(doc.original_name);
+      if (filenameGuess) {
+        doc.field = filenameGuess;
+        doc.field_label = attachmentFieldLabels[filenameGuess] || filenameGuess;
+      } else if (!doc.field) {
+        return;
+      }
+      if (!doc.field) return;
       if (!grouped.has(doc.field)) grouped.set(doc.field, []);
       grouped.get(doc.field).push(doc);
     });
@@ -4530,6 +4980,39 @@ function startValidationSimulation(progress) {
       selected.forEach(doc => queue.push(doc));
     }
 
+    const coveredFields = new Set(queue.map(doc => doc.field));
+    (Array.isArray(files) ? files : []).forEach((file, index) => {
+      const guess = guessAttachmentFieldFromFilename(file.name);
+      if (!guess) return;
+
+      if (multiFieldSet.has(guess)) {
+        const already = queue.some(
+          doc => doc.field === guess && doc.original_name === file.name
+        );
+        if (!already) {
+          queue.push({
+            client_index: index,
+            original_name: file.name,
+            field: guess,
+            field_label: attachmentFieldLabels[guess] || guess,
+            confidence: 0.75
+          });
+        }
+        return;
+      }
+
+      if (coveredFields.has(guess)) return;
+
+      queue.push({
+        client_index: index,
+        original_name: file.name,
+        field: guess,
+        field_label: attachmentFieldLabels[guess] || guess,
+        confidence: 0.75
+      });
+      coveredFields.add(guess);
+    });
+
     return { queue, warnings };
   }
 
@@ -4546,7 +5029,11 @@ function startValidationSimulation(progress) {
       while (nextIndex < queue.length) {
         const currentIndex = nextIndex++;
         const doc = queue[currentIndex];
-        const file = files[Number(doc?.client_index)];
+        let file = files[Number(doc?.client_index)];
+        if (!file && doc?.original_name) {
+          const wanted = String(doc.original_name).toLowerCase();
+          file = files.find(f => String(f.name || "").toLowerCase() === wanted);
+        }
 
         if (!file) {
           warnings.push(`Original file missing for ${doc?.original_name || "document"}.`);
@@ -4625,54 +5112,24 @@ function startValidationSimulation(progress) {
       setStage("draft", <?php echo json_encode($t['smart_autofill_stage_draft'], JSON_UNESCAPED_UNICODE); ?>, "info", "Preparing your application draft for document routing.");
       const applicationId = await ensureDraftExists();
 
-      setStage("batch", texts.processing, "info", "Reading each selected document and extracting applicant details.");
       const files = [...pendingFiles];
-      const formData = new FormData();
-      files.forEach(file => formData.append("documents[]", file));
-      formData.append("application_id", applicationId);
-      formData.append("lang", document.documentElement.lang || "en");
 
-      const analysisResponse = await fetch("student_ai_autofill.php", {
-        method: "POST",
-        body: formData,
-        credentials: "same-origin"
-      }).catch(fetchErr => {
-        throw new Error(
-          fetchErr && fetchErr.message === "Failed to fetch"
-            ? "Document analysis timed out or lost connection to the server. Please try again — fewer documents at once can also help."
-            : (fetchErr && fetchErr.message ? fetchErr.message : texts.error)
-        );
-      });
-
-      let analysisData = null;
-      try {
-        analysisData = await analysisResponse.json();
-      } catch (err) {
-        throw new Error(texts.error);
-      }
-
-      if (!analysisResponse.ok || !analysisData || analysisData.status !== "success") {
-        throw new Error(analysisData?.message || texts.error);
-      }
-
-      if (analysisData.fields && typeof window.applyAutofillFields === "function") {
-        window.applyAutofillFields(analysisData.fields);
-      }
-
-      const { queue, warnings: queueWarnings } = buildUploadQueue(analysisData.documents || []);
-      const warnings = [...(analysisData.warnings || []), ...queueWarnings];
-      const batchUploadToken = typeof analysisData.upload_token === "string"
-        ? analysisData.upload_token
-        : "";
+      setStage("batch", texts.processing, "info", texts.analysisIntro);
+      const analysisData = await analyzeDocumentsBatch(files, applicationId);
 
       setStage(
         "route",
         texts.uploading,
         "info",
-        batchUploadToken
-          ? "Saving recognized documents directly into the existing attachment fields."
-          : "Routing recognized documents into the existing attachment fields."
+        "Analysis finished. Attaching recognized documents to form fields…"
       );
+
+      const { queue, warnings: queueWarnings } = buildUploadQueue(analysisData.documents || [], files);
+      const warnings = [...(analysisData.warnings || []), ...queueWarnings];
+      const batchUploadToken = typeof analysisData.upload_token === "string"
+        ? analysisData.upload_token
+        : "";
+
       const routeResult = await routeQueuedDocuments(queue, files, {
         concurrency: batchUploadToken ? 4 : 3,
         smartAutofillBatchToken: batchUploadToken
@@ -4683,7 +5140,9 @@ function startValidationSimulation(progress) {
       setStage("save", <?php echo json_encode($t['smart_autofill_stage_save'], JSON_UNESCAPED_UNICODE); ?>, "info", "Saving extracted student details and current study choices.");
       try {
         if (typeof window.persistAutofillDraftData === "function") {
-          await window.persistAutofillDraftData(applicationId, analysisData.fields || {});
+          const saveFields = { ...analysisData.fields };
+          delete saveFields.__mergeScores;
+          await window.persistAutofillDraftData(applicationId, saveFields);
         }
       } catch (err) {
         warnings.push(err && err.message ? err.message : "Autofilled form values were applied, but saving the draft needs another try.");
@@ -4721,6 +5180,7 @@ function startValidationSimulation(progress) {
 
       setStage("submit", texts.success, "success", texts.submitDone);
     } catch (err) {
+      stopWaitAnimation("Analysis stopped.");
       const message = err && err.message ? err.message : texts.error;
       setStage("batch", message, "danger", "The queued documents were kept so you can adjust them and try again.");
       if (typeof showApplicationSaveError === "function") {
