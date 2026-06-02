@@ -4087,6 +4087,13 @@ function uploadSingleFile(field, file, options = {}) {
       document.querySelector('[name="last_name"]')?.value || ""
     );
     formData.append("lang", document.documentElement.lang || "en");
+    const uploadAppId =
+      window.currentApplicationId ||
+      document.querySelector('[name="application_id"]')?.value ||
+      "";
+    if (uploadAppId) {
+      formData.append("application_id", String(uploadAppId));
+    }
     if (skipAiValidation && smartAutofillBatchToken) {
       formData.append("skip_ai_validation", "1");
       formData.append("smart_autofill_batch_token", smartAutofillBatchToken);
@@ -4105,7 +4112,8 @@ function uploadSingleFile(field, file, options = {}) {
     =============================== */
     xhr.upload.onprogress = e => {
       if (!e.lengthComputable) return;
-      const percent = Math.round((e.loaded / e.total) * 60);
+      const batchRoute = skipAiValidation && smartAutofillBatchToken;
+      const percent = Math.round((e.loaded / e.total) * (batchRoute ? 85 : 60));
       progress.set(percent, `Uploading ${file.name}…`, "upload");
     };
 
@@ -4174,7 +4182,11 @@ function uploadSingleFile(field, file, options = {}) {
         renderUploadedFileChip(file.name);
         window.uploadStatus[field].push(file.name);
         let draftSaveWarning = "";
-        if (response.autofill_fields && typeof window.applyAutofillFields === "function") {
+        if (
+          !(skipAiValidation && smartAutofillBatchToken) &&
+          response.autofill_fields &&
+          typeof window.applyAutofillFields === "function"
+        ) {
           window.applyAutofillFields(response.autofill_fields);
           if (typeof window.persistAutofillDraftData === "function") {
             try {
@@ -4534,14 +4546,29 @@ function startValidationSimulation(progress) {
 
   function hasCoreApplicantInfo(fields) {
     const values = fields || {};
+    const hasPhone =
+      (String(values.area_code || values.phone_area_code || "").trim() !== "" &&
+        String(values.phone_number || "").trim() !== "") ||
+      String(values.phone_e164 || "").trim() !== "";
+
     return [
       values.first_name,
       values.last_name,
       values.email,
       values.passport_number,
       values.student_national_id,
-      values.phone_number
+      hasPhone ? "1" : ""
     ].some(value => String(value || "").trim() !== "");
+  }
+
+  function applyMergedAutofillFields(aiFields) {
+    if (typeof window.applyAutofillFields === "function") {
+      window.applyAutofillFields(aiFields);
+    }
+    if (typeof window.syncApplicantPhoneHiddenFields === "function") {
+      window.syncApplicantPhoneHiddenFields();
+    }
+    return aiFields || {};
   }
 
   function renderQueue() {
@@ -4733,9 +4760,7 @@ function startValidationSimulation(progress) {
         __documentType: "valid_passport",
         __confidence: 0.95
       });
-      if (data.fields && typeof window.applyAutofillFields === "function") {
-        window.applyAutofillFields(data.fields);
-      }
+      applyMergedAutofillFields(data.fields || {});
       if (Array.isArray(data.warnings)) {
         merged.warnings.push(...data.warnings);
       }
@@ -4773,9 +4798,7 @@ function startValidationSimulation(progress) {
       if (!res.ok || !data || data.status !== "success") return;
 
       mergeAutofillFields(merged.fields, data.fields || {});
-      if (data.fields && typeof window.applyAutofillFields === "function") {
-        window.applyAutofillFields(data.fields);
-      }
+      applyMergedAutofillFields(data.fields || {});
       if (Array.isArray(data.warnings)) {
         merged.warnings.push(...data.warnings);
       }
@@ -4832,9 +4855,7 @@ function startValidationSimulation(progress) {
           return null;
         }
 
-        if (analysisData.fields && typeof window.applyAutofillFields === "function") {
-          window.applyAutofillFields(analysisData.fields);
-        }
+        applyMergedAutofillFields(analysisData.fields || {});
 
         const docMeta = (analysisData.documents && analysisData.documents[0]) || {};
         const fieldsWithMeta = {
@@ -4882,11 +4903,9 @@ function startValidationSimulation(progress) {
     await refineMissingContactFields(files, applicationId, merged);
     await refineMissingPassportField(files, applicationId, merged);
 
-    if (typeof window.applyAutofillFields === "function") {
-      const cleanFields = { ...merged.fields };
-      delete cleanFields.__mergeScores;
-      window.applyAutofillFields(cleanFields);
-    }
+    const cleanFields = { ...merged.fields };
+    delete cleanFields.__mergeScores;
+    applyMergedAutofillFields(cleanFields);
 
     setAutofillProgress(60, "Analysis complete — routing files next…");
 
@@ -5130,13 +5149,15 @@ function startValidationSimulation(progress) {
       warnings.push(...routeResult.warnings);
       const attachFailures = routeResult.attachFailures;
 
+      const saveFields = { ...analysisData.fields };
+      delete saveFields.__mergeScores;
+      const mergedFields = applyMergedAutofillFields(saveFields);
+
       setStage("save", <?php echo json_encode($t['smart_autofill_stage_save'], JSON_UNESCAPED_UNICODE); ?>, "info", "Saving extracted student details and current study choices.");
       setAutofillProgress(88, "Saving extracted student details…");
       try {
         if (typeof window.persistAutofillDraftData === "function") {
-          const saveFields = { ...analysisData.fields };
-          delete saveFields.__mergeScores;
-          await window.persistAutofillDraftData(applicationId, saveFields);
+          await window.persistAutofillDraftData(applicationId, mergedFields);
         }
       } catch (err) {
         warnings.push(err && err.message ? err.message : "Autofilled form values were applied, but saving the draft needs another try.");
@@ -5145,15 +5166,30 @@ function startValidationSimulation(progress) {
       renderPanels(analysisData.documents || [], warnings);
       clearPendingFiles();
 
-      if (!hasCoreApplicantInfo(analysisData.fields || {})) {
+      if (!hasCoreApplicantInfo(mergedFields)) {
         setAutofillProgress(100, texts.draftOnly);
         setStage("save", texts.draftOnly, "warning", "You can add more documents later and run the analysis again.");
+        return;
+      }
+
+      if (typeof collectStudyChoices === "function" && collectStudyChoices().length === 0) {
+        setStage(
+          "submit",
+          "Select at least one study program on step 1, then run Start analysis again to submit.",
+          "warning",
+          "Study choice is required before final submission."
+        );
         return;
       }
 
       if (attachFailures > 0) {
         warnings.push("Some documents could not be attached, but the application will still continue to final submission with the details already extracted.");
         renderPanels(analysisData.documents || [], warnings);
+      }
+
+      applyMergedAutofillFields(mergedFields);
+      if (typeof window.syncApplicantPhoneHiddenFields === "function") {
+        window.syncApplicantPhoneHiddenFields();
       }
 
       setStage("submit", texts.submitAttempt, "info", "Continuing automatically to the final submission even if only one identity document was provided.");
