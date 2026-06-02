@@ -2687,12 +2687,6 @@ class="list-group mt-2 d-none"></div>
           </div>
         </div>
 
-        <div id="smartAutofillDebugWrap" class="doc-debug-wrap d-none mt-3">
-          <div class="small fw-semibold text-body mb-2">
-            <?php echo htmlspecialchars($t['smart_autofill_debug_title'], ENT_QUOTES, 'UTF-8'); ?>
-          </div>
-          <ul id="smartAutofillDebugList" class="doc-debug-list"></ul>
-        </div>
       </div>
 
     </div>
@@ -4311,8 +4305,6 @@ function startValidationSimulation(progress) {
   const resultsEl = document.getElementById("smartAutofillResults");
   const warningsWrapEl = document.getElementById("smartAutofillWarningsWrap");
   const warningsEl = document.getElementById("smartAutofillWarnings");
-  const debugWrapEl = document.getElementById("smartAutofillDebugWrap");
-  const debugListEl = document.getElementById("smartAutofillDebugList");
   const progressBarWrap = document.getElementById("smartAutofillProgressBarWrap");
   const progressBar = document.getElementById("smartAutofillProgressBar");
   const elapsedEl = document.getElementById("smartAutofillElapsed");
@@ -4321,7 +4313,7 @@ function startValidationSimulation(progress) {
   if (
     !trigger || !startButton || !input || !statusEl || !queueWrap || !queueHint || !queueEl ||
     !progressWrap || !progressText || !progressLabel || !progressSubtext || !stagePillsEl ||
-    !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl || !debugWrapEl || !debugListEl ||
+    !panelsEl || !resultsEl || !warningsWrapEl || !warningsEl ||
     !progressBarWrap || !progressBar || !elapsedEl || !liveStatusEl
   ) {
     return;
@@ -4412,54 +4404,6 @@ function startValidationSimulation(progress) {
     warningsEl.innerHTML = "";
     panelsEl.classList.add("d-none");
     warningsWrapEl.classList.add("d-none");
-    renderAutofillDebug(null);
-  }
-
-  function renderAutofillDebug(debug, extraRows = []) {
-    if (!debugWrapEl || !debugListEl) return;
-
-    const rows = Array.isArray(extraRows) ? extraRows.slice() : [];
-    if (debug && typeof debug === "object") {
-      if (Array.isArray(debug.providers) && debug.providers.length) {
-        rows.push(["AI providers", debug.providers.join(", ")]);
-      }
-      if (debug.model) rows.push(["Gemini model", debug.model]);
-      if (debug.fast_mode != null) rows.push(["Fast mode", debug.fast_mode ? "on" : "off"]);
-      if (debug.dual_provider != null) rows.push(["Dual provider", debug.dual_provider ? "on" : "off"]);
-      if (debug.concurrency != null) rows.push(["Concurrency", String(debug.concurrency)]);
-      if (debug.documents_received != null) {
-        rows.push(["Documents received", String(debug.documents_received)]);
-      }
-      if (debug.api_key_status) rows.push(["API keys", debug.api_key_status]);
-      if (debug.log_file) rows.push(["Server log", debug.log_file]);
-      if (Array.isArray(debug.stages) && debug.stages.length) {
-        debug.stages.forEach(stage => {
-          const label = stage && stage.stage ? String(stage.stage) : "stage";
-          const detail = stage && stage.detail ? String(stage.detail) : "";
-          const time = stage && stage.time ? String(stage.time) : "";
-          rows.push([label, time ? `${detail} (${time})` : detail]);
-        });
-      }
-    }
-
-    debugListEl.innerHTML = "";
-    if (!rows.length) {
-      debugWrapEl.classList.add("d-none");
-      return;
-    }
-
-    rows.forEach(([label, value]) => {
-      const li = document.createElement("li");
-      const left = document.createElement("span");
-      const right = document.createElement("span");
-      left.textContent = label;
-      right.textContent = value == null ? "" : String(value);
-      li.appendChild(left);
-      li.appendChild(right);
-      debugListEl.appendChild(li);
-    });
-
-    debugWrapEl.classList.remove("d-none");
   }
 
   function resetProgress() {
@@ -4795,9 +4739,6 @@ function startValidationSimulation(progress) {
       if (Array.isArray(data.warnings)) {
         merged.warnings.push(...data.warnings);
       }
-      if (data.debug) {
-        renderAutofillDebug(data.debug);
-      }
     } catch (err) {
       merged.warnings.push(
         `${passportFile.name}: passport refinement failed (${err?.message || "error"}).`
@@ -4857,11 +4798,6 @@ function startValidationSimulation(progress) {
     const ANALYSIS_TIMEOUT_MS = 120000;
     let finished = 0;
 
-    renderAutofillDebug(null, [
-      ["Mode", `Analyzing ${files.length} file(s), ${ANALYSIS_CONCURRENCY} at a time`],
-      ["Files", files.map(file => file.name).join(", ")]
-    ]);
-
     async function analyzeOne(file, index) {
       const label = `Document ${index + 1} of ${files.length}: ${file.name}`;
       setStage("batch", texts.processing, "info", label);
@@ -4893,9 +4829,6 @@ function startValidationSimulation(progress) {
 
         if (!analysisResponse.ok || !analysisData || analysisData.status !== "success") {
           merged.warnings.push(`${file.name}: ${analysisData?.message || texts.error}`);
-          if (analysisData?.debug) {
-            renderAutofillDebug(analysisData.debug);
-          }
           return null;
         }
 
@@ -4920,12 +4853,6 @@ function startValidationSimulation(progress) {
         merged.warnings.push(...(analysisData.warnings || []));
         if (analysisData.upload_token) {
           merged.upload_token = analysisData.upload_token;
-        }
-
-        if (analysisData.debug) {
-          renderAutofillDebug(analysisData.debug, [
-            ["Progress", `${finished + 1}/${files.length} complete`]
-          ]);
         }
 
         return analysisData;
