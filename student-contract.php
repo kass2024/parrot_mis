@@ -541,10 +541,37 @@ body {
 .package-details {
   display: none;
   margin-top: 10pt;
-  padding-left: 28px;
+  padding: 12px 14px 12px 28px;
   font-size: 11.6pt;
-  line-height: 1.7;
+  line-height: 1.75;
   color: var(--muted);
+  background: #f8faf8;
+  border-left: 3px solid #2e7d32;
+  border-radius: 0 8px 8px 0;
+}
+
+/* Highlighted fee amounts (Article 7 packages) */
+.fee-price {
+  display: inline-block;
+  font-weight: 700;
+  color: #0d5c2e;
+  background: linear-gradient(135deg, #e8f5e9 0%, #f4fbf4 100%);
+  border: 1px solid #81c784;
+  border-radius: 5px;
+  padding: 2px 7px;
+  margin: 0 2px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  box-shadow: 0 1px 2px rgba(46, 125, 50, 0.12);
+}
+
+.package-details strong .fee-price,
+.package-details strong:has(.fee-price) {
+  font-size: 1.05em;
+}
+
+.additional-fees .fee-price {
+  font-size: 1em;
 }
 
 /* =====================================================
@@ -1048,14 +1075,12 @@ button {
     7.8 🇰🇷 Study in South Korea (Self-Sponsored)
   </label>
   <div id="p77" class="package-details">
-    <!-- ➤ Registration & Application Fee: USD 500 (Refundable if admission is not secured)<br> -->
-    ➤ Registration & Application Fee: USD 1000 (Refundable if admission is not secured)<br> 
-    ➤ Service Fees (After Visa Approval): USD 1,400<br>
-    <!-- ➤ Service Fees – Bachelor’s: USD 1,800<br>
-    ➤ Service Fees – Master’s: USD 2,000<br>
-    ➤ Service Fees – PhD: USD 2,200<br> -->
-    ✔ Free Korean language training (3 months)<br>
-    <!-- ✔ 50% payable upon admission, balance before visa application -->
+    ➤ Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)<br>
+    ➤ Self-Sponsored Service Fees – Bachelor: USD 2,000 (Includes free Korean language training for 3 months & Pre-Departure Orientation)<br>
+    ➤ Self-Sponsored Service Fees – Master’s: USD 2,400 (Includes free Korean language training for 3 months & Pre-Departure Orientation)<br>
+    ➤ Self-Sponsored Service Fees – PhD: USD 2,800 (Includes free Korean language training for 3 months & Pre-Departure Orientation)<br>
+    ✔ Once the Final Acceptance Letter is approved, one-half (1/2) of the applicable service fees must be paid before the visa application<br>
+    ✔ Free Korean language training (3 months) and Pre-Departure Orientation are provided if needed
   </div>
 </div>
 
@@ -2185,6 +2210,43 @@ document.addEventListener('DOMContentLoaded', function() {
     return label ? label.textContent.trim() : null;
   };
 
+})();
+
+/**
+ * Highlight currency amounts in package fee blocks (Article 7).
+ */
+(function () {
+  'use strict';
+
+  const NUM = '(?:\\d{1,3}(?:,\\d{3})*|\\d+)(?:\\.\\d+)?';
+  const PRICE_RE = new RegExp(
+    '(?:(?:USD|CAD|EUR)\\s+' + NUM +
+      '(?:\\s*(?:–|-|to)\\s*(?:(?:USD|CAD|EUR)\\s+)?' + NUM + ')?' +
+      '|€\\s*' + NUM +
+      '(?:\\s*(?:–|-)\\s*€?\\s*' + NUM + ')?)',
+    'gi'
+  );
+
+  function highlightPricesInContainer(container) {
+    if (!container || container.dataset.pricesHighlighted === '1') {
+      return;
+    }
+    container.innerHTML = container.innerHTML.replace(
+      PRICE_RE,
+      (match) => '<span class="fee-price">' + match + '</span>'
+    );
+    container.dataset.pricesHighlighted = '1';
+  }
+
+  function initPriceHighlights() {
+    document.querySelectorAll('.package-details, .additional-fees').forEach(highlightPricesInContainer);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initPriceHighlights);
+  } else {
+    initPriceHighlights();
+  }
 })();
 </script>
 

@@ -5,6 +5,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
+require_once __DIR__ . '/helpers/contract_price_highlight.php';
 
 /* =====================================================
    SAFE ESCAPE
@@ -123,14 +124,12 @@ function getPackageDetails(string $code): array
         'p77' => [
             'title' => '7.8 Study in South Korea (Self-Sponsored)',
             'lines' => [
-                // 'Registration & Application Fee: USD 500 (Refundable if admission is not secured)',
-                'Registration & Application Fee: USD 1000 (Refundable if admission is not secured)',
-                'Service Fees (After Visa Approval): USD 1,400',
-                // 'Service Fees – Bachelor’s Program: USD 1,800',
-                // 'Service Fees – Master’s Program: USD 2,000',
-                // 'Service Fees – PhD Program: USD 2,200',
-                'Includes free Korean language training (3 months)',
-                // '50% payable upon admission, balance before visa application',
+                'Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)',
+                'Self-Sponsored Service Fees – Bachelor: USD 2,000 (Includes free Korean language training for 3 months & Pre-Departure Orientation)',
+                'Self-Sponsored Service Fees – Master’s: USD 2,400 (Includes free Korean language training for 3 months & Pre-Departure Orientation)',
+                'Self-Sponsored Service Fees – PhD: USD 2,800 (Includes free Korean language training for 3 months & Pre-Departure Orientation)',
+                'Once the Final Acceptance Letter is approved, one-half (1/2) of the applicable service fees must be paid before the visa application',
+                'Free Korean language training (3 months) and Pre-Departure Orientation are provided if needed',
             ],
             'total' => null,
         ],
@@ -465,6 +464,31 @@ a {
     text-decoration: underline;
 }
 
+/* =========================
+   FEE AMOUNTS (PDF – subtle, inline only)
+========================= */
+.fee-price {
+    font-weight: 700;
+}
+
+/* =========================
+   SIGNATURES – keep on one page
+========================= */
+.signatures-section {
+    page-break-inside: avoid;
+    page-break-before: auto;
+}
+
+.signatures-section table,
+.signatures-section tr,
+.signatures-section td {
+    page-break-inside: avoid;
+}
+
+.pricing-block {
+    page-break-inside: avoid;
+}
+
 </style>
 
 </head>
@@ -606,36 +630,42 @@ subject to the specific service package selected by the Student under this Agree
 
 <p><strong><?= esc($package['title']) ?></strong></p>
 
-<ul>
+<ul class="package-fees-list">
 <?php foreach ($package['lines'] as $line): ?>
-    <li><?= esc($line) ?></li>
+    <li><?= highlightContractPrices($line) ?></li>
 <?php endforeach; ?>
 </ul>
 
 <?php if (!empty($package['total'])): ?>
-<p><strong>Total Package: <?= esc($package['total']) ?></strong></p>
+<p><strong>Total Package: <?= highlightContractPrices($package['total']) ?></strong></p>
 <?php endif; ?>
 <h3>Additional Pricing Provisions (Without Loan &amp; Special Services)</h3>
 
+<div class="pricing-block">
 <p><strong>1. Spring, Winter, Summer, or Fall Short Courses (Worldwide)</strong></p>
 <ul>
-    <li>Application and Registration Fees: <strong>EUR 250</strong>, refundable if approval is not secured within four (4) months</li>
-    <li>Service Fees: <strong>EUR 2,000</strong>, payable only once the visa is approved</li>
+    <li><?= highlightContractPrices('Application and Registration Fees: EUR 250, refundable if approval is not secured within four (4) months') ?></li>
+    <li><?= highlightContractPrices('Service Fees: EUR 2,000, payable only once the visa is approved') ?></li>
 </ul>
+</div>
 
+<div class="pricing-block">
 <p><strong>2. Canadian Immigration Lawyer – Visa Application (Canada Only)</strong></p>
 <p>
 Where the Student requests that the visa application be handled by a licensed
 Canadian Immigration Lawyer, an additional charge of
-<strong>CAD 300 per applicant</strong> shall apply.
+<?= highlightContractPrices('CAD 300 per applicant') ?> shall apply.
 </p>
+</div>
 
+<div class="pricing-block">
 <p><strong>3. Canadian Immigration Lawyer – Legal Advice or Consultation (Canada Only)</strong></p>
 <p>
 Where the Student requires legal advice or consultation from a licensed
 Canadian Immigration Lawyer, the Student shall pay a consultation fee of
-<strong>CAD 300</strong>.
+<?= highlightContractPrices('CAD 300') ?>.
 </p>
+</div>
 
 <p>
 <strong>Important:</strong>
@@ -716,6 +746,7 @@ with exclusive jurisdiction vested in the competent courts of Rwanda.
 This Agreement constitutes the entire understanding between the parties and supersedes
 all prior discussions. Any amendment must be in writing and signed by both parties.
 </p>
+<div class="signatures-section">
 <h2>15. SIGNATURES</h2>
 
 <table style="width:100%; border-collapse:collapse;">
@@ -724,35 +755,33 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 <tr>
 
 <!-- COMPANY REPRESENTATIVE -->
-<td style="padding:20px; vertical-align:top; width:50%;">
+<td style="padding:10px 12px; vertical-align:top; width:50%;">
 
 <strong>For the Company Representative</strong><br><br>
 
 Name: Jean Pierre TWAJAMAHORO<br>
-Title: Managing Director<br><br>
+Title: Managing Director<br>
 
 Signature:<br>
-<div style="border-bottom:1px solid #000; height:60px; width:70%; position:relative;">
-  <img src="<?= $consultantSignature ?>" alt="Company Signature" style="max-height:55px; position:absolute; bottom:2px; left:0;">
+<div style="border-bottom:1px solid #000; height:50px; width:70%; position:relative;">
+  <img src="<?= $consultantSignature ?>" alt="Company Signature" style="max-height:48px; position:absolute; bottom:2px; left:0;">
 </div>
 
-<br>
 Date: <?= esc($data['signed_date']) ?>
 
 </td>
 
 
 <!-- NOTARY -->
-<td style="padding:20px; vertical-align:top; width:50%;">
+<td style="padding:10px 12px; vertical-align:top; width:50%;">
 
 <strong>For the Notary</strong><br><br>
 
-Name: ___________________________<br><br>
+Name: ___________________________<br>
 
 Signature:<br>
-<div style="border-bottom:1px solid #000; height:40px; width:70%;"></div>
+<div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
 
-<br>
 Date: ___________________________
 
 </td>
@@ -763,26 +792,26 @@ Date: ___________________________
 <!-- ================= ROW 2 ================= -->
 <tr>
 
-<!-- STUDENT (CENTERED AREA) -->
-<td colspan="2" style="padding:30px; text-align:left;">
+<!-- STUDENT -->
+<td colspan="2" style="padding:12px; text-align:left;">
 
 <strong>For the Student</strong><br><br>
 
-Name: <?= esc($data['full_name']) ?><br><br>
+Name: <?= esc($data['full_name']) ?><br>
 
 Signature:<br>
 
 <div class="signature-box" style="
 border:1px dashed #9ca3af;
-height:120px;
-width:320px;
-padding:10px;
-margin-top:10px;
-margin-bottom:15px;
+height:90px;
+width:300px;
+padding:6px;
+margin-top:6px;
+margin-bottom:8px;
 ">
 
 <?php if(!empty($studentSignature)): ?>
-<img src="<?= $studentSignature ?>" alt="Student Signature" style="max-height:100px;">
+<img src="<?= $studentSignature ?>" alt="Student Signature" style="max-height:78px;">
 <?php endif; ?>
 
 </div>
@@ -796,6 +825,7 @@ Date: <?= esc($data['signed_date']) ?>
 </table>
 <div class="footer">
 Contract Reference: <?= esc($data['contract_token']) ?>
+</div>
 </div>
 
 </body>
