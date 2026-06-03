@@ -220,14 +220,14 @@ function getPackageDetails(string $code): array
         'p714' => [
             'title' => '7.15 SHORT COURSES-CANADA',
             'lines' => [
-                'Registration & Application Fee: CAD 200 (Refundable if admission is not secured within 2 weeks)',
-                'Registration & Application Fee for Family Member: CAD 100 (If applicable)',
+                'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)',
+                'Registration & Application Fee for Family Member: CAD 200 (If applicable)',
                 'Tuition Fees Deposit after getting offer letter: CAD 535 (Paid directly to school)',
                 'Before starting Visa Application: CAD 100 for visit visa application (Paid to embassy)',
                 'Biometrics: CAD 85 (Paid to embassy)',
                 'After Visa Approval: CAD 2,500',
             ],
-            'total' => 'CAD 3,420',
+            'total' => 'CAD 3,670',
         ],
 
         /* =========================

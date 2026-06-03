@@ -1138,13 +1138,13 @@ button {
     7.15 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
-    ➤ Registration & Application Fee: CAD 200 (Refundable if admission is not secured within 2 weeks)<br>
-    ➤ Registration & Application Fee for Family Member: CAD 100 (If applicable)<br>
+    ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)<br>
+    ➤ Registration & Application Fee for Family Member: CAD 200 (If applicable)<br>
     ➤ Tuition Fees Deposit after getting offer letter: CAD 535 (Paid directly to school)<br>
     ➤ Before starting Visa Application: CAD 100 for visit visa application (Paid to embassy)<br>
     ➤ Biometrics: CAD 85 (Paid to embassy)<br>
     ➤ After Visa Approval: CAD 2,500<br>
-    <strong>Total Package: CAD 3,420</strong>
+    <strong>Total Package: CAD 3,670</strong>
   </div>
 </div>
 
