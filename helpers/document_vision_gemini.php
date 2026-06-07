@@ -440,7 +440,7 @@ function pcvc_docvision_guess_document_type_from_filename(string $originalName):
     if (preg_match('/\b(passport|passeport)\b/', $hint)) {
         return 'valid_passport';
     }
-    if (preg_match('/\b(cv|resume|curriculum|vitae)\b/', $hint)) {
+    if (preg_match('/\b(cv|resume|curriculum|vitae|biodata|bio[\s_-]?data|profile)\b/', $hint)) {
         return 'cv_resume';
     }
     if (preg_match('/\b(transcript|releve|relevé|academic|grade|diploma|degree)\b/', $hint)) {
@@ -568,6 +568,10 @@ function pcvc_docvision_supplement_fields_from_text(array $fields, string $text,
             $fields['phone_international'] = '+250' . $rw[1];
         } elseif (preg_match('/\b0?(7[2389]\d{7})\b/', $text, $rwLocal)) {
             $fields['phone_international'] = '+250' . $rwLocal[1];
+        } elseif (preg_match('/\b0?(7\d{8})\b/', $text, $keLocal)) {
+            $fields['phone_international'] = '+254' . $keLocal[1];
+        } elseif (preg_match('/\b(?:\+?1[\s\-.]?)?\(?(\d{3})\)?[\s\-.]?(\d{3})[\s\-.]?(\d{4})\b/', $text, $na)) {
+            $fields['phone_international'] = '+1' . $na[1] . $na[2] . $na[3];
         }
     }
 

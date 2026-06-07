@@ -301,6 +301,37 @@ function normalize_phone_pair(?string $value, array $countryHints = []): array
         }
     }
 
+    if (preg_match('/^0?(7[2389]\d{7})$/', $digits, $rwMatch)) {
+        return [
+            'area_code' => '+250',
+            'phone_number' => $rwMatch[1]
+        ];
+    }
+
+    if (preg_match('/^0?(7\d{8})$/', $digits, $keMatch)) {
+        return [
+            'area_code' => '+254',
+            'phone_number' => $keMatch[1]
+        ];
+    }
+
+    if (strlen($digits) === 10 && !str_starts_with($digits, '0')) {
+        return [
+            'area_code' => '+1',
+            'phone_number' => $digits
+        ];
+    }
+
+    if (str_starts_with($digits, '0') && strlen($digits) >= 9 && strlen($digits) <= 11) {
+        $localDigits = ltrim($digits, '0');
+        if ($localDigits !== '' && preg_match('/^\d{8,10}$/', $localDigits)) {
+            return [
+                'area_code' => '+250',
+                'phone_number' => $localDigits
+            ];
+        }
+    }
+
     return ['area_code' => '', 'phone_number' => ''];
 }
 
@@ -331,6 +362,13 @@ function normalize_fields(array $fields, string $lang, mysqli $conn): array
         && preg_match('/^\+/', trim((string)$fields['phone_number']))
     ) {
         $fields['phone_international'] = trim((string)$fields['phone_number']);
+    }
+    if (empty($fields['phone_international'])) {
+        $areaCode = normalize_text($fields['area_code'] ?? '');
+        $phoneDigits = preg_replace('/\D+/', '', (string)($fields['phone_number'] ?? ''));
+        if ($areaCode !== '' && is_string($phoneDigits) && $phoneDigits !== '') {
+            $fields['phone_international'] = $areaCode . $phoneDigits;
+        }
     }
 
     $normalized = [];
@@ -587,6 +625,16 @@ if (empty($_SESSION['user_id'])) {
     ], 401);
 }
 
+$existingUploadToken = '';
+$existingUploadTokenExpiry = 0;
+if (
+    !empty($_SESSION['smart_autofill_batch_upload_token'])
+    && (int)($_SESSION['smart_autofill_batch_upload_token_expires'] ?? 0) > time()
+) {
+    $existingUploadToken = (string)$_SESSION['smart_autofill_batch_upload_token'];
+    $existingUploadTokenExpiry = (int)$_SESSION['smart_autofill_batch_upload_token_expires'];
+}
+
 if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
@@ -749,7 +797,36 @@ function process_ai_document_result(
         }
     }
 
-    if (!array_key_exists($documentType, $fieldLabels) || $confidence < 0.30) {
+    $normalized = normalize_fields($rawFields, $lang, $conn);
+    if (!empty($normalized)) {
+        merge_candidate_fields(
+            $mergedFields,
+            $fieldScores,
+            $normalized,
+            $documentType !== '' ? $documentType : 'unknown',
+            max($confidence, 0.55)
+        );
+    }
+
+    $attachField = '';
+    $attachConfidence = $confidence;
+    if (array_key_exists($documentType, $fieldLabels) && $confidence >= 0.30) {
+        $attachField = $documentType;
+    } else {
+        $filenameGuess = pcvc_docvision_guess_document_type_from_filename($originalName);
+        if ($filenameGuess !== '' && array_key_exists($filenameGuess, $fieldLabels)) {
+            $attachField = $filenameGuess;
+            $attachConfidence = max($confidence, 0.72);
+        } elseif (
+            array_key_exists($documentType, $fieldLabels)
+            && preg_match('/\b(cv|resume|curriculum|vitae|passport|transcript|diploma|degree|birth|ielts|toefl|recommend|statement)\b/i', $summary)
+        ) {
+            $attachField = $documentType;
+            $attachConfidence = max($confidence, 0.55);
+        }
+    }
+
+    if ($attachField === '') {
         $documents[] = [
             'client_index' => $clientIndex,
             'original_name' => $originalName,
@@ -762,15 +839,12 @@ function process_ai_document_result(
         return;
     }
 
-    $normalized = normalize_fields($rawFields, $lang, $conn);
-    merge_candidate_fields($mergedFields, $fieldScores, $normalized, $documentType, $confidence);
-
     $documents[] = [
         'client_index' => $clientIndex,
         'original_name' => $originalName,
-        'field' => $documentType,
-        'field_label' => $fieldLabels[$documentType],
-        'confidence' => $confidence,
+        'field' => $attachField,
+        'field_label' => $fieldLabels[$attachField],
+        'confidence' => $attachConfidence,
         'summary' => $summary
     ];
 }
@@ -812,13 +886,32 @@ function autofill_harvest_contact_fields(
         return;
     }
 
+    $contactPriority = [];
     foreach ($jobs as $idx => $job) {
         $hint = strtolower((string)($job['original_name'] ?? ''));
-        if (!preg_match('/\b(cv|resume|curriculum|vitae|passport|passeport)\b/', $hint)) {
-            continue;
+        $response = $responses[$idx] ?? null;
+        $docType = is_array($response)
+            ? strtolower((string)(($response['json']['document_type'] ?? '') ?: ''))
+            : '';
+        $score = 1;
+        if (preg_match('/\b(cv|resume|curriculum|vitae)\b/', $hint) || $docType === 'cv_resume') {
+            $score = 4;
+        } elseif (preg_match('/\b(passport|passeport)\b/', $hint) || $docType === 'valid_passport') {
+            $score = 3;
+        } elseif (in_array($docType, ['personal_statement', 'recommendation_letters'], true)) {
+            $score = 2;
+        }
+        $contactPriority[] = ['idx' => $idx, 'job' => $job, 'score' => $score];
+    }
+
+    usort($contactPriority, static fn(array $a, array $b): int => $b['score'] <=> $a['score']);
+
+    foreach ($contactPriority as $entry) {
+        if (!empty($mergedFields['email']) && !empty($mergedFields['phone_number'])) {
+            return;
         }
 
-        $contact = pcvc_docvision_extract_contact_from_content($job['user']);
+        $contact = pcvc_docvision_extract_contact_from_content($entry['job']['user']);
         if (isset($contact['error'])) {
             continue;
         }
@@ -830,10 +923,6 @@ function autofill_harvest_contact_fields(
 
         $patch = normalize_fields($raw, $lang, $conn);
         $mergedFields = pcvc_docvision_merge_contact_fields($mergedFields, $patch);
-
-        if (!empty($mergedFields['email']) && !empty($mergedFields['phone_number'])) {
-            return;
-        }
     }
 }
 
@@ -1198,17 +1287,18 @@ if (!$documents && !$mergedFields) {
 }
 
 add_stage($debug, 'save', 'Document analysis completed successfully.');
-$uploadToken = '';
-if (
-    !empty($_SESSION['smart_autofill_batch_upload_token'])
-    && (int)($_SESSION['smart_autofill_batch_upload_token_expires'] ?? 0) > time()
-) {
-    $uploadToken = (string)$_SESSION['smart_autofill_batch_upload_token'];
-} else {
-    $uploadToken = bin2hex(random_bytes(16));
-    $_SESSION['smart_autofill_batch_upload_token'] = $uploadToken;
-    $_SESSION['smart_autofill_batch_upload_token_expires'] = time() + 1800;
+$uploadToken = $existingUploadToken !== '' ? $existingUploadToken : bin2hex(random_bytes(16));
+$uploadTokenExpiry = $existingUploadTokenExpiry > time()
+    ? $existingUploadTokenExpiry
+    : (time() + 1800);
+
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
 }
+$_SESSION['smart_autofill_batch_upload_token'] = $uploadToken;
+$_SESSION['smart_autofill_batch_upload_token_expires'] = $uploadTokenExpiry;
+session_write_close();
+
 json_exit([
     'status' => 'success',
     'message' => 'Documents analyzed successfully.',

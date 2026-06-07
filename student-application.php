@@ -4660,11 +4660,14 @@ function startValidationSimulation(progress) {
   function guessAttachmentFieldFromFilename(name) {
     const n = String(name || "").toLowerCase();
     if (/\b(passport|passeport)\b/.test(n)) return "valid_passport";
-    if (/\b(cv|resume|curriculum|vitae)\b/.test(n)) return "cv_resume";
+    if (/\b(cv|resume|curriculum|vitae|biodata|bio[\s_-]?data|profile)\b/.test(n)) return "cv_resume";
     if (/\b(transcript|releve|relevé|academic|grade|diploma|degree)\b/.test(n)) return "degree_transcripts";
     if (/\b(high[\s_-]?school|lycee|lycée|baccalaureat|secondary)\b/.test(n)) return "high_school_degree";
     if (/\b(birth[\s_-]?cert|naissance)\b/.test(n)) return "birth_certificate";
-    if (/\b(ielts|toefl|english|anglais)\b/.test(n)) return "english_certificate";
+    if (/\b(ielts|toefl|english|anglais|duolingo|pte|celpip)\b/.test(n)) return "english_certificate";
+    if (/\b(recommend|reference[\s_-]?letter)\b/.test(n)) return "recommendation_letters";
+    if (/\b(motivation|personal[\s_-]?statement|cover[\s_-]?letter)\b/.test(n)) return "personal_statement";
+    if (/\b(payment|receipt|invoice|proof|paid)\b/.test(n)) return "payment_proof";
     return "";
   }
 
@@ -4772,40 +4775,57 @@ function startValidationSimulation(progress) {
   }
 
   async function refineMissingContactFields(files, applicationId, merged) {
-    const needsEmail = !String(merged.fields?.email || "").trim();
-    const needsPhone = !String(merged.fields?.phone_number || "").trim();
-    if (!needsEmail && !needsPhone) return;
+    const needsEmail = () => !String(merged.fields?.email || "").trim();
+    const needsPhone = () => !String(merged.fields?.phone_number || "").trim();
+    if (!needsEmail() && !needsPhone()) return;
 
-    const contactFile = pickContactRefineFile(files);
-    if (!contactFile) return;
-
-    liveStatusEl.textContent = `${contactFile.name} — smart contact extraction (email & phone)…`;
-
-    const formData = new FormData();
-    formData.append("documents[]", contactFile);
-    formData.append("document_client_index", String(files.indexOf(contactFile)));
-    formData.append("application_id", applicationId);
-    formData.append("lang", document.documentElement.lang || "en");
-    formData.append("contact_only", "1");
-
-    try {
-      const res = await fetch("student_ai_autofill.php", {
-        method: "POST",
-        body: formData,
-        credentials: "same-origin"
+    const ranked = files
+      .map((file, index) => ({ file, index, name: String(file.name || "").toLowerCase() }))
+      .sort((a, b) => {
+        const score = (name) => {
+          if (/\b(cv|resume|curriculum|vitae|biodata|profile)\b/.test(name)) return 4;
+          if (/\b(passport|passeport)\b/.test(name)) return 3;
+          if (/\b(statement|recommend|letter)\b/.test(name)) return 2;
+          return 1;
+        };
+        return score(b.name) - score(a.name);
       });
-      const data = await res.json();
-      if (!res.ok || !data || data.status !== "success") return;
 
-      mergeAutofillFields(merged.fields, data.fields || {});
-      applyMergedAutofillFields(data.fields || {});
-      if (Array.isArray(data.warnings)) {
-        merged.warnings.push(...data.warnings);
+    for (const entry of ranked) {
+      if (!needsEmail() && !needsPhone()) break;
+
+      liveStatusEl.textContent = `${entry.file.name} — smart contact extraction (email & phone)…`;
+
+      const formData = new FormData();
+      formData.append("documents[]", entry.file);
+      formData.append("document_client_index", String(entry.index));
+      formData.append("application_id", applicationId);
+      formData.append("lang", document.documentElement.lang || "en");
+      formData.append("contact_only", "1");
+
+      try {
+        const res = await fetch("student_ai_autofill.php", {
+          method: "POST",
+          body: formData,
+          credentials: "same-origin"
+        });
+        const data = await res.json();
+        if (!res.ok || !data || data.status !== "success") continue;
+
+        mergeAutofillFields(merged.fields, {
+          ...(data.fields || {}),
+          __documentType: guessAttachmentFieldFromFilename(entry.file.name) || "cv_resume",
+          __confidence: 0.92
+        });
+        applyMergedAutofillFields(data.fields || {});
+        if (Array.isArray(data.warnings)) {
+          merged.warnings.push(...data.warnings);
+        }
+      } catch (err) {
+        merged.warnings.push(
+          `${entry.file.name}: contact refinement failed (${err?.message || "error"}).`
+        );
       }
-    } catch (err) {
-      merged.warnings.push(
-        `${contactFile.name}: contact refinement failed (${err?.message || "error"}).`
-      );
     }
   }
 
@@ -4817,7 +4837,7 @@ function startValidationSimulation(progress) {
       warnings: [],
       upload_token: ""
     };
-    const ANALYSIS_CONCURRENCY = 2;
+    const ANALYSIS_CONCURRENCY = 3;
     const ANALYSIS_TIMEOUT_MS = 120000;
     let finished = 0;
 
@@ -4945,7 +4965,13 @@ function startValidationSimulation(progress) {
         doc.field = filenameGuess;
         doc.field_label = attachmentFieldLabels[filenameGuess] || filenameGuess;
       } else if (!doc.field) {
-        return;
+        const summaryGuess = guessAttachmentFieldFromSummary(doc.summary);
+        if (summaryGuess) {
+          doc.field = summaryGuess;
+          doc.field_label = attachmentFieldLabels[summaryGuess] || summaryGuess;
+        } else {
+          return;
+        }
       }
       if (!doc.field) return;
       if (!grouped.has(doc.field)) grouped.set(doc.field, []);
@@ -4968,23 +4994,30 @@ function startValidationSimulation(progress) {
     }
 
     const coveredFields = new Set(queue.map(doc => doc.field));
+    const queuedNames = new Set(
+      queue.map(doc => String(doc.original_name || "").toLowerCase())
+    );
+    const queuedIndices = new Set(
+      queue.map(doc => Number(doc.client_index))
+    );
+
     (Array.isArray(files) ? files : []).forEach((file, index) => {
+      const fileName = String(file.name || "").toLowerCase();
+      if (queuedNames.has(fileName) || queuedIndices.has(index)) return;
+
       const guess = guessAttachmentFieldFromFilename(file.name);
       if (!guess) return;
 
       if (multiFieldSet.has(guess)) {
-        const already = queue.some(
-          doc => doc.field === guess && doc.original_name === file.name
-        );
-        if (!already) {
-          queue.push({
-            client_index: index,
-            original_name: file.name,
-            field: guess,
-            field_label: attachmentFieldLabels[guess] || guess,
-            confidence: 0.75
-          });
-        }
+        queue.push({
+          client_index: index,
+          original_name: file.name,
+          field: guess,
+          field_label: attachmentFieldLabels[guess] || guess,
+          confidence: 0.75
+        });
+        queuedNames.add(fileName);
+        queuedIndices.add(index);
         return;
       }
 
@@ -4998,9 +5031,50 @@ function startValidationSimulation(progress) {
         confidence: 0.75
       });
       coveredFields.add(guess);
+      queuedNames.add(fileName);
+      queuedIndices.add(index);
     });
 
+    const orphanFiles = [];
+    (Array.isArray(files) ? files : []).forEach((file, index) => {
+      const fileName = String(file.name || "").toLowerCase();
+      if (queuedNames.has(fileName) || queuedIndices.has(index)) return;
+      orphanFiles.push({ file, index, fileName });
+    });
+
+    if (orphanFiles.length === 1 && !coveredFields.has("cv_resume")) {
+      const orphan = orphanFiles[0];
+      queue.push({
+        client_index: orphan.index,
+        original_name: orphan.file.name,
+        field: "cv_resume",
+        field_label: attachmentFieldLabels.cv_resume || "cv_resume",
+        confidence: 0.5
+      });
+      coveredFields.add("cv_resume");
+      warnings.push(`Assigned ${orphan.file.name} to CV / Resume because no CV was detected automatically.`);
+    } else {
+      orphanFiles.forEach(orphan => {
+        warnings.push(`Could not auto-route ${orphan.file.name} to a form attachment field.`);
+      });
+    }
+
     return { queue, warnings };
+  }
+
+  function guessAttachmentFieldFromSummary(summary) {
+    const text = String(summary || "").toLowerCase();
+    if (!text) return "";
+    if (/\b(passport|passeport|travel document)\b/.test(text)) return "valid_passport";
+    if (/\b(cv|resume|curriculum vitae|employment history|work experience)\b/.test(text)) return "cv_resume";
+    if (/\b(transcript|academic record|grade|diploma|degree)\b/.test(text)) return "degree_transcripts";
+    if (/\b(high school|secondary|baccalaureat|lycee|lycée)\b/.test(text)) return "high_school_degree";
+    if (/\b(birth certificate|acte de naissance)\b/.test(text)) return "birth_certificate";
+    if (/\b(ielts|toefl|english|duolingo|language proficiency)\b/.test(text)) return "english_certificate";
+    if (/\b(recommendation|reference letter)\b/.test(text)) return "recommendation_letters";
+    if (/\b(personal statement|motivation letter|cover letter)\b/.test(text)) return "personal_statement";
+    if (/\b(payment|receipt|invoice|proof of payment)\b/.test(text)) return "payment_proof";
+    return "";
   }
 
   async function routeQueuedDocuments(queue, files, options = {}) {
@@ -5143,7 +5217,7 @@ function startValidationSimulation(progress) {
           : "No files to route — saving extracted data next…"
       );
       const routeResult = await routeQueuedDocuments(queue, files, {
-        concurrency: batchUploadToken ? 4 : 3,
+        concurrency: batchUploadToken ? 5 : 3,
         smartAutofillBatchToken: batchUploadToken
       });
       warnings.push(...routeResult.warnings);
