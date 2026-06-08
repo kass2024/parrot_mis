@@ -238,6 +238,7 @@ $cards = [
       'Credit-Transfer-report.php' => 'Transfer Requests list',
       'transfer-status.php' => 'Review Status',
       'credit-search.php' => 'credit userID',
+      'research-project-elearning.php' => 'RESEARCH PROJECT FOR ELEARNING',
     ]
   ],
   'visit_study_visa' => [
@@ -1954,6 +1955,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('credit-search.php', 'Search Credit User ID')">
           <i class="bi bi-search"></i>
           credit userID
+        </a>
+        <a href="#" onclick="loadInFrame('research-project-elearning.php', 'Research Project for E-Learning')">
+          <i class="bi bi-journal-bookmark"></i>
+          RESEARCH PROJECT FOR ELEARNING
         </a>
         <?php if ($isSuperExecutive): ?>
         <a href="#" onclick="loadInFrame('special-student-payments.php', 'Record Credit Transfer / UPAFA Payment')">
