@@ -213,7 +213,7 @@ $cards = [
     'links' => [
       'staff-management.php'=> 'Manage staff ',
       // 'tasks.php'=> 'Task Allocation',
-      'admin/contracts-admin.php'=> 'View staffs Contracts',
+      'admin/contracts-admin.php'=> 'Staff employment contracts',
       'salary-report.php'=> 'View Requested Salaries ',
       'leave-approvals.php'=> 'Manage Permissions ',
       'overtime-approvals.php'=> 'Overtime Management ',
@@ -1872,9 +1872,9 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <i class="bi bi-list-task"></i>
           Task Allocation
         </a> -->
-        <a href="#" onclick="loadInFrame('admin/contracts-admin.php', 'Staff Contracts')">
+        <a href="#" onclick="loadInFrame('admin/contracts-admin.php', 'Staff Employment Contracts')">
           <i class="bi bi-file-earmark-text"></i>
-          Contracts
+          Staff employment contracts
         </a>
         <a href="#" onclick="loadInFrame('salary-report.php', 'Requested Salaries')">
           <i class="bi bi-cash-stack"></i>
