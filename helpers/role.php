@@ -28,31 +28,53 @@ function xander_is_superadmin_role($role): bool
 }
 
 /**
- * Resolve admin role from session + DB, then enforce superadmin-only access.
+ * Whether the logged-in admin is superadmin (session role and/or DB role).
  */
-function pcvc_require_superadmin(mysqli $conn, bool $json = false): void
+function pcvc_current_user_is_superadmin(mysqli $conn): bool
 {
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
 
     $sessionRole = trim((string) ($_SESSION['role'] ?? ''));
-    $dbRole = '';
-    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
-
-    if ($adminPk > 0) {
-        $st = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
-        if ($st) {
-            $st->bind_param('i', $adminPk);
-            $st->execute();
-            if ($row = $st->get_result()->fetch_assoc()) {
-                $dbRole = trim((string) ($row['role'] ?? ''));
-            }
-            $st->close();
-        }
+    if (pcvc_is_superadmin_role($sessionRole)) {
+        return true;
     }
 
-    if (pcvc_is_superadmin_role($dbRole) || pcvc_is_superadmin_role($sessionRole)) {
+    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    if ($adminPk <= 0) {
+        return false;
+    }
+
+    $st = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('i', $adminPk);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+
+    return pcvc_is_superadmin_role((string) ($row['role'] ?? ''));
+}
+
+/**
+ * SQL expression: TRUE when admins.role is any superadmin variant.
+ * Normalization matches pcvc_is_superadmin_role().
+ */
+function pcvc_sql_is_superadmin_role_expr(string $column = 'role'): string
+{
+    $col = trim($column) !== '' ? $column : 'role';
+
+    return "REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$col}, ''))), ' ', ''), '_', ''), '-', '') = 'superadmin'";
+}
+
+/**
+ * Resolve admin role from session + DB, then enforce superadmin-only access.
+ */
+function pcvc_require_superadmin(mysqli $conn, bool $json = false): void
+{
+    if (pcvc_current_user_is_superadmin($conn)) {
         return;
     }
 

@@ -14,7 +14,7 @@ if ($viewerId <= 0) {
 
 $staffId = (int) ($_GET['staff_id'] ?? $viewerId);
 $type = ($_GET['type'] ?? 'source') === 'signed' ? 'signed' : 'source';
-$isSuper = pcvc_is_superadmin_role($_SESSION['role'] ?? '');
+$isSuper = pcvc_current_user_is_superadmin($conn);
 
 if (!$isSuper && $staffId !== $viewerId) {
     http_response_code(403);

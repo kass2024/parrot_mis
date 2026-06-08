@@ -6,10 +6,7 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/staff_contract_schema.php';
 
-if (!pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
-    http_response_code(403);
-    exit('Superadmin access required');
-}
+pcvc_require_superadmin($conn);
 
 pcvc_staff_contract_ensure_schema($conn);
 
@@ -31,7 +28,6 @@ $sql = "
         c.uploaded_at
     FROM admins a
     LEFT JOIN employment_contracts c ON c.admin_id = a.id
-    WHERE LOWER(TRIM(COALESCE(a.role, ''))) NOT IN ('superadmin')
     ORDER BY a.full_name ASC
 ";
 $staffRows = $conn->query($sql)?->fetch_all(MYSQLI_ASSOC) ?? [];
@@ -278,4 +274,4 @@ $totalStaff = count($staffRows);
 })();
 </script>
 </body>
-</html>
+</html>

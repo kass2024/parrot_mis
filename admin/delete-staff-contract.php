@@ -18,15 +18,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 
 
-if (!pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
-
-    http_response_code(403);
-
-    echo json_encode(['success' => false, 'message' => 'Superadmin access required']);
-
-    exit;
-
-}
+pcvc_require_superadmin($conn, true);
 
 
 
@@ -83,16 +75,6 @@ $stmt->close();
 if (!$staff) {
 
     echo json_encode(['success' => false, 'message' => 'Staff member not found']);
-
-    exit;
-
-}
-
-
-
-if (pcvc_is_superadmin_role((string) ($staff['role'] ?? ''))) {
-
-    echo json_encode(['success' => false, 'message' => 'Cannot delete contracts for superadmin accounts']);
 
     exit;
 

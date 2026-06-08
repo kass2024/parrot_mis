@@ -9,11 +9,7 @@ require_once __DIR__ . '/../helpers/staff_contract_word.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-if (!pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Superadmin access required']);
-    exit;
-}
+pcvc_require_superadmin($conn, true);
 
 $staffId = (int) ($_POST['staff_id'] ?? 0);
 if ($staffId <= 0) {
