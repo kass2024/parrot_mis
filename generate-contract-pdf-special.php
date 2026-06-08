@@ -72,7 +72,7 @@ function getPackageDetails(string $code): array
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'Service Fees (payable after visa approval): CAD 3,050',
-                'Note: Canadian institutions may require a tuition deposit ranging from CAD 1,500 to CAD 5,000, payable directly by the Student.',
+                'Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.',
             ],
             'total' => 'CAD 3,500',
         ],
@@ -84,9 +84,9 @@ function getPackageDetails(string $code): array
             'title' => '7.5 Study in Canada (Without Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
-                'Fees payable before visa application: USD 550',
-                'Service Fees (payable after visa approval): CAD 1,500',
-                'Note: Canadian institutions may require a tuition deposit ranging from CAD 1,500 to CAD 5,000, payable directly by the Student.',
+                'Before starting Visa Application: CAD 650',
+                'After Visa Approval: CAD 1,500',
+                'Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.',
             ],
             'total' => 'CAD 2,500',
         ],

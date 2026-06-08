@@ -70,7 +70,7 @@ function getPackageDetails(string $code): array
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'After Visa Approval: CAD 3,050',
-                'Note: Tuition deposit CAD 1,500–5,000 payable directly by the Student',
+                'Note: Tuition deposit CAD 500–5,000 payable directly by the Student',
             ],
             'total' => 'CAD 3,500',
         ],
@@ -82,9 +82,9 @@ function getPackageDetails(string $code): array
             'title' => '7.5 Study in Canada (Without Loan)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
-                'Before Visa Application: USD 550',
+                'Before starting Visa Application: CAD 650',
                 'After Visa Approval: CAD 1,500',
-                'Note: Tuition deposit CAD 1,500–5,000 payable directly by the Student',
+                'Note: Tuition deposit CAD 500–5,000 payable directly by the Student',
             ],
             'total' => 'CAD 2,500',
         ],

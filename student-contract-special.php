@@ -1136,7 +1136,7 @@ button {
       ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
       ➤ Service Fees (payable after visa approval): CAD 3,050<br>
       <strong>🔥 Total Package: CAD 3,500</strong><br>
-      <em>Note: Canadian institutions may require a tuition deposit ranging from CAD 1,500 to CAD 5,000, payable directly by the Student.</em>
+      <em>Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.</em>
     </div>
   </div>
 
@@ -1156,10 +1156,10 @@ button {
     </label>
     <div id="p75" class="package-details">
       ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
-      ➤ Fees payable before visa application: USD 550<br>
-      ➤ Service Fees (payable after visa approval): CAD 1,500<br>
-      <strong>🔥 Total Package: CAD 2,500</strong><br>
-      <em>Note: Canadian institutions may require a tuition deposit ranging from CAD 1,500 to CAD 5,000, payable directly by the Student.</em>
+      ➤ Before starting Visa Application: CAD 650<br>
+      ➤ After Visa Approval: CAD 1,500<br>
+      <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong><br>
+      <em>Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.</em>
     </div>
   </div>
 

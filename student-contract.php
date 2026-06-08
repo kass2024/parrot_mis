@@ -1022,7 +1022,7 @@ button {
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
     ➤ After Visa Approval: CAD 3,050<br>
     <strong>Total Package: CAD 3,500</strong><br>
-    <em>Note: Tuition deposit CAD 1,500–5,000 payable directly by the Student.</em>
+    <em>Note: Tuition deposit CAD 500–5,000 payable directly by the Student.</em>
   </div>
 </div>
 
@@ -1033,10 +1033,10 @@ button {
   </label>
   <div id="p75" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
-    ➤ Before Visa Application: USD 550<br>
+    ➤ Before starting Visa Application: CAD 650<br>
     ➤ After Visa Approval: CAD 1,500<br>
-    <strong>Total Package: CAD 2,500</strong><br>
-    <em>Note: Tuition deposit CAD 1,500–5,000 payable directly by the Student.</em>
+    <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong><br>
+    <em>Note: Tuition deposit CAD 500–5,000 payable directly by the Student.</em>
   </div>
 </div>
 
