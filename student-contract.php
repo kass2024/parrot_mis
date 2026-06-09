@@ -1193,6 +1193,26 @@ button {
   </div>
 </div>
 
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p716')">
+    7.17 WES EVALUATION – INTERNATIONAL EQUIVALENCE
+  </label>
+  <div id="p716" class="package-details">
+    <strong>1. Professional Service Fees: CAD 200</strong><br>
+    The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the WES evaluation process.<br><br>
+    <strong>2. Application &amp; Processing Costs: CAD 300</strong><br>
+    The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.<br><br>
+    <strong>3. University &amp; Verification Coordination: CAD 100</strong><br>
+    The service involves contacting universities, registrars, and authorized offices to ensure transcripts and academic records are properly verified and submitted to WES.<br><br>
+    <strong>4. Document Shipping &amp; Delivery Expenses: CAD 100</strong><br>
+    The cost also includes courier charges, document shipping, electronic submission support, and tracking to ensure documents safely reach WES on time.<br><br>
+    <strong>5. Time, Administrative Work &amp; Follow-up: CAD 200</strong><br>
+    Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.<br><br>
+    <strong>🔹 Total Package: CAD 900</strong>
+  </div>
+</div>
+
 <p class="contract-warning">
   ⚠ <strong>Important:</strong> All government fees, embassy charges, biometric fees,
   tuition deposits, lawyer fees, border pass fees, and third-party charges

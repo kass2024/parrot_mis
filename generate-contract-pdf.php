@@ -249,6 +249,21 @@ function getPackageDetails(string $code): array
             ],
             'total' => null,
         ],
+
+        /* =========================
+           7.17 WES Evaluation – International Equivalence
+        ========================== */
+        'p716' => [
+            'title' => '7.17 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+            'lines' => [
+                '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the WES evaluation process.',
+                '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
+                '3. University & Verification Coordination: CAD 100 — The service involves contacting universities, registrars, and authorized offices to ensure transcripts and academic records are properly verified and submitted to WES.',
+                '4. Document Shipping & Delivery Expenses: CAD 100 — The cost also includes courier charges, document shipping, electronic submission support, and tracking to ensure documents safely reach WES on time.',
+                '5. Time, Administrative Work & Follow-up: CAD 200 — Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.',
+            ],
+            'total' => 'CAD 900',
+        ],
     ];
 
     return $packages[$code] ?? [];
