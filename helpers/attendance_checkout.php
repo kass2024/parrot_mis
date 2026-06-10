@@ -1,8 +1,9 @@
 <?php
 declare(strict_types=1);
 
-const PCVC_CHECKOUT_MIN_JOBS_TODAY = 10;
-const PCVC_CHECKOUT_MAX_HOURS      = 7;
+const PCVC_CHECKOUT_MIN_JOBS_TODAY   = 10;
+const PCVC_CHECKOUT_FULL_DAY_HOURS   = 7;
+const PCVC_CHECKOUT_FULL_DAY_MINUTES = 480;
 
 /**
  * Ensure job_list.completed_at exists (when a job was marked completed).
@@ -130,9 +131,15 @@ function pcvc_count_jobs_completed_on_date(mysqli $conn, int $admin_id, string $
 }
 
 /**
- * Validate whether checkout is allowed for this admin today.
+ * Validate checkout: requires at least 10 jobs completed today.
  *
- * @return array{ok: bool, message: string, jobs_completed: int, elapsed_minutes: int}
+ * @return array{
+ *   ok: bool,
+ *   message: string,
+ *   jobs_completed: int,
+ *   elapsed_minutes: int,
+ *   salary_eligible: bool
+ * }
  */
 function pcvc_validate_attendance_checkout(
     mysqli $conn,
@@ -142,42 +149,40 @@ function pcvc_validate_attendance_checkout(
     string $today
 ): array {
     $jobsCompleted = pcvc_count_jobs_completed_on_date($conn, $admin_id, $today);
-    $elapsedMinutes = (int) ceil((strtotime($now) - strtotime($check_in_time)) / 60);
-    $maxMinutes = PCVC_CHECKOUT_MAX_HOURS * 60;
+    $elapsedMinutes = max(0, (int) ceil((strtotime($now) - strtotime($check_in_time)) / 60));
+    $salaryEligible = $jobsCompleted >= PCVC_CHECKOUT_MIN_JOBS_TODAY;
 
-    if ($jobsCompleted < PCVC_CHECKOUT_MIN_JOBS_TODAY) {
+    if (!$salaryEligible) {
         return [
-            'ok'               => false,
-            'message'          => sprintf(
+            'ok'              => false,
+            'message'         => sprintf(
                 'Complete at least %d jobs today before checking out. You have completed %d of %d.',
                 PCVC_CHECKOUT_MIN_JOBS_TODAY,
                 $jobsCompleted,
                 PCVC_CHECKOUT_MIN_JOBS_TODAY
             ),
-            'jobs_completed'   => $jobsCompleted,
-            'elapsed_minutes'  => $elapsedMinutes,
+            'jobs_completed'  => $jobsCompleted,
+            'elapsed_minutes' => $elapsedMinutes,
+            'salary_eligible' => false,
         ];
     }
 
-    if ($elapsedMinutes > $maxMinutes) {
-        $hours = round($elapsedMinutes / 60, 1);
-        return [
-            'ok'               => false,
-            'message'          => sprintf(
-                'Cannot check out: more than %d hours since check-in (%.1f hours). Please contact your supervisor.',
-                PCVC_CHECKOUT_MAX_HOURS,
-                $hours
-            ),
-            'jobs_completed'   => $jobsCompleted,
-            'elapsed_minutes'  => $elapsedMinutes,
-        ];
+    $messages = [];
+    $fullDayThreshold = PCVC_CHECKOUT_FULL_DAY_HOURS * 60;
+    if ($elapsedMinutes >= $fullDayThreshold) {
+        $messages[] = sprintf(
+            '%d+ hours worked. Salary will be calculated for %d hours.',
+            PCVC_CHECKOUT_FULL_DAY_HOURS,
+            (int) (PCVC_CHECKOUT_FULL_DAY_MINUTES / 60)
+        );
     }
 
     return [
         'ok'              => true,
-        'message'         => '',
+        'message'         => implode(' ', $messages),
         'jobs_completed'  => $jobsCompleted,
         'elapsed_minutes' => $elapsedMinutes,
+        'salary_eligible' => true,
     ];
 }
 
@@ -208,9 +213,10 @@ function pcvc_attendance_checkout_status(
             'jobs_completed'   => $jobsCompleted,
             'jobs_required'    => PCVC_CHECKOUT_MIN_JOBS_TODAY,
             'elapsed_minutes'  => 0,
-            'max_hours'        => PCVC_CHECKOUT_MAX_HOURS,
+            'full_day_hours'   => PCVC_CHECKOUT_FULL_DAY_HOURS,
             'can_checkout'     => false,
             'block_reason'     => 'You must check in first.',
+            'salary_eligible'  => false,
         ];
     }
 
@@ -228,9 +234,10 @@ function pcvc_attendance_checkout_status(
             'jobs_completed'   => $jobsCompleted,
             'jobs_required'    => PCVC_CHECKOUT_MIN_JOBS_TODAY,
             'elapsed_minutes'  => 0,
-            'max_hours'        => PCVC_CHECKOUT_MAX_HOURS,
+            'full_day_hours'   => PCVC_CHECKOUT_FULL_DAY_HOURS,
             'can_checkout'     => false,
             'block_reason'     => 'You must check in first.',
+            'salary_eligible'  => false,
         ];
     }
 
@@ -243,14 +250,29 @@ function pcvc_attendance_checkout_status(
         'jobs_completed'   => $jobsCompleted,
         'jobs_required'    => PCVC_CHECKOUT_MIN_JOBS_TODAY,
         'elapsed_minutes'  => $validation['elapsed_minutes'],
-        'max_hours'        => PCVC_CHECKOUT_MAX_HOURS,
+        'full_day_hours'   => PCVC_CHECKOUT_FULL_DAY_HOURS,
         'can_checkout'     => $validation['ok'],
-        'block_reason'     => $validation['ok'] ? '' : $validation['message'],
+        'block_reason'     => $validation['message'],
+        'salary_eligible'  => $validation['salary_eligible'],
     ];
 }
 
 /**
- * Compute daily salary at checkout (weekend = 0, 5h+ → full 8h day).
+ * Billable minutes: < 7h actual time, >= 7h counts as 8h (480 min).
+ */
+function pcvc_attendance_billable_minutes(int $elapsed_minutes): int
+{
+    $threshold = PCVC_CHECKOUT_FULL_DAY_HOURS * 60;
+
+    if ($elapsed_minutes >= $threshold) {
+        return PCVC_CHECKOUT_FULL_DAY_MINUTES;
+    }
+
+    return max(0, $elapsed_minutes);
+}
+
+/**
+ * Compute daily salary at checkout (weekend = 0, >= 7h → 8h pay, else actual time).
  *
  * @return array{
  *   minutes: int,
@@ -266,21 +288,24 @@ function pcvc_attendance_compute_checkout_salary(
     mysqli $conn,
     int $admin_id,
     int $elapsed_minutes,
-    string $date
+    string $date,
+    bool $salary_eligible = true
 ): array {
     require_once __DIR__ . '/daily_attendance_notify.php';
 
     $dayOfWeek = (int) date('w', strtotime($date . ' 12:00:00'));
     $isWeekend = ($dayOfWeek === 0 || $dayOfWeek === 6);
 
-    if ($isWeekend) {
+    $actualMinutes = max(0, $elapsed_minutes);
+
+    if ($isWeekend || !$salary_eligible) {
         return [
             'minutes'           => 0,
             'salary'            => 0,
             'break_minutes'     => 0,
-            'is_weekend'        => true,
+            'is_weekend'        => $isWeekend,
             'salary_per_minute' => 0.0,
-            'work_label'        => pcvc_daily_attendance_format_duration(0),
+            'work_label'        => pcvc_daily_attendance_format_duration($actualMinutes),
             'salary_label'      => pcvc_daily_attendance_format_salary(0),
         ];
     }
@@ -299,7 +324,7 @@ function pcvc_attendance_compute_checkout_salary(
         $stmt->close();
     }
 
-    $effectiveMinutes = $elapsed_minutes >= 300 ? 480 : $elapsed_minutes;
+    $effectiveMinutes = pcvc_attendance_billable_minutes($elapsed_minutes);
     $salary = (int) round($effectiveMinutes * $salaryPerMinute);
 
     return [
@@ -328,9 +353,16 @@ function pcvc_attendance_save_checkout(
     string $location,
     float $lat,
     float $lng,
-    int $elapsed_minutes
+    int $elapsed_minutes,
+    bool $salary_eligible = true
 ): ?array {
-    $pay = pcvc_attendance_compute_checkout_salary($conn, $admin_id, $elapsed_minutes, $today);
+    $pay = pcvc_attendance_compute_checkout_salary(
+        $conn,
+        $admin_id,
+        $elapsed_minutes,
+        $today,
+        $salary_eligible
+    );
 
     $stmt = $conn->prepare("
         UPDATE attendance SET

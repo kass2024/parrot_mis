@@ -338,7 +338,9 @@ function renderCheckoutHint() {
   let html = "<strong>Today's jobs completed:</strong> " + jobs;
 
   if (checkoutStatus.checked_in) {
-    html += "<br><strong>Time since check-in:</strong> " + hours + " h (max " + checkoutStatus.max_hours + " h)";
+    const fullDayHours = checkoutStatus.full_day_hours || 7;
+    html += "<br><strong>Time since check-in:</strong> " + hours + " h";
+    html += "<br><strong>Salary rule:</strong> under " + fullDayHours + " h = actual time; " + fullDayHours + " h or more = 8 h pay";
     if (checkoutStatus.check_out_time) {
       html += "<br><strong>Last checkout:</strong> " + checkoutStatus.check_out_time + " (you may check out again to update it)";
     }
@@ -347,7 +349,7 @@ function renderCheckoutHint() {
   }
 
   checkoutHint.className = "checkout-hint " + (checkoutStatus.can_checkout ? "ok" : "warn");
-  if (!checkoutStatus.can_checkout && checkoutStatus.block_reason) {
+  if (checkoutStatus.block_reason) {
     html += "<br>" + checkoutStatus.block_reason;
   }
   checkoutHint.innerHTML = html;

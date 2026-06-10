@@ -176,7 +176,8 @@ if ($action === "checkout") {
         $location,
         $lat,
         $lng,
-        $checkoutCheck['elapsed_minutes']
+        $checkoutCheck['elapsed_minutes'],
+        (bool) ($checkoutCheck['salary_eligible'] ?? true)
     );
 
     if ($checkout === null) {
