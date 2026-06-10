@@ -2,6 +2,7 @@
 session_start();
 // Main database (e.g. student_applications)
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
 
@@ -17,7 +18,7 @@ if (!$result || mysqli_num_rows($result) === 0) {
   die("Admin not found.");
 }
 $admin = mysqli_fetch_assoc($result);
-$role = $admin['role'] ?? 'standard';
+$role = pcvc_normalize_role_string($admin['role'] ?? 'standard');
 $displayName = trim(
   ($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? '')
 );
@@ -28,8 +29,7 @@ if ($displayName === '') {
 
 require_once __DIR__ . '/includes/staff_dashboard_stats.php';
 require_once __DIR__ . '/helpers/application_filters.php';
-require_once __DIR__ . '/helpers/role.php';
-$isSuperExecutive = pcvc_is_superadmin_role($role);
+$isSuperExecutive = pcvc_current_user_is_superadmin($conn);
 $isCatholicPortal = (strtolower(trim((string) $role)) === 'catholic university of america');
 $showStaffPersonalDashboard = !$isSuperExecutive && !$isCatholicPortal;
 $staffDashStats = [];
@@ -366,8 +366,10 @@ $sidebarAccess = [
   ]
 ];
 
-// Get current role's allowed sidebar items
-$allowedSidebarItems = $sidebarAccess[$role] ?? $sidebarAccess['standard'];
+// Get current role's allowed sidebar items (normalized — DB role may contain stray newlines)
+$dashboardRoleKey = pcvc_resolve_dashboard_role_key($role, $sidebarAccess, 'standard');
+$allowedSidebarItems = $sidebarAccess[$dashboardRoleKey] ?? $sidebarAccess['standard'];
+$allowedDashboardCards = $allowedCardsByRole[$dashboardRoleKey] ?? ($allowedCardsByRole['standard'] ?? []);
 
 // Get agent data for chart
 $agentsCombined = [];
@@ -1856,7 +1858,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       </div>
       <?php endif; ?>
       
-      <?php if (in_array('staff_reporting', $allowedSidebarItems) && $role === 'superadmin'): ?>
+      <?php if (in_array('staff_reporting', $allowedSidebarItems) && $isSuperExecutive): ?>
       <!-- Staff Management - Superadmin only -->
       <a href="#staff_reporting" class="sidebar-link" onclick="toggleSidebarMenu('staff_reporting')">
         <i class="bi bi-people"></i>
@@ -2042,6 +2044,27 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       <?php if (in_array('university_portal', $allowedSidebarItems)): ?>
       <!-- Apply for Student -->
       <a href="#university_portal" class="sidebar-link" onclick="toggleSidebarMenu('university_portal')">
+        <i class="bi bi-person-plus"></i>
+        <span>Apply for Student</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_university_portal">
+        <a href="#" onclick="loadInFrame('student-application.php', 'Apply Now')">
+          <i class="bi bi-pencil-square"></i>
+          Apply Now
+        </a>
+        <a href="#" onclick="loadInFrame('agent-student-manage.php', 'Manage Students')">
+          <i class="bi bi-people"></i>
+          Manage Students
+        </a>
+        <a href="#" onclick="loadInFrame('userid-search.php', 'User ID Search')">
+          <i class="bi bi-search"></i>
+          User-id
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('marketing', $allowedSidebarItems)): ?>
       <!-- Marketing Materials -->
       <a href="#marketing" class="sidebar-link" onclick="toggleSidebarMenu('marketing')">
         <i class="bi bi-megaphone"></i>
@@ -2237,7 +2260,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <i class="bi bi-key"></i>
         <span>Change Password</span>
       </a>
-      <?php if ($role === 'superadmin'): ?>
+      <?php if ($isSuperExecutive): ?>
         <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#adminSettingsModal">
           <i class="bi bi-gear"></i>
           <span>System Settings</span>
@@ -2311,7 +2334,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                   <i class="bi bi-key me-2"></i> Change Password
                 </a>
               </li>
-              <?php if ($role === 'superadmin'): ?>
+              <?php if ($isSuperExecutive): ?>
                 <li>
                   <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#adminSettingsModal">
                     <i class="bi bi-gear me-2"></i> System Settings
@@ -2739,7 +2762,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   </div>
   
   <!-- System Settings Modal (for superadmin) -->
-  <?php if ($role === 'superadmin'): ?>
+  <?php if ($isSuperExecutive): ?>
   <div class="modal fade" id="adminSettingsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content border-0 shadow-lg">

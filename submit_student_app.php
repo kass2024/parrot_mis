@@ -7,6 +7,7 @@
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/attendance_checkout.php';
 /* =======================
    HARDENING
 ======================= */
@@ -251,10 +252,11 @@ try {
 /* =======================
    MARK JOB COMPLETED
 ======================= */
-$conn->query("UPDATE job_list SET status='completed' WHERE id=$job_id");
+pcvc_job_list_mark_completed($conn, $job_id, date('Y-m-d H:i:s'));
 
 /* =======================
    SUCCESS
 ======================= */
-echo "success";
+$_SESSION['job_save_success'] = 'Student admission job was saved and marked completed.';
+echo 'success';
 exit;

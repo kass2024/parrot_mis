@@ -2,9 +2,17 @@
 /**
  * Normalize role strings from DB/session ("Super Admin", "superadmin", etc.)
  */
+function pcvc_normalize_role_string($role): string
+{
+    $s = trim((string) $role);
+    $s = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $s) ?? $s;
+
+    return trim($s);
+}
+
 function pcvc_is_superadmin_role($role): bool
 {
-    $s = strtolower(trim((string) $role));
+    $s = strtolower(pcvc_normalize_role_string($role));
     // Strip zero-width / BOM / NBSP so DB values still match
     $s = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $s);
     $s = preg_replace('/[\s_\-]+/u', '', $s);
@@ -72,6 +80,32 @@ function pcvc_sql_is_superadmin_role_expr(string $column = 'role'): string
 /**
  * Resolve admin role from session + DB, then enforce superadmin-only access.
  */
+/**
+ * Map DB/session role to a dashboard sidebar/cards key (handles newlines and superadmin variants).
+ *
+ * @param array<string, mixed> $accessMap
+ */
+function pcvc_resolve_dashboard_role_key(string $role, array $accessMap, string $fallback = 'standard'): string
+{
+    if (pcvc_is_superadmin_role($role)) {
+        return isset($accessMap['superadmin']) ? 'superadmin' : $fallback;
+    }
+
+    $normalized = pcvc_normalize_role_string($role);
+    if ($normalized !== '' && isset($accessMap[$normalized])) {
+        return $normalized;
+    }
+
+    $lower = strtolower($normalized);
+    foreach (array_keys($accessMap) as $key) {
+        if (strtolower((string) $key) === $lower) {
+            return (string) $key;
+        }
+    }
+
+    return isset($accessMap[$fallback]) ? $fallback : (string) array_key_first($accessMap);
+}
+
 function pcvc_require_superadmin(mysqli $conn, bool $json = false): void
 {
     if (pcvc_current_user_is_superadmin($conn)) {

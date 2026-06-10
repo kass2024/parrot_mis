@@ -12,6 +12,7 @@
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/database.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/admin_password_reset.php';
 
 xander_ensure_admin_password_reset_columns($conn);
@@ -47,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_id'] = $admin['id'];
             $_SESSION['username'] = $username;
             $_SESSION['name']     = $admin['full_name'];
-            $_SESSION['role']     = $admin['role'];
+            $_SESSION['role']     = pcvc_normalize_role_string($admin['role'] ?? '');
 
             $clr = $conn->prepare('UPDATE admins SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?');
             if ($clr) {

@@ -141,6 +141,28 @@ body {
   font-weight: 500;
 }
 
+.checkout-hint {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: .9rem;
+  line-height: 1.45;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  border: 1px solid rgba(1, 47, 107, 0.08);
+}
+
+.checkout-hint.ok {
+  border-color: rgba(46, 125, 50, 0.25);
+  background: rgba(46, 125, 50, 0.08);
+}
+
+.checkout-hint.warn {
+  border-color: rgba(198, 40, 40, 0.2);
+  background: rgba(198, 40, 40, 0.06);
+}
+
 /* ===== LOADER ===== */
 .loader {
   display: none;
@@ -237,6 +259,8 @@ body {
       Distance: -- m
     </div>
 
+    <div id="checkoutHint" class="checkout-hint" style="display:none;"></div>
+
     <div id="loader" class="loader">⏳ Processing…</div>
 
     <button id="btnIn" class="btn green" disabled>CHECK IN</button>
@@ -266,9 +290,12 @@ let lat = null, lng = null, gpsReady = false, insideOffice = false, office = nul
 
 const statusText = document.getElementById("statusText");
 const distanceText = document.getElementById("distanceText");
+const checkoutHint = document.getElementById("checkoutHint");
 const btnIn = document.getElementById("btnIn");
 const btnOut = document.getElementById("btnOut");
 const loader = document.getElementById("loader");
+
+let checkoutStatus = null;
 
 const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -282,7 +309,49 @@ function setStatus(text, cls) {
 
 function enableButtons(enable) {
   btnIn.disabled = !enable;
-  btnOut.disabled = !enable;
+  const canCheckout = enable && checkoutStatus && checkoutStatus.can_checkout;
+  btnOut.disabled = !canCheckout;
+}
+
+function loadCheckoutStatus() {
+  fetch("attendance-records.php?timezone=" + encodeURIComponent(timezone))
+    .then(r => r.json())
+    .then(res => {
+      if (!res.success || !res.status) return;
+      checkoutStatus = res.status;
+      renderCheckoutHint();
+      if (gpsReady && insideOffice) {
+        enableButtons(true);
+      }
+    })
+    .catch(() => {});
+}
+
+function renderCheckoutHint() {
+  if (!checkoutStatus) {
+    checkoutHint.style.display = "none";
+    return;
+  }
+
+  const jobs = checkoutStatus.jobs_completed + " / " + checkoutStatus.jobs_required;
+  const hours = (checkoutStatus.elapsed_minutes / 60).toFixed(1);
+  let html = "<strong>Today's jobs completed:</strong> " + jobs;
+
+  if (checkoutStatus.checked_in) {
+    html += "<br><strong>Time since check-in:</strong> " + hours + " h (max " + checkoutStatus.max_hours + " h)";
+    if (checkoutStatus.check_out_time) {
+      html += "<br><strong>Last checkout:</strong> " + checkoutStatus.check_out_time + " (you may check out again to update it)";
+    }
+  } else {
+    html += "<br>Check in first, then complete at least " + checkoutStatus.jobs_required + " jobs before checkout.";
+  }
+
+  checkoutHint.className = "checkout-hint " + (checkoutStatus.can_checkout ? "ok" : "warn");
+  if (!checkoutStatus.can_checkout && checkoutStatus.block_reason) {
+    html += "<br>" + checkoutStatus.block_reason;
+  }
+  checkoutHint.innerHTML = html;
+  checkoutHint.style.display = "block";
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -301,6 +370,8 @@ function haversine(lat1, lon1, lat2, lon2) {
 document.addEventListener("DOMContentLoaded", () => {
   logEvent("Attendance UI loaded");
   startGPS();
+  loadCheckoutStatus();
+  setInterval(loadCheckoutStatus, 60000);
 });
 
 /* ==============================
@@ -382,8 +453,21 @@ function sendAttendance(action) {
   })
   .then(r => r.json())
   .then(res => {
-    alert(res.message);
-    logEvent("Attendance " + action, {lat, lng, distance: distanceText.innerText});
+    if (res.success && action === "checkout") {
+      const worked = res.work_label || (res.worked_minutes + " min");
+      const salary = res.salary_label || ("RWF " + Number(res.daily_salary_rwf || res.salary || 0).toLocaleString());
+      let text = (res.message || "Checked out successfully.")
+        + "\n\nTime worked: " + worked
+        + "\nDaily salary: " + salary;
+      if (res.notify && res.notify.email) {
+        text += "\n\nSummary sent to your email.";
+      }
+      alert(text);
+    } else {
+      alert(res.message || (res.success ? "Done." : "Request failed."));
+    }
+    logEvent("Attendance " + action, {lat, lng, distance: distanceText.innerText, salary: res.daily_salary_rwf});
+    loadCheckoutStatus();
   })
   .catch(() => alert("Network error"))
   .finally(() => {

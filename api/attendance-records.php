@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/../db.php';
+require_once __DIR__ . '/../helpers/attendance_checkout.php';
+require_once __DIR__ . '/../helpers/daily_attendance_notify.php';
 header("Content-Type: application/json");
 
 // =============================================================
@@ -148,77 +150,67 @@ if ($action === "checkout") {
         exit;
     }
 
-    // Weekend → no salary
-    if ($isWeekend) {
-        $up = $conn->prepare("
-            UPDATE attendance SET
-                check_out_time = ?, check_out_location = ?, check_out_lat = ?, check_out_lng = ?,
-                break_duration_minutes = 0,
-                total_work_minutes = 0,
-                total_payment_rwf = 0,
-                daily_salary_rwf = 0
-            WHERE id = ?
-        ");
-        $up->bind_param("ssdddi", $now, $location, $lat, $lng, $attendance_id);
-        $up->execute();
+    $checkoutCheck = pcvc_validate_attendance_checkout(
+        $conn,
+        $admin_id,
+        $check_in_time,
+        $now,
+        $today
+    );
 
-        echo json_encode(["status" => "success", "message" => "Weekend checkout", "salary" => 0]);
+    if (!$checkoutCheck['ok']) {
+        echo json_encode([
+            "status"  => "error",
+            "message" => $checkoutCheck['message'],
+        ]);
         exit;
     }
 
-    // get rate
-    $rate = $conn->prepare("SELECT salary_per_minute, allowed_break_minutes FROM admins WHERE id = ?");
-    $rate->bind_param("i", $admin_id);
-    $rate->execute();
-    $rate->bind_result($salary_per_minute, $allowed_break);
-    $rate->fetch();
-    $rate->close();
+    $checkout = pcvc_attendance_save_checkout(
+        $conn,
+        $admin_id,
+        (int) $attendance_id,
+        $check_in_time,
+        $now,
+        $today,
+        $location,
+        $lat,
+        $lng,
+        $checkoutCheck['elapsed_minutes']
+    );
 
-    $salary_per_minute = floatval($salary_per_minute ?: 8.33);
-    $allowed_break = intval($allowed_break ?? 0);
-
-    // time calc
-    $checkin_ts = strtotime($check_in_time);
-    $checkout_ts = strtotime($now);
-    $total_minutes = ceil(($checkout_ts - $checkin_ts) / 60);
-
-    // =============================================================
-    // NEW RULE:
-    // If worked minutes >= 300 → count as FULL DAY (480)
-    // Otherwise keep actual minutes
-    // =============================================================
-    if ($total_minutes >= 300) {
-        $effective_minutes = 480;
-    } else {
-        $effective_minutes = $total_minutes;
+    if ($checkout === null) {
+        echo json_encode(['status' => 'error', 'message' => 'Could not save checkout. Please try again.']);
+        exit;
     }
 
-    $payment = round($effective_minutes * $salary_per_minute);
+    $notify = pcvc_attendance_notify_after_checkout($conn, $admin_id, $today);
 
-    // SAVE INTO ALL REQUIRED FIELDS
-    $up = $conn->prepare("
-        UPDATE attendance SET
-            check_out_time = ?, check_out_location = ?, check_out_lat = ?, check_out_lng = ?,
-            break_duration_minutes = ?, 
-            total_work_minutes = ?, 
-            total_payment_rwf = ?, 
-            daily_salary_rwf = ?
-        WHERE id = ?
-    ");
-    $up->bind_param(
-        "ssddiiiii",
-        $now, $location, $lat, $lng,
-        $allowed_break, $effective_minutes,
-        $payment, $payment,
-        $attendance_id
-    );
-    $up->execute();
+    $message = $checkout['is_weekend']
+        ? 'Weekend checkout recorded.'
+        : 'Checkout successful.';
+
+    $message .= "\nTime worked: " . $checkout['work_label']
+        . "\nDaily salary: " . $checkout['salary_label'];
+
+    if ($notify['email']) {
+        $message .= "\nSummary sent to your email.";
+    }
 
     echo json_encode([
-        "status" => "success",
-        "message" => "Checkout successful",
-        "worked_minutes" => $effective_minutes,
-        "salary" => $payment
+        'status'           => 'success',
+        'message'          => $message,
+        'worked_minutes'   => $checkout['worked_minutes'],
+        'daily_salary_rwf' => $checkout['daily_salary_rwf'],
+        'salary'           => $checkout['daily_salary_rwf'],
+        'work_label'       => $checkout['work_label'],
+        'salary_label'     => $checkout['salary_label'],
+        'is_weekend'       => $checkout['is_weekend'],
+        'notify'           => [
+            'email'    => $notify['email'],
+            'whatsapp' => $notify['whatsapp'],
+            'wa_error' => $notify['wa_error'],
+        ],
     ]);
     exit;
 }

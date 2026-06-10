@@ -7,6 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/attendance_checkout.php';
+require_once __DIR__ . '/helpers/daily_attendance_notify.php';
 header("Content-Type: application/json");
 
 // =====================================================
@@ -29,12 +31,28 @@ function log_event(string $message, array $data = []): void {
 }
 
 // =====================================================
-// SAFE GET HANDLER (DO NOT LOG)
+// GET — checkout eligibility (web UI)
 // =====================================================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $admin_id = $_SESSION['admin_id'] ?? $_SESSION['id'] ?? null;
+    if (!$admin_id) {
+        http_response_code(403);
+        echo json_encode(["success" => false, "message" => "Not authenticated"]);
+        exit;
+    }
+
+    $timezone = $_GET['timezone'] ?? 'UTC';
+    if (in_array($timezone, timezone_identifiers_list(), true)) {
+        date_default_timezone_set($timezone);
+    }
+
+    $today = date('Y-m-d');
+    $now   = date('Y-m-d H:i:s');
+    $status = pcvc_attendance_checkout_status($conn, (int) $admin_id, $today, $now);
+
     echo json_encode([
-        "success" => false,
-        "message" => "Attendance API endpoint. Use POST."
+        "success" => true,
+        "status"  => $status,
     ]);
     exit;
 }
@@ -229,39 +247,77 @@ if ($action === 'checkout') {
         exit;
     }
 
-    $minutes = (int)ceil((strtotime($now) - strtotime($check_in_time)) / 60);
-    $salary_per_minute = 8.33;
-    $salary = (int)round($minutes * $salary_per_minute);
-
-    $stmt = $conn->prepare("
-        UPDATE attendance SET
-            check_out_time = ?,
-            check_out_location = ?,
-            check_out_lat = ?,
-            check_out_lng = ?,
-            total_work_minutes = ?,
-            total_payment_rwf = ?,
-            daily_salary_rwf = ?
-        WHERE id = ?
-    ");
-    $stmt->bind_param(
-        "ssddiiii",
-        $now, $location, $lat, $lng,
-        $minutes, $salary, $salary,
-        $attendance_id
+    $checkoutCheck = pcvc_validate_attendance_checkout(
+        $conn,
+        $admin_id,
+        $check_in_time,
+        $now,
+        $today
     );
-    $stmt->execute();
 
-    log_event("CHECKOUT_SUCCESS", [
-        "minutes" => $minutes,
-        "salary"  => $salary
+    if (!$checkoutCheck['ok']) {
+        log_event("CHECKOUT_BLOCKED", [
+            'reason'          => $checkoutCheck['message'],
+            'jobs_completed'  => $checkoutCheck['jobs_completed'],
+            'elapsed_minutes' => $checkoutCheck['elapsed_minutes'],
+        ]);
+        echo json_encode([
+            "success" => false,
+            "message" => $checkoutCheck['message'],
+        ]);
+        exit;
+    }
+
+    $checkout = pcvc_attendance_save_checkout(
+        $conn,
+        $admin_id,
+        (int) $attendance_id,
+        $check_in_time,
+        $now,
+        $today,
+        $location,
+        $lat,
+        $lng,
+        $checkoutCheck['elapsed_minutes']
+    );
+
+    if ($checkout === null) {
+        log_event('CHECKOUT_SAVE_FAILED');
+        echo json_encode(['success' => false, 'message' => 'Could not save checkout. Please try again.']);
+        exit;
+    }
+
+    $notify = pcvc_attendance_notify_after_checkout($conn, $admin_id, $today);
+
+    log_event('CHECKOUT_SUCCESS', [
+        'minutes'  => $checkout['worked_minutes'],
+        'salary'   => $checkout['daily_salary_rwf'],
+        'notify'   => ['email' => $notify['email'], 'whatsapp' => $notify['whatsapp']],
     ]);
 
+    $message = 'Checked out successfully.'
+        . "\n\nTime worked: " . $checkout['work_label']
+        . "\nDaily salary: " . $checkout['salary_label'];
+
+    $sentVia = [];
+    if ($notify['email']) {
+        $message .= "\n\nSummary sent to your email.";
+    }
+
     echo json_encode([
-        "success"        => true,
-        "message"        => "Checked out successfully",
-        "worked_minutes" => $minutes,
-        "salary"         => $salary
+        'success'          => true,
+        'message'          => $message,
+        'worked_minutes'   => $checkout['worked_minutes'],
+        'daily_salary_rwf' => $checkout['daily_salary_rwf'],
+        'salary'           => $checkout['daily_salary_rwf'],
+        'work_label'       => $checkout['work_label'],
+        'salary_label'     => $checkout['salary_label'],
+        'is_weekend'       => $checkout['is_weekend'],
+        'notify'           => [
+            'email'    => $notify['email'],
+            'whatsapp' => $notify['whatsapp'],
+            'wa_error' => $notify['wa_error'],
+        ],
     ]);
     exit;
 }

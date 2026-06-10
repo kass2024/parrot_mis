@@ -228,6 +228,12 @@ $staffs = $isSuperadmin
         ORDER BY full_name ASC, id ASC
       ")
     : null;
+
+$jobSaveSuccess = '';
+if (!empty($_SESSION['job_save_success'])) {
+    $jobSaveSuccess = trim((string) $_SESSION['job_save_success']);
+    unset($_SESSION['job_save_success']);
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -409,6 +415,38 @@ button{
   border-color:#fca5a5;
 }
 
+.success-banner{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:18px;
+  padding:14px 16px;
+  border-radius:12px;
+  border:1px solid #86efac;
+  background:#ecfdf5;
+  color:#166534;
+  font-size:14px;
+  font-weight:600;
+  line-height:1.45;
+}
+
+.success-banner button{
+  margin:0;
+  width:auto;
+  padding:4px 10px;
+  border-radius:8px;
+  background:transparent;
+  color:#166534;
+  border:1px solid #86efac;
+  font-size:18px;
+  line-height:1;
+}
+
+.success-banner button:hover{
+  background:#dcfce7;
+}
+
 </style>
 </head>
 
@@ -421,6 +459,13 @@ button{
 </div>
 
 <div class="job-list">
+
+<?php if ($jobSaveSuccess !== ''): ?>
+<div class="success-banner" id="jobSaveSuccess" role="status">
+  <span>✅ <?= htmlspecialchars($jobSaveSuccess, ENT_QUOTES, 'UTF-8') ?></span>
+  <button type="button" id="dismissJobSuccess" aria-label="Dismiss">×</button>
+</div>
+<?php endif; ?>
 
 <form method="post" class="add-job" id="addJobForm">
   <input id="job_title" name="title" readonly required placeholder="Job Title">
@@ -480,6 +525,18 @@ button{
 
 <script>
 $(function(){
+
+  const $successBanner = $('#jobSaveSuccess');
+  if ($successBanner.length) {
+    $('#dismissJobSuccess').on('click', function () {
+      $successBanner.fadeOut(200, function () { $(this).remove(); });
+    });
+    setTimeout(function () {
+      if ($successBanner.length) {
+        $successBanner.fadeOut(400, function () { $(this).remove(); });
+      }
+    }, 6000);
+  }
 
   function fetchJobs(){
     $.post('',{
