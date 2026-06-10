@@ -4,8 +4,9 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 
-if (!isset($_SESSION['id'], $_SESSION['role']) || $_SESSION['role'] !== 'superadmin') {
+if (!isset($_SESSION['id']) || !pcvc_current_user_is_superadmin($conn)) {
     http_response_code(403);
     header('Content-Type: application/json; charset=UTF-8');
     echo json_encode(['error' => true, 'message' => 'Forbidden']);

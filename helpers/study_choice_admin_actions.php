@@ -141,21 +141,56 @@ function pcvc_fetch_study_choices_for_admin_view(mysqli $conn, int $applicationI
 }
 
 /**
- * Auto-create platform jobs for one university on an application (mirrors view endpoint logic).
+ * Remove incomplete assignment-based jobs for a staff member on an application.
  */
-function pcvc_ensure_auto_jobs_for_university(mysqli $conn, int $applicationId, int $universityId): int
+function pcvc_remove_incomplete_assignment_jobs(mysqli $conn, int $applicationId, int $adminId): void
 {
-    if ($applicationId <= 0 || $universityId <= 0) {
+    if ($applicationId <= 0 || $adminId <= 0) {
+        return;
+    }
+
+    $stmt = $conn->prepare(
+        'DELETE FROM job_list
+         WHERE application_id = ?
+           AND admin_id = ?
+           AND is_auto_created = 1
+           AND status = \'not_completed\'
+           AND (platform_id IS NULL OR platform_id = 0)'
+    );
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param('ii', $applicationId, $adminId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+/**
+ * Create Job Do List rows for the assigned staff member (one per study-choice university).
+ */
+function pcvc_ensure_assignment_jobs_for_application(mysqli $conn, int $applicationId, int $assigneeAdminId): int
+{
+    if ($applicationId <= 0 || $assigneeAdminId <= 0) {
+        return 0;
+    }
+
+    $stmt = $conn->prepare('SELECT id FROM admins WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return 0;
+    }
+    $stmt->bind_param('i', $assigneeAdminId);
+    $stmt->execute();
+    $assigneeOk = (bool) $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$assigneeOk) {
         return 0;
     }
 
     $stmt = $conn->prepare(
-        '
-        SELECT first_name, last_name, email
-        FROM student_applications
-        WHERE id = ?
-        LIMIT 1
-    '
+        'SELECT first_name, last_name, email
+         FROM student_applications
+         WHERE id = ?
+         LIMIT 1'
     );
     if (!$stmt) {
         return 0;
@@ -173,133 +208,102 @@ function pcvc_ensure_auto_jobs_for_university(mysqli $conn, int $applicationId, 
     }
 
     $stmt = $conn->prepare(
-        '
-        SELECT
-            u.id AS university_id,
+        'SELECT DISTINCT
+            ascx.university_id,
             u.name AS university_name,
             c.name AS country_name
-        FROM universities u
-        LEFT JOIN countries c ON c.id = u.country_id
-        WHERE u.id = ?
-        LIMIT 1
-    '
+         FROM application_study_choices ascx
+         JOIN universities u ON u.id = ascx.university_id
+         LEFT JOIN countries c ON c.id = u.country_id
+         WHERE ascx.application_id = ?'
     );
     if (!$stmt) {
         return 0;
     }
-    $stmt->bind_param('i', $universityId);
+    $stmt->bind_param('i', $applicationId);
     $stmt->execute();
-    $choice = $stmt->get_result()->fetch_assoc();
+    $choices = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
-
-    if (!$choice) {
-        return 0;
-    }
 
     $checkJob = $conn->prepare(
-        '
-        SELECT id
-        FROM job_list
-        WHERE
-            application_id = ?
-            AND university_id = ?
-            AND admin_id = ?
-            AND platform_id = ?
-            AND is_auto_created = 1
-        LIMIT 1
-    '
+        'SELECT id
+         FROM job_list
+         WHERE application_id = ?
+           AND university_id <=> ?
+           AND admin_id = ?
+           AND (platform_id IS NULL OR platform_id = 0)
+           AND is_auto_created = 1
+         LIMIT 1'
     );
-    if (!$checkJob) {
-        return 0;
-    }
-
     $insertJob = $conn->prepare(
-        '
-        INSERT INTO job_list
-            (
-                admin_id,
-                application_id,
-                university_id,
-                platform_id,
-                title,
-                applicant_name,
-                applicant_email,
-                job_type,
-                status,
-                is_auto_created
-            )
-        VALUES
-            (?, ?, ?, ?, ?, ?, ?, \'Student Admission Application\', \'not_completed\', 1)
-    '
+        'INSERT INTO job_list
+            (admin_id, application_id, university_id, platform_id, title,
+             applicant_name, applicant_email, job_type, status, is_auto_created)
+         VALUES
+            (?, ?, ?, NULL, ?, ?, ?, \'Student Admission Application\', \'not_completed\', 1)'
     );
-    if (!$insertJob) {
-        $checkJob->close();
-        return 0;
-    }
-
-    $stmt = $conn->prepare(
-        '
-        SELECT
-            a.id AS admin_id,
-            p.id AS platform_id
-        FROM university_platforms up
-        JOIN platforms p ON p.id = up.platform_id
-        JOIN admins a ON a.id = p.person_in_charge
-        WHERE up.university_id = ?
-          AND p.status = \'Active\'
-        ORDER BY up.is_preferred DESC, p.id ASC
-    '
-    );
-    if (!$stmt) {
-        $checkJob->close();
-        $insertJob->close();
-        return 0;
-    }
-
-    $stmt->bind_param('i', $choice['university_id']);
-    $stmt->execute();
-    $admins = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
-
-    if (!$admins) {
-        $checkJob->close();
-        $insertJob->close();
+    if (!$checkJob || !$insertJob) {
+        $checkJob?->close();
+        $insertJob?->close();
         return 0;
     }
 
     $jobsCreated = 0;
-    $uid = (int) $choice['university_id'];
 
-    foreach ($admins as $admin) {
-        $adminId = (int) $admin['admin_id'];
-        $platformId = (int) $admin['platform_id'];
+    if (!$choices) {
+        $jobTitle = sprintf('Application #%d', $applicationId);
+        $fallbackUniversityId = 0;
+        $checkJob->bind_param('iii', $applicationId, $fallbackUniversityId, $assigneeAdminId);
+        $checkJob->execute();
+        $checkJob->store_result();
+        if ($checkJob->num_rows === 0) {
+            $insertJob->bind_param(
+                'iiisss',
+                $assigneeAdminId,
+                $applicationId,
+                $fallbackUniversityId,
+                $jobTitle,
+                $applicantName,
+                $applicantEmail
+            );
+            if ($insertJob->execute()) {
+                $jobsCreated++;
+            }
+        }
+        $checkJob->close();
+        $insertJob->close();
+        return $jobsCreated;
+    }
+
+    foreach ($choices as $choice) {
+        $universityId = (int) ($choice['university_id'] ?? 0);
+        if ($universityId <= 0) {
+            continue;
+        }
 
         $jobTitle = sprintf(
             'Application #%d – %s (%s)',
             $applicationId,
-            $choice['university_name'],
+            $choice['university_name'] ?? 'University',
             $choice['country_name'] ?? 'Unknown'
         );
 
-        $checkJob->bind_param('iiii', $applicationId, $uid, $adminId, $platformId);
+        $checkJob->bind_param('iii', $applicationId, $universityId, $assigneeAdminId);
         $checkJob->execute();
         $checkJob->store_result();
-
         if ($checkJob->num_rows > 0) {
             continue;
         }
 
         $insertJob->bind_param(
-            'iiiisss',
-            $adminId,
+            'iiisss',
+            $assigneeAdminId,
             $applicationId,
-            $uid,
-            $platformId,
+            $universityId,
             $jobTitle,
             $applicantName,
             $applicantEmail
         );
-
         if ($insertJob->execute()) {
             $jobsCreated++;
         }
@@ -309,6 +313,15 @@ function pcvc_ensure_auto_jobs_for_university(mysqli $conn, int $applicationId, 
     $insertJob->close();
 
     return $jobsCreated;
+}
+
+/**
+ * @deprecated Platform auto-jobs disabled — use pcvc_ensure_assignment_jobs_for_application().
+ */
+function pcvc_ensure_auto_jobs_for_university(mysqli $conn, int $applicationId, int $universityId): int
+{
+    unset($applicationId, $universityId);
+    return 0;
 }
 
 /**

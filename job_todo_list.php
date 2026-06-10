@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 if (!isset($_SESSION['id'], $_SESSION['role'])) {
     header("Location: admin-login.php");
     exit;
@@ -8,6 +9,56 @@ if (!isset($_SESSION['id'], $_SESSION['role'])) {
 
 $admin_id = (int)$_SESSION['id'];
 $role = $_SESSION['role'];
+$isSuperadmin = pcvc_current_user_is_superadmin($conn);
+
+/* ================= AJAX: DELETE JOB (superadmin — any assignee/role) ================= */
+if (isset($_POST['ajax']) && $_POST['ajax'] === 'delete_job') {
+    header('Content-Type: application/json; charset=utf-8');
+    if (!$isSuperadmin) {
+        echo json_encode(['success' => false, 'message' => 'Only superadmin can delete jobs.']);
+        exit;
+    }
+
+    $jobId = (int) ($_POST['job_id'] ?? 0);
+    if ($jobId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid job.']);
+        exit;
+    }
+
+    $stmt = $conn->prepare('SELECT screenshot_path FROM job_list WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        echo json_encode(['success' => false, 'message' => 'Database error.']);
+        exit;
+    }
+    $stmt->bind_param('i', $jobId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    $stmt = $conn->prepare('DELETE FROM job_list WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        echo json_encode(['success' => false, 'message' => 'Database error.']);
+        exit;
+    }
+    $stmt->bind_param('i', $jobId);
+    $stmt->execute();
+    $deleted = $stmt->affected_rows > 0;
+    $stmt->close();
+
+    if (!$deleted) {
+        echo json_encode(['success' => false, 'message' => 'Job not found or already deleted.']);
+        exit;
+    }
+
+    $shot = trim((string) ($row['screenshot_path'] ?? ''));
+    if ($shot !== '' && is_file(__DIR__ . '/' . ltrim($shot, '/'))) {
+        @unlink(__DIR__ . '/' . ltrim($shot, '/'));
+    }
+
+    echo json_encode(['success' => true, 'message' => 'Job deleted.']);
+    exit;
+}
+
 /* ================= AJAX: SAVE COMMENT ================= */
 if (isset($_POST['ajax']) && $_POST['ajax'] === 'save_comment') {
 
@@ -29,14 +80,19 @@ if (isset($_POST['ajax']) && $_POST['ajax'] === 'fetch_jobs') {
     $status   = $_POST['status'] ?? '';
     $period   = $_POST['period'] ?? '';
     $search   = strtolower(trim($_POST['search'] ?? ''));
-    $staff_id = (int)($_POST['staff'] ?? 0);
+    $staffRaw = $_POST['staff'] ?? '0';
+    $staff_id = ($staffRaw === '' || $staffRaw === null) ? 0 : (int) $staffRaw;
 
     $where = [];
 
-    if ($role === 'superadmin') {
-        $where[] = ($staff_id > 0)
-            ? "j.admin_id = $staff_id"
-            : "j.admin_id = $admin_id";
+    if ($isSuperadmin) {
+        if ($staff_id > 0) {
+            $where[] = "j.admin_id = $staff_id";
+        } elseif ($staff_id === -1) {
+            // All jobs (every role / assignee)
+        } else {
+            $where[] = "j.admin_id = $admin_id";
+        }
     } else {
         $where[] = "j.admin_id = $admin_id";
     }
@@ -124,6 +180,13 @@ if (isset($_POST['ajax']) && $_POST['ajax'] === 'fetch_jobs') {
                 >'.htmlspecialchars($job['comment'] ?? '').'</textarea>
                 ';
 
+                if ($isSuperadmin) {
+                    echo '
+                    <button type="button" class="btn-delete-job" data-job-id="'.(int)$job['id'].'"
+                      title="Delete job" aria-label="Delete job">🗑</button>
+                    ';
+                }
+
             echo '</div>'; // job-actions
 
         echo '</div>'; // job-card
@@ -155,8 +218,15 @@ if (isset($_POST['add_job'])) {
     exit;
 }
 
-$staffs = ($role === 'superadmin')
-    ? mysqli_query($conn,"SELECT id, full_name FROM admins WHERE role='staff' ORDER BY full_name")
+$staffs = $isSuperadmin
+    ? mysqli_query($conn, "
+        SELECT id,
+               COALESCE(NULLIF(TRIM(full_name), ''),
+                        TRIM(CONCAT(COALESCE(first_name,''), ' ', COALESCE(last_name,'')))) AS full_name,
+               role
+        FROM admins
+        ORDER BY full_name ASC, id ASC
+      ")
     : null;
 ?>
 <!DOCTYPE html>
@@ -322,6 +392,23 @@ button{
   cursor:not-allowed;
 }
 
+.btn-delete-job{
+  padding:8px 12px;
+  border-radius:10px;
+  border:1px solid #fecaca;
+  background:#fff;
+  color:var(--danger);
+  font-size:16px;
+  line-height:1;
+  cursor:pointer;
+  flex-shrink:0;
+}
+
+.btn-delete-job:hover{
+  background:#fee2e2;
+  border-color:#fca5a5;
+}
+
 </style>
 </head>
 
@@ -362,11 +449,22 @@ button{
   <input id="searchTitle" placeholder="Search…">
   <select id="statusFilter"><option value="">All</option><option value="completed">Completed</option><option value="not_completed">Not Completed</option></select>
   <select id="timeFilter"><option value="">All Time</option><option value="today">Today</option><option value="week">Week</option><option value="month">Month</option></select>
-  <?php if($role==='superadmin'): ?>
+  <?php if ($isSuperadmin): ?>
   <select id="staffFilter">
-    <option value="0">My Jobs</option>
-    <?php while($s=mysqli_fetch_assoc($staffs)): ?>
-      <option value="<?= $s['id'] ?>"><?= htmlspecialchars($s['full_name']) ?></option>
+    <option value="-1">All jobs</option>
+    <option value="0">My jobs</option>
+    <?php while ($s = mysqli_fetch_assoc($staffs)): ?>
+      <?php
+        $staffLabel = trim((string) ($s['full_name'] ?? ''));
+        if ($staffLabel === '') {
+            $staffLabel = 'Admin #' . (int) $s['id'];
+        }
+        $staffRole = trim((string) ($s['role'] ?? ''));
+        if ($staffRole !== '') {
+            $staffLabel .= ' (' . $staffRole . ')';
+        }
+      ?>
+      <option value="<?= (int) $s['id'] ?>"><?= htmlspecialchars($staffLabel) ?></option>
     <?php endwhile; ?>
   </select>
   <?php endif; ?>
@@ -441,6 +539,32 @@ $('#job_type').on('change', function () {
   }
 });
 
+
+  $(document).on('click', '.btn-delete-job', function () {
+    const jobId = $(this).data('job-id');
+    const title = $(this).closest('.job-card').find('.job-title').text().trim() || 'this job';
+    if (!confirm('Delete "' + title + '" permanently?\n\nThis cannot be undone.')) {
+      return;
+    }
+    const btn = $(this);
+    btn.prop('disabled', true);
+    $.ajax({
+      url: '',
+      type: 'POST',
+      dataType: 'json',
+      data: { ajax: 'delete_job', job_id: jobId }
+    }).done(function (res) {
+      if (res && res.success) {
+        fetchJobs();
+      } else {
+        alert((res && res.message) ? res.message : 'Could not delete job.');
+        btn.prop('disabled', false);
+      }
+    }).fail(function () {
+      alert('Could not delete job.');
+      btn.prop('disabled', false);
+    });
+  });
 
   /* 🔥 CLICK EVENT RESTORED */
   $(document).on('click','.open-report',function(){

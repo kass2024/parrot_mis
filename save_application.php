@@ -1251,11 +1251,20 @@ if ($isFinal === 1) {
     }
 
     require_once __DIR__ . '/helpers/staff_assignment_notify.php';
+    require_once __DIR__ . '/helpers/study_choice_admin_actions.php';
     try {
         pcvc_notify_assigned_staff_application_submitted($conn, $appId);
         debug_log('STAFF ASSIGNMENT NOTIFY SENT', ['application_id' => $appId]);
     } catch (Throwable $e) {
         debug_log('STAFF ASSIGNMENT NOTIFY ERROR', $e->getMessage());
+    }
+    if ($assignedToAdminId !== null && $assignedToAdminId > 0) {
+        try {
+            $jobCount = pcvc_ensure_assignment_jobs_for_application($conn, $appId, $assignedToAdminId);
+            debug_log('ASSIGNMENT JOBS ENSURED', ['application_id' => $appId, 'jobs' => $jobCount]);
+        } catch (Throwable $e) {
+            debug_log('ASSIGNMENT JOBS ERROR', $e->getMessage());
+        }
     }
 }
 

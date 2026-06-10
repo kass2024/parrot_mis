@@ -590,24 +590,6 @@ function loadApplication(id, listItem) {
 loadJourney(id); // 👈 USE STUDENT APPLICATION ID
 
 
-/* =====================================================
-   🔔 JOB CREATION TOAST (THIS WAS MISSING)
-===================================================== */
-const jobsCreated = Number(res.data?.meta?.jobs_created || 0);
-
-console.log("JOBS CREATED:", jobsCreated); // 👈 DEBUG (keep for now)
-
-if (jobsCreated > 0) {
-    showToast(
-        `${jobsCreated} job${jobsCreated > 1 ? "s" : ""} created`,
-        () => {
-            // optional: redirect to jobs page
-            window.location.href = "admin-jobs.php";
-        },
-        "Jobs created"
-    );
-}
-
 const dot = listItem?.querySelector(".unread-dot");
 if (dot) dot.remove();
 
@@ -926,13 +908,21 @@ async function saveApplicationAssignment() {
             return;
         }
         const d = json.data || {};
-        const msg = d.notified
+        let msg = d.notified
             ? "Assignment saved. The new assignee was notified (email / WhatsApp where configured)."
             : "Assignment saved.";
+        const jobsCreated = Number(d.jobs_created || 0);
+        if (jobsCreated > 0) {
+            msg += ` ${jobsCreated} job${jobsCreated > 1 ? "s" : ""} added to their Job Do List.`;
+            showToast(msg, () => {
+                window.location.href = "job_todo_list.php";
+            }, "Assignment");
+        } else {
+            showToast(msg, null, "Assignment");
+        }
         if (statusEl) {
             statusEl.textContent = msg;
         }
-        showToast(msg, null, "Assignment");
         loadStudents();
         loadApplication(appId, null);
     } catch (err) {
@@ -2458,9 +2448,9 @@ async function submitAddStudyChoice() {
         } else {
             let msg = d.message || "Study choice added.";
             if (d.jobs_created > 0) {
-                msg += ` ${d.jobs_created} job(s) created.`;
+                msg += ` ${d.jobs_created} job(s) added to the assignee's Job Do List.`;
                 showToast(msg, () => {
-                    window.location.href = "admin-jobs.php";
+                    window.location.href = "job_todo_list.php";
                 }, "Study choices");
             } else {
                 showToast(

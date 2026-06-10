@@ -133,7 +133,22 @@ if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $notified = false;
 
     if ($ins['inserted']) {
-        $jobsCreated = pcvc_ensure_auto_jobs_for_university($conn, $applicationId, $universityId);
+        $assigneeId = 0;
+        $stAssign = $conn->prepare(
+            'SELECT assigned_to_admin_id FROM student_applications WHERE id = ? LIMIT 1'
+        );
+        if ($stAssign) {
+            $stAssign->bind_param('i', $applicationId);
+            $stAssign->execute();
+            $assignRow = $stAssign->get_result()->fetch_assoc();
+            $stAssign->close();
+            if ($assignRow && $assignRow['assigned_to_admin_id'] !== null && $assignRow['assigned_to_admin_id'] !== '') {
+                $assigneeId = (int) $assignRow['assigned_to_admin_id'];
+            }
+        }
+        if ($assigneeId > 0) {
+            $jobsCreated = pcvc_ensure_assignment_jobs_for_application($conn, $applicationId, $assigneeId);
+        }
         $notified = pcvc_notify_student_study_choice_added(
             $conn,
             $applicationId,
@@ -366,6 +381,14 @@ if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    $jobsCreated = 0;
+    if ($oldAssign > 0 && $oldAssign !== $newAssigneeId) {
+        pcvc_remove_incomplete_assignment_jobs($conn, $applicationId, $oldAssign);
+    }
+    if ($newAssigneeId > 0 && $newAssigneeId !== $oldAssign) {
+        $jobsCreated = pcvc_ensure_assignment_jobs_for_application($conn, $applicationId, $newAssigneeId);
+    }
+
     $notified = false;
     if ($newAssigneeId > 0 && $newAssigneeId !== $oldAssign) {
         $senderAdminLine = 'Admin #' . $adminId;
@@ -404,6 +427,7 @@ if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'assigned_to_admin_id' => $newAssigneeId,
         'assigned_display' => $assignDisplay,
         'notified' => $notified,
+        'jobs_created' => $jobsCreated,
     ]);
     exit;
 }
@@ -995,164 +1019,9 @@ if ($action === 'view' && !empty($_GET['id'])) {
     $stmt = $conn->prepare("UPDATE student_applications SET is_read = 1 WHERE id = ?");
     $stmt->bind_param("i", $id);
     $stmt->execute();
-/**
- * ==================================================
- * AUTO CREATE JOBS (ONE UNIVERSITY = ONE JOB)
- * ==================================================
- */
 
-// 1️⃣ Load applicant basic info (we already need this later anyway)
-$applicantName  = '';
-$applicantEmail = '';
-
-$stmt = $conn->prepare("
-    SELECT first_name, last_name, email
-    FROM student_applications
-    WHERE id = ?
-");
-$stmt->bind_param("i", $id);
-$stmt->execute();
-$basic = $stmt->get_result()->fetch_assoc();
-
-if ($basic) {
-    $applicantName  = trim($basic['first_name'] . ' ' . $basic['last_name']);
-    $applicantEmail = $basic['email'];
-}
-
-// 2️⃣ Load STUDY CHOICES (each university = one job)
-$stmt = $conn->prepare("
-    SELECT DISTINCT
-        ascx.university_id,
-        u.name AS university_name,
-        c.name AS country_name
-    FROM application_study_choices ascx
-    JOIN universities u ON u.id = ascx.university_id
-    LEFT JOIN countries c ON c.id = u.country_id
-    WHERE ascx.application_id = ?
-");
-$stmt->bind_param("i", $id);
-$stmt->execute();
-$studyChoicesForJobs = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-// 3️⃣ Prepare job statements
-$checkJob = $conn->prepare("
-    SELECT id
-    FROM job_list
-    WHERE
-        application_id = ?
-        AND university_id = ?
-        AND admin_id = ?
-        AND platform_id = ?
-        AND is_auto_created = 1
-    LIMIT 1
-");
-
-
-$insertJob = $conn->prepare("
-    INSERT INTO job_list
-        (
-            admin_id,
-            application_id,
-            university_id,
-            platform_id,
-            title,
-            applicant_name,
-            applicant_email,
-            job_type,
-            status,
-            is_auto_created
-        )
-    VALUES
-        (?, ?, ?, ?, ?, ?, ?, 'Student Admission Application', 'not_completed', 1)
-");
-
-
-// 4️⃣ Loop: ONE UNIVERSITY = ONE JOB
-$jobsCreated = 0;
-
-foreach ($studyChoicesForJobs as $choice) {
-
-    /**
-     * ==================================================
-     * 1️⃣ LOAD ALL PLATFORMS / ADMINS FOR THIS UNIVERSITY
-     * ==================================================
-     */
-    $stmt = $conn->prepare("
-        SELECT
-            a.id AS admin_id,
-            p.id AS platform_id
-        FROM university_platforms up
-        JOIN platforms p ON p.id = up.platform_id
-        JOIN admins a ON a.id = p.person_in_charge
-        WHERE up.university_id = ?
-          AND p.status = 'Active'
-        ORDER BY up.is_preferred DESC, p.id ASC
-    ");
-    $stmt->bind_param("i", $choice['university_id']);
-    $stmt->execute();
-    $admins = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-
-    if (!$admins) {
-        continue; // no platforms → no jobs
-    }
-
-    /**
-     * ==================================================
-     * 2️⃣ CREATE ONE JOB PER ADMIN / PLATFORM
-     * ==================================================
-     */
-    foreach ($admins as $admin) {
-
-        $adminId    = (int)$admin['admin_id'];
-        $platformId = (int)$admin['platform_id'];
-
-        // unique job title
-        $jobTitle = sprintf(
-            "Application #%d – %s (%s)",
-            $id,
-            $choice['university_name'],
-            $choice['country_name'] ?? 'Unknown'
-        );
-
-        /**
-         * ==================================================
-         * 3️⃣ PREVENT DUPLICATES (STRICT)
-         * ==================================================
-         */
-        $checkJob->bind_param(
-            "iiii",
-            $id,                           // application_id
-            $choice['university_id'],
-            $adminId,
-            $platformId
-        );
-        $checkJob->execute();
-        $checkJob->store_result();
-
-        if ($checkJob->num_rows > 0) {
-            continue; // exact job already exists
-        }
-
-        /**
-         * ==================================================
-         * 4️⃣ INSERT JOB
-         * ==================================================
-         */
-        $insertJob->bind_param(
-            "iiiisss",
-            $adminId,
-            $id,
-            $choice['university_id'],
-            $platformId,
-            $jobTitle,
-            $applicantName,
-            $applicantEmail
-        );
-
-        $insertJob->execute();
-        $jobsCreated++;
-    }
-}
+    // Jobs are created when a superadmin assigns the application (not on view).
+    $jobsCreated = 0;
 
     /**
      * ==================================================
