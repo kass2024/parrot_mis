@@ -58,14 +58,24 @@ $docxUrl .= '&ts=' . time();
       position: relative;
       font-family: 'Times New Roman', Times, serif !important;
       line-height: 1.15;
+      padding-bottom: 36px;
     }
-    #docx-container .docx-wrapper > section.docx::after {
-      content: 'Page ' attr(data-page-number);
+    /* Hide Word page headers/footers if the renderer still outputs them. */
+    #docx-container .docx-wrapper > section.docx > header,
+    #docx-container .docx-wrapper > section.docx > footer {
+      display: none !important;
+    }
+    #docx-container .docx-page-number {
       position: absolute;
-      right: 18px;
-      bottom: 10px;
-      font: 11px 'Segoe UI', system-ui, sans-serif;
-      color: #64748b;
+      right: 54px;
+      bottom: 22px;
+      left: auto;
+      width: auto;
+      text-align: right;
+      font: 11px 'Times New Roman', Times, serif;
+      color: #334155;
+      pointer-events: none;
+      z-index: 5;
     }
     #docx-container .docx,
     #docx-container .docx * {
@@ -100,6 +110,17 @@ $docxUrl .= '&ts=' . time();
         margin: 0 auto !important;
         page-break-after: always;
         break-after: page;
+        padding-bottom: 36px;
+      }
+      #docx-container header,
+      #docx-container footer,
+      #docx-container .docx-wrapper > section.docx > header,
+      #docx-container .docx-wrapper > section.docx > footer {
+        display: none !important;
+      }
+      #docx-container .docx-page-number {
+        right: 54px;
+        bottom: 22px;
       }
       #docx-container .docx-wrapper > section.docx:last-child {
         page-break-after: auto;
@@ -136,8 +157,8 @@ $docxUrl .= '&ts=' . time();
           ignoreFonts: false,
           breakPages: true,
           ignoreLastRenderedPageBreak: false,
-          renderHeaders: true,
-          renderFooters: true,
+          renderHeaders: false,
+          renderFooters: false,
           renderFootnotes: true,
           renderEndnotes: true,
           useBase64URL: true,
@@ -147,7 +168,13 @@ $docxUrl .= '&ts=' . time();
       .then(function () {
         const pages = container.querySelectorAll('.docx-wrapper > section.docx');
         pages.forEach(function (page, idx) {
-          page.setAttribute('data-page-number', String(idx + 1));
+          page.querySelectorAll('.docx-page-number').forEach(function (el) {
+            el.remove();
+          });
+          const num = document.createElement('div');
+          num.className = 'docx-page-number';
+          num.textContent = String(idx + 1);
+          page.appendChild(num);
         });
         if (pages.length > 0 && status.style.display !== 'none') {
           status.textContent = pages.length + ' page(s)';
