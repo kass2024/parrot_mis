@@ -230,7 +230,9 @@ $totalStaff = count($staffRows);
       data: fd,
       processData: false,
       contentType: false,
-      dataType: 'json'
+      dataType: 'json',
+      timeout: 300000,
+      xhrFields: { withCredentials: true }
     }).done(function (data) {
       btn.prop('disabled', false).html('<i class="bi bi-cloud-upload"></i> Upload Word');
       if (!data || !data.success) {
@@ -239,10 +241,23 @@ $totalStaff = count($staffRows);
       }
       alert(data.message || 'Uploaded');
       location.reload();
-    }).fail(function (xhr) {
+    }).fail(function (xhr, textStatus) {
       btn.prop('disabled', false).html('<i class="bi bi-cloud-upload"></i> Upload Word');
       let msg = 'Upload failed';
-      try { msg = JSON.parse(xhr.responseText).message || msg; } catch (e) {}
+      if (textStatus === 'timeout') {
+        msg = 'Upload timed out while generating the PDF preview. The server may need LibreOffice or a higher PHP time limit.';
+      } else if (xhr.status === 404) {
+        msg = 'Upload endpoint not found. Deploy admin/upload-staff-contract.php to the server.';
+      } else {
+        try {
+          const parsed = JSON.parse(xhr.responseText || '');
+          msg = parsed.message || msg;
+        } catch (e) {
+          if (xhr.status) {
+            msg += ' (HTTP ' + xhr.status + ')';
+          }
+        }
+      }
       alert(msg);
     });
   });
@@ -262,7 +277,9 @@ $totalStaff = count($staffRows);
       method: 'POST',
       contentType: 'application/json',
       data: JSON.stringify({ staff_id: staffId, mode: mode }),
-      dataType: 'json'
+      dataType: 'json',
+      timeout: 300000,
+      xhrFields: { withCredentials: true }
     }).done(function (data) {
       btn.prop('disabled', false).html('<i class="bi bi-arrow-' + (mode === 'signed' ? 'repeat' : 'clockwise') + '"></i> ' + label);
       if (!data || !data.success) {
@@ -271,10 +288,23 @@ $totalStaff = count($staffRows);
       }
       alert(data.message || 'Regenerated');
       location.reload();
-    }).fail(function (xhr) {
+    }).fail(function (xhr, textStatus) {
       btn.prop('disabled', false).html('<i class="bi bi-arrow-' + (mode === 'signed' ? 'repeat' : 'clockwise') + '"></i> ' + label);
       let errMsg = 'Regenerate failed';
-      try { errMsg = JSON.parse(xhr.responseText).message || errMsg; } catch (e) {}
+      if (textStatus === 'timeout') {
+        errMsg = 'Regenerate timed out. The server may need LibreOffice installed, or PHP max_execution_time increased.';
+      } else if (xhr.status === 404) {
+        errMsg = 'Regenerate endpoint not found. Deploy admin/regenerate-staff-contract.php to the server.';
+      } else {
+        try {
+          const parsed = JSON.parse(xhr.responseText || '');
+          errMsg = parsed.message || errMsg;
+        } catch (e) {
+          if (xhr.responseText) {
+            errMsg += ' (HTTP ' + xhr.status + ')';
+          }
+        }
+      }
       alert(errMsg);
     });
   });

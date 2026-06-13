@@ -1,56 +1,79 @@
 <?php
 declare(strict_types=1);
 
+@ini_set('display_errors', '0');
+@set_time_limit(300);
+
 session_start();
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/staff_contract_schema.php';
-require_once __DIR__ . '/../helpers/staff_contract_word.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
-pcvc_require_superadmin($conn, true);
-
-$staffId = (int) ($_POST['staff_id'] ?? 0);
-if ($staffId <= 0) {
-    echo json_encode(['success' => false, 'message' => 'Missing staff member']);
-    exit;
-}
-
-$stmt = $conn->prepare('SELECT id, full_name, role FROM admins WHERE id = ? LIMIT 1');
-if (!$stmt) {
-    echo json_encode(['success' => false, 'message' => 'Database error']);
-    exit;
-}
-$stmt->bind_param('i', $staffId);
-$stmt->execute();
-$staff = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-
-if (!$staff) {
-    echo json_encode(['success' => false, 'message' => 'Staff member not found']);
-    exit;
-}
-
-$fileKey = isset($_FILES['contract_docx']) ? 'contract_docx' : 'contract_pdf';
-if (!isset($_FILES[$fileKey]) || $_FILES[$fileKey]['error'] !== UPLOAD_ERR_OK) {
-    echo json_encode(['success' => false, 'message' => 'Please choose a Word contract file (.docx)']);
-    exit;
-}
-
-$ext = strtolower(pathinfo((string) $_FILES[$fileKey]['name'], PATHINFO_EXTENSION));
-if ($ext !== 'docx') {
-    echo json_encode(['success' => false, 'message' => 'Only Word .docx contract templates are allowed']);
-    exit;
-}
-if ((int) $_FILES[$fileKey]['size'] > 25 * 1024 * 1024) {
-    echo json_encode(['success' => false, 'message' => 'Contract file must be 25MB or less']);
+function pcvc_upload_json_error(string $message, int $code = 500): void
+{
+    http_response_code($code);
+    echo json_encode(['success' => false, 'message' => $message]);
     exit;
 }
 
 try {
+    pcvc_require_superadmin($conn, true);
+
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        pcvc_upload_json_error('Invalid request', 405);
+    }
+
+    $autoload = __DIR__ . '/../vendor/autoload.php';
+    if (!is_file($autoload)) {
+        pcvc_upload_json_error('Composer dependencies missing on server. Run composer install in the project root.');
+    }
+    require_once $autoload;
+    require_once __DIR__ . '/../helpers/staff_contract_word.php';
+
+    if (!class_exists('ZipArchive')) {
+        pcvc_upload_json_error('PHP Zip extension (ext-zip) is required for contract uploads.');
+    }
+
+    $staffId = (int) ($_POST['staff_id'] ?? 0);
+    if ($staffId <= 0) {
+        pcvc_upload_json_error('Missing staff member', 400);
+    }
+
+    $stmt = $conn->prepare('SELECT id, full_name, role FROM admins WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        pcvc_upload_json_error('Database error');
+    }
+    $stmt->bind_param('i', $staffId);
+    $stmt->execute();
+    $staff = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$staff) {
+        pcvc_upload_json_error('Staff member not found', 404);
+    }
+
+    $fileKey = isset($_FILES['contract_docx']) ? 'contract_docx' : 'contract_pdf';
+    if (!isset($_FILES[$fileKey])) {
+        pcvc_upload_json_error('No file received. If the file is large, increase post_max_size and upload_max_filesize on the server.');
+    }
+
+    $uploadErr = (int) ($_FILES[$fileKey]['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadErr !== UPLOAD_ERR_OK) {
+        pcvc_upload_json_error(pcvc_staff_contract_upload_error_message($uploadErr), 400);
+    }
+
+    $ext = strtolower(pathinfo((string) $_FILES[$fileKey]['name'], PATHINFO_EXTENSION));
+    if ($ext !== 'docx') {
+        pcvc_upload_json_error('Only Word .docx contract templates are allowed', 400);
+    }
+    if ((int) $_FILES[$fileKey]['size'] > 25 * 1024 * 1024) {
+        pcvc_upload_json_error('Contract file must be 25MB or less', 400);
+    }
+
     pcvc_staff_contract_ensure_schema($conn);
-    pcvc_staff_contract_ensure_dirs();
+    pcvc_staff_contract_assert_writable_dirs();
 
     $safeName = preg_replace('/[^A-Za-z0-9.\-_]+/', '_', basename((string) $_FILES[$fileKey]['name']));
     $stored = 'staff_' . $staffId . '_' . time() . '_' . $safeName;
@@ -58,7 +81,7 @@ try {
     $docxAbs = pcvc_staff_contract_abs_path($docxRel);
 
     if (!move_uploaded_file($_FILES[$fileKey]['tmp_name'], $docxAbs)) {
-        throw new RuntimeException('Could not save uploaded Word contract');
+        pcvc_upload_json_error('Could not save uploaded Word contract. Check uploads/staff_contracts folder permissions.');
     }
 
     $templateWarning = pcvc_staff_contract_ensure_rich_template($docxAbs);
@@ -108,20 +131,32 @@ try {
         throw new RuntimeException('Could not save contract record');
     }
 
-    $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract);
-    $message = 'Word contract uploaded for ' . ($staff['full_name'] ?? 'staff')
-        . '. Employee details were auto-filled. Staff can review and e-sign when they log in.';
+    $message = 'Word contract uploaded for ' . ($staff['full_name'] ?? 'staff') . '.';
     if ($templateWarning !== '') {
         $message .= ' ' . $templateWarning;
     }
-    if (!empty($preview['position_warning'])) {
-        $message .= $preview['position_warning'];
+
+    $previewWarning = '';
+    try {
+        $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract);
+        $message .= ' Employee details were auto-filled. Staff can review and e-sign when they log in.';
+        if (!empty($preview['position_warning'])) {
+            $message .= $preview['position_warning'];
+        }
+        if (!empty($preview['pdf_warning'])) {
+            $message .= $preview['pdf_warning'];
+        }
+    } catch (Throwable $previewError) {
+        $previewWarning = $previewError->getMessage();
+        $message .= ' Template saved, but PDF preview could not be generated: ' . $previewWarning
+            . ' Use Regenerate PDF after fixing server PDF tools (LibreOffice recommended).';
     }
 
     echo json_encode([
         'success' => true,
         'message' => $message,
+        'preview_warning' => $previewWarning,
     ]);
 } catch (Throwable $e) {
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+    pcvc_upload_json_error($e->getMessage());
 }

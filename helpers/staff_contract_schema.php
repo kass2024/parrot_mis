@@ -16,6 +16,48 @@ function pcvc_staff_contract_ensure_dirs(): void
     }
 }
 
+/**
+ * @throws RuntimeException
+ */
+function pcvc_staff_contract_assert_writable_dirs(): void
+{
+    pcvc_staff_contract_ensure_dirs();
+    $base = pcvc_staff_contract_upload_dir();
+    foreach ([$base, $base . '/source', $base . '/generated', $base . '/signed', $base . '/signatures'] as $dir) {
+        if (!is_writable($dir)) {
+            throw new RuntimeException(
+                'Contract upload folder is not writable: ' . $dir . '. Fix folder permissions on the server.'
+            );
+        }
+    }
+}
+
+/**
+ * Human-readable PHP upload error.
+ */
+function pcvc_staff_contract_upload_error_message(int $code): string
+{
+    if ($code === UPLOAD_ERR_INI_SIZE || $code === UPLOAD_ERR_FORM_SIZE) {
+        return 'Contract file is too large for server limits (upload_max_filesize / post_max_size).';
+    }
+    if ($code === UPLOAD_ERR_PARTIAL) {
+        return 'Contract upload was interrupted. Please try again.';
+    }
+    if ($code === UPLOAD_ERR_NO_FILE) {
+        return 'Please choose a Word contract file (.docx).';
+    }
+    if ($code === UPLOAD_ERR_NO_TMP_DIR) {
+        return 'Server temp folder missing. Contact hosting support.';
+    }
+    if ($code === UPLOAD_ERR_CANT_WRITE) {
+        return 'Server could not write the uploaded file to disk.';
+    }
+    if ($code === UPLOAD_ERR_EXTENSION) {
+        return 'Server blocked this upload type.';
+    }
+    return 'Contract upload failed (error code ' . $code . ').';
+}
+
 function pcvc_staff_contract_ensure_schema(mysqli $conn): void
 {
     $conn->query(

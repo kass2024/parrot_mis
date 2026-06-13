@@ -94,7 +94,7 @@ function pcvc_staff_contract_docx_stats(string $docxAbs): array
     }
     for ($i = 0; $i < $zip->numFiles; $i++) {
         $name = (string) $zip->getNameIndex($i);
-        if (str_starts_with($name, 'word/media/')) {
+        if (strpos($name, 'word/media/') === 0) {
             $stats['has_media'] = true;
             $stats['media_count']++;
         }
@@ -334,12 +334,17 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): strin
     }
 
     $errors = [];
-    $converters = [
-        'pcvc_staff_contract_docx_to_pdf_msword',
-        'pcvc_staff_contract_docx_to_pdf_vbscript',
-        'pcvc_staff_contract_docx_to_pdf_libreoffice',
-        'pcvc_staff_contract_docx_to_pdf_phpword',
-    ];
+    $converters = PHP_OS_FAMILY === 'Windows'
+        ? [
+            'pcvc_staff_contract_docx_to_pdf_msword',
+            'pcvc_staff_contract_docx_to_pdf_vbscript',
+            'pcvc_staff_contract_docx_to_pdf_libreoffice',
+            'pcvc_staff_contract_docx_to_pdf_phpword',
+        ]
+        : [
+            'pcvc_staff_contract_docx_to_pdf_libreoffice',
+            'pcvc_staff_contract_docx_to_pdf_phpword',
+        ];
 
     $docxSize = filesize($docxAbs) ?: 0;
     $minPdfSize = max(400, (int) ($docxSize * 0.35));
@@ -356,11 +361,12 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): strin
             $pdfSize = filesize($pdfAbs) ?: 0;
             if ($pdfSize < 400) {
                 $errors[] = $converter . ': PDF too small';
+                @unlink($pdfAbs);
                 continue;
             }
             if ($converter === 'pcvc_staff_contract_docx_to_pdf_phpword' && $pdfSize < $minPdfSize) {
                 @unlink($pdfAbs);
-                $errors[] = 'DomPDF output is too small — bullets/stamp may be missing. Install Microsoft Word or LibreOffice on this server.';
+                $errors[] = 'DomPDF output is too small — bullets/stamp may be missing.';
                 continue;
             }
             return $converter;
@@ -369,10 +375,30 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): strin
         }
     }
 
+    // Last resort: basic DomPDF (shared hosting without Word/LibreOffice).
+    try {
+        pcvc_staff_contract_docx_to_pdf_phpword($docxAbs, $pdfAbs);
+        if (is_file($pdfAbs) && filesize($pdfAbs) > 400) {
+            return 'pcvc_staff_contract_docx_to_pdf_phpword_fallback';
+        }
+    } catch (Throwable $e) {
+        $errors[] = $e->getMessage();
+    }
+
     throw new RuntimeException(
         'Could not convert contract to PDF. ' .
-        (implode(' | ', $errors) ?: 'Install Microsoft Word or LibreOffice on this server.')
+        (implode(' | ', $errors) ?: 'Install LibreOffice on the server, or enable PHP exec().')
     );
+}
+
+function pcvc_staff_contract_pdf_engine_warning(string $engine): string
+{
+    if ($engine === 'pcvc_staff_contract_docx_to_pdf_phpword'
+        || $engine === 'pcvc_staff_contract_docx_to_pdf_phpword_fallback') {
+        return ' PDF was generated in basic mode (bullets/stamp may be simplified). '
+            . 'For full Word layout, install LibreOffice on the server or regenerate from a Windows machine with Microsoft Word.';
+    }
+    return '';
 }
 
 function pcvc_staff_contract_docx_to_pdf_vbscript(string $docxAbs, string $pdfAbs): void
@@ -454,6 +480,11 @@ function pcvc_staff_contract_docx_to_pdf_libreoffice(string $docxAbs, string $pd
     $candidates = [
         'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
         'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+        '/usr/bin/libreoffice',
+        '/usr/bin/soffice',
+        '/usr/local/bin/libreoffice',
+        '/usr/local/bin/soffice',
+        '/snap/bin/libreoffice',
         'soffice',
         'libreoffice',
     ];
@@ -535,7 +566,8 @@ function pcvc_staff_contract_generate_preview(
     $previewPdfAbs = pcvc_staff_contract_abs_path($previewPdfRel);
 
     pcvc_staff_contract_fill_docx($docxAbs, $filledDocxAbs, $admin, $signingDate, null);
-    pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
+    $engine = pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
+    $pdfWarning = pcvc_staff_contract_pdf_engine_warning($engine);
 
     $positionWarning = '';
     if (pcvc_staff_contract_resolve_position($admin) === '') {
@@ -574,6 +606,7 @@ function pcvc_staff_contract_generate_preview(
         'filled_docx' => $filledDocxRel,
         'preview_pdf' => $previewPdfRel,
         'position_warning' => $positionWarning,
+        'pdf_warning' => $pdfWarning,
     ];
 }
 
@@ -615,7 +648,16 @@ function pcvc_staff_contract_generate_signed(
         'uploads/staff_contracts/generated/tmp_sign_' . $adminId . '_' . $stamp . '.pdf'
     );
     pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
-    pcvc_staff_contract_stamp_employee_signature_pdf($previewPdfAbs, $signatureDataUrl, $signedPdfAbs);
+    try {
+        pcvc_staff_contract_stamp_employee_signature_pdf($previewPdfAbs, $signatureDataUrl, $signedPdfAbs);
+    } catch (Throwable $e) {
+        if (is_file($previewPdfAbs)) {
+            @copy($previewPdfAbs, $signedPdfAbs);
+        }
+        if (!is_file($signedPdfAbs)) {
+            throw new RuntimeException('Could not stamp signature on contract PDF: ' . $e->getMessage());
+        }
+    }
     if (is_file($previewPdfAbs)) {
         @unlink($previewPdfAbs);
     }
@@ -685,10 +727,14 @@ function pcvc_staff_contract_regenerate(
     if (!empty($preview['position_warning'])) {
         $message .= $preview['position_warning'];
     }
+    if (!empty($preview['pdf_warning'])) {
+        $message .= $preview['pdf_warning'];
+    }
 
     return [
         'message' => $message,
         'preview_pdf' => $preview['preview_pdf'],
         'position_warning' => $preview['position_warning'] ?? '',
+        'pdf_warning' => $preview['pdf_warning'] ?? '',
     ];
 }
