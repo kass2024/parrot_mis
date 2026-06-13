@@ -61,6 +61,8 @@ try {
         throw new RuntimeException('Could not save uploaded Word contract');
     }
 
+    $templateWarning = pcvc_staff_contract_ensure_rich_template($docxAbs);
+
     $title = trim((string) ($_POST['contract_title'] ?? ''));
     if ($title === '') {
         $title = pathinfo($safeName, PATHINFO_FILENAME);
@@ -109,6 +111,9 @@ try {
     $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract);
     $message = 'Word contract uploaded for ' . ($staff['full_name'] ?? 'staff')
         . '. Employee details were auto-filled. Staff can review and e-sign when they log in.';
+    if ($templateWarning !== '') {
+        $message .= ' ' . $templateWarning;
+    }
     if (!empty($preview['position_warning'])) {
         $message .= $preview['position_warning'];
     }

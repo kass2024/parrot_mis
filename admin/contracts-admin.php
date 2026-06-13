@@ -144,7 +144,13 @@ $totalStaff = count($staffRows);
           </button>
           <?php if ($hasTemplate): ?>
             <a class="btn btn-outline-primary btn-sm mb-1" target="_blank"
-              href="view-staff-contract-pdf.php?staff_id=<?= $staffId ?>&type=source">View filled PDF</a>
+              href="view-staff-contract-pdf.php?staff_id=<?= $staffId ?>&type=source&ts=<?= time() ?>">View filled PDF</a>
+            <button type="button" class="btn btn-outline-secondary btn-sm mb-1 btn-regenerate-contract"
+              data-staff-id="<?= $staffId ?>"
+              data-mode="preview"
+              title="Rebuild PDF from staff profile (keeps Word formatting, bullets, stamp)">
+              <i class="bi bi-arrow-clockwise"></i> Regenerate PDF
+            </button>
             <button type="button" class="btn btn-outline-danger btn-sm mb-1 btn-delete-contract"
               data-staff-id="<?= $staffId ?>"
               data-staff-name="<?= htmlspecialchars((string) $row['full_name'], ENT_QUOTES) ?>"
@@ -153,6 +159,12 @@ $totalStaff = count($staffRows);
             </button>
           <?php endif; ?>
           <?php if ($status['code'] === 'signed'): ?>
+            <button type="button" class="btn btn-outline-warning btn-sm mb-1 btn-regenerate-contract"
+              data-staff-id="<?= $staffId ?>"
+              data-mode="signed"
+              title="Rebuild signed PDF with current profile data and saved signature">
+              <i class="bi bi-arrow-repeat"></i> Regenerate signed
+            </button>
             <a class="btn btn-primary btn-sm mb-1"
               href="download-staff-contract.php?staff_id=<?= $staffId ?>&type=signed">Download signed</a>
           <?php endif; ?>
@@ -232,6 +244,38 @@ $totalStaff = count($staffRows);
       let msg = 'Upload failed';
       try { msg = JSON.parse(xhr.responseText).message || msg; } catch (e) {}
       alert(msg);
+    });
+  });
+
+  $('.btn-regenerate-contract').on('click', function () {
+    const staffId = $(this).data('staff-id');
+    const mode = $(this).data('mode') || 'preview';
+    const btn = $(this);
+    const label = mode === 'signed' ? 'Regenerate signed' : 'Regenerate PDF';
+    if (!confirm('Rebuild the ' + (mode === 'signed' ? 'signed ' : '') + 'contract PDF for this staff member using current profile data?')) {
+      return;
+    }
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+
+    $.ajax({
+      url: 'regenerate-staff-contract.php',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ staff_id: staffId, mode: mode }),
+      dataType: 'json'
+    }).done(function (data) {
+      btn.prop('disabled', false).html('<i class="bi bi-arrow-' + (mode === 'signed' ? 'repeat' : 'clockwise') + '"></i> ' + label);
+      if (!data || !data.success) {
+        alert(data?.message || 'Regenerate failed');
+        return;
+      }
+      alert(data.message || 'Regenerated');
+      location.reload();
+    }).fail(function (xhr) {
+      btn.prop('disabled', false).html('<i class="bi bi-arrow-' + (mode === 'signed' ? 'repeat' : 'clockwise') + '"></i> ' + label);
+      let errMsg = 'Regenerate failed';
+      try { errMsg = JSON.parse(xhr.responseText).message || errMsg; } catch (e) {}
+      alert(errMsg);
     });
   });
 
