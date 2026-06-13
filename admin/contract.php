@@ -12,7 +12,7 @@ if ($adminId <= 0) {
     exit('Unauthorized');
 }
 
-$stmt = $conn->prepare('SELECT id, full_name, email, role FROM admins WHERE id = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, full_name, email, role, position FROM admins WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $adminId);
 $stmt->execute();
 $admin = $stmt->get_result()->fetch_assoc();
@@ -100,6 +100,11 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
   <?php else: ?>
   <?php if ($previewError !== ''): ?>
   <div class="alert alert-warning"><?= htmlspecialchars($previewError) ?></div>
+  <?php endif; ?>
+  <?php if (trim((string) ($admin['position'] ?? '')) === ''): ?>
+  <div class="alert alert-warning mb-3">
+    <strong>Position missing.</strong> Ask superadmin to set your <em>Position</em> in Staff Management, save your row, then reopen this page so the contract PDF can be regenerated.
+  </div>
   <?php endif; ?>
   <div class="autofill-note mb-3">
     <i class="bi bi-magic me-1"></i>
@@ -243,4 +248,4 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
 </script>
 <?php endif; ?>
 </body>
-</html>
+</html>

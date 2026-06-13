@@ -55,6 +55,91 @@ function pcvc_staff_contract_format_date(?string $value): string
 }
 
 /**
+ * Resolve job title for contract merge (admins.position).
+ */
+function pcvc_staff_contract_resolve_position(array $admin): string
+{
+    return trim((string) ($admin['position'] ?? ''));
+}
+
+/**
+ * Agreement reference suffix (PCVC-PROB-… in Word templates).
+ */
+function pcvc_staff_contract_agreement_reference(array $admin): string
+{
+    $nationalId = trim((string) ($admin['national_id'] ?? ''));
+    if ($nationalId !== '') {
+        return $nationalId;
+    }
+    $adminId = (int) ($admin['id'] ?? 0);
+    return $adminId > 0 ? (string) $adminId : '';
+}
+
+/**
+ * Word sometimes splits ${placeholder} across runs and spell-check tags.
+ */
+function pcvc_staff_contract_repair_docx_xml(string $xml): string
+{
+    $xml = preg_replace('/<w:proofErr[^>]*\/>/', '', $xml) ?? $xml;
+
+    $prev = '';
+    $limit = 0;
+    while ($xml !== $prev && $limit < 100) {
+        $prev = $xml;
+        $xml = preg_replace(
+            '/(\$\{)(<\/w:t><\/w:r><w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s+xml:space="preserve")?[^>]*>)/s',
+            '$1',
+            $xml
+        ) ?? $xml;
+        $xml = preg_replace(
+            '/(<\/w:t><\/w:r><w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s+xml:space="preserve")?[^>]*>)(\})/s',
+            '$2',
+            $xml
+        ) ?? $xml;
+        $limit++;
+    }
+
+    return $xml;
+}
+
+/**
+ * Copy template and repair split placeholders before PhpWord merge.
+ */
+function pcvc_staff_contract_prepare_template(string $templateAbs): string
+{
+    pcvc_staff_contract_ensure_dirs();
+    $work = pcvc_staff_contract_upload_dir() . '/tmp_tpl_' . bin2hex(random_bytes(8)) . '.docx';
+    if (!copy($templateAbs, $work)) {
+        throw new RuntimeException('Could not copy contract template.');
+    }
+
+    $zip = new ZipArchive();
+    if ($zip->open($work) !== true) {
+        @unlink($work);
+        throw new RuntimeException('Could not open contract template.');
+    }
+
+    for ($i = 0; $i < $zip->numFiles; $i++) {
+        $name = (string) $zip->getNameIndex($i);
+        if (!preg_match('/^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/', $name)) {
+            continue;
+        }
+        $content = $zip->getFromName($name);
+        if ($content === false) {
+            continue;
+        }
+        $repaired = pcvc_staff_contract_repair_docx_xml($content);
+        if ($repaired !== $content) {
+            $zip->deleteName($name);
+            $zip->addFromString($name, $repaired);
+        }
+    }
+    $zip->close();
+
+    return $work;
+}
+
+/**
  * @param array<string, mixed> $admin
  * @return array<string, string>
  */
@@ -90,7 +175,7 @@ function pcvc_staff_contract_merge_values(
         'phone_number' => trim((string) ($admin['phone_number'] ?? '')),
         'username' => trim((string) ($admin['username'] ?? '')),
         'role' => trim((string) ($admin['role'] ?? '')),
-        'position' => trim((string) ($admin['position'] ?? '')),
+        'position' => pcvc_staff_contract_resolve_position($admin),
         'employment_type' => trim((string) ($admin['employment_type'] ?? '')),
         'employment_start_date' => $startDate,
         'probation_end_date' => $probationEnd,
@@ -132,18 +217,28 @@ function pcvc_staff_contract_fill_docx(
         throw new RuntimeException('Could not create generated contract directory.');
     }
 
-    $processor = new TemplateProcessor($templateAbs);
-    $values = pcvc_staff_contract_merge_values($admin, $signingDate, $signatureDataUrl);
+    $preparedTemplate = pcvc_staff_contract_prepare_template($templateAbs);
+    $tmpFiles = [$preparedTemplate];
 
-    $imagePlaceholders = ['employee_signature', 'employer_signature'];
-    foreach ($values as $key => $value) {
-        if (in_array($key, $imagePlaceholders, true)) {
-            continue;
+    try {
+        $processor = new TemplateProcessor($preparedTemplate);
+        $values = pcvc_staff_contract_merge_values($admin, $signingDate, $signatureDataUrl);
+
+        $imagePlaceholders = ['employee_signature', 'employer_signature'];
+        foreach ($values as $key => $value) {
+            if (in_array($key, $imagePlaceholders, true)) {
+                continue;
+            }
+            $processor->setValue($key, $value);
         }
-        $processor->setValue($key, $value);
+    } catch (Throwable $e) {
+        foreach ($tmpFiles as $tmp) {
+            if (is_file($tmp)) {
+                @unlink($tmp);
+            }
+        }
+        throw $e;
     }
-
-    $tmpFiles = [];
 
     $managerSig = pcvc_staff_contract_manager_signature_path();
     if (is_file($managerSig)) {
@@ -205,29 +300,62 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): void
     }
 
     $errors = [];
+    $converters = [
+        'pcvc_staff_contract_docx_to_pdf_msword',
+        'pcvc_staff_contract_docx_to_pdf_libreoffice',
+        'pcvc_staff_contract_docx_to_pdf_phpword',
+    ];
 
-    try {
-        pcvc_staff_contract_docx_to_pdf_phpword($docxAbs, $pdfAbs);
-        if (is_file($pdfAbs) && filesize($pdfAbs) > 400) {
-            return;
+    foreach ($converters as $converter) {
+        if (!is_callable($converter)) {
+            continue;
         }
-    } catch (Throwable $e) {
-        $errors[] = $e->getMessage();
-    }
-
-    try {
-        pcvc_staff_contract_docx_to_pdf_libreoffice($docxAbs, $pdfAbs);
-        if (is_file($pdfAbs) && filesize($pdfAbs) > 400) {
-            return;
+        try {
+            $converter($docxAbs, $pdfAbs);
+            if (is_file($pdfAbs) && filesize($pdfAbs) > 400) {
+                return;
+            }
+        } catch (Throwable $e) {
+            $errors[] = $e->getMessage();
         }
-    } catch (Throwable $e) {
-        $errors[] = $e->getMessage();
     }
 
     throw new RuntimeException(
         'Could not convert contract to PDF. ' .
-        (implode(' | ', $errors) ?: 'Install LibreOffice or ensure DomPDF is available.')
+        (implode(' | ', $errors) ?: 'Install Microsoft Word, LibreOffice, or ensure DomPDF is available.')
     );
+}
+
+function pcvc_staff_contract_docx_to_pdf_msword(string $docxAbs, string $pdfAbs): void
+{
+    if (PHP_OS_FAMILY !== 'Windows') {
+        throw new RuntimeException('Microsoft Word conversion is only available on Windows.');
+    }
+
+    $script = dirname(__DIR__) . '/tools/convert-docx-to-pdf.ps1';
+    if (!is_file($script)) {
+        throw new RuntimeException('Word conversion script missing.');
+    }
+
+    $outDir = dirname($pdfAbs);
+    if (!is_dir($outDir) && !mkdir($outDir, 0775, true) && !is_dir($outDir)) {
+        throw new RuntimeException('Could not create PDF output directory.');
+    }
+    if (is_file($pdfAbs)) {
+        @unlink($pdfAbs);
+    }
+
+    $cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File '
+        . escapeshellarg($script)
+        . ' -DocxPath ' . escapeshellarg($docxAbs)
+        . ' -PdfPath ' . escapeshellarg($pdfAbs);
+
+    @exec($cmd . ' 2>&1', $output, $code);
+    if (!is_file($pdfAbs) || filesize($pdfAbs) < 400) {
+        throw new RuntimeException(
+            'Microsoft Word PDF conversion failed' . ($output ? ': ' . implode(' ', $output) : '.')
+        );
+    }
 }
 
 function pcvc_staff_contract_docx_to_pdf_phpword(string $docxAbs, string $pdfAbs): void
@@ -333,6 +461,11 @@ function pcvc_staff_contract_generate_preview(
     pcvc_staff_contract_fill_docx($docxAbs, $filledDocxAbs, $admin, $signingDate, null);
     pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
 
+    $positionWarning = '';
+    if (pcvc_staff_contract_resolve_position($admin) === '') {
+        $positionWarning = ' Note: staff Position is empty in Staff Management — fill Position and save, then re-upload the contract.';
+    }
+
     $oldFilled = trim((string) ($contract['filled_docx_path'] ?? ''));
     $oldPreview = trim((string) ($contract['source_pdf_path'] ?? ''));
     if ($oldFilled !== '' && $oldFilled !== $filledDocxRel) {
@@ -361,7 +494,11 @@ function pcvc_staff_contract_generate_preview(
     $stmt->execute();
     $stmt->close();
 
-    return ['filled_docx' => $filledDocxRel, 'preview_pdf' => $previewPdfRel];
+    return [
+        'filled_docx' => $filledDocxRel,
+        'preview_pdf' => $previewPdfRel,
+        'position_warning' => $positionWarning,
+    ];
 }
 
 /**

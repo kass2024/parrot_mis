@@ -106,13 +106,17 @@ try {
         throw new RuntimeException('Could not save contract record');
     }
 
-    pcvc_staff_contract_generate_preview($conn, $staffId, $contract);
+    $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract);
+    $message = 'Word contract uploaded for ' . ($staff['full_name'] ?? 'staff')
+        . '. Employee details were auto-filled. Staff can review and e-sign when they log in.';
+    if (!empty($preview['position_warning'])) {
+        $message .= $preview['position_warning'];
+    }
 
     echo json_encode([
         'success' => true,
-        'message' => 'Word contract uploaded for ' . ($staff['full_name'] ?? 'staff')
-            . '. Employee details were auto-filled. Staff can review and e-sign when they log in.',
+        'message' => $message,
     ]);
 } catch (Throwable $e) {
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-}
+}
