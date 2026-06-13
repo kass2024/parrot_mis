@@ -634,11 +634,146 @@ function pcvc_staff_contract_merge_values(
 }
 
 /**
- * Remove soft page-break markers that confuse docx-preview (half-empty pages, wrong numbering).
+ * Text anchors where the canonical 9-page Word contract starts a new page.
+ *
+ * @return list<string>
+ */
+function pcvc_staff_contract_page_break_anchor_texts(): array
+{
+    return [
+        'The Company reserves the right to extend the probation period',
+        'Support the Country Coordinator in achieving recruitment',
+        'Help organize student information sessions and institutional presentations',
+        '7. TRAINING AND LEARNING REQUIREMENTS',
+        'The Employee shall not use Company property, systems, databases, software, documents, equipment',
+        'Daily Check-In and Check-Out records in PARROT MIS shall serve as the official attendance',
+        '14. CONFIRMATION OF EMPLOYMENT',
+    ];
+}
+
+/**
+ * Insert a hard page break immediately after the first paragraph matching anchor text.
+ */
+function pcvc_staff_contract_inject_page_break_after_anchor(string $xml, string $anchorText): string
+{
+    $breakPara = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+    if (!preg_match_all('/<w:p\b[^>]*>.*?<\/w:p>/s', $xml, $matches, PREG_OFFSET_CAPTURE)) {
+        return $xml;
+    }
+
+    foreach ($matches[0] as $paragraph) {
+        $text = pcvc_staff_contract_paragraph_text($paragraph[0]);
+        if ($text === '' || strpos($text, $anchorText) === false) {
+            continue;
+        }
+        $offset = $paragraph[1] + strlen($paragraph[0]);
+        $after = substr($xml, $offset, 160);
+        if (strpos($after, 'w:type="page"') !== false) {
+            return $xml;
+        }
+
+        return substr($xml, 0, $offset) . $breakPara . substr($xml, $offset);
+    }
+
+    return $xml;
+}
+
+/**
+ * Apply canonical page-break layout from Parrot Contract for Mutware.docx.
+ */
+function pcvc_staff_contract_apply_page_break_layout(string $xml): string
+{
+    $xml = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
+    $xml = pcvc_staff_contract_inject_page_breaks_in_xml($xml);
+    $xml = pcvc_staff_contract_inject_page_break_after_anchor($xml, 'Quality of work');
+
+    return $xml;
+}
+
+function pcvc_staff_contract_paragraph_text(string $paragraphXml): string
+{
+    if (!preg_match_all('/<w:t[^>]*>(.*?)<\/w:t>/s', $paragraphXml, $matches)) {
+        return '';
+    }
+
+    return trim(html_entity_decode(implode('', $matches[1])));
+}
+
+/**
+ * Count pages implied by explicit page-break markers in document.xml.
+ */
+function pcvc_staff_contract_expected_page_count_from_xml(string $xml): int
+{
+    $breaks = substr_count($xml, 'w:type="page"') + substr_count($xml, 'lastRenderedPageBreak');
+
+    return max(1, $breaks + 1);
+}
+
+/**
+ * Count expected pages for a DOCX file on disk.
+ */
+function pcvc_staff_contract_expected_page_count(string $docxAbs): int
+{
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        return 1;
+    }
+    $xml = (string) $zip->getFromName('word/document.xml');
+    $zip->close();
+
+    return $xml === '' ? 1 : pcvc_staff_contract_expected_page_count_from_xml($xml);
+}
+
+/**
+ * Insert hard page breaks before canonical anchor paragraphs (matches Parrot Contract for Mutware.docx).
+ */
+function pcvc_staff_contract_inject_page_breaks_in_xml(string $xml): string
+{
+    $breakPara = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+    $anchors = pcvc_staff_contract_page_break_anchor_texts();
+
+    if (!preg_match_all('/<w:p\b[^>]*>.*?<\/w:p>/s', $xml, $matches, PREG_OFFSET_CAPTURE)) {
+        return $xml;
+    }
+
+    $usedAnchors = [];
+    $shift = 0;
+    foreach ($matches[0] as $paragraph) {
+        $offset = $paragraph[1] + $shift;
+        $text = pcvc_staff_contract_paragraph_text($paragraph[0]);
+        if ($text === '') {
+            continue;
+        }
+
+        foreach ($anchors as $anchor) {
+            if (isset($usedAnchors[$anchor])) {
+                continue;
+            }
+            if (strpos($text, $anchor) === false) {
+                continue;
+            }
+            $before = substr($xml, max(0, $offset - 160), 160);
+            if (strpos($before, 'w:type="page"') !== false) {
+                $usedAnchors[$anchor] = true;
+                break;
+            }
+            $xml = substr($xml, 0, $offset) . $breakPara . substr($xml, $offset);
+            $shift += strlen($breakPara);
+            $usedAnchors[$anchor] = true;
+            break;
+        }
+    }
+
+    return $xml;
+}
+
+/**
+ * Remove page-break markers inside numbered list items (prevents empty bullet ghosts).
  */
 function pcvc_staff_contract_clean_docx_layout_in_xml(string $xml): string
 {
-    $xml = preg_replace_callback(
+    return preg_replace_callback(
         '/<w:p\b[^>]*>.*?<\/w:p>/s',
         static function (array $m): string {
             $p = $m[0];
@@ -647,13 +782,11 @@ function pcvc_staff_contract_clean_docx_layout_in_xml(string $xml): string
             }
             $p = preg_replace('/<w:lastRenderedPageBreak\s*\/>/', '', $p) ?? $p;
             $p = preg_replace('/<w:br\s+w:type="page"\s*\/>/', '', $p) ?? $p;
+
             return $p;
         },
         $xml
     );
-    $xml = preg_replace('/<w:lastRenderedPageBreak\s*\/>/', '', $xml) ?? $xml;
-
-    return $xml;
 }
 
 /**
@@ -665,7 +798,7 @@ function pcvc_staff_contract_clean_list_page_breaks_in_xml(string $xml): string
 }
 
 /**
- * Patch an existing DOCX on disk to remove layout artifacts (no full rebuild).
+ * Ensure canonical page breaks and list layout on an existing DOCX (no full rebuild).
  */
 function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
 {
@@ -678,7 +811,7 @@ function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
         $zip->close();
         return;
     }
-    $fixed = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
+    $fixed = pcvc_staff_contract_apply_page_break_layout($xml);
     if ($fixed !== $xml) {
         $zip->deleteName('word/document.xml');
         $zip->addFromString('word/document.xml', $fixed);
@@ -707,7 +840,7 @@ function pcvc_staff_contract_fill_docx_text(string $docxAbs, array $values): voi
             continue;
         }
         $xml = pcvc_staff_contract_apply_placeholder_values($xml, $values, $imageKeys);
-        $xml = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
+        $xml = pcvc_staff_contract_apply_page_break_layout($xml);
         $zip->deleteName($name);
         $zip->addFromString($name, $xml);
         unset($xml);

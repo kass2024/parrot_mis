@@ -19,6 +19,23 @@ if ($viewerId <= 0) {
 
 $staffId = (int) ($_GET['staff_id'] ?? $viewerId);
 $type = ($_GET['type'] ?? 'source') === 'signed' ? 'signed' : 'source';
+$expectedPages = 9;
+
+$contract = pcvc_staff_contract_for_admin($conn, $staffId);
+if ($contract) {
+    try {
+        $rel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, $type);
+        if ($rel !== '') {
+            $abs = pcvc_staff_contract_abs_path($rel);
+            if (is_file($abs)) {
+                $expectedPages = pcvc_staff_contract_expected_page_count($abs);
+            }
+        }
+    } catch (Throwable $e) {
+        // Viewer still attempts client render; status bar may show mismatch only.
+    }
+}
+
 $docxUrl = 'view-staff-contract-docx.php?type=' . rawurlencode($type);
 if ($staffId !== $viewerId) {
     $docxUrl .= '&staff_id=' . $staffId;
@@ -52,33 +69,26 @@ $docxUrl .= '&ts=' . time();
     }
     #docx-container .docx-wrapper > section.docx {
       background: #fff;
-      margin: 0 auto 20px;
+      margin: 0 auto 24px;
       box-shadow: 0 2px 14px rgba(15, 23, 42, 0.12);
       box-sizing: border-box;
       position: relative;
-      display: block !important;
-      min-height: auto !important;
-      height: auto !important;
       font-family: 'Times New Roman', Times, serif !important;
       line-height: 1.15;
-      overflow: visible;
+      overflow: hidden;
     }
     #docx-container .docx-wrapper > section.docx > header,
     #docx-container .docx-wrapper > section.docx > footer {
       display: none !important;
     }
-    #docx-container .docx-page-footer {
-      display: block;
-      width: 100%;
-      text-align: right;
-      padding: 4px 72px 10px 0;
-      margin: 0;
-      box-sizing: border-box;
-      border-top: 0;
-    }
-    #docx-container .docx-page-footer .docx-page-number {
+    #docx-container .docx-page-number {
+      position: absolute;
+      right: 72px;
+      bottom: 42px;
       font: 11px 'Times New Roman', Times, serif;
       color: #334155;
+      pointer-events: none;
+      z-index: 5;
       line-height: 1;
     }
     #docx-container .docx,
@@ -112,8 +122,6 @@ $docxUrl .= '&ts=' . time();
       #docx-container .docx-wrapper > section.docx {
         box-shadow: none !important;
         margin: 0 auto !important;
-        min-height: auto !important;
-        height: auto !important;
         page-break-after: always;
         break-after: page;
       }
@@ -121,8 +129,9 @@ $docxUrl .= '&ts=' . time();
       #docx-container .docx-wrapper > section.docx > footer {
         display: none !important;
       }
-      #docx-container .docx-page-footer {
-        padding-right: 72px;
+      #docx-container .docx-page-number {
+        right: 72px;
+        bottom: 42px;
       }
       #docx-container .docx-wrapper > section.docx:last-child {
         page-break-after: auto;
@@ -140,29 +149,19 @@ $docxUrl .= '&ts=' . time();
   (function () {
     const status = document.getElementById('status');
     const container = document.getElementById('docx-container');
+    const expectedPages = <?= (int) ($_GET['expected_pages'] ?? 0) ?>;
 
-    function tightenPageLayout() {
-      const pages = container.querySelectorAll('.docx-wrapper > section.docx');
-      pages.forEach(function (page) {
-        page.style.minHeight = 'auto';
-        page.style.height = 'auto';
-      });
-      return pages;
-    }
-
-    function addPageFooters(pages) {
+    function addPageNumbers(pages) {
       pages.forEach(function (page, idx) {
-        page.querySelectorAll('.docx-page-footer').forEach(function (el) {
+        page.querySelectorAll('.docx-page-number').forEach(function (el) {
           el.remove();
         });
-        const footer = document.createElement('div');
-        footer.className = 'docx-page-footer';
-        const num = document.createElement('span');
+        const num = document.createElement('div');
         num.className = 'docx-page-number';
         num.textContent = String(idx + 1);
-        footer.appendChild(num);
-        page.appendChild(footer);
+        page.appendChild(num);
       });
+      return pages.length;
     }
 
     fetch(<?= json_encode($docxUrl, JSON_UNESCAPED_SLASHES) ?>, { credentials: 'same-origin' })
@@ -180,10 +179,10 @@ $docxUrl .= '&ts=' . time();
           className: 'docx',
           inWrapper: true,
           ignoreWidth: false,
-          ignoreHeight: true,
+          ignoreHeight: false,
           ignoreFonts: false,
           breakPages: true,
-          ignoreLastRenderedPageBreak: true,
+          ignoreLastRenderedPageBreak: false,
           renderHeaders: false,
           renderFooters: false,
           renderFootnotes: true,
@@ -193,10 +192,16 @@ $docxUrl .= '&ts=' . time();
         });
       })
       .then(function () {
-        const pages = tightenPageLayout();
-        addPageFooters(pages);
-        if (pages.length > 0 && status.style.display !== 'none') {
-          status.textContent = pages.length + ' page(s)';
+        const pages = container.querySelectorAll('.docx-wrapper > section.docx');
+        const rendered = addPageNumbers(pages);
+        if (rendered > 0) {
+          status.style.display = 'block';
+          status.style.color = '#64748b';
+          let msg = rendered + ' page(s)';
+          if (expectedPages > 0 && rendered !== expectedPages) {
+            msg += ' (expected ' + expectedPages + ')';
+          }
+          status.textContent = msg;
         }
       })
       .catch(function (err) {
