@@ -634,11 +634,11 @@ function pcvc_staff_contract_merge_values(
 }
 
 /**
- * Remove page-break markers inside numbered list items (prevents empty bullet ghosts in preview/print).
+ * Remove soft page-break markers that confuse docx-preview (half-empty pages, wrong numbering).
  */
-function pcvc_staff_contract_clean_list_page_breaks_in_xml(string $xml): string
+function pcvc_staff_contract_clean_docx_layout_in_xml(string $xml): string
 {
-    return preg_replace_callback(
+    $xml = preg_replace_callback(
         '/<w:p\b[^>]*>.*?<\/w:p>/s',
         static function (array $m): string {
             $p = $m[0];
@@ -651,10 +651,21 @@ function pcvc_staff_contract_clean_list_page_breaks_in_xml(string $xml): string
         },
         $xml
     );
+    $xml = preg_replace('/<w:lastRenderedPageBreak\s*\/>/', '', $xml) ?? $xml;
+
+    return $xml;
 }
 
 /**
- * Patch an existing DOCX on disk to remove list page-break artifacts (no full rebuild).
+ * @deprecated Use pcvc_staff_contract_clean_docx_layout_in_xml()
+ */
+function pcvc_staff_contract_clean_list_page_breaks_in_xml(string $xml): string
+{
+    return pcvc_staff_contract_clean_docx_layout_in_xml($xml);
+}
+
+/**
+ * Patch an existing DOCX on disk to remove layout artifacts (no full rebuild).
  */
 function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
 {
@@ -667,7 +678,7 @@ function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
         $zip->close();
         return;
     }
-    $fixed = pcvc_staff_contract_clean_list_page_breaks_in_xml($xml);
+    $fixed = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
     if ($fixed !== $xml) {
         $zip->deleteName('word/document.xml');
         $zip->addFromString('word/document.xml', $fixed);
@@ -696,7 +707,7 @@ function pcvc_staff_contract_fill_docx_text(string $docxAbs, array $values): voi
             continue;
         }
         $xml = pcvc_staff_contract_apply_placeholder_values($xml, $values, $imageKeys);
-        $xml = pcvc_staff_contract_clean_list_page_breaks_in_xml($xml);
+        $xml = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
         $zip->deleteName($name);
         $zip->addFromString($name, $xml);
         unset($xml);

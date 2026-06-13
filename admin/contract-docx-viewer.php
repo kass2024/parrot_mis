@@ -52,30 +52,34 @@ $docxUrl .= '&ts=' . time();
     }
     #docx-container .docx-wrapper > section.docx {
       background: #fff;
-      margin: 0 auto 28px;
+      margin: 0 auto 20px;
       box-shadow: 0 2px 14px rgba(15, 23, 42, 0.12);
       box-sizing: border-box;
       position: relative;
+      display: block !important;
+      min-height: auto !important;
+      height: auto !important;
       font-family: 'Times New Roman', Times, serif !important;
       line-height: 1.15;
-      padding-bottom: 36px;
+      overflow: visible;
     }
-    /* Hide Word page headers/footers if the renderer still outputs them. */
     #docx-container .docx-wrapper > section.docx > header,
     #docx-container .docx-wrapper > section.docx > footer {
       display: none !important;
     }
-    #docx-container .docx-page-number {
-      position: absolute;
-      right: 54px;
-      bottom: 22px;
-      left: auto;
-      width: auto;
+    #docx-container .docx-page-footer {
+      display: block;
+      width: 100%;
       text-align: right;
+      padding: 4px 72px 10px 0;
+      margin: 0;
+      box-sizing: border-box;
+      border-top: 0;
+    }
+    #docx-container .docx-page-footer .docx-page-number {
       font: 11px 'Times New Roman', Times, serif;
       color: #334155;
-      pointer-events: none;
-      z-index: 5;
+      line-height: 1;
     }
     #docx-container .docx,
     #docx-container .docx * {
@@ -108,19 +112,17 @@ $docxUrl .= '&ts=' . time();
       #docx-container .docx-wrapper > section.docx {
         box-shadow: none !important;
         margin: 0 auto !important;
+        min-height: auto !important;
+        height: auto !important;
         page-break-after: always;
         break-after: page;
-        padding-bottom: 36px;
       }
-      #docx-container header,
-      #docx-container footer,
       #docx-container .docx-wrapper > section.docx > header,
       #docx-container .docx-wrapper > section.docx > footer {
         display: none !important;
       }
-      #docx-container .docx-page-number {
-        right: 54px;
-        bottom: 22px;
+      #docx-container .docx-page-footer {
+        padding-right: 72px;
       }
       #docx-container .docx-wrapper > section.docx:last-child {
         page-break-after: auto;
@@ -138,6 +140,31 @@ $docxUrl .= '&ts=' . time();
   (function () {
     const status = document.getElementById('status');
     const container = document.getElementById('docx-container');
+
+    function tightenPageLayout() {
+      const pages = container.querySelectorAll('.docx-wrapper > section.docx');
+      pages.forEach(function (page) {
+        page.style.minHeight = 'auto';
+        page.style.height = 'auto';
+      });
+      return pages;
+    }
+
+    function addPageFooters(pages) {
+      pages.forEach(function (page, idx) {
+        page.querySelectorAll('.docx-page-footer').forEach(function (el) {
+          el.remove();
+        });
+        const footer = document.createElement('div');
+        footer.className = 'docx-page-footer';
+        const num = document.createElement('span');
+        num.className = 'docx-page-number';
+        num.textContent = String(idx + 1);
+        footer.appendChild(num);
+        page.appendChild(footer);
+      });
+    }
+
     fetch(<?= json_encode($docxUrl, JSON_UNESCAPED_SLASHES) ?>, { credentials: 'same-origin' })
       .then(function (res) {
         if (!res.ok) {
@@ -153,10 +180,10 @@ $docxUrl .= '&ts=' . time();
           className: 'docx',
           inWrapper: true,
           ignoreWidth: false,
-          ignoreHeight: false,
+          ignoreHeight: true,
           ignoreFonts: false,
           breakPages: true,
-          ignoreLastRenderedPageBreak: false,
+          ignoreLastRenderedPageBreak: true,
           renderHeaders: false,
           renderFooters: false,
           renderFootnotes: true,
@@ -166,16 +193,8 @@ $docxUrl .= '&ts=' . time();
         });
       })
       .then(function () {
-        const pages = container.querySelectorAll('.docx-wrapper > section.docx');
-        pages.forEach(function (page, idx) {
-          page.querySelectorAll('.docx-page-number').forEach(function (el) {
-            el.remove();
-          });
-          const num = document.createElement('div');
-          num.className = 'docx-page-number';
-          num.textContent = String(idx + 1);
-          page.appendChild(num);
-        });
+        const pages = tightenPageLayout();
+        addPageFooters(pages);
         if (pages.length > 0 && status.style.display !== 'none') {
           status.textContent = pages.length + ' page(s)';
         }
