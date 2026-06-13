@@ -139,20 +139,56 @@ function pcvc_staff_contract_ensure_rich_template(string $docxAbs): string
 }
 
 /**
- * Word sometimes splits ${placeholder} across runs and spell-check tags.
+ * Extract visible text from a Word XML fragment (w:t nodes only).
  */
-function pcvc_staff_contract_repair_docx_xml(string $xml): string
+function pcvc_staff_contract_xml_fragment_text(string $fragment): string
 {
-    $xml = preg_replace('/<w:proofErr[^>]*\/>/', '', $xml) ?? $xml;
+    if (!preg_match_all('/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/', $fragment, $matches)) {
+        return '';
+    }
+    return implode('', $matches[1]);
+}
 
-    $runBoundary = '(?:<\/w:t><\/w:r><w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s+xml:space="preserve")?[^>]*>)*';
+/**
+ * Strip spell-check tags only (safe on large documents).
+ */
+function pcvc_staff_contract_strip_proof_err(string $xml): string
+{
+    return preg_replace('/<w:proofErr[^>]*\/>/', '', $xml) ?? $xml;
+}
 
-    foreach (pcvc_staff_contract_placeholder_keys() as $key) {
-        $quoted = preg_quote($key, '/');
-        $pattern = '/\$\{' . $runBoundary . $quoted . $runBoundary . '\}/s';
-        $replaced = preg_replace($pattern, '${' . $key . '}', $xml);
-        if (is_string($replaced)) {
-            $xml = $replaced;
+/**
+ * Replace ${placeholder} values in DOCX XML without destroying list formatting.
+ *
+ * @param array<string, string> $values
+ * @param list<string> $imageKeys
+ */
+function pcvc_staff_contract_apply_placeholder_values(string $xml, array $values, array $imageKeys): string
+{
+    $xml = pcvc_staff_contract_strip_proof_err($xml);
+
+    foreach ($values as $key => $value) {
+        if (in_array($key, $imageKeys, true)) {
+            continue;
+        }
+        $safe = htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $xml = str_replace('${' . $key . '}', $safe, $xml);
+    }
+
+    foreach ($values as $key => $value) {
+        if (in_array($key, $imageKeys, true)) {
+            continue;
+        }
+        if (strpos($xml, '${' . $key . '}') !== false) {
+            continue;
+        }
+        $safe = htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        while (strpos($xml, $key) !== false && strpos($xml, '${' . $key . '}') === false) {
+            $next = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
+            if ($next === $xml) {
+                break;
+            }
+            $xml = $next;
         }
     }
 
@@ -160,7 +196,64 @@ function pcvc_staff_contract_repair_docx_xml(string $xml): string
 }
 
 /**
- * Copy template and repair split placeholders before PhpWord merge.
+ * Replace placeholders Word split across runs without collapsing XML structure.
+ */
+function pcvc_staff_contract_replace_split_placeholder(string $xml, string $key, string $safe): string
+{
+    if (strpos($xml, '${' . $key . '}') !== false) {
+        return $xml;
+    }
+
+    $keyWt = '/<w:t(?:\s[^>]*)?>' . preg_quote($key, '/') . '<\/w:t>/';
+    if (!preg_match($keyWt, $xml, $match, PREG_OFFSET_CAPTURE)) {
+        return $xml;
+    }
+
+    $keyPos = (int) $match[0][1];
+    $before = substr($xml, max(0, $keyPos - 3000), $keyPos - max(0, $keyPos - 3000));
+    if (strpos($before, '${') === false) {
+        return $xml;
+    }
+
+    $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+
+    // "Name: ${" -> "Name: "
+    $xml = preg_replace(
+        '/<w:t(?:\s[^>]*)?>([^<]*)\$\{<\/w:t>/',
+        '<w:t xml:space="preserve">$1</w:t>',
+        $xml,
+        1
+    ) ?? $xml;
+
+    // Lone "${" run
+    $xml = preg_replace(
+        '/<w:t(?:\s[^>]*)?>\$\{<\/w:t>/',
+        '',
+        $xml,
+        1
+    ) ?? $xml;
+
+    // Key run -> value
+    $xml = preg_replace(
+        $keyWt,
+        '<w:t xml:space="preserve">' . $safeXml . '</w:t>',
+        $xml,
+        1
+    ) ?? $xml;
+
+    // Lone "}" run
+    $xml = preg_replace(
+        '/<w:t(?:\s[^>]*)?>\}<\/w:t>/',
+        '',
+        $xml,
+        1
+    ) ?? $xml;
+
+    return $xml;
+}
+
+/**
+ * Copy template to a temp file (no heavy XML rewriting).
  */
 function pcvc_staff_contract_prepare_template(string $templateAbs): string
 {
@@ -169,30 +262,6 @@ function pcvc_staff_contract_prepare_template(string $templateAbs): string
     if (!copy($templateAbs, $work)) {
         throw new RuntimeException('Could not copy contract template.');
     }
-
-    $zip = new ZipArchive();
-    if ($zip->open($work) !== true) {
-        @unlink($work);
-        throw new RuntimeException('Could not open contract template.');
-    }
-
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-        $name = (string) $zip->getNameIndex($i);
-        if (!preg_match('/^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/', $name)) {
-            continue;
-        }
-        $content = $zip->getFromName($name);
-        if ($content === false) {
-            continue;
-        }
-        $repaired = pcvc_staff_contract_repair_docx_xml($content);
-        if ($repaired !== $content) {
-            $zip->deleteName($name);
-            $zip->addFromString($name, $repaired);
-        }
-    }
-    $zip->close();
-
     return $work;
 }
 
@@ -279,14 +348,7 @@ function pcvc_staff_contract_fill_docx_text(string $docxAbs, array $values): voi
         if ($xml === false) {
             continue;
         }
-        $xml = pcvc_staff_contract_repair_docx_xml($xml);
-        foreach ($values as $key => $value) {
-            if (in_array($key, $imageKeys, true)) {
-                continue;
-            }
-            $safe = htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-            $xml = str_replace('${' . $key . '}', $safe, $xml);
-        }
+        $xml = pcvc_staff_contract_apply_placeholder_values($xml, $values, $imageKeys);
         $zip->deleteName($name);
         $zip->addFromString($name, $xml);
     }
