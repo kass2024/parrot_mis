@@ -32,23 +32,56 @@ $docxUrl .= '&ts=' . time();
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Contract preview</title>
   <style>
-    html, body { margin: 0; padding: 0; height: 100%; background: #e8edf3; }
+    html, body {
+      margin: 0; padding: 0; min-height: 100%;
+      background: #d7dee8;
+      font-family: 'Times New Roman', Times, serif;
+    }
     #status {
       font: 14px/1.4 'Segoe UI', system-ui, sans-serif;
       color: #475569; padding: 1rem; text-align: center;
     }
     #docx-container {
-      min-height: calc(100vh - 48px);
-      padding: 12px;
+      padding: 16px 12px 32px;
       box-sizing: border-box;
     }
     #docx-container .docx-wrapper {
-      background: #fff;
+      background: transparent;
       margin: 0 auto;
-      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+      padding: 0;
     }
     #docx-container .docx-wrapper > section.docx {
-      padding: 24px 32px !important;
+      background: #fff;
+      margin: 0 auto 28px;
+      box-shadow: 0 2px 14px rgba(15, 23, 42, 0.12);
+      box-sizing: border-box;
+      position: relative;
+      font-family: 'Times New Roman', Times, serif !important;
+      line-height: 1.15;
+    }
+    #docx-container .docx-wrapper > section.docx::after {
+      content: 'Page ' attr(data-page-number);
+      position: absolute;
+      right: 18px;
+      bottom: 10px;
+      font: 11px 'Segoe UI', system-ui, sans-serif;
+      color: #64748b;
+    }
+    #docx-container .docx,
+    #docx-container .docx * {
+      font-family: 'Times New Roman', Times, serif !important;
+    }
+    #docx-container p,
+    #docx-container span,
+    #docx-container li {
+      line-height: inherit;
+    }
+    #docx-container table {
+      border-collapse: collapse;
+    }
+    #docx-container img {
+      max-width: 100%;
+      height: auto;
     }
   </style>
 </head>
@@ -77,10 +110,27 @@ $docxUrl .= '&ts=' . time();
           inWrapper: true,
           ignoreWidth: false,
           ignoreHeight: false,
-          breakPages: true
+          ignoreFonts: false,
+          breakPages: true,
+          renderHeaders: true,
+          renderFooters: true,
+          renderFootnotes: true,
+          renderEndnotes: true,
+          useBase64URL: true,
+          experimental: true
         });
       })
+      .then(function () {
+        const pages = container.querySelectorAll('.docx-wrapper > section.docx');
+        pages.forEach(function (page, idx) {
+          page.setAttribute('data-page-number', String(idx + 1));
+        });
+        if (pages.length > 0 && status.style.display !== 'none') {
+          status.textContent = pages.length + ' page(s)';
+        }
+      })
       .catch(function (err) {
+        status.style.display = 'block';
         status.textContent = 'Could not load contract: ' + (err.message || 'Unknown error');
         status.style.color = '#b45309';
       });

@@ -12,6 +12,7 @@ $checks = [
     'vendor_autoload' => is_file(__DIR__ . '/../vendor/autoload.php'),
     'word_helper' => is_file(__DIR__ . '/../helpers/staff_contract_word.php'),
     'canonical_template' => is_file(__DIR__ . '/Parrot Contract for Mutware.docx'),
+    'manager_signature' => is_file(__DIR__ . '/signature-manager.png'),
     'uploads_writable' => is_writable(__DIR__ . '/../uploads') || @mkdir(__DIR__ . '/../uploads/staff_contracts/source', 0775, true),
     'libreoffice_available' => pcvc_staff_contract_libreoffice_available(),
     'docx_preview_mode' => pcvc_staff_contract_use_docx_preview(),
@@ -26,6 +27,9 @@ if (!$checks['word_helper']) {
 }
 if (!$checks['canonical_template']) {
     $errors[] = 'Deploy admin/Parrot Contract for Mutware.docx (company stamp template)';
+}
+if (!$checks['manager_signature']) {
+    $errors[] = 'Deploy admin/signature-manager.png (employer signature image)';
 }
 
 $notes = [];

@@ -90,20 +90,44 @@ function pcvc_staff_contract_use_docx_preview(): bool
 }
 
 /**
- * Embed employee signature PNG into a filled DOCX at ${employee_signature}.
+ * Build inline Word drawing XML for an embedded PNG.
  */
-function pcvc_staff_contract_embed_signature_in_docx(string $docxAbs, string $pngBytes): void
+function pcvc_staff_contract_inline_image_xml(string $rid, string $label, int $cx, int $cy): string
 {
+    return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+        . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
+        . '<wp:docPr id="' . (9000 + crc32($label) % 1000) . '" name="' . htmlspecialchars($label, ENT_XML1) . '"/>'
+        . '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        . '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        . '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        . '<pic:nvPicPr><pic:cNvPr id="0" name="' . htmlspecialchars($label, ENT_XML1) . '"/><pic:cNvPicPr/></pic:nvPicPr>'
+        . '<pic:blipFill><a:blip r:embed="' . $rid . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+        . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $cx . '" cy="' . $cy . '"/></a:xfrm>'
+        . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+        . '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+}
+
+/**
+ * Replace ${placeholder_key} in document.xml with an embedded PNG image.
+ */
+function pcvc_staff_contract_embed_image_at_placeholder(
+    string $docxAbs,
+    string $placeholderKey,
+    string $mediaFileName,
+    string $pngBytes,
+    int $widthEmu = 1371600,
+    int $heightEmu = 457200
+): void {
     if ($pngBytes === '') {
         throw new RuntimeException('Signature image is empty.');
     }
 
     $zip = new ZipArchive();
     if ($zip->open($docxAbs) !== true) {
-        throw new RuntimeException('Could not open contract document for signature embed.');
+        throw new RuntimeException('Could not open contract document for image embed.');
     }
 
-    $mediaPath = 'word/media/employee_signature.png';
+    $mediaPath = 'word/media/' . $mediaFileName;
     if ($zip->locateName($mediaPath) !== false) {
         $zip->deleteName($mediaPath);
     }
@@ -116,24 +140,23 @@ function pcvc_staff_contract_embed_signature_in_docx(string $docxAbs, string $pn
         throw new RuntimeException('Contract relationships file missing.');
     }
 
-    $nextId = 1;
-    if (preg_match_all('/Id="rId(\d+)"/', $rels, $matches)) {
-        $nextId = max(array_map('intval', $matches[1])) + 1;
-    }
-    $newRid = 'rId' . $nextId;
-
-    if (strpos($rels, 'employee_signature.png') === false) {
+    $target = 'media/' . $mediaFileName;
+    $newRid = '';
+    if (preg_match('/Id="(rId\d+)"[^>]+Target="' . preg_quote($target, '/') . '"/', $rels, $existing)) {
+        $newRid = $existing[1];
+    } else {
+        $nextId = 1;
+        if (preg_match_all('/Id="rId(\d+)"/', $rels, $matches)) {
+            $nextId = max(array_map('intval', $matches[1])) + 1;
+        }
+        $newRid = 'rId' . $nextId;
         $rels = str_replace(
             '</Relationships>',
-            '<Relationship Id="' . $newRid . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/employee_signature.png"/></Relationships>',
+            '<Relationship Id="' . $newRid . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="' . $target . '"/></Relationships>',
             $rels
         );
         $zip->deleteName($relsPath);
         $zip->addFromString($relsPath, $rels);
-    } else {
-        if (preg_match('/Id="(rId\d+)"[^>]+Target="media\/employee_signature\.png"/', $rels, $ridMatch)) {
-            $newRid = $ridMatch[1];
-        }
     }
 
     $xml = (string) $zip->getFromName('word/document.xml');
@@ -142,31 +165,117 @@ function pcvc_staff_contract_embed_signature_in_docx(string $docxAbs, string $pn
         throw new RuntimeException('Contract document body missing.');
     }
 
-    $drawing = '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
-        . '<wp:extent cx="1371600" cy="457200"/>'
-        . '<wp:docPr id="9999" name="Employee Signature"/>'
-        . '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
-        . '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
-        . '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
-        . '<pic:nvPicPr><pic:cNvPr id="0" name="Employee Signature"/><pic:cNvPicPr/></pic:nvPicPr>'
-        . '<pic:blipFill><a:blip r:embed="' . $newRid . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
-        . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1371600" cy="457200"/></a:xfrm>'
-        . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
-        . '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+    $token = '${' . $placeholderKey . '}';
+    $drawing = pcvc_staff_contract_inline_image_xml($newRid, ucfirst(str_replace('_', ' ', $placeholderKey)), $widthEmu, $heightEmu);
 
-    $updated = preg_replace(
-        '/<w:r[^>]*>\s*<w:rPr>.*?<\/w:rPr>\s*<w:t>\$\{employee_signature\}<\/w:t>\s*<\/w:r>/s',
-        $drawing,
-        $xml,
-        1
-    );
-    if (!is_string($updated) || $updated === $xml) {
-        $updated = str_replace('<w:t>${employee_signature}</w:t>', $drawing, $xml);
+    $patterns = [
+        '/<w:r[^>]*>\s*<w:rPr>.*?<\/w:rPr>\s*<w:t>\$\{' . preg_quote($placeholderKey, '/') . '\}<\/w:t>\s*<\/w:r>/s',
+        '/<w:r[^>]*>\s*<w:t>\$\{' . preg_quote($placeholderKey, '/') . '\}<\/w:t>\s*<\/w:r>/s',
+    ];
+    $updated = $xml;
+    foreach ($patterns as $pattern) {
+        $next = preg_replace($pattern, $drawing, $updated, 1);
+        if (is_string($next) && $next !== $updated) {
+            $updated = $next;
+            break;
+        }
+    }
+    if ($updated === $xml) {
+        $updated = str_replace('<w:t>' . $token . '</w:t>', $drawing, $xml);
     }
 
     $zip->deleteName('word/document.xml');
     $zip->addFromString('word/document.xml', $updated);
     $zip->close();
+}
+
+/**
+ * Remove a text placeholder line (e.g. employee signature before signing).
+ */
+function pcvc_staff_contract_clear_text_placeholder(string $docxAbs, string $placeholderKey): void
+{
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        return;
+    }
+    $xml = (string) $zip->getFromName('word/document.xml');
+    if ($xml === '') {
+        $zip->close();
+        return;
+    }
+    $token = '${' . $placeholderKey . '}';
+    $updated = str_replace('<w:t>' . $token . '</w:t>', '<w:t xml:space="preserve"> </w:t>', $xml);
+    if ($updated !== $xml) {
+        $zip->deleteName('word/document.xml');
+        $zip->addFromString('word/document.xml', $updated);
+    }
+    $zip->close();
+}
+
+function pcvc_staff_contract_manager_signature_bytes(): ?string
+{
+    $path = pcvc_staff_contract_manager_signature_path();
+    if (!is_file($path)) {
+        return null;
+    }
+    $bytes = file_get_contents($path);
+    return $bytes !== false && $bytes !== '' ? $bytes : null;
+}
+
+/**
+ * Embed employer signature image; embed or clear employee signature placeholder.
+ */
+function pcvc_staff_contract_apply_signature_images(string $docxAbs, ?string $employeeSignatureDataUrl = null): void
+{
+    $employerPng = pcvc_staff_contract_manager_signature_bytes();
+    if ($employerPng !== null) {
+        pcvc_staff_contract_embed_image_at_placeholder(
+            $docxAbs,
+            'employer_signature',
+            'employer_signature.png',
+            $employerPng,
+            1371600,
+            457200
+        );
+    }
+
+    if ($employeeSignatureDataUrl !== null && $employeeSignatureDataUrl !== '') {
+        if (!function_exists('contract_signature_to_display_png')) {
+            require_once __DIR__ . '/contract_signature_image.php';
+        }
+        $sigPng = contract_signature_to_display_png($employeeSignatureDataUrl);
+        if ($sigPng === null) {
+            $sigPng = contract_signature_raw_bytes($employeeSignatureDataUrl);
+        }
+        if ($sigPng !== null && $sigPng !== '') {
+            pcvc_staff_contract_embed_image_at_placeholder(
+                $docxAbs,
+                'employee_signature',
+                'employee_signature.png',
+                $sigPng,
+                1371600,
+                457200
+            );
+            return;
+        }
+    }
+
+    pcvc_staff_contract_clear_text_placeholder($docxAbs, 'employee_signature');
+}
+
+/**
+ * @deprecated Use pcvc_staff_contract_embed_image_at_placeholder()
+ */
+function pcvc_staff_contract_embed_signature_in_docx(string $docxAbs, string $pngBytes): void
+{
+    pcvc_staff_contract_embed_image_at_placeholder(
+        $docxAbs,
+        'employee_signature',
+        'employee_signature.png',
+        $pngBytes,
+        1371600,
+        457200
+    );
 }
 
 /**
@@ -552,6 +661,7 @@ function pcvc_staff_contract_fill_docx(
 
         $values = pcvc_staff_contract_merge_values($admin, $signingDate, $signatureDataUrl);
         pcvc_staff_contract_fill_docx_text($outputDocxAbs, $values);
+        pcvc_staff_contract_apply_signature_images($outputDocxAbs, $signatureDataUrl);
     } finally {
         if (is_file($preparedTemplate)) {
             @unlink($preparedTemplate);
@@ -909,16 +1019,7 @@ function pcvc_staff_contract_generate_signed(
     $signedDocxAbs = pcvc_staff_contract_abs_path($signedDocxRel);
     $signedPdfAbs = pcvc_staff_contract_abs_path($signedPdfRel);
 
-    pcvc_staff_contract_fill_docx($docxAbs, $signedDocxAbs, $admin, $signedDate, null);
-
-    $sigPng = contract_signature_to_display_png($signatureDataUrl);
-    if ($sigPng === null) {
-        $sigPng = contract_signature_raw_bytes($signatureDataUrl);
-    }
-    if ($sigPng === null || $sigPng === '') {
-        throw new RuntimeException('Invalid signature image.');
-    }
-    pcvc_staff_contract_embed_signature_in_docx($signedDocxAbs, $sigPng);
+    pcvc_staff_contract_fill_docx($docxAbs, $signedDocxAbs, $admin, $signedDate, $signatureDataUrl);
 
     $signedPdfOut = null;
     if (!pcvc_staff_contract_use_docx_preview()) {
