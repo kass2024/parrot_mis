@@ -70,6 +70,7 @@ function pcvc_staff_contract_ensure_schema(mysqli $conn): void
             filled_docx_path VARCHAR(500) NULL,
             source_pdf_path VARCHAR(500) NULL,
             signed_pdf_path VARCHAR(500) NULL,
+            signed_docx_path VARCHAR(500) NULL,
             pdf_path VARCHAR(500) NULL,
             contract_title VARCHAR(255) NULL,
             staff_typed_name VARCHAR(255) NULL,
@@ -92,6 +93,7 @@ function pcvc_staff_contract_ensure_schema(mysqli $conn): void
         'filled_docx_path' => "VARCHAR(500) NULL AFTER source_docx_path",
         'source_pdf_path' => "VARCHAR(500) NULL AFTER filled_docx_path",
         'signed_pdf_path' => "VARCHAR(500) NULL AFTER source_pdf_path",
+        'signed_docx_path' => "VARCHAR(500) NULL AFTER signed_pdf_path",
         'contract_title' => "VARCHAR(255) NULL AFTER pdf_path",
         'staff_typed_name' => "VARCHAR(255) NULL AFTER contract_title",
         'signature_file' => "VARCHAR(500) NULL AFTER staff_typed_name",
@@ -153,7 +155,10 @@ function pcvc_staff_contract_row_status(?array $row): array
     if (!pcvc_staff_contract_has_template($row)) {
         return ['code' => 'no_contract', 'label' => 'No contract uploaded', 'badge' => 'secondary'];
     }
-    if (($row['status'] ?? '') === 'signed' && trim((string) ($row['signed_pdf_path'] ?? $row['pdf_path'] ?? '')) !== '') {
+    if (($row['status'] ?? '') === 'signed' && (
+        trim((string) ($row['signed_pdf_path'] ?? $row['pdf_path'] ?? '')) !== ''
+        || trim((string) ($row['signed_docx_path'] ?? '')) !== ''
+    )) {
         return ['code' => 'signed', 'label' => 'Signed', 'badge' => 'success'];
     }
     return ['code' => 'pending_signature', 'label' => 'Awaiting signature', 'badge' => 'warning'];
@@ -166,6 +171,16 @@ function pcvc_staff_contract_signed_path(array $row): string
         return $path;
     }
     return trim((string) ($row['pdf_path'] ?? ''));
+}
+
+function pcvc_staff_contract_signed_docx_path(array $row): string
+{
+    return trim((string) ($row['signed_docx_path'] ?? ''));
+}
+
+function pcvc_staff_contract_preview_docx_path(array $row): string
+{
+    return trim((string) ($row['filled_docx_path'] ?? ''));
 }
 
 function pcvc_staff_contract_abs_path(string $relative): string
@@ -189,6 +204,7 @@ function pcvc_staff_contract_remove_files(?array $contract): void
         trim((string) ($contract['filled_docx_path'] ?? '')),
         trim((string) ($contract['source_pdf_path'] ?? '')),
         trim((string) ($contract['signed_pdf_path'] ?? '')),
+        trim((string) ($contract['signed_docx_path'] ?? '')),
         trim((string) ($contract['pdf_path'] ?? '')),
         trim((string) ($contract['signature_file'] ?? '')),
     ];

@@ -29,10 +29,11 @@ $isSigned = $status['code'] === 'signed';
 $hasContract = $status['code'] !== 'no_contract';
 $title = trim((string) ($contract['contract_title'] ?? 'Employment Contract'));
 $previewError = '';
+$useDocxPreview = pcvc_staff_contract_use_docx_preview();
 
 if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?? '')) !== '') {
     try {
-        pcvc_staff_contract_generate_preview($conn, $adminId, $contract);
+        pcvc_staff_contract_generate_preview($conn, $adminId, $contract, null, !$useDocxPreview);
         $contract = pcvc_staff_contract_for_admin($conn, $adminId);
     } catch (Throwable $e) {
         $previewError = $e->getMessage();
@@ -56,6 +57,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     }
     .panel { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 1.25rem; }
     .pdf-frame { width: 100%; min-height: 70vh; border: 1px solid #dbe3ef; border-radius: 10px; }
+    .docx-frame { width: 100%; min-height: 70vh; border: 1px solid #dbe3ef; border-radius: 10px; background: #e8edf3; }
     #signaturePad {
       width: 100%; height: 180px; border: 2px dashed #94a3b8; border-radius: 10px;
       background: #fff; touch-action: none; cursor: crosshair;
@@ -90,11 +92,19 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
         <?php endif; ?>
       </div>
     </div>
-    <iframe class="pdf-frame" src="view-staff-contract-pdf.php?type=signed#toolbar=1"></iframe>
-    <div class="mt-3 text-end">
+    <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>"
+      src="<?= $useDocxPreview ? 'contract-docx-viewer.php?type=signed&ts=' . time() : 'view-staff-contract-pdf.php?type=signed#toolbar=1' ?>"></iframe>
+    <div class="mt-3 text-end d-flex gap-2 justify-content-end flex-wrap">
+      <?php if ($useDocxPreview && pcvc_staff_contract_signed_docx_path($contract) !== ''): ?>
+      <a href="download-staff-contract.php?type=signed&format=docx" class="btn btn-outline-primary btn-lg">
+        <i class="bi bi-file-earmark-word me-1"></i> Download Word contract
+      </a>
+      <?php endif; ?>
+      <?php if (!$useDocxPreview || pcvc_staff_contract_signed_path($contract) !== ''): ?>
       <a href="download-staff-contract.php?type=signed" class="btn btn-primary btn-lg">
         <i class="bi bi-download me-1"></i> Download signed contract
       </a>
+      <?php endif; ?>
     </div>
   </div>
   <?php else: ?>
@@ -110,7 +120,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     <i class="bi bi-magic me-1"></i>
     <strong>Auto-filled from your profile.</strong>
     Your name, phone, address, and other details were inserted into the contract automatically.
-    Review the PDF, then sign below — no dragging required.
+    Review the <?= $useDocxPreview ? 'Word document' : 'PDF' ?>, then sign below — no dragging required.
   </div>
   <div class="row g-3">
     <div class="col-lg-8">
@@ -119,7 +129,17 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
           <h6 class="fw-bold mb-0">Your contract (auto-filled)</h6>
           <span class="badge text-bg-warning">Signature required</span>
         </div>
-        <iframe class="pdf-frame" src="view-staff-contract-pdf.php?type=source&ts=<?= time() ?>#toolbar=1"></iframe>
+        <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>"
+          src="<?= $useDocxPreview
+            ? 'contract-docx-viewer.php?type=source&ts=' . time()
+            : 'view-staff-contract-pdf.php?type=source&ts=' . time() . '#toolbar=1' ?>"></iframe>
+        <?php if ($useDocxPreview): ?>
+        <div class="mt-2 text-end">
+          <a href="download-staff-contract.php?type=source&format=docx" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-file-earmark-word me-1"></i> Download Word copy
+          </a>
+        </div>
+        <?php endif; ?>
       </div>
     </div>
     <div class="col-lg-4">

@@ -5,10 +5,12 @@ session_start();
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/staff_contract_schema.php';
+require_once __DIR__ . '/../helpers/staff_contract_word.php';
 
 pcvc_require_superadmin($conn);
 
 pcvc_staff_contract_ensure_schema($conn);
+$useDocxPreview = pcvc_staff_contract_use_docx_preview();
 
 $sql = "
     SELECT
@@ -144,12 +146,14 @@ $totalStaff = count($staffRows);
           </button>
           <?php if ($hasTemplate): ?>
             <a class="btn btn-outline-primary btn-sm mb-1" target="_blank"
-              href="view-staff-contract-pdf.php?staff_id=<?= $staffId ?>&type=source&ts=<?= time() ?>">View filled PDF</a>
+              href="<?= $useDocxPreview
+                ? 'contract-docx-viewer.php?staff_id=' . $staffId . '&type=source&ts=' . time()
+                : 'view-staff-contract-pdf.php?staff_id=' . $staffId . '&type=source&ts=' . time() ?>">View filled <?= $useDocxPreview ? 'Word' : 'PDF' ?></a>
             <button type="button" class="btn btn-outline-secondary btn-sm mb-1 btn-regenerate-contract"
               data-staff-id="<?= $staffId ?>"
               data-mode="preview"
-              title="Rebuild PDF from staff profile (keeps Word formatting, bullets, stamp)">
-              <i class="bi bi-arrow-clockwise"></i> Regenerate PDF
+              title="Rebuild contract from staff profile (keeps Word formatting, bullets, stamp)">
+              <i class="bi bi-arrow-clockwise"></i> Regenerate <?= $useDocxPreview ? 'Word' : 'PDF' ?>
             </button>
             <button type="button" class="btn btn-outline-danger btn-sm mb-1 btn-delete-contract"
               data-staff-id="<?= $staffId ?>"

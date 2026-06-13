@@ -28,42 +28,38 @@ if (!$contract) {
     exit('Contract not found');
 }
 
-$rel = $type === 'signed'
-    ? pcvc_staff_contract_signed_path($contract)
-    : trim((string) ($contract['source_pdf_path'] ?? ''));
-
-if ($rel === '' && pcvc_staff_contract_use_docx_preview()) {
-    http_response_code(404);
-    exit('PDF not used on this server — open the Word contract viewer instead.');
-}
-
-if ($rel === '' && $type === 'source' && trim((string) ($contract['source_docx_path'] ?? '')) !== '') {
-    @set_time_limit(300);
-    try {
-        pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, true);
-        $contract = pcvc_staff_contract_for_admin($conn, $staffId);
-        if ($contract) {
-            $rel = trim((string) ($contract['source_pdf_path'] ?? ''));
+if ($type === 'signed') {
+    $rel = pcvc_staff_contract_signed_docx_path($contract);
+} else {
+    $rel = pcvc_staff_contract_preview_docx_path($contract);
+    if ($rel === '' && trim((string) ($contract['source_docx_path'] ?? '')) !== '') {
+        @set_time_limit(120);
+        try {
+            pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, false);
+            $contract = pcvc_staff_contract_for_admin($conn, $staffId);
+            if ($contract) {
+                $rel = pcvc_staff_contract_preview_docx_path($contract);
+            }
+        } catch (Throwable $e) {
+            http_response_code(503);
+            exit('Contract not ready: ' . $e->getMessage());
         }
-    } catch (Throwable $e) {
-        http_response_code(503);
-        exit('PDF not ready: ' . $e->getMessage());
     }
 }
 
 if ($rel === '') {
     http_response_code(404);
-    exit('PDF not available');
+    exit('Word contract not available');
 }
 
 $abs = pcvc_staff_contract_abs_path($rel);
 if (!is_file($abs)) {
     http_response_code(404);
-    exit('PDF file missing');
+    exit('Word contract file missing');
 }
 
-header('Content-Type: application/pdf');
-header('Content-Disposition: inline; filename="staff-contract.pdf"');
+header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+header('Content-Disposition: inline; filename="staff-contract.docx"');
 header('Content-Length: ' . (string) filesize($abs));
 header('Cache-Control: private, max-age=0, must-revalidate');
 readfile($abs);

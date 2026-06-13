@@ -125,7 +125,7 @@ try {
 
         $sql = "UPDATE employment_contracts
                 SET source_docx_path = ?, filled_docx_path = NULL, source_pdf_path = NULL,
-                    signed_pdf_path = NULL, pdf_path = NULL,
+                    signed_pdf_path = NULL, signed_docx_path = NULL, pdf_path = NULL,
                     contract_title = ?, status = 'pending_signature',
                     staff_typed_name = NULL, signature_file = NULL, field_layout = NULL,
                     signed_at = NULL, signed_ip = NULL,

@@ -62,7 +62,7 @@ try {
 
     $hasDocx = trim((string) ($contract['source_docx_path'] ?? '')) !== '';
     if ($hasDocx) {
-        $signedRel = pcvc_staff_contract_generate_signed(
+        $signed = pcvc_staff_contract_generate_signed(
             $conn,
             $adminId,
             $contract,
@@ -70,6 +70,8 @@ try {
             $typedName,
             $signedDate
         );
+        $signedRel = $signed['pdf'] ?? '';
+        $signedDocxRel = $signed['docx'];
     } else {
         $sourceRel = trim((string) ($contract['source_pdf_path'] ?? ''));
         if ($sourceRel === '') {
@@ -81,6 +83,7 @@ try {
         $signedRel = 'uploads/staff_contracts/signed/' . $signedName;
         $signedAbs = pcvc_staff_contract_abs_path($signedRel);
         pcvc_staff_contract_build_signed_pdf($sourceAbs, $signature, $typedName, $signedDate, $signedAbs);
+        $signedDocxRel = '';
     }
 
     $sigRel = 'uploads/staff_contracts/signatures/signature_' . $adminId . '_' . time() . '.png';
@@ -95,6 +98,7 @@ try {
     $stmt = $conn->prepare(
         "UPDATE employment_contracts
          SET status = 'signed',
+             signed_docx_path = ?,
              signed_pdf_path = ?,
              pdf_path = ?,
              staff_typed_name = ?,
@@ -107,7 +111,8 @@ try {
     if (!$stmt) {
         throw new RuntimeException('Database error');
     }
-    $stmt->bind_param('sssssii', $signedRel, $signedRel, $typedName, $sigRel, $ip, $adminId, $contractId);
+    $signedDocxRel = $signedDocxRel ?? '';
+    $stmt->bind_param('ssssssii', $signedDocxRel, $signedRel, $signedRel, $typedName, $sigRel, $ip, $adminId, $contractId);
     $stmt->execute();
     $stmt->close();
 
@@ -142,4 +147,4 @@ function table_exists(mysqli $conn, string $table): bool
     $ok = (bool) $stmt->get_result()->fetch_row();
     $stmt->close();
     return $ok;
-}
+}

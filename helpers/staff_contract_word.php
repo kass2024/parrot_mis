@@ -34,6 +34,142 @@ function pcvc_staff_contract_require_pdf_helpers(): void
 }
 
 /**
+ * Whether LibreOffice/soffice is available for server-side DOCX→PDF.
+ */
+function pcvc_staff_contract_libreoffice_available(): bool
+{
+    static $cached = null;
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    if (PHP_OS_FAMILY === 'Windows') {
+        foreach ([
+            'C:\\Program Files\\LibreOffice\\program\\soffice.exe',
+            'C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe',
+        ] as $bin) {
+            if (is_file($bin)) {
+                $cached = true;
+                return true;
+            }
+        }
+    }
+
+    foreach (['/usr/bin/libreoffice', '/usr/bin/soffice', '/usr/local/bin/libreoffice'] as $bin) {
+        if (is_file($bin)) {
+            $cached = true;
+            return true;
+        }
+    }
+
+    $disabled = array_filter(array_map('trim', explode(',', (string) ini_get('disable_functions'))));
+    if (!in_array('exec', $disabled, true)) {
+        foreach (['libreoffice', 'soffice'] as $cmd) {
+            @exec('command -v ' . escapeshellarg($cmd) . ' 2>/dev/null', $out, $code);
+            if ($code === 0 && !empty($out[0])) {
+                $cached = true;
+                return true;
+            }
+            $out = [];
+        }
+    }
+
+    $cached = false;
+    return false;
+}
+
+/**
+ * Shared hosting (e.g. Namecheap): render filled Word in the browser instead of server PDF.
+ */
+function pcvc_staff_contract_use_docx_preview(): bool
+{
+    if (PHP_OS_FAMILY === 'Windows') {
+        return false;
+    }
+    return !pcvc_staff_contract_libreoffice_available();
+}
+
+/**
+ * Embed employee signature PNG into a filled DOCX at ${employee_signature}.
+ */
+function pcvc_staff_contract_embed_signature_in_docx(string $docxAbs, string $pngBytes): void
+{
+    if ($pngBytes === '') {
+        throw new RuntimeException('Signature image is empty.');
+    }
+
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        throw new RuntimeException('Could not open contract document for signature embed.');
+    }
+
+    $mediaPath = 'word/media/employee_signature.png';
+    if ($zip->locateName($mediaPath) !== false) {
+        $zip->deleteName($mediaPath);
+    }
+    $zip->addFromString($mediaPath, $pngBytes);
+
+    $relsPath = 'word/_rels/document.xml.rels';
+    $rels = (string) $zip->getFromName($relsPath);
+    if ($rels === '') {
+        $zip->close();
+        throw new RuntimeException('Contract relationships file missing.');
+    }
+
+    $nextId = 1;
+    if (preg_match_all('/Id="rId(\d+)"/', $rels, $matches)) {
+        $nextId = max(array_map('intval', $matches[1])) + 1;
+    }
+    $newRid = 'rId' . $nextId;
+
+    if (strpos($rels, 'employee_signature.png') === false) {
+        $rels = str_replace(
+            '</Relationships>',
+            '<Relationship Id="' . $newRid . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/employee_signature.png"/></Relationships>',
+            $rels
+        );
+        $zip->deleteName($relsPath);
+        $zip->addFromString($relsPath, $rels);
+    } else {
+        if (preg_match('/Id="(rId\d+)"[^>]+Target="media\/employee_signature\.png"/', $rels, $ridMatch)) {
+            $newRid = $ridMatch[1];
+        }
+    }
+
+    $xml = (string) $zip->getFromName('word/document.xml');
+    if ($xml === '') {
+        $zip->close();
+        throw new RuntimeException('Contract document body missing.');
+    }
+
+    $drawing = '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+        . '<wp:extent cx="1371600" cy="457200"/>'
+        . '<wp:docPr id="9999" name="Employee Signature"/>'
+        . '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+        . '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        . '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
+        . '<pic:nvPicPr><pic:cNvPr id="0" name="Employee Signature"/><pic:cNvPicPr/></pic:nvPicPr>'
+        . '<pic:blipFill><a:blip r:embed="' . $newRid . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
+        . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1371600" cy="457200"/></a:xfrm>'
+        . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
+        . '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+
+    $updated = preg_replace(
+        '/<w:r[^>]*>\s*<w:rPr>.*?<\/w:rPr>\s*<w:t>\$\{employee_signature\}<\/w:t>\s*<\/w:r>/s',
+        $drawing,
+        $xml,
+        1
+    );
+    if (!is_string($updated) || $updated === $xml) {
+        $updated = str_replace('<w:t>${employee_signature}</w:t>', $drawing, $xml);
+    }
+
+    $zip->deleteName('word/document.xml');
+    $zip->addFromString('word/document.xml', $updated);
+    $zip->close();
+}
+
+/**
  * Placeholders supported in Word templates (${placeholder_name}).
  *
  * @return list<string>
@@ -678,7 +814,7 @@ function pcvc_staff_contract_generate_preview(
 
     $engine = '';
     $pdfWarning = '';
-    if ($makePdf) {
+    if ($makePdf && !pcvc_staff_contract_use_docx_preview()) {
         $engine = pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
         $pdfWarning = pcvc_staff_contract_pdf_engine_warning($engine);
     } else {
@@ -739,7 +875,9 @@ function pcvc_staff_contract_generate_preview(
 }
 
 /**
- * Generate final signed PDF from Word template + signature.
+ * Generate final signed contract from Word template + signature.
+ *
+ * @return array{docx:string, pdf:?string}
  */
 function pcvc_staff_contract_generate_signed(
     mysqli $conn,
@@ -748,7 +886,7 @@ function pcvc_staff_contract_generate_signed(
     string $signatureDataUrl,
     string $typedName,
     string $signedDate
-): string {
+): array {
     $admin = pcvc_staff_contract_admin_row($conn, $adminId);
     if (!$admin) {
         throw new RuntimeException('Staff account not found.');
@@ -762,36 +900,55 @@ function pcvc_staff_contract_generate_signed(
         throw new RuntimeException('No Word contract template uploaded.');
     }
 
+    pcvc_staff_contract_require_pdf_helpers();
     pcvc_staff_contract_ensure_dirs();
     $docxAbs = pcvc_staff_contract_abs_path($docxRel);
     $stamp = time();
-    $filledDocxRel = 'uploads/staff_contracts/generated/signed_' . $adminId . '_' . $stamp . '.docx';
+    $signedDocxRel = 'uploads/staff_contracts/signed/signed_staff_' . $adminId . '_' . $stamp . '.docx';
     $signedPdfRel = 'uploads/staff_contracts/signed/signed_staff_' . $adminId . '_' . $stamp . '.pdf';
-    $filledDocxAbs = pcvc_staff_contract_abs_path($filledDocxRel);
+    $signedDocxAbs = pcvc_staff_contract_abs_path($signedDocxRel);
     $signedPdfAbs = pcvc_staff_contract_abs_path($signedPdfRel);
 
-    // Fill Word template, convert with Microsoft Word (keeps bullets + stamp), then stamp e-signature on PDF.
-    pcvc_staff_contract_fill_docx($docxAbs, $filledDocxAbs, $admin, $signedDate, null);
-    $previewPdfAbs = pcvc_staff_contract_abs_path(
-        'uploads/staff_contracts/generated/tmp_sign_' . $adminId . '_' . $stamp . '.pdf'
-    );
-    pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
-    pcvc_staff_contract_require_pdf_helpers();
-    try {
-        pcvc_staff_contract_stamp_employee_signature_pdf($previewPdfAbs, $signatureDataUrl, $signedPdfAbs);
-    } catch (Throwable $e) {
-        if (is_file($previewPdfAbs)) {
-            @copy($previewPdfAbs, $signedPdfAbs);
-        }
-        if (!is_file($signedPdfAbs)) {
-            throw new RuntimeException('Could not stamp signature on contract PDF: ' . $e->getMessage());
-        }
+    pcvc_staff_contract_fill_docx($docxAbs, $signedDocxAbs, $admin, $signedDate, null);
+
+    $sigPng = contract_signature_to_display_png($signatureDataUrl);
+    if ($sigPng === null) {
+        $sigPng = contract_signature_raw_bytes($signatureDataUrl);
     }
-    if (is_file($previewPdfAbs)) {
-        @unlink($previewPdfAbs);
+    if ($sigPng === null || $sigPng === '') {
+        throw new RuntimeException('Invalid signature image.');
+    }
+    pcvc_staff_contract_embed_signature_in_docx($signedDocxAbs, $sigPng);
+
+    $signedPdfOut = null;
+    if (!pcvc_staff_contract_use_docx_preview()) {
+        $previewPdfAbs = pcvc_staff_contract_abs_path(
+            'uploads/staff_contracts/generated/tmp_sign_' . $adminId . '_' . $stamp . '.pdf'
+        );
+        pcvc_staff_contract_docx_to_pdf($signedDocxAbs, $previewPdfAbs);
+        try {
+            pcvc_staff_contract_stamp_employee_signature_pdf($previewPdfAbs, $signatureDataUrl, $signedPdfAbs);
+            $signedPdfOut = $signedPdfRel;
+        } catch (Throwable $e) {
+            if (is_file($previewPdfAbs)) {
+                @copy($previewPdfAbs, $signedPdfAbs);
+                if (is_file($signedPdfAbs)) {
+                    $signedPdfOut = $signedPdfRel;
+                }
+            }
+            if ($signedPdfOut === null) {
+                throw new RuntimeException('Could not stamp signature on contract PDF: ' . $e->getMessage());
+            }
+        }
+        if (is_file($previewPdfAbs)) {
+            @unlink($previewPdfAbs);
+        }
     }
 
-    return $signedPdfRel;
+    return [
+        'docx' => $signedDocxRel,
+        'pdf' => $signedPdfOut,
+    ];
 }
 
 /**
@@ -817,7 +974,7 @@ function pcvc_staff_contract_regenerate(
             throw new RuntimeException('Stored signature image not found — cannot rebuild signed PDF.');
         }
         $signatureDataUrl = 'data:image/png;base64,' . base64_encode((string) file_get_contents($sigAbs));
-        $signedRel = pcvc_staff_contract_generate_signed(
+        $signed = pcvc_staff_contract_generate_signed(
             $conn,
             $adminId,
             $contract,
@@ -826,33 +983,49 @@ function pcvc_staff_contract_regenerate(
             !empty($contract['signed_at']) ? date('Y-m-d', strtotime((string) $contract['signed_at'])) : date('Y-m-d')
         );
 
-        $oldSigned = trim((string) ($contract['signed_pdf_path'] ?? ''));
-        if ($oldSigned !== '' && $oldSigned !== $signedRel) {
-            $oldAbs = pcvc_staff_contract_abs_path($oldSigned);
+        $oldSignedPdf = trim((string) ($contract['signed_pdf_path'] ?? ''));
+        if ($oldSignedPdf !== '' && $signed['pdf'] !== null && $oldSignedPdf !== $signed['pdf']) {
+            $oldAbs = pcvc_staff_contract_abs_path($oldSignedPdf);
+            if (is_file($oldAbs)) {
+                @unlink($oldAbs);
+            }
+        }
+        $oldSignedDocx = trim((string) ($contract['signed_docx_path'] ?? ''));
+        if ($oldSignedDocx !== '' && $oldSignedDocx !== $signed['docx']) {
+            $oldAbs = pcvc_staff_contract_abs_path($oldSignedDocx);
             if (is_file($oldAbs)) {
                 @unlink($oldAbs);
             }
         }
 
         $contractId = (int) ($contract['id'] ?? 0);
+        $signedPdf = $signed['pdf'] ?? '';
         $stmt = $conn->prepare(
-            'UPDATE employment_contracts SET signed_pdf_path = ?, pdf_path = ? WHERE admin_id = ? AND id = ?'
+            'UPDATE employment_contracts SET signed_docx_path = ?, signed_pdf_path = ?, pdf_path = ? WHERE admin_id = ? AND id = ?'
         );
         if (!$stmt) {
             throw new RuntimeException('Database error');
         }
-        $stmt->bind_param('ssii', $signedRel, $signedRel, $adminId, $contractId);
+        $stmt->bind_param('sssii', $signed['docx'], $signedPdf, $signedPdf, $adminId, $contractId);
         $stmt->execute();
         $stmt->close();
 
+        $message = pcvc_staff_contract_use_docx_preview()
+            ? 'Signed contract Word file regenerated with current staff details.'
+            : 'Signed contract PDF regenerated with current staff details.';
+
         return [
-            'message' => 'Signed contract PDF regenerated with current staff details.',
-            'signed_pdf' => $signedRel,
+            'message' => $message,
+            'signed_pdf' => $signedPdf !== '' ? $signedPdf : null,
+            'signed_docx' => $signed['docx'],
         ];
     }
 
-    $preview = pcvc_staff_contract_generate_preview($conn, $adminId, $contract);
-    $message = 'Contract preview PDF regenerated.';
+    $makePdf = !pcvc_staff_contract_use_docx_preview();
+    $preview = pcvc_staff_contract_generate_preview($conn, $adminId, $contract, null, $makePdf);
+    $message = $makePdf
+        ? 'Contract preview PDF regenerated.'
+        : 'Contract preview Word file regenerated.';
     if (!empty($preview['position_warning'])) {
         $message .= $preview['position_warning'];
     }
