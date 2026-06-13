@@ -94,7 +94,15 @@ function pcvc_staff_contract_use_docx_preview(): bool
  */
 function pcvc_staff_contract_inline_image_xml(string $rid, string $label, int $cx, int $cy): string
 {
-    return '<w:r><w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
+    return '<w:r>' . pcvc_staff_contract_inline_drawing_xml($rid, $label, $cx, $cy) . '</w:r>';
+}
+
+/**
+ * Drawing block only (no w:r wrapper) for merging into an existing run.
+ */
+function pcvc_staff_contract_inline_drawing_xml(string $rid, string $label, int $cx, int $cy): string
+{
+    return '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
         . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
         . '<wp:docPr id="' . (9000 + crc32($label) % 1000) . '" name="' . htmlspecialchars($label, ENT_XML1) . '"/>'
         . '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
@@ -104,7 +112,19 @@ function pcvc_staff_contract_inline_image_xml(string $rid, string $label, int $c
         . '<pic:blipFill><a:blip r:embed="' . $rid . '"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>'
         . '<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="' . $cx . '" cy="' . $cy . '"/></a:xfrm>'
         . '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>'
-        . '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>';
+        . '</pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing>';
+}
+
+/**
+ * Strip a single outer w:r wrapper when embedding into a preserved run prefix.
+ */
+function pcvc_staff_contract_run_inner_content(string $runXml): string
+{
+    if (preg_match('#^<w:r[^>]*>(.*)</w:r>$#s', trim($runXml), $match)) {
+        return $match[1];
+    }
+
+    return $runXml;
 }
 
 /**
@@ -132,11 +152,11 @@ function pcvc_staff_contract_fragmented_placeholder_pattern(string $key): string
 {
     $keyEsc = preg_quote($key, '/');
 
-    return '#<w:t(?:\s[^>]*)?>([^<]*?)\s*\$\{</w:t></w:r>'
+    return '#(<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?)<w:t(?:\s[^>]*)?>([^<]*?)\s*\$\{</w:t><\/w:r>'
         . '(?:<w:proofErr[^>]*\/>)?'
-        . '<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>' . $keyEsc . '</w:t></w:r>'
+        . '<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>' . $keyEsc . '</w:t><\/w:r>'
         . '(?:<w:proofErr[^>]*\/>)?'
-        . '<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>\}</w:t></w:r>#s';
+        . '<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>\}</w:t><\/w:r>#s';
 }
 
 /**
@@ -191,11 +211,12 @@ function pcvc_staff_contract_replace_fragmented_placeholder(
         $absLen = strlen($fragMatch[0][0]);
 
         if ($replacementIsXml) {
-            $insert = $replacement;
+            $inner = pcvc_staff_contract_run_inner_content($replacement);
+            $insert = $fragMatch[1][0] . $inner . '</w:r>';
         } else {
-            $prefix = $fragMatch[1][0];
+            $prefix = $fragMatch[2][0];
             $safe = htmlspecialchars($replacement, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-            $insert = '<w:t xml:space="preserve">' . $prefix . $safe . '</w:t></w:r>';
+            $insert = $fragMatch[1][0] . '<w:t xml:space="preserve">' . $prefix . $safe . '</w:t></w:r>';
         }
 
         $xml = substr($xml, 0, $absStart) . $insert . substr($xml, $absStart + $absLen);
@@ -674,17 +695,17 @@ function pcvc_staff_contract_replace_key_split_placeholder(string $xml, string $
     for ($splitAt = 1; $splitAt < $keyLen; $splitAt++) {
         $part1 = substr($key, 0, $splitAt);
         $part2 = substr($key, $splitAt);
-        $pattern = '#<w:t(?:\s[^>]*)?>\s*\$\{'
+        $pattern = '#(<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?)<w:t(?:\s[^>]*)?>\s*\$\{'
             . preg_quote($part1, '/')
             . '</w:t></w:r>(?:(?!</w:p>).)*<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>'
             . preg_quote($part2, '/')
             . '\}</w:t></w:r>#s';
 
         $prev = '';
-        while ($xml !== $prev && preg_match($pattern, $xml)) {
+        while ($xml !== $prev && preg_match($pattern, $xml, $km, PREG_OFFSET_CAPTURE)) {
             $prev = $xml;
-            $replacement = '<w:t xml:space="preserve"> ' . $safeXml . '</w:t></w:r>';
-            $xml = preg_replace($pattern, $replacement, $xml, 1) ?? $xml;
+            $replacement = $km[1][0] . '<w:t xml:space="preserve"> ' . $safeXml . '</w:t></w:r>';
+            $xml = substr($xml, 0, $km[0][1]) . $replacement . substr($xml, $km[0][1] + strlen($km[0][0]));
         }
     }
 
