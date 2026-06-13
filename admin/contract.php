@@ -82,6 +82,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     }
     .sign-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; }
     .autofill-note { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: .75rem 1rem; font-size: .88rem; }
+    .contract-toolbar { display: flex; justify-content: flex-end; gap: .5rem; margin-bottom: .75rem; }
   </style>
 </head>
 <body>
@@ -110,20 +111,22 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
         <?php endif; ?>
       </div>
     </div>
-    <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
+    <?php if ($useDocxPreview): ?>
+    <div class="contract-toolbar">
+      <button type="button" class="btn btn-outline-primary" id="printContractBtn">
+        <i class="bi bi-printer me-1"></i> Print / Save as PDF
+      </button>
+    </div>
+    <?php endif; ?>
+    <iframe id="contractFrame" class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
       src="<?= $useDocxPreview ? 'contract-docx-viewer.php?type=signed&ts=' . time() : 'view-staff-contract-pdf.php?type=signed#toolbar=1' ?>"></iframe>
-    <div class="mt-3 text-end d-flex gap-2 justify-content-end flex-wrap">
-      <?php if ($useDocxPreview && pcvc_staff_contract_signed_docx_path($contract) !== ''): ?>
-      <a href="download-staff-contract.php?type=signed&format=docx" class="btn btn-outline-primary btn-lg">
-        <i class="bi bi-file-earmark-word me-1"></i> Download Word contract
-      </a>
-      <?php endif; ?>
-      <?php if (!$useDocxPreview || pcvc_staff_contract_signed_path($contract) !== ''): ?>
+    <?php if (!$useDocxPreview && pcvc_staff_contract_signed_path($contract) !== ''): ?>
+    <div class="mt-3 text-end">
       <a href="download-staff-contract.php?type=signed" class="btn btn-primary btn-lg">
         <i class="bi bi-download me-1"></i> Download signed contract
       </a>
-      <?php endif; ?>
     </div>
+    <?php endif; ?>
   </div>
   <?php else: ?>
   <?php if ($previewError !== ''): ?>
@@ -145,19 +148,19 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
       <div class="panel">
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="fw-bold mb-0">Your contract (auto-filled)</h6>
-          <span class="badge text-bg-warning">Signature required</span>
+          <div class="d-flex align-items-center gap-2">
+            <?php if ($useDocxPreview): ?>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="printContractBtn">
+              <i class="bi bi-printer me-1"></i> Print / Save as PDF
+            </button>
+            <?php endif; ?>
+            <span class="badge text-bg-warning">Signature required</span>
+          </div>
         </div>
-        <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
+        <iframe id="contractFrame" class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
           src="<?= $useDocxPreview
             ? 'contract-docx-viewer.php?type=source&ts=' . time()
             : 'view-staff-contract-pdf.php?type=source&ts=' . time() . '#toolbar=1' ?>"></iframe>
-        <?php if ($useDocxPreview): ?>
-        <div class="mt-2 text-end">
-          <a href="download-staff-contract.php?type=source&format=docx" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-file-earmark-word me-1"></i> Download Word copy
-          </a>
-        </div>
-        <?php endif; ?>
       </div>
     </div>
     <div class="col-lg-4">
@@ -186,6 +189,30 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
   </div>
   <?php endif; ?>
 </div>
+
+<?php if ($hasContract && $useDocxPreview): ?>
+<script>
+(function () {
+  const btn = document.getElementById('printContractBtn');
+  const frame = document.getElementById('contractFrame');
+  if (!btn || !frame) {
+    return;
+  }
+  btn.addEventListener('click', function () {
+    try {
+      if (frame.contentWindow && typeof frame.contentWindow.printContract === 'function') {
+        frame.contentWindow.printContract();
+        return;
+      }
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch (e) {
+      alert('Contract is still loading. Please wait a moment and try again.');
+    }
+  });
+})();
+</script>
+<?php endif; ?>
 
 <?php if ($hasContract && !$isSigned): ?>
 <script>

@@ -83,6 +83,29 @@ $docxUrl .= '&ts=' . time();
       max-width: 100%;
       height: auto;
     }
+    @media print {
+      html, body {
+        background: #fff !important;
+        margin: 0;
+        padding: 0;
+      }
+      #status {
+        display: none !important;
+      }
+      #docx-container {
+        padding: 0 !important;
+      }
+      #docx-container .docx-wrapper > section.docx {
+        box-shadow: none !important;
+        margin: 0 auto !important;
+        page-break-after: always;
+        break-after: page;
+      }
+      #docx-container .docx-wrapper > section.docx:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
   </style>
 </head>
 <body>
@@ -135,6 +158,11 @@ $docxUrl .= '&ts=' . time();
         status.textContent = 'Could not load contract: ' + (err.message || 'Unknown error');
         status.style.color = '#b45309';
       });
+
+    window.printContract = function () {
+      window.focus();
+      window.print();
+    };
   })();
   </script>
 </body>

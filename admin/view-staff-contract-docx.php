@@ -46,6 +46,8 @@ if (!is_file($abs)) {
     exit('Word contract file missing');
 }
 
+pcvc_staff_contract_patch_docx_layout($abs);
+
 header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 header('Content-Disposition: inline; filename="staff-contract.docx"');
 header('Content-Length: ' . (string) filesize($abs));

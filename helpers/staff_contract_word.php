@@ -634,6 +634,48 @@ function pcvc_staff_contract_merge_values(
 }
 
 /**
+ * Remove page-break markers inside numbered list items (prevents empty bullet ghosts in preview/print).
+ */
+function pcvc_staff_contract_clean_list_page_breaks_in_xml(string $xml): string
+{
+    return preg_replace_callback(
+        '/<w:p\b[^>]*>.*?<\/w:p>/s',
+        static function (array $m): string {
+            $p = $m[0];
+            if (strpos($p, '<w:numPr>') === false) {
+                return $p;
+            }
+            $p = preg_replace('/<w:lastRenderedPageBreak\s*\/>/', '', $p) ?? $p;
+            $p = preg_replace('/<w:br\s+w:type="page"\s*\/>/', '', $p) ?? $p;
+            return $p;
+        },
+        $xml
+    );
+}
+
+/**
+ * Patch an existing DOCX on disk to remove list page-break artifacts (no full rebuild).
+ */
+function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
+{
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        return;
+    }
+    $xml = (string) $zip->getFromName('word/document.xml');
+    if ($xml === '') {
+        $zip->close();
+        return;
+    }
+    $fixed = pcvc_staff_contract_clean_list_page_breaks_in_xml($xml);
+    if ($fixed !== $xml) {
+        $zip->deleteName('word/document.xml');
+        $zip->addFromString('word/document.xml', $fixed);
+    }
+    $zip->close();
+}
+
+/**
  * Fill text placeholders by editing DOCX XML directly (preserves bullets, stamp, layout).
  *
  * @param array<string, string> $values
@@ -654,6 +696,7 @@ function pcvc_staff_contract_fill_docx_text(string $docxAbs, array $values): voi
             continue;
         }
         $xml = pcvc_staff_contract_apply_placeholder_values($xml, $values, $imageKeys);
+        $xml = pcvc_staff_contract_clean_list_page_breaks_in_xml($xml);
         $zip->deleteName($name);
         $zip->addFromString($name, $xml);
         unset($xml);
