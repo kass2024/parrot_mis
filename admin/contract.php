@@ -32,11 +32,29 @@ $previewError = '';
 $useDocxPreview = pcvc_staff_contract_use_docx_preview();
 
 if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?? '')) !== '') {
-    try {
-        pcvc_staff_contract_generate_preview($conn, $adminId, $contract, null, !$useDocxPreview);
-        $contract = pcvc_staff_contract_for_admin($conn, $adminId);
-    } catch (Throwable $e) {
-        $previewError = $e->getMessage();
+    $filledRel = pcvc_staff_contract_preview_docx_path($contract);
+    $filledAbs = $filledRel !== '' ? pcvc_staff_contract_abs_path($filledRel) : '';
+    $needsPreview = $filledRel === ''
+        || !is_file($filledAbs)
+        || pcvc_staff_contract_docx_is_corrupt($filledAbs);
+    if ($needsPreview) {
+        try {
+            pcvc_staff_contract_generate_preview($conn, $adminId, $contract, null, !$useDocxPreview);
+            $contract = pcvc_staff_contract_for_admin($conn, $adminId);
+        } catch (Throwable $e) {
+            $previewError = $e->getMessage();
+        }
+    }
+} elseif ($hasContract && $isSigned && $useDocxPreview && pcvc_staff_contract_signed_docx_path($contract) !== '') {
+    $signedRel = pcvc_staff_contract_signed_docx_path($contract);
+    $signedAbs = pcvc_staff_contract_abs_path($signedRel);
+    if (!is_file($signedAbs) || pcvc_staff_contract_docx_is_corrupt($signedAbs)) {
+        try {
+            pcvc_staff_contract_regenerate($conn, $adminId, $contract, 'signed');
+            $contract = pcvc_staff_contract_for_admin($conn, $adminId);
+        } catch (Throwable $e) {
+            $previewError = $e->getMessage();
+        }
     }
 }
 ?>

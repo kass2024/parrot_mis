@@ -28,23 +28,11 @@ if (!$contract) {
     exit('Contract not found');
 }
 
-if ($type === 'signed') {
-    $rel = pcvc_staff_contract_signed_docx_path($contract);
-} else {
-    $rel = pcvc_staff_contract_preview_docx_path($contract);
-    if ($rel === '' && trim((string) ($contract['source_docx_path'] ?? '')) !== '') {
-        @set_time_limit(120);
-        try {
-            pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, false);
-            $contract = pcvc_staff_contract_for_admin($conn, $staffId);
-            if ($contract) {
-                $rel = pcvc_staff_contract_preview_docx_path($contract);
-            }
-        } catch (Throwable $e) {
-            http_response_code(503);
-            exit('Contract not ready: ' . $e->getMessage());
-        }
-    }
+try {
+    $rel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, $type);
+} catch (Throwable $e) {
+    http_response_code(503);
+    exit('Contract not ready: ' . $e->getMessage());
 }
 
 if ($rel === '') {

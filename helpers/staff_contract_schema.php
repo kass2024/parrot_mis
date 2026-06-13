@@ -114,7 +114,8 @@ function pcvc_staff_contract_ensure_schema(mysqli $conn): void
 
     foreach ($columns as $name => $definition) {
         if (!isset($existing[$name])) {
-            $conn->query("ALTER TABLE employment_contracts ADD COLUMN {$name} {$definition}");
+            $def = preg_replace('/\s+AFTER\s+[`\w]+/i', '', $definition);
+            $conn->query("ALTER TABLE employment_contracts ADD COLUMN `{$name}` {$def}");
         }
     }
 }
@@ -181,6 +182,32 @@ function pcvc_staff_contract_signed_docx_path(array $row): string
 function pcvc_staff_contract_preview_docx_path(array $row): string
 {
     return trim((string) ($row['filled_docx_path'] ?? ''));
+}
+
+/**
+ * Detect DOCX files truncated by the old signature-embed bug (only last page left).
+ */
+function pcvc_staff_contract_docx_is_corrupt(string $docxAbs): bool
+{
+    if (!is_file($docxAbs)) {
+        return true;
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        return true;
+    }
+    $xml = (string) $zip->getFromName('word/document.xml');
+    $zip->close();
+    if ($xml === '') {
+        return true;
+    }
+    if (strlen($xml) < 50000) {
+        return true;
+    }
+    if (strpos($xml, 'EMPLOYEE PROBATION AGREEMENT') === false) {
+        return true;
+    }
+    return substr_count($xml, '<w:p ') < 100;
 }
 
 function pcvc_staff_contract_abs_path(string $relative): string

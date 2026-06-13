@@ -10,6 +10,8 @@ require_once __DIR__ . '/../helpers/contract_signature_image.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
+pcvc_staff_contract_ensure_schema($conn);
+
 $adminId = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
 if ($adminId <= 0) {
     http_response_code(401);

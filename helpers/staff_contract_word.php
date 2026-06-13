@@ -108,6 +108,24 @@ function pcvc_staff_contract_inline_image_xml(string $rid, string $label, int $c
 }
 
 /**
+ * Find the start of the w:r element that contains a placeholder token.
+ */
+function pcvc_staff_contract_find_word_run_start(string $xml, int $tokenPos): ?int
+{
+    $before = substr($xml, 0, $tokenPos);
+    $best = null;
+    $offset = 0;
+    while (($p = strpos($before, '<w:r', $offset)) !== false) {
+        $next = $before[$p + 4] ?? '';
+        if ($next === '>' || $next === ' ') {
+            $best = $p;
+        }
+        $offset = $p + 4;
+    }
+    return $best;
+}
+
+/**
  * Replace the single w:r run that contains a ${placeholder} token (safe — no cross-document regex).
  */
 function pcvc_staff_contract_replace_placeholder_run_in_xml(string $xml, string $placeholderKey, string $replacementXml): string
@@ -123,10 +141,9 @@ function pcvc_staff_contract_replace_placeholder_run_in_xml(string $xml, string 
         return substr($xml, 0, $pos) . $replacementXml . substr($xml, $pos + strlen($token));
     }
 
-    $before = substr($xml, 0, $pos);
-    $rStart = strrpos($before, '<w:r');
+    $rStart = pcvc_staff_contract_find_word_run_start($xml, $pos);
     $rEnd = strpos($xml, '</w:r>', $pos);
-    if ($rStart === false || $rEnd === false) {
+    if ($rStart === null || $rEnd === false) {
         return str_replace($needle, $replacementXml, $xml);
     }
     $rEnd += strlen('</w:r>');
@@ -905,6 +922,50 @@ function pcvc_staff_contract_admin_row(mysqli $conn, int $adminId): ?array
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     return $row ?: null;
+}
+
+/**
+ * Return a valid filled or signed DOCX path, rebuilding truncated/corrupt files automatically.
+ */
+function pcvc_staff_contract_ensure_valid_docx(
+    mysqli $conn,
+    int $staffId,
+    array $contract,
+    string $type = 'source'
+): string {
+    $type = $type === 'signed' ? 'signed' : 'source';
+    $rel = $type === 'signed'
+        ? pcvc_staff_contract_signed_docx_path($contract)
+        : pcvc_staff_contract_preview_docx_path($contract);
+
+    $needsRebuild = static function (string $pathRel): bool {
+        if ($pathRel === '') {
+            return true;
+        }
+        $abs = pcvc_staff_contract_abs_path($pathRel);
+        return !is_file($abs) || pcvc_staff_contract_docx_is_corrupt($abs);
+    };
+
+    if (!$needsRebuild($rel)) {
+        return $rel;
+    }
+
+    @set_time_limit(120);
+
+    if ($type === 'signed' && ($contract['status'] ?? '') === 'signed') {
+        pcvc_staff_contract_regenerate($conn, $staffId, $contract, 'signed');
+    } else {
+        pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, false);
+    }
+
+    $contract = pcvc_staff_contract_for_admin($conn, $staffId);
+    if (!$contract) {
+        return '';
+    }
+
+    return $type === 'signed'
+        ? pcvc_staff_contract_signed_docx_path($contract)
+        : pcvc_staff_contract_preview_docx_path($contract);
 }
 
 /**
