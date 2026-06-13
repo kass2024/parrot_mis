@@ -1,7 +1,14 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../vendor/autoload.php';
+if (!defined('PHP_OS_FAMILY')) {
+    define('PHP_OS_FAMILY', DIRECTORY_SEPARATOR === '\\' ? 'Windows' : 'Linux');
+}
+
+$pcvcAutoload = __DIR__ . '/../vendor/autoload.php';
+if (is_file($pcvcAutoload)) {
+    require_once $pcvcAutoload;
+}
 require_once __DIR__ . '/staff_contract_schema.php';
 require_once __DIR__ . '/staff_contract_pdf.php';
 require_once __DIR__ . '/contract_signature_image.php';

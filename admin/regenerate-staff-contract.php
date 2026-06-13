@@ -4,16 +4,38 @@ declare(strict_types=1);
 @ini_set('display_errors', '0');
 @set_time_limit(300);
 
+ob_start();
+
+register_shutdown_function(static function (): void {
+    $err = error_get_last();
+    if (!$err || !in_array($err['type'], [E_ERROR, E_PARSE, E_COMPILE_ERROR, E_CORE_ERROR], true)) {
+        return;
+    }
+    if (ob_get_length()) {
+        ob_clean();
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error: ' . $err['message'] . ' (' . basename((string) $err['file']) . ':' . $err['line'] . ')',
+    ]);
+});
+
 session_start();
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/staff_contract_schema.php';
-require_once __DIR__ . '/../helpers/staff_contract_word.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
 function pcvc_regenerate_json_error(string $message, int $code = 500): void
 {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     http_response_code($code);
     echo json_encode(['success' => false, 'message' => $message]);
     exit;
@@ -25,6 +47,18 @@ try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         pcvc_regenerate_json_error('Invalid request', 405);
     }
+
+    $autoload = __DIR__ . '/../vendor/autoload.php';
+    if (!is_file($autoload)) {
+        pcvc_regenerate_json_error('Composer dependencies missing on server. Run composer install in the project root.');
+    }
+    require_once $autoload;
+
+    $wordHelper = __DIR__ . '/../helpers/staff_contract_word.php';
+    if (!is_file($wordHelper)) {
+        pcvc_regenerate_json_error('Contract helper missing on server. Deploy helpers/staff_contract_word.php');
+    }
+    require_once $wordHelper;
 
     if (!class_exists('ZipArchive')) {
         pcvc_regenerate_json_error('PHP Zip extension is required for contract regeneration.');
@@ -60,6 +94,9 @@ try {
         $message .= ' ' . $templateWarning;
     }
 
+    if (ob_get_length()) {
+        ob_clean();
+    }
     echo json_encode([
         'success' => true,
         'message' => $message,

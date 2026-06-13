@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 
 
-require_once __DIR__ . '/../vendor/autoload.php';
+$pcvcPdfAutoload = __DIR__ . '/../vendor/autoload.php';
+if (is_file($pcvcPdfAutoload)) {
+    require_once $pcvcPdfAutoload;
+}
 
 require_once __DIR__ . '/staff_contract_schema.php';
 

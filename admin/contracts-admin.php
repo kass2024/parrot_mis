@@ -253,7 +253,10 @@ $totalStaff = count($staffRows);
           const parsed = JSON.parse(xhr.responseText || '');
           msg = parsed.message || msg;
         } catch (e) {
-          if (xhr.status) {
+          const raw = (xhr.responseText || '').replace(/\s+/g, ' ').trim();
+          if (raw) {
+            msg = raw.substring(0, 220);
+          } else if (xhr.status) {
             msg += ' (HTTP ' + xhr.status + ')';
           }
         }

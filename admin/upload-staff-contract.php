@@ -4,6 +4,26 @@ declare(strict_types=1);
 @ini_set('display_errors', '0');
 @set_time_limit(300);
 
+ob_start();
+
+register_shutdown_function(static function (): void {
+    $err = error_get_last();
+    if (!$err || !in_array($err['type'], [E_ERROR, E_PARSE, E_COMPILE_ERROR, E_CORE_ERROR], true)) {
+        return;
+    }
+    if (ob_get_length()) {
+        ob_clean();
+    }
+    if (!headers_sent()) {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(500);
+    }
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error: ' . $err['message'] . ' (' . basename((string) $err['file']) . ':' . $err['line'] . ')',
+    ]);
+});
+
 session_start();
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/role.php';
@@ -13,6 +33,9 @@ header('Content-Type: application/json; charset=utf-8');
 
 function pcvc_upload_json_error(string $message, int $code = 500): void
 {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     http_response_code($code);
     echo json_encode(['success' => false, 'message' => $message]);
     exit;
@@ -29,8 +52,6 @@ try {
     if (!is_file($autoload)) {
         pcvc_upload_json_error('Composer dependencies missing on server. Run composer install in the project root.');
     }
-    require_once $autoload;
-    require_once __DIR__ . '/../helpers/staff_contract_word.php';
 
     if (!class_exists('ZipArchive')) {
         pcvc_upload_json_error('PHP Zip extension (ext-zip) is required for contract uploads.');
@@ -73,7 +94,11 @@ try {
     }
 
     pcvc_staff_contract_ensure_schema($conn);
-    pcvc_staff_contract_assert_writable_dirs();
+    try {
+        pcvc_staff_contract_assert_writable_dirs();
+    } catch (Throwable $dirError) {
+        pcvc_staff_contract_ensure_dirs();
+    }
 
     $safeName = preg_replace('/[^A-Za-z0-9.\-_]+/', '_', basename((string) $_FILES[$fileKey]['name']));
     $stored = 'staff_' . $staffId . '_' . time() . '_' . $safeName;
@@ -84,6 +109,13 @@ try {
         pcvc_upload_json_error('Could not save uploaded Word contract. Check uploads/staff_contracts folder permissions.');
     }
 
+    $templateWarning = '';
+    require_once $autoload;
+    $wordHelper = __DIR__ . '/../helpers/staff_contract_word.php';
+    if (!is_file($wordHelper)) {
+        pcvc_upload_json_error('Contract helper missing on server. Deploy helpers/staff_contract_word.php');
+    }
+    require_once $wordHelper;
     $templateWarning = pcvc_staff_contract_ensure_rich_template($docxAbs);
 
     $title = trim((string) ($_POST['contract_title'] ?? ''));
@@ -152,11 +184,17 @@ try {
             . ' Use Regenerate PDF after fixing server PDF tools (LibreOffice recommended).';
     }
 
+    if (ob_get_length()) {
+        ob_clean();
+    }
     echo json_encode([
         'success' => true,
         'message' => $message,
         'preview_warning' => $previewWarning,
     ]);
 } catch (Throwable $e) {
+    if (ob_get_length()) {
+        ob_clean();
+    }
     pcvc_upload_json_error($e->getMessage());
 }
