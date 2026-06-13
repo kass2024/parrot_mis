@@ -126,6 +126,86 @@ function pcvc_staff_contract_find_word_run_start(string $xml, int $tokenPos): ?i
 }
 
 /**
+ * Regex for Word placeholders split as: [prefix${] + [key] + [}]
+ */
+function pcvc_staff_contract_fragmented_placeholder_pattern(string $key): string
+{
+    $keyEsc = preg_quote($key, '/');
+
+    return '#<w:t(?:\s[^>]*)?>([^<]*?)\s*\$\{</w:t></w:r>'
+        . '(?:<w:proofErr[^>]*\/>)?'
+        . '<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>' . $keyEsc . '</w:t></w:r>'
+        . '(?:<w:proofErr[^>]*\/>)?'
+        . '<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>\}</w:t></w:r>#s';
+}
+
+/**
+ * Return the w:p paragraph XML containing a byte offset.
+ */
+function pcvc_staff_contract_paragraph_for_offset(string $xml, int $offset): string
+{
+    $start = strrpos(substr($xml, 0, $offset), '<w:p');
+    if ($start === false) {
+        return '';
+    }
+    $end = strpos($xml, '</w:p>', $offset);
+    if ($end === false) {
+        return '';
+    }
+
+    return substr($xml, $start, $end - $start + strlen('</w:p>'));
+}
+
+/**
+ * Replace ${key} when Word split it across runs (prefix${ + key + }).
+ */
+function pcvc_staff_contract_replace_fragmented_placeholder(
+    string $xml,
+    string $key,
+    string $replacement,
+    bool $replacementIsXml = false
+): string {
+    if (strpos($xml, '${' . $key . '}') !== false) {
+        return $xml;
+    }
+
+    $pattern = pcvc_staff_contract_fragmented_placeholder_pattern($key);
+    $keyWt = '/<w:t(?:\s[^>]*)?>' . preg_quote($key, '/') . '<\/w:t>/';
+    $offset = 0;
+
+    while (preg_match($keyWt, $xml, $keyMatch, PREG_OFFSET_CAPTURE, $offset)) {
+        $keyPos = (int) $keyMatch[0][1];
+        $para = pcvc_staff_contract_paragraph_for_offset($xml, $keyPos);
+        if ($para === '' || !preg_match($pattern, $para, $fragMatch, PREG_OFFSET_CAPTURE)) {
+            $offset = $keyPos + 1;
+            continue;
+        }
+
+        $paraStart = strrpos(substr($xml, 0, $keyPos), '<w:p');
+        if ($paraStart === false) {
+            $offset = $keyPos + 1;
+            continue;
+        }
+
+        $absStart = $paraStart + (int) $fragMatch[0][1];
+        $absLen = strlen($fragMatch[0][0]);
+
+        if ($replacementIsXml) {
+            $insert = $replacement;
+        } else {
+            $prefix = $fragMatch[1][0];
+            $safe = htmlspecialchars($replacement, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+            $insert = '<w:t xml:space="preserve">' . $prefix . $safe . '</w:t></w:r>';
+        }
+
+        $xml = substr($xml, 0, $absStart) . $insert . substr($xml, $absStart + $absLen);
+        $offset = $absStart + strlen($insert);
+    }
+
+    return $xml;
+}
+
+/**
  * Replace the single w:r run that contains a ${placeholder} token (safe — no cross-document regex).
  */
 function pcvc_staff_contract_replace_placeholder_run_in_xml(string $xml, string $placeholderKey, string $replacementXml): string
@@ -136,8 +216,9 @@ function pcvc_staff_contract_replace_placeholder_run_in_xml(string $xml, string 
     if ($pos === false) {
         $pos = strpos($xml, $token);
         if ($pos === false) {
-            return $xml;
+            return pcvc_staff_contract_replace_fragmented_placeholder($xml, $placeholderKey, $replacementXml, true);
         }
+
         return substr($xml, 0, $pos) . $replacementXml . substr($xml, $pos + strlen($token));
     }
 
@@ -480,27 +561,19 @@ function pcvc_staff_contract_apply_placeholder_values(string $xml, array $values
     }
 
     if (strpos($xml, '${') !== false) {
-        $splitKeys = [
-            'employer_name', 'employer_position', 'full_name', 'first_name', 'last_name',
-            'employment_start_date', 'probation_end_date', 'national_id', 'company_name',
-            'signing_date', 'position', 'monthly_salary', 'email', 'phone_number',
-        ];
-        foreach ($splitKeys as $key) {
+        foreach (pcvc_staff_contract_placeholder_keys() as $key) {
             if (!isset($values[$key]) || in_array($key, $imageKeys, true)) {
                 continue;
             }
-            if (strpos($xml, '${' . $key . '}') !== false) {
-                continue;
-            }
-            $safe = htmlspecialchars((string) $values[$key], ENT_XML1 | ENT_QUOTES, 'UTF-8');
-            $next = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
-            if ($next !== $xml) {
-                $xml = $next;
-                continue;
-            }
-            $next = pcvc_staff_contract_replace_key_split_placeholder($xml, $key, $safe);
-            if ($next !== $xml) {
-                $xml = $next;
+            $safe = (string) $values[$key];
+            $prev = '';
+            while ($xml !== $prev) {
+                $prev = $xml;
+                $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+                $xml = str_replace('${' . $key . '}', $safeXml, $xml);
+                $xml = pcvc_staff_contract_replace_fragmented_placeholder($xml, $key, $safe);
+                $xml = pcvc_staff_contract_replace_key_split_placeholder($xml, $key, $safe);
+                $xml = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
             }
         }
     }
@@ -518,49 +591,70 @@ function pcvc_staff_contract_replace_split_placeholder(string $xml, string $key,
     }
 
     $keyWt = '/<w:t(?:\s[^>]*)?>' . preg_quote($key, '/') . '<\/w:t>/';
-    if (!preg_match($keyWt, $xml, $match, PREG_OFFSET_CAPTURE)) {
-        return $xml;
+    $offset = 0;
+
+    while (preg_match($keyWt, $xml, $match, PREG_OFFSET_CAPTURE, $offset)) {
+        $keyPos = (int) $match[0][1];
+        $para = pcvc_staff_contract_paragraph_for_offset($xml, $keyPos);
+        if ($para === '') {
+            $offset = $keyPos + 1;
+            continue;
+        }
+
+        $paraStart = strrpos(substr($xml, 0, $keyPos), '<w:p');
+        if ($paraStart === false) {
+            $offset = $keyPos + 1;
+            continue;
+        }
+
+        $before = substr($para, 0, $keyPos - $paraStart);
+        if (strpos($before, '${') === false) {
+            $offset = $keyPos + 1;
+            continue;
+        }
+
+        $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+        $chunk = $para;
+        $chunk = preg_replace(
+            '/<w:t(?:\s[^>]*)?>([^<]*?)\s*\$\{<\/w:t>/',
+            '<w:t xml:space="preserve">$1</w:t>',
+            $chunk,
+            1
+        ) ?? $chunk;
+        $chunk = preg_replace(
+            '/<w:t(?:\s[^>]*)?>\s*\$\{<\/w:t>/',
+            '',
+            $chunk,
+            1
+        ) ?? $chunk;
+        $chunk = preg_replace(
+            $keyWt,
+            '<w:t xml:space="preserve">' . $safeXml . '</w:t>',
+            $chunk,
+            1
+        ) ?? $chunk;
+        $chunk = preg_replace(
+            '/<w:t(?:\s[^>]*)?>\}<\/w:t>/',
+            '',
+            $chunk,
+            1
+        ) ?? $chunk;
+
+        if ($chunk === $para) {
+            $offset = $keyPos + 1;
+            continue;
+        }
+
+        $paraEnd = strpos($xml, '</w:p>', $keyPos);
+        if ($paraEnd === false) {
+            $offset = $keyPos + 1;
+            continue;
+        }
+        $paraEnd += strlen('</w:p>');
+
+        $xml = substr($xml, 0, $paraStart) . $chunk . substr($xml, $paraEnd);
+        $offset = $paraStart + strlen($chunk);
     }
-
-    $keyPos = (int) $match[0][1];
-    $before = substr($xml, max(0, $keyPos - 3000), $keyPos - max(0, $keyPos - 3000));
-    if (strpos($before, '${') === false) {
-        return $xml;
-    }
-
-    $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-
-    // "Name: ${" -> "Name: "
-    $xml = preg_replace(
-        '/<w:t(?:\s[^>]*)?>([^<]*)\$\{<\/w:t>/',
-        '<w:t xml:space="preserve">$1</w:t>',
-        $xml,
-        1
-    ) ?? $xml;
-
-    // Lone "${" run
-    $xml = preg_replace(
-        '/<w:t(?:\s[^>]*)?>\$\{<\/w:t>/',
-        '',
-        $xml,
-        1
-    ) ?? $xml;
-
-    // Key run -> value
-    $xml = preg_replace(
-        $keyWt,
-        '<w:t xml:space="preserve">' . $safeXml . '</w:t>',
-        $xml,
-        1
-    ) ?? $xml;
-
-    // Lone "}" run
-    $xml = preg_replace(
-        '/<w:t(?:\s[^>]*)?>\}<\/w:t>/',
-        '',
-        $xml,
-        1
-    ) ?? $xml;
 
     return $xml;
 }
@@ -576,22 +670,22 @@ function pcvc_staff_contract_replace_key_split_placeholder(string $xml, string $
 
     $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
     $keyLen = strlen($key);
+
     for ($splitAt = 1; $splitAt < $keyLen; $splitAt++) {
         $part1 = substr($key, 0, $splitAt);
         $part2 = substr($key, $splitAt);
-        $pattern = '/<w:t(?:\s[^>]*)?>\s*\$\{'
+        $pattern = '#<w:t(?:\s[^>]*)?>\s*\$\{'
             . preg_quote($part1, '/')
-            . '<\/w:t><\/w:r>(?:<w:proofErr[^>]*\/>)?<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>'
+            . '</w:t></w:r>(?:(?!</w:p>).)*<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>'
             . preg_quote($part2, '/')
-            . '\}<\/w:t><\/w:r>/s';
+            . '\}</w:t></w:r>#s';
 
-        if (!preg_match($pattern, $xml)) {
-            continue;
+        $prev = '';
+        while ($xml !== $prev && preg_match($pattern, $xml)) {
+            $prev = $xml;
+            $replacement = '<w:t xml:space="preserve"> ' . $safeXml . '</w:t></w:r>';
+            $xml = preg_replace($pattern, $replacement, $xml, 1) ?? $xml;
         }
-
-        $replacement = '<w:t xml:space="preserve"> ' . $safeXml . '</w:t></w:r>';
-
-        return preg_replace($pattern, $replacement, $xml, 1) ?? $xml;
     }
 
     return $xml;
