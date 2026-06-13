@@ -496,6 +496,11 @@ function pcvc_staff_contract_apply_placeholder_values(string $xml, array $values
             $next = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
             if ($next !== $xml) {
                 $xml = $next;
+                continue;
+            }
+            $next = pcvc_staff_contract_replace_key_split_placeholder($xml, $key, $safe);
+            if ($next !== $xml) {
+                $xml = $next;
             }
         }
     }
@@ -556,6 +561,49 @@ function pcvc_staff_contract_replace_split_placeholder(string $xml, string $key,
         $xml,
         1
     ) ?? $xml;
+
+    return $xml;
+}
+
+/**
+ * Replace placeholders Word split inside the key (e.g. ${employer_ + name}).
+ */
+function pcvc_staff_contract_replace_key_split_placeholder(string $xml, string $key, string $safe): string
+{
+    if (strpos($xml, '${' . $key . '}') !== false) {
+        return $xml;
+    }
+
+    $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+    $keyLen = strlen($key);
+    for ($splitAt = 1; $splitAt < $keyLen; $splitAt++) {
+        $part1 = substr($key, 0, $splitAt);
+        $part2 = substr($key, $splitAt);
+        $pattern = '/<w:t(?:\s[^>]*)?>\s*\$\{'
+            . preg_quote($part1, '/')
+            . '<\/w:t><\/w:r>(?:<w:proofErr[^>]*\/>)?<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?<w:t(?:\s[^>]*)?>'
+            . preg_quote($part2, '/')
+            . '\}<\/w:t><\/w:r>/s';
+
+        if (!preg_match($pattern, $xml)) {
+            continue;
+        }
+
+        $replacement = '<w:t xml:space="preserve"> ' . $safeXml . '</w:t></w:r>';
+
+        return preg_replace($pattern, $replacement, $xml, 1) ?? $xml;
+    }
+
+    return $xml;
+}
+
+/**
+ * Remove hard/soft page breaks before canonical layout is applied (idempotent merge).
+ */
+function pcvc_staff_contract_strip_canonical_page_breaks(string $xml): string
+{
+    $xml = preg_replace('/<w:p><w:r><w:br w:type="page"\/><\/w:r><\/w:p>/', '', $xml) ?? $xml;
+    $xml = preg_replace('/<w:lastRenderedPageBreak\s*\/>/', '', $xml) ?? $xml;
 
     return $xml;
 }
@@ -684,6 +732,7 @@ function pcvc_staff_contract_inject_page_break_after_anchor(string $xml, string 
  */
 function pcvc_staff_contract_apply_page_break_layout(string $xml): string
 {
+    $xml = pcvc_staff_contract_strip_canonical_page_breaks($xml);
     $xml = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
     $xml = pcvc_staff_contract_inject_page_breaks_in_xml($xml);
     $xml = pcvc_staff_contract_inject_page_break_after_anchor($xml, 'Quality of work');
@@ -705,9 +754,7 @@ function pcvc_staff_contract_paragraph_text(string $paragraphXml): string
  */
 function pcvc_staff_contract_expected_page_count_from_xml(string $xml): int
 {
-    $breaks = substr_count($xml, 'w:type="page"') + substr_count($xml, 'lastRenderedPageBreak');
-
-    return max(1, $breaks + 1);
+    return max(1, substr_count($xml, 'w:type="page"') + 1);
 }
 
 /**

@@ -26,6 +26,7 @@ $sql = "
         c.source_pdf_path,
         c.signed_pdf_path,
         c.pdf_path,
+        c.signed_docx_path,
         c.signed_at,
         c.uploaded_at
     FROM admins a
@@ -34,6 +35,12 @@ $sql = "
 ";
 $staffRows = $conn->query($sql)?->fetch_all(MYSQLI_ASSOC) ?? [];
 $totalStaff = count($staffRows);
+$awaitingCount = 0;
+foreach ($staffRows as $row) {
+    if (pcvc_staff_contract_is_awaiting_signature($row)) {
+        $awaitingCount++;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -85,10 +92,12 @@ $totalStaff = count($staffRows);
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
       <h6 class="fw-bold mb-0">All staff contracts</h6>
       <div class="d-flex align-items-center gap-2 flex-wrap">
-        <button type="button" class="btn btn-outline-primary btn-sm" id="btnNotifyAllPending">
-          <i class="bi bi-envelope"></i> Email all awaiting signature
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btnNotifyAllPending"
+          data-awaiting-count="<?= (int) $awaitingCount ?>"
+          title="Send reminder only to staff with contracts awaiting signature">
+          <i class="bi bi-envelope"></i> Email <?= $awaitingCount ?> awaiting signature
         </button>
-        <span class="text-muted small" id="staffCount"><?= $totalStaff ?> staff</span>
+        <span class="text-muted small" id="staffCount"><?= $awaitingCount ?> awaiting · <?= $totalStaff ?> staff</span>
       </div>
     </div>
 
@@ -127,9 +136,9 @@ $totalStaff = count($staffRows);
         </div>
         <div class="col-lg-2">
           <span class="badge text-bg-<?= $status['badge'] ?>"><?= htmlspecialchars($status['label']) ?></span>
-          <?php if (!empty($row['signed_at'])): ?>
+          <?php if ($status['code'] === 'signed' && !empty($row['signed_at'])): ?>
             <div class="small text-muted mt-1">Signed <?= htmlspecialchars(date('Y-m-d H:i', strtotime((string) $row['signed_at']))) ?></div>
-          <?php elseif (!empty($row['uploaded_at'])): ?>
+          <?php elseif ($status['code'] === 'pending_signature' && !empty($row['uploaded_at'])): ?>
             <div class="small text-muted mt-1">Uploaded <?= htmlspecialchars(date('Y-m-d H:i', strtotime((string) $row['uploaded_at']))) ?></div>
           <?php endif; ?>
         </div>
@@ -233,10 +242,16 @@ $totalStaff = count($staffRows);
   runSearch();
 
   $('#btnNotifyAllPending').on('click', function () {
-    if (!confirm('Send contract reminder emails to all staff with contracts awaiting signature?')) {
+    const awaiting = $(this).data('awaiting-count') || 0;
+    if (awaiting <= 0) {
+      alert('No staff with contracts awaiting signature.');
+      return;
+    }
+    if (!confirm('Send contract reminder emails to ' + awaiting + ' staff awaiting signature?')) {
       return;
     }
     const btn = $(this);
+    const btnLabel = '<i class="bi bi-envelope"></i> Email ' + awaiting + ' awaiting signature';
     btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Sending…');
     $.ajax({
       url: 'notify-staff-contract.php',
@@ -245,10 +260,10 @@ $totalStaff = count($staffRows);
       data: JSON.stringify({ all_pending: true }),
       dataType: 'json'
     }).done(function (data) {
-      btn.prop('disabled', false).html('<i class="bi bi-envelope"></i> Email all awaiting signature');
+      btn.prop('disabled', false).html(btnLabel);
       alert(data?.message || (data?.success ? 'Done' : 'Failed'));
     }).fail(function (xhr) {
-      btn.prop('disabled', false).html('<i class="bi bi-envelope"></i> Email all awaiting signature');
+      btn.prop('disabled', false).html(btnLabel);
       let msg = 'Email failed';
       try { msg = JSON.parse(xhr.responseText).message || msg; } catch (e) {}
       alert(msg);

@@ -156,13 +156,27 @@ function pcvc_staff_contract_row_status(?array $row): array
     if (!pcvc_staff_contract_has_template($row)) {
         return ['code' => 'no_contract', 'label' => 'No contract uploaded', 'badge' => 'secondary'];
     }
-    if (($row['status'] ?? '') === 'signed' && (
-        trim((string) ($row['signed_pdf_path'] ?? $row['pdf_path'] ?? '')) !== ''
-        || trim((string) ($row['signed_docx_path'] ?? '')) !== ''
-    )) {
-        return ['code' => 'signed', 'label' => 'Signed', 'badge' => 'success'];
+
+    $signedDocx = trim((string) ($row['signed_docx_path'] ?? ''));
+    $signedPdf = trim((string) ($row['signed_pdf_path'] ?? $row['pdf_path'] ?? ''));
+    $signedAt = trim((string) ($row['signed_at'] ?? ''));
+    $status = (string) ($row['status'] ?? '');
+
+    if ($status === 'signed' || ($signedAt !== '' && ($signedDocx !== '' || $signedPdf !== ''))) {
+        if ($signedDocx !== '' || $signedPdf !== '' || $signedAt !== '') {
+            return ['code' => 'signed', 'label' => 'Signed', 'badge' => 'success'];
+        }
     }
+
     return ['code' => 'pending_signature', 'label' => 'Awaiting signature', 'badge' => 'warning'];
+}
+
+/**
+ * True when staff has an uploaded contract that still needs e-signature.
+ */
+function pcvc_staff_contract_is_awaiting_signature(?array $row): bool
+{
+    return pcvc_staff_contract_row_status($row)['code'] === 'pending_signature';
 }
 
 function pcvc_staff_contract_signed_path(array $row): string

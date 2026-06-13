@@ -93,7 +93,8 @@ function pcvc_staff_contract_send_awaiting_email(
 function pcvc_staff_contract_notify_staff_pending(mysqli $conn, int $staffId): array
 {
     $stmt = $conn->prepare(
-        'SELECT a.id, a.full_name, a.email, c.contract_title, c.status, c.source_docx_path, c.source_pdf_path
+        'SELECT a.id, a.full_name, a.email, c.contract_title, c.status, c.source_docx_path, c.source_pdf_path,
+                c.signed_at, c.signed_docx_path, c.signed_pdf_path, c.pdf_path
          FROM admins a
          LEFT JOIN employment_contracts c ON c.admin_id = a.id
          WHERE a.id = ? LIMIT 1'
@@ -111,7 +112,7 @@ function pcvc_staff_contract_notify_staff_pending(mysqli $conn, int $staffId): a
     }
 
     $status = pcvc_staff_contract_row_status($row);
-    if ($status['code'] !== 'pending_signature') {
+    if (!pcvc_staff_contract_is_awaiting_signature($row)) {
         return ['ok' => true, 'skipped' => true, 'error' => 'Contract is not awaiting signature'];
     }
 
@@ -140,6 +141,10 @@ function pcvc_staff_contract_notify_all_pending(mysqli $conn): array
         FROM admins a
         INNER JOIN employment_contracts c ON c.admin_id = a.id
         WHERE c.status = 'pending_signature'
+          AND c.signed_at IS NULL
+          AND TRIM(COALESCE(c.signed_docx_path, '')) = ''
+          AND TRIM(COALESCE(c.signed_pdf_path, '')) = ''
+          AND TRIM(COALESCE(c.pdf_path, '')) = ''
           AND (TRIM(COALESCE(c.source_docx_path, '')) <> '' OR TRIM(COALESCE(c.source_pdf_path, '')) <> '')
         ORDER BY a.full_name ASC
     ";
