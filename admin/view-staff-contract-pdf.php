@@ -31,6 +31,21 @@ $rel = $type === 'signed'
     ? pcvc_staff_contract_signed_path($contract)
     : trim((string) ($contract['source_pdf_path'] ?? ''));
 
+if ($rel === '' && $type === 'source' && trim((string) ($contract['source_docx_path'] ?? '')) !== '') {
+    require_once __DIR__ . '/../helpers/staff_contract_word.php';
+    @set_time_limit(300);
+    try {
+        pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, true);
+        $contract = pcvc_staff_contract_for_admin($conn, $staffId);
+        if ($contract) {
+            $rel = trim((string) ($contract['source_pdf_path'] ?? ''));
+        }
+    } catch (Throwable $e) {
+        http_response_code(503);
+        exit('PDF not ready: ' . $e->getMessage());
+    }
+}
+
 if ($rel === '') {
     http_response_code(404);
     exit('PDF not available');

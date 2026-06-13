@@ -48,11 +48,6 @@ try {
         pcvc_upload_json_error('Invalid request', 405);
     }
 
-    $autoload = __DIR__ . '/../vendor/autoload.php';
-    if (!is_file($autoload)) {
-        pcvc_upload_json_error('Composer dependencies missing on server. Run composer install in the project root.');
-    }
-
     if (!class_exists('ZipArchive')) {
         pcvc_upload_json_error('PHP Zip extension (ext-zip) is required for contract uploads.');
     }
@@ -110,7 +105,6 @@ try {
     }
 
     $templateWarning = '';
-    require_once $autoload;
     $wordHelper = __DIR__ . '/../helpers/staff_contract_word.php';
     if (!is_file($wordHelper)) {
         pcvc_upload_json_error('Contract helper missing on server. Deploy helpers/staff_contract_word.php');
@@ -170,18 +164,16 @@ try {
 
     $previewWarning = '';
     try {
-        $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract);
-        $message .= ' Employee details were auto-filled. Staff can review and e-sign when they log in.';
+        $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, false);
+        $message .= ' Employee details were auto-filled into the Word contract.';
+        $message .= ' PDF preview will be created when the staff member opens their contract page (or use Regenerate PDF).';
         if (!empty($preview['position_warning'])) {
             $message .= $preview['position_warning'];
         }
-        if (!empty($preview['pdf_warning'])) {
-            $message .= $preview['pdf_warning'];
-        }
     } catch (Throwable $previewError) {
         $previewWarning = $previewError->getMessage();
-        $message .= ' Template saved, but PDF preview could not be generated: ' . $previewWarning
-            . ' Use Regenerate PDF after fixing server PDF tools (LibreOffice recommended).';
+        $message .= ' Template saved, but auto-fill failed: ' . $previewWarning
+            . ' Use Regenerate PDF after fixing the issue.';
     }
 
     if (ob_get_length()) {

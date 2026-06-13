@@ -5,17 +5,33 @@ if (!defined('PHP_OS_FAMILY')) {
     define('PHP_OS_FAMILY', DIRECTORY_SEPARATOR === '\\' ? 'Windows' : 'Linux');
 }
 
-$pcvcAutoload = __DIR__ . '/../vendor/autoload.php';
-if (is_file($pcvcAutoload)) {
-    require_once $pcvcAutoload;
-}
 require_once __DIR__ . '/staff_contract_schema.php';
-require_once __DIR__ . '/staff_contract_pdf.php';
-require_once __DIR__ . '/contract_signature_image.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 
-use PhpOffice\PhpWord\IOFactory;
-use PhpOffice\PhpWord\Settings;
+function pcvc_staff_contract_require_autoload(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    $pcvcAutoload = __DIR__ . '/../vendor/autoload.php';
+    if (is_file($pcvcAutoload)) {
+        require_once $pcvcAutoload;
+    }
+    $loaded = true;
+}
+
+function pcvc_staff_contract_require_pdf_helpers(): void
+{
+    static $loaded = false;
+    if ($loaded) {
+        return;
+    }
+    pcvc_staff_contract_require_autoload();
+    require_once __DIR__ . '/staff_contract_pdf.php';
+    require_once __DIR__ . '/contract_signature_image.php';
+    $loaded = true;
+}
 
 /**
  * Placeholders supported in Word templates (${placeholder_name}).
@@ -115,7 +131,21 @@ function pcvc_staff_contract_docx_stats(string $docxAbs): array
 }
 
 /**
- * Use the full Parrot template (stamp, drawings) when upload is a stripped export.
+ * Pick the template used for merge (canonical Parrot file when upload lacks stamp/images).
+ */
+function pcvc_staff_contract_resolve_template_path(string $docxAbs): string
+{
+    $stats = pcvc_staff_contract_docx_stats($docxAbs);
+    if ($stats['has_media']) {
+        return $docxAbs;
+    }
+
+    $canonical = pcvc_staff_contract_canonical_template_path();
+    return is_file($canonical) ? $canonical : $docxAbs;
+}
+
+/**
+ * Warn when upload is a stripped export (stamp applied at merge time via canonical template).
  */
 function pcvc_staff_contract_ensure_rich_template(string $docxAbs): string
 {
@@ -131,11 +161,7 @@ function pcvc_staff_contract_ensure_rich_template(string $docxAbs): string
             . 'admin/Parrot Contract for Mutware.docx on the server.';
     }
 
-    if (!copy($canonical, $docxAbs)) {
-        return 'Could not apply the standard contract template with company stamp.';
-    }
-
-    return 'Uploaded file had no company stamp/images. The standard Parrot contract template was applied automatically.';
+    return 'Uploaded file had no company stamp/images. The standard Parrot contract template will be used when filling placeholders.';
 }
 
 /**
@@ -175,20 +201,24 @@ function pcvc_staff_contract_apply_placeholder_values(string $xml, array $values
         $xml = str_replace('${' . $key . '}', $safe, $xml);
     }
 
-    foreach ($values as $key => $value) {
-        if (in_array($key, $imageKeys, true)) {
-            continue;
-        }
-        if (strpos($xml, '${' . $key . '}') !== false) {
-            continue;
-        }
-        $safe = htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-        while (strpos($xml, $key) !== false && strpos($xml, '${' . $key . '}') === false) {
-            $next = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
-            if ($next === $xml) {
-                break;
+    if (strpos($xml, '${') !== false) {
+        $splitKeys = [
+            'employer_name', 'employer_position', 'full_name', 'first_name', 'last_name',
+            'employment_start_date', 'probation_end_date', 'national_id', 'company_name',
+            'signing_date', 'position', 'monthly_salary', 'email', 'phone_number',
+        ];
+        foreach ($splitKeys as $key) {
+            if (!isset($values[$key]) || in_array($key, $imageKeys, true)) {
+                continue;
             }
-            $xml = $next;
+            if (strpos($xml, '${' . $key . '}') !== false) {
+                continue;
+            }
+            $safe = htmlspecialchars((string) $values[$key], ENT_XML1 | ENT_QUOTES, 'UTF-8');
+            $next = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
+            if ($next !== $xml) {
+                $xml = $next;
+            }
         }
     }
 
@@ -338,22 +368,23 @@ function pcvc_staff_contract_fill_docx_text(string $docxAbs, array $values): voi
     }
 
     $imageKeys = ['employer_signature', 'employee_signature'];
+    $parts = ['word/document.xml'];
 
-    for ($i = 0; $i < $zip->numFiles; $i++) {
-        $name = (string) $zip->getNameIndex($i);
-        if (!preg_match('/^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/', $name)) {
-            continue;
-        }
+    foreach ($parts as $name) {
         $xml = $zip->getFromName($name);
-        if ($xml === false) {
+        if ($xml === false || $xml === '') {
             continue;
         }
         $xml = pcvc_staff_contract_apply_placeholder_values($xml, $values, $imageKeys);
         $zip->deleteName($name);
         $zip->addFromString($name, $xml);
+        unset($xml);
     }
 
     $zip->close();
+    if (function_exists('gc_collect_cycles')) {
+        gc_collect_cycles();
+    }
 }
 
 /**
@@ -376,7 +407,8 @@ function pcvc_staff_contract_fill_docx(
         throw new RuntimeException('Could not create generated contract directory.');
     }
 
-    $preparedTemplate = pcvc_staff_contract_prepare_template($templateAbs);
+    $effectiveTemplate = pcvc_staff_contract_resolve_template_path($templateAbs);
+    $preparedTemplate = pcvc_staff_contract_prepare_template($effectiveTemplate);
     try {
         if (!copy($preparedTemplate, $outputDocxAbs)) {
             throw new RuntimeException('Could not copy prepared contract template.');
@@ -412,7 +444,6 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): strin
         ]
         : [
             'pcvc_staff_contract_docx_to_pdf_libreoffice',
-            'pcvc_staff_contract_docx_to_pdf_phpword',
         ];
 
     $docxSize = filesize($docxAbs) ?: 0;
@@ -444,19 +475,21 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): strin
         }
     }
 
-    // Last resort: basic DomPDF (shared hosting without Word/LibreOffice).
-    try {
-        pcvc_staff_contract_docx_to_pdf_phpword($docxAbs, $pdfAbs);
-        if (is_file($pdfAbs) && filesize($pdfAbs) > 400) {
-            return 'pcvc_staff_contract_docx_to_pdf_phpword_fallback';
+    // Last resort on Windows only: basic DomPDF (shared hosting without Word/LibreOffice).
+    if (PHP_OS_FAMILY === 'Windows') {
+        try {
+            pcvc_staff_contract_docx_to_pdf_phpword($docxAbs, $pdfAbs);
+            if (is_file($pdfAbs) && filesize($pdfAbs) > 400) {
+                return 'pcvc_staff_contract_docx_to_pdf_phpword_fallback';
+            }
+        } catch (Throwable $e) {
+            $errors[] = $e->getMessage();
         }
-    } catch (Throwable $e) {
-        $errors[] = $e->getMessage();
     }
 
     throw new RuntimeException(
         'Could not convert contract to PDF. ' .
-        (implode(' | ', $errors) ?: 'Install LibreOffice on the server, or enable PHP exec().')
+        (implode(' | ', $errors) ?: 'Install LibreOffice on the server (recommended for cPanel/Linux), or enable PHP exec().')
     );
 }
 
@@ -531,17 +564,23 @@ function pcvc_staff_contract_docx_to_pdf_msword(string $docxAbs, string $pdfAbs)
 
 function pcvc_staff_contract_docx_to_pdf_phpword(string $docxAbs, string $pdfAbs): void
 {
+    pcvc_staff_contract_require_autoload();
+    if (!class_exists(\PhpOffice\PhpWord\IOFactory::class)) {
+        throw new RuntimeException('PhpWord library missing.');
+    }
+
     $dompdfPath = dirname(__DIR__) . '/vendor/dompdf/dompdf';
     if (!is_dir($dompdfPath)) {
         throw new RuntimeException('DomPDF library missing.');
     }
 
-    Settings::setPdfRendererName(Settings::PDF_RENDERER_DOMPDF);
-    Settings::setPdfRendererPath($dompdfPath);
+    \PhpOffice\PhpWord\Settings::setPdfRendererName(\PhpOffice\PhpWord\Settings::PDF_RENDERER_DOMPDF);
+    \PhpOffice\PhpWord\Settings::setPdfRendererPath($dompdfPath);
 
-    $phpWord = IOFactory::load($docxAbs);
-    $writer = IOFactory::createWriter($phpWord, 'PDF');
+    $phpWord = \PhpOffice\PhpWord\IOFactory::load($docxAbs);
+    $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'PDF');
     $writer->save($pdfAbs);
+    unset($phpWord, $writer);
 }
 
 function pcvc_staff_contract_docx_to_pdf_libreoffice(string $docxAbs, string $pdfAbs): void
@@ -607,15 +646,16 @@ function pcvc_staff_contract_admin_row(mysqli $conn, int $adminId): ?array
 }
 
 /**
- * Generate prefilled DOCX + preview PDF from stored Word template.
+ * Generate prefilled DOCX and optionally preview PDF from stored Word template.
  *
- * @return array{filled_docx:string, preview_pdf:string}
+ * @return array{filled_docx:string, preview_pdf:?string, position_warning?:string, pdf_warning?:string}
  */
 function pcvc_staff_contract_generate_preview(
     mysqli $conn,
     int $adminId,
     array $contract,
-    ?string $signingDate = null
+    ?string $signingDate = null,
+    bool $makePdf = true
 ): array {
     $admin = pcvc_staff_contract_admin_row($conn, $adminId);
     if (!$admin) {
@@ -635,8 +675,15 @@ function pcvc_staff_contract_generate_preview(
     $previewPdfAbs = pcvc_staff_contract_abs_path($previewPdfRel);
 
     pcvc_staff_contract_fill_docx($docxAbs, $filledDocxAbs, $admin, $signingDate, null);
-    $engine = pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
-    $pdfWarning = pcvc_staff_contract_pdf_engine_warning($engine);
+
+    $engine = '';
+    $pdfWarning = '';
+    if ($makePdf) {
+        $engine = pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
+        $pdfWarning = pcvc_staff_contract_pdf_engine_warning($engine);
+    } else {
+        $previewPdfRel = null;
+    }
 
     $positionWarning = '';
     if (pcvc_staff_contract_resolve_position($admin) === '') {
@@ -651,7 +698,7 @@ function pcvc_staff_contract_generate_preview(
             @unlink($oldAbs);
         }
     }
-    if ($oldPreview !== '' && $oldPreview !== $previewPdfRel && ($contract['status'] ?? '') !== 'signed') {
+    if ($makePdf && $oldPreview !== '' && $oldPreview !== $previewPdfRel && ($contract['status'] ?? '') !== 'signed') {
         $oldAbs = pcvc_staff_contract_abs_path($oldPreview);
         if (is_file($oldAbs)) {
             @unlink($oldAbs);
@@ -659,15 +706,27 @@ function pcvc_staff_contract_generate_preview(
     }
 
     $contractId = (int) ($contract['id'] ?? 0);
-    $stmt = $conn->prepare(
-        'UPDATE employment_contracts
-         SET filled_docx_path = ?, source_pdf_path = ?
-         WHERE admin_id = ? AND id = ?'
-    );
-    if (!$stmt) {
-        throw new RuntimeException('Database error');
+    if ($makePdf) {
+        $stmt = $conn->prepare(
+            'UPDATE employment_contracts
+             SET filled_docx_path = ?, source_pdf_path = ?
+             WHERE admin_id = ? AND id = ?'
+        );
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param('ssii', $filledDocxRel, $previewPdfRel, $adminId, $contractId);
+    } else {
+        $stmt = $conn->prepare(
+            'UPDATE employment_contracts
+             SET filled_docx_path = ?
+             WHERE admin_id = ? AND id = ?'
+        );
+        if (!$stmt) {
+            throw new RuntimeException('Database error');
+        }
+        $stmt->bind_param('sii', $filledDocxRel, $adminId, $contractId);
     }
-    $stmt->bind_param('ssii', $filledDocxRel, $previewPdfRel, $adminId, $contractId);
     $stmt->execute();
     $stmt->close();
 
@@ -717,6 +776,7 @@ function pcvc_staff_contract_generate_signed(
         'uploads/staff_contracts/generated/tmp_sign_' . $adminId . '_' . $stamp . '.pdf'
     );
     pcvc_staff_contract_docx_to_pdf($filledDocxAbs, $previewPdfAbs);
+    pcvc_staff_contract_require_pdf_helpers();
     try {
         pcvc_staff_contract_stamp_employee_signature_pdf($previewPdfAbs, $signatureDataUrl, $signedPdfAbs);
     } catch (Throwable $e) {
