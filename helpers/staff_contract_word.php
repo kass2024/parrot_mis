@@ -108,6 +108,33 @@ function pcvc_staff_contract_inline_image_xml(string $rid, string $label, int $c
 }
 
 /**
+ * Replace the single w:r run that contains a ${placeholder} token (safe — no cross-document regex).
+ */
+function pcvc_staff_contract_replace_placeholder_run_in_xml(string $xml, string $placeholderKey, string $replacementXml): string
+{
+    $token = '${' . $placeholderKey . '}';
+    $needle = '<w:t>' . $token . '</w:t>';
+    $pos = strpos($xml, $needle);
+    if ($pos === false) {
+        $pos = strpos($xml, $token);
+        if ($pos === false) {
+            return $xml;
+        }
+        return substr($xml, 0, $pos) . $replacementXml . substr($xml, $pos + strlen($token));
+    }
+
+    $before = substr($xml, 0, $pos);
+    $rStart = strrpos($before, '<w:r');
+    $rEnd = strpos($xml, '</w:r>', $pos);
+    if ($rStart === false || $rEnd === false) {
+        return str_replace($needle, $replacementXml, $xml);
+    }
+    $rEnd += strlen('</w:r>');
+
+    return substr($xml, 0, $rStart) . $replacementXml . substr($xml, $rEnd);
+}
+
+/**
  * Replace ${placeholder_key} in document.xml with an embedded PNG image.
  */
 function pcvc_staff_contract_embed_image_at_placeholder(
@@ -165,24 +192,13 @@ function pcvc_staff_contract_embed_image_at_placeholder(
         throw new RuntimeException('Contract document body missing.');
     }
 
-    $token = '${' . $placeholderKey . '}';
-    $drawing = pcvc_staff_contract_inline_image_xml($newRid, ucfirst(str_replace('_', ' ', $placeholderKey)), $widthEmu, $heightEmu);
-
-    $patterns = [
-        '/<w:r[^>]*>\s*<w:rPr>.*?<\/w:rPr>\s*<w:t>\$\{' . preg_quote($placeholderKey, '/') . '\}<\/w:t>\s*<\/w:r>/s',
-        '/<w:r[^>]*>\s*<w:t>\$\{' . preg_quote($placeholderKey, '/') . '\}<\/w:t>\s*<\/w:r>/s',
-    ];
-    $updated = $xml;
-    foreach ($patterns as $pattern) {
-        $next = preg_replace($pattern, $drawing, $updated, 1);
-        if (is_string($next) && $next !== $updated) {
-            $updated = $next;
-            break;
-        }
-    }
-    if ($updated === $xml) {
-        $updated = str_replace('<w:t>' . $token . '</w:t>', $drawing, $xml);
-    }
+    $drawing = pcvc_staff_contract_inline_image_xml(
+        $newRid,
+        ucfirst(str_replace('_', ' ', $placeholderKey)),
+        $widthEmu,
+        $heightEmu
+    );
+    $updated = pcvc_staff_contract_replace_placeholder_run_in_xml($xml, $placeholderKey, $drawing);
 
     $zip->deleteName('word/document.xml');
     $zip->addFromString('word/document.xml', $updated);
@@ -203,8 +219,8 @@ function pcvc_staff_contract_clear_text_placeholder(string $docxAbs, string $pla
         $zip->close();
         return;
     }
-    $token = '${' . $placeholderKey . '}';
-    $updated = str_replace('<w:t>' . $token . '</w:t>', '<w:t xml:space="preserve"> </w:t>', $xml);
+    $blank = '<w:r><w:t xml:space="preserve"> </w:t></w:r>';
+    $updated = pcvc_staff_contract_replace_placeholder_run_in_xml($xml, $placeholderKey, $blank);
     if ($updated !== $xml) {
         $zip->deleteName('word/document.xml');
         $zip->addFromString('word/document.xml', $updated);

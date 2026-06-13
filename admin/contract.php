@@ -57,7 +57,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     }
     .panel { background: #fff; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.06); padding: 1.25rem; }
     .pdf-frame { width: 100%; min-height: 70vh; border: 1px solid #dbe3ef; border-radius: 10px; }
-    .docx-frame { width: 100%; min-height: 70vh; border: 1px solid #dbe3ef; border-radius: 10px; background: #e8edf3; }
+    .docx-frame { width: 100%; min-height: 85vh; height: 85vh; border: 1px solid #dbe3ef; border-radius: 10px; background: #e8edf3; }
     #signaturePad {
       width: 100%; height: 180px; border: 2px dashed #94a3b8; border-radius: 10px;
       background: #fff; touch-action: none; cursor: crosshair;
@@ -92,7 +92,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
         <?php endif; ?>
       </div>
     </div>
-    <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>"
+    <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
       src="<?= $useDocxPreview ? 'contract-docx-viewer.php?type=signed&ts=' . time() : 'view-staff-contract-pdf.php?type=signed#toolbar=1' ?>"></iframe>
     <div class="mt-3 text-end d-flex gap-2 justify-content-end flex-wrap">
       <?php if ($useDocxPreview && pcvc_staff_contract_signed_docx_path($contract) !== ''): ?>
@@ -129,7 +129,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
           <h6 class="fw-bold mb-0">Your contract (auto-filled)</h6>
           <span class="badge text-bg-warning">Signature required</span>
         </div>
-        <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>"
+        <iframe class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
           src="<?= $useDocxPreview
             ? 'contract-docx-viewer.php?type=source&ts=' . time()
             : 'view-staff-contract-pdf.php?type=source&ts=' . time() . '#toolbar=1' ?>"></iframe>
