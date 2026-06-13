@@ -107,3 +107,47 @@ function app_admission_mailer(): PHPMailer
     return app_mailer('Parrot Canada Visa Consultant');
 }
 
+/**
+ * Staff contract notifications — uses STAFF_CONTRACT_SMTP_* (.env) on same host/port as finance SMTP.
+ */
+function pcvc_staff_contract_smtp_mailer(?string $fromNameOverride = null): PHPMailer
+{
+    xander_load_env_file();
+
+    $host = xander_env_get('SMTP_HOST') ?: 'visaconsultantcanada.com';
+    $portStr = xander_env_get('SMTP_PORT');
+    $port = $portStr !== '' ? (int) $portStr : 465;
+
+    $username = xander_env_get('STAFF_CONTRACT_SMTP_USERNAME');
+    if ($username === '') {
+        $username = 'infos@visaconsultantcanada.com';
+    }
+    $password = xander_env_get('STAFF_CONTRACT_SMTP_PASSWORD');
+    if ($password === '') {
+        $password = xander_env_get_from_dotenv_file('STAFF_CONTRACT_SMTP_PASSWORD');
+    }
+
+    $fromEmail = xander_env_get('STAFF_CONTRACT_SMTP_FROM_EMAIL') ?: $username;
+    $fromName = $fromNameOverride
+        ?? (xander_env_get('STAFF_CONTRACT_SMTP_FROM_NAME') ?: 'Parrot Canada Visa Consultant');
+    $fromName = trim($fromName, " \t\n\r\0\x0B\"'");
+
+    $mail = new PHPMailer(true);
+    $mail->isSMTP();
+    $mail->Host = $host;
+    $mail->SMTPAuth = true;
+    $mail->Username = $username;
+    $mail->Password = $password;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
+    $mail->Port = $port > 0 ? $port : 465;
+    $mail->CharSet = 'UTF-8';
+    $mail->Timeout = 30;
+    $mail->SMTPDebug = SMTP::DEBUG_OFF;
+    $mail->isHTML(true);
+    $mail->setFrom($fromEmail, $fromName);
+    $mail->XMailer = 'Parrot-MIS-StaffContract';
+    pcvc_smtp_apply_deliverability($mail, $fromEmail);
+
+    return $mail;
+}
+

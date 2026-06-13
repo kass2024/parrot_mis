@@ -57,7 +57,7 @@ try {
         pcvc_upload_json_error('Missing staff member', 400);
     }
 
-    $stmt = $conn->prepare('SELECT id, full_name, role FROM admins WHERE id = ? LIMIT 1');
+    $stmt = $conn->prepare('SELECT id, full_name, role, email FROM admins WHERE id = ? LIMIT 1');
     if (!$stmt) {
         pcvc_upload_json_error('Database error');
     }
@@ -179,9 +179,23 @@ try {
     if (ob_get_length()) {
         ob_clean();
     }
+
+    $emailNote = '';
+    try {
+        require_once __DIR__ . '/../helpers/staff_contract_notify.php';
+        $notify = pcvc_staff_contract_notify_staff_pending($conn, $staffId);
+        if (!empty($notify['ok']) && empty($notify['skipped'])) {
+            $emailNote = ' Reminder email sent to ' . ($notify['email'] ?? 'staff') . '.';
+        } elseif (empty($notify['ok'])) {
+            $emailNote = ' Email reminder failed: ' . ($notify['error'] ?? 'unknown error') . '.';
+        }
+    } catch (Throwable $notifyError) {
+        $emailNote = ' Email reminder failed: ' . $notifyError->getMessage() . '.';
+    }
+
     echo json_encode([
         'success' => true,
-        'message' => $message,
+        'message' => $message . $emailNote,
         'preview_warning' => $previewWarning,
     ]);
 } catch (Throwable $e) {

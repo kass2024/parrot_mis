@@ -84,7 +84,12 @@ $totalStaff = count($staffRows);
   <div class="card-panel">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
       <h6 class="fw-bold mb-0">All staff contracts</h6>
-      <span class="text-muted small" id="staffCount"><?= $totalStaff ?> staff</span>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <button type="button" class="btn btn-outline-primary btn-sm" id="btnNotifyAllPending">
+          <i class="bi bi-envelope"></i> Email all awaiting signature
+        </button>
+        <span class="text-muted small" id="staffCount"><?= $totalStaff ?> staff</span>
+      </div>
     </div>
 
     <div class="search-wrap mb-3">
@@ -162,6 +167,13 @@ $totalStaff = count($staffRows);
               <i class="bi bi-trash"></i> Delete
             </button>
           <?php endif; ?>
+          <?php if ($status['code'] === 'pending_signature' && $hasTemplate): ?>
+            <button type="button" class="btn btn-outline-info btn-sm mb-1 btn-notify-contract"
+              data-staff-id="<?= $staffId ?>"
+              data-staff-name="<?= htmlspecialchars((string) $row['full_name'], ENT_QUOTES) ?>">
+              <i class="bi bi-envelope"></i> Email reminder
+            </button>
+          <?php endif; ?>
           <?php if ($status['code'] === 'signed'): ?>
             <button type="button" class="btn btn-outline-warning btn-sm mb-1 btn-regenerate-contract"
               data-staff-id="<?= $staffId ?>"
@@ -219,6 +231,54 @@ $totalStaff = count($staffRows);
     timer = setTimeout(runSearch, 120);
   });
   runSearch();
+
+  $('#btnNotifyAllPending').on('click', function () {
+    if (!confirm('Send contract reminder emails to all staff with contracts awaiting signature?')) {
+      return;
+    }
+    const btn = $(this);
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span> Sending…');
+    $.ajax({
+      url: 'notify-staff-contract.php',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ all_pending: true }),
+      dataType: 'json'
+    }).done(function (data) {
+      btn.prop('disabled', false).html('<i class="bi bi-envelope"></i> Email all awaiting signature');
+      alert(data?.message || (data?.success ? 'Done' : 'Failed'));
+    }).fail(function (xhr) {
+      btn.prop('disabled', false).html('<i class="bi bi-envelope"></i> Email all awaiting signature');
+      let msg = 'Email failed';
+      try { msg = JSON.parse(xhr.responseText).message || msg; } catch (e) {}
+      alert(msg);
+    });
+  });
+
+  $('.btn-notify-contract').on('click', function () {
+    const staffId = $(this).data('staff-id');
+    const staffName = $(this).data('staff-name') || 'this staff member';
+    if (!confirm('Send contract reminder email to ' + staffName + '?')) {
+      return;
+    }
+    const btn = $(this);
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
+    $.ajax({
+      url: 'notify-staff-contract.php',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({ staff_id: staffId }),
+      dataType: 'json'
+    }).done(function (data) {
+      btn.prop('disabled', false).html('<i class="bi bi-envelope"></i> Email reminder');
+      alert(data?.message || (data?.success ? 'Sent' : 'Failed'));
+    }).fail(function (xhr) {
+      btn.prop('disabled', false).html('<i class="bi bi-envelope"></i> Email reminder');
+      let msg = 'Email failed';
+      try { msg = JSON.parse(xhr.responseText).message || msg; } catch (e) {}
+      alert(msg);
+    });
+  });
 
   $('.btn-upload').on('click', function () {
     const staffId = $(this).data('staff-id');
