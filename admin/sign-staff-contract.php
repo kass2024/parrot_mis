@@ -130,7 +130,8 @@ try {
     echo json_encode([
         'success' => true,
         'message' => 'Contract signed successfully. You can download your signed copy now.',
-        'download_url' => 'download-staff-contract.php?type=signed',
+        'download_url' => 'download-staff-contract.php?type=signed'
+            . (pcvc_staff_contract_use_docx_preview() ? '&format=docx' : ''),
     ]);
 } catch (Throwable $e) {
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);

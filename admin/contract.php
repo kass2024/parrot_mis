@@ -45,10 +45,10 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
             $previewError = $e->getMessage();
         }
     }
-} elseif ($hasContract && $isSigned && $useDocxPreview && pcvc_staff_contract_signed_docx_path($contract) !== '') {
+} elseif ($hasContract && $isSigned && $useDocxPreview) {
     $signedRel = pcvc_staff_contract_signed_docx_path($contract);
-    $signedAbs = pcvc_staff_contract_abs_path($signedRel);
-    if (!is_file($signedAbs) || pcvc_staff_contract_docx_is_corrupt($signedAbs)) {
+    $signedAbs = $signedRel !== '' ? pcvc_staff_contract_abs_path($signedRel) : '';
+    if ($signedRel === '' || !is_file($signedAbs) || pcvc_staff_contract_docx_is_corrupt($signedAbs)) {
         try {
             pcvc_staff_contract_regenerate($conn, $adminId, $contract, 'signed');
             $contract = pcvc_staff_contract_for_admin($conn, $adminId);
@@ -120,13 +120,12 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     <?php endif; ?>
     <iframe id="contractFrame" class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
       src="<?= $useDocxPreview ? 'contract-docx-viewer.php?type=signed&ts=' . time() : 'view-staff-contract-pdf.php?type=signed#toolbar=1' ?>"></iframe>
-    <?php if (!$useDocxPreview && pcvc_staff_contract_signed_path($contract) !== ''): ?>
     <div class="mt-3 text-end">
-      <a href="download-staff-contract.php?type=signed" class="btn btn-primary btn-lg">
+      <a href="download-staff-contract.php?type=signed<?= $useDocxPreview ? '&format=docx' : '' ?>" target="_blank"
+        class="btn btn-primary btn-lg">
         <i class="bi bi-download me-1"></i> Download signed contract
       </a>
     </div>
-    <?php endif; ?>
   </div>
   <?php else: ?>
   <?php if ($previewError !== ''): ?>

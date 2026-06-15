@@ -1336,6 +1336,71 @@ function pcvc_staff_contract_admin_row(mysqli $conn, int $adminId): ?array
 }
 
 /**
+ * Resolve a downloadable contract file (rebuilds missing signed/filled DOCX when needed).
+ *
+ * @return array{rel:string, mime:string, ext:string}
+ */
+function pcvc_staff_contract_resolve_download(
+    mysqli $conn,
+    int $staffId,
+    array $contract,
+    string $type,
+    string $format
+): array {
+    $type = $type === 'source' ? 'source' : 'signed';
+    $format = $format === 'docx' ? 'docx' : 'pdf';
+    $useDocxPreview = pcvc_staff_contract_use_docx_preview();
+
+    if ($type === 'signed' && $format === 'pdf' && $useDocxPreview) {
+        $format = 'docx';
+    }
+
+    if ($format === 'docx') {
+        $mime = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        $ext = 'docx';
+        try {
+            $rel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, $type);
+        } catch (Throwable $e) {
+            throw new RuntimeException('Contract not ready: ' . $e->getMessage(), 0, $e);
+        }
+        if ($rel === '') {
+            throw new RuntimeException('Word contract not available');
+        }
+        return ['rel' => $rel, 'mime' => $mime, 'ext' => $ext];
+    }
+
+    $rel = $type === 'signed'
+        ? pcvc_staff_contract_signed_path($contract)
+        : trim((string) ($contract['source_pdf_path'] ?? ''));
+
+    if ($rel === '' && $type === 'signed') {
+        try {
+            $docxRel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, 'signed');
+        } catch (Throwable $e) {
+            throw new RuntimeException('Signed contract not available: ' . $e->getMessage(), 0, $e);
+        }
+        if ($docxRel !== '') {
+            return [
+                'rel' => $docxRel,
+                'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'ext' => 'docx',
+            ];
+        }
+    }
+
+    if ($rel === '') {
+        throw new RuntimeException('File not available');
+    }
+
+    $abs = pcvc_staff_contract_abs_path($rel);
+    if (!is_file($abs)) {
+        throw new RuntimeException('File missing on server');
+    }
+
+    return ['rel' => $rel, 'mime' => 'application/pdf', 'ext' => 'pdf'];
+}
+
+/**
  * Return a valid filled or signed DOCX path, rebuilding truncated/corrupt files automatically.
  */
 function pcvc_staff_contract_ensure_valid_docx(
@@ -1363,7 +1428,7 @@ function pcvc_staff_contract_ensure_valid_docx(
 
     @set_time_limit(120);
 
-    if ($type === 'signed' && ($contract['status'] ?? '') === 'signed') {
+    if ($type === 'signed' && pcvc_staff_contract_row_status($contract)['code'] === 'signed') {
         pcvc_staff_contract_regenerate($conn, $staffId, $contract, 'signed');
     } else {
         pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, false);
