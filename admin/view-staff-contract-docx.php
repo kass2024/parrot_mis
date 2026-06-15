@@ -28,6 +28,10 @@ if (!$contract) {
     exit('Contract not found');
 }
 
+if ($type === 'source' && pcvc_staff_contract_row_status($contract)['code'] === 'signed') {
+    $type = 'signed';
+}
+
 try {
     $rel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, $type);
 } catch (Throwable $e) {

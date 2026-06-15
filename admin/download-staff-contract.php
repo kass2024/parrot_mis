@@ -55,6 +55,10 @@ if (!is_file($abs)) {
     exit('File missing');
 }
 
+if ($resolved['ext'] === 'docx') {
+    pcvc_staff_contract_finalize_docx_on_disk($abs);
+}
+
 $safe = preg_replace('/[^\w\- ]+/', '_', trim((string) $fullName));
 if ($safe === '') {
     $safe = 'staff_contract';

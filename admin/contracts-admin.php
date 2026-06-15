@@ -159,13 +159,17 @@ foreach ($staffRows as $row) {
             <i class="bi bi-cloud-upload"></i> Upload Word
           </button>
           <?php if ($hasTemplate): ?>
+            <?php if ($status['code'] !== 'signed'): ?>
             <a class="btn btn-outline-primary btn-sm mb-1" target="_blank"
               href="<?= $useDocxPreview
                 ? 'contract-docx-viewer.php?staff_id=' . $staffId . '&type=source&ts=' . time()
-                : 'view-staff-contract-pdf.php?staff_id=' . $staffId . '&type=source&ts=' . time() ?>">View filled <?= $useDocxPreview ? 'Word' : 'PDF' ?></a>
+                : 'view-staff-contract-pdf.php?staff_id=' . $staffId . '&type=source&ts=' . time() ?>"
+              title="Preview before staff signs (no employee signature)">View filled <?= $useDocxPreview ? 'Word' : 'PDF' ?></a>
+            <?php endif; ?>
             <?php if ($status['code'] === 'signed' && $useDocxPreview): ?>
             <a class="btn btn-outline-success btn-sm mb-1" target="_blank"
-              href="contract-docx-viewer.php?staff_id=<?= $staffId ?>&type=signed&ts=<?= time() ?>">View signed Word</a>
+              href="contract-docx-viewer.php?staff_id=<?= $staffId ?>&type=signed&ts=<?= time() ?>"
+              title="Full signed contract with employee signature">View signed Word</a>
             <?php endif; ?>
             <button type="button" class="btn btn-outline-secondary btn-sm mb-1 btn-regenerate-contract"
               data-staff-id="<?= $staffId ?>"

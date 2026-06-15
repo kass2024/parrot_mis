@@ -23,6 +23,9 @@ $expectedPages = 9;
 
 $contract = pcvc_staff_contract_for_admin($conn, $staffId);
 if ($contract) {
+    if ($type === 'source' && pcvc_staff_contract_row_status($contract)['code'] === 'signed') {
+        $type = 'signed';
+    }
     try {
         $rel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, $type);
         if ($rel !== '') {

@@ -966,6 +966,103 @@ function pcvc_staff_contract_inject_page_break_after_anchor(string $xml, string 
 }
 
 /**
+ * True when a paragraph contains only a hard page break (optional pPr), no visible text.
+ */
+function pcvc_staff_contract_is_break_only_paragraph(string $paragraphXml): bool
+{
+    if (strpos($paragraphXml, 'w:type="page"') === false) {
+        return false;
+    }
+    if (pcvc_staff_contract_paragraph_text($paragraphXml) !== '') {
+        return false;
+    }
+
+    $body = preg_replace('/<w:pPr\b[^>]*>.*?<\/w:pPr>/s', '', $paragraphXml) ?? $paragraphXml;
+    $body = preg_replace('/^<w:p\b[^>]*>/', '', $body) ?? $body;
+    $body = preg_replace('/<\/w:p>$/', '', $body) ?? $body;
+
+    return (bool) preg_match(
+        '/^(?:\s*<w:r[^>]*>\s*(?:<w:lastRenderedPageBreak\s*\/>)?\s*<w:br\s+w:type="page"\s*\/>\s*<\/w:r>\s*)+$/s',
+        trim($body)
+    );
+}
+
+/**
+ * Move standalone page-break paragraphs onto the end of the previous paragraph.
+ * Word no longer inserts a blank page; docx-preview still sees w:type="page".
+ */
+function pcvc_staff_contract_compact_page_break_paragraphs(string $xml): string
+{
+    $prev = '';
+    while ($prev !== $xml) {
+        $prev = $xml;
+        if (!preg_match_all('/<w:p\b[^>]*>.*?<\/w:p>/s', $xml, $matches, PREG_OFFSET_CAPTURE)) {
+            break;
+        }
+
+        $merged = false;
+        foreach ($matches[0] as $paragraph) {
+            $paraXml = $paragraph[0];
+            $offset = $paragraph[1];
+            if (!pcvc_staff_contract_is_break_only_paragraph($paraXml)) {
+                continue;
+            }
+
+            $prevClose = strrpos(substr($xml, 0, $offset), '</w:p>');
+            if ($prevClose === false) {
+                continue;
+            }
+
+            $brRun = '<w:r><w:br w:type="page"/></w:r>';
+            $xml = substr($xml, 0, $prevClose)
+                . $brRun
+                . substr($xml, $prevClose, $offset - $prevClose)
+                . substr($xml, $offset + strlen($paraXml));
+            $merged = true;
+            break;
+        }
+
+        if (!$merged) {
+            break;
+        }
+    }
+
+    return $xml;
+}
+
+/**
+ * Finalize document.xml for filled/signed DOCX (layout + compact breaks).
+ */
+function pcvc_staff_contract_finalize_docx_xml(string $xml): string
+{
+    $xml = pcvc_staff_contract_apply_page_break_layout($xml);
+
+    return pcvc_staff_contract_compact_page_break_paragraphs($xml);
+}
+
+/**
+ * Patch an on-disk DOCX so Word download/preview matches the uploaded template pages.
+ */
+function pcvc_staff_contract_finalize_docx_on_disk(string $docxAbs): void
+{
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        return;
+    }
+    $xml = (string) $zip->getFromName('word/document.xml');
+    if ($xml === '') {
+        $zip->close();
+        return;
+    }
+    $fixed = pcvc_staff_contract_finalize_docx_xml($xml);
+    if ($fixed !== $xml) {
+        $zip->deleteName('word/document.xml');
+        $zip->addFromString('word/document.xml', $fixed);
+    }
+    $zip->close();
+}
+
+/**
  * Apply canonical page-break layout from Parrot Contract for Mutware.docx.
  *
  * Preserves the uploaded template's hard page breaks (nine pages in docx-preview).
@@ -1097,30 +1194,7 @@ function pcvc_staff_contract_clean_list_page_breaks_in_xml(string $xml): string
  */
 function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
 {
-    $zip = new ZipArchive();
-    if ($zip->open($docxAbs) !== true) {
-        return;
-    }
-    $xml = (string) $zip->getFromName('word/document.xml');
-    if ($xml === '') {
-        $zip->close();
-        return;
-    }
-
-    $needsFix = strpos($xml, 'lastRenderedPageBreak') !== false
-        || strpos($xml, 'w:pageBreakBefore') !== false
-        || substr_count($xml, 'w:type="page"') < pcvc_staff_contract_canonical_hard_page_break_count();
-    if (!$needsFix) {
-        $zip->close();
-        return;
-    }
-
-    $fixed = pcvc_staff_contract_apply_page_break_layout($xml);
-    if ($fixed !== $xml) {
-        $zip->deleteName('word/document.xml');
-        $zip->addFromString('word/document.xml', $fixed);
-    }
-    $zip->close();
+    pcvc_staff_contract_finalize_docx_on_disk($docxAbs);
 }
 
 /**
@@ -1144,7 +1218,7 @@ function pcvc_staff_contract_fill_docx_text(string $docxAbs, array $values): voi
             continue;
         }
         $xml = pcvc_staff_contract_apply_placeholder_values($xml, $values, $imageKeys);
-        $xml = pcvc_staff_contract_apply_page_break_layout($xml);
+        $xml = pcvc_staff_contract_finalize_docx_xml($xml);
         $zip->deleteName($name);
         $zip->addFromString($name, $xml);
         unset($xml);
@@ -1490,6 +1564,9 @@ function pcvc_staff_contract_ensure_valid_docx(
     string $type = 'source'
 ): string {
     $type = $type === 'signed' ? 'signed' : 'source';
+    if ($type === 'source' && pcvc_staff_contract_row_status($contract)['code'] === 'signed') {
+        $type = 'signed';
+    }
     $rel = $type === 'signed'
         ? pcvc_staff_contract_signed_docx_path($contract)
         : pcvc_staff_contract_preview_docx_path($contract);
