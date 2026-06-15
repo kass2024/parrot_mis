@@ -211,7 +211,7 @@ $docxUrl .= '&ts=' . time();
           ignoreHeight: false,
           ignoreFonts: false,
           breakPages: true,
-          ignoreLastRenderedPageBreak: false,
+          ignoreLastRenderedPageBreak: true,
           renderHeaders: false,
           renderFooters: false,
           renderFootnotes: true,
