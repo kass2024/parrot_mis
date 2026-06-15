@@ -324,7 +324,7 @@ foreach ($staffRows as $row) {
       btn.prop('disabled', false).html('<i class="bi bi-cloud-upload"></i> Upload Word');
       let msg = 'Upload failed';
       if (textStatus === 'timeout') {
-        msg = 'Upload timed out while generating the PDF preview. The server may need LibreOffice or a higher PHP time limit.';
+        msg = 'Upload timed out. Try again — if it keeps failing, ask hosting to raise PHP max_execution_time.';
       } else if (xhr.status === 404) {
         msg = 'Upload endpoint not found. Deploy admin/upload-staff-contract.php to the server.';
       } else {
@@ -348,8 +348,8 @@ foreach ($staffRows as $row) {
     const staffId = $(this).data('staff-id');
     const mode = $(this).data('mode') || 'preview';
     const btn = $(this);
-    const label = mode === 'signed' ? 'Regenerate signed' : 'Regenerate PDF';
-    if (!confirm('Rebuild the ' + (mode === 'signed' ? 'signed ' : '') + 'contract PDF for this staff member using current profile data?')) {
+    const label = mode === 'signed' ? 'Regenerate signed' : 'Regenerate Word';
+    if (!confirm('Rebuild the ' + (mode === 'signed' ? 'signed ' : 'filled ') + 'contract for this staff member using current profile data?')) {
       return;
     }
     btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm"></span>');
@@ -374,7 +374,7 @@ foreach ($staffRows as $row) {
       btn.prop('disabled', false).html('<i class="bi bi-arrow-' + (mode === 'signed' ? 'repeat' : 'clockwise') + '"></i> ' + label);
       let errMsg = 'Regenerate failed';
       if (textStatus === 'timeout') {
-        errMsg = 'Regenerate timed out. The server may need LibreOffice installed, or PHP max_execution_time increased.';
+        errMsg = 'Regenerate timed out. Try again — if it keeps failing, ask hosting to raise PHP max_execution_time.';
       } else if (xhr.status === 404) {
         errMsg = 'Regenerate endpoint not found. Deploy admin/regenerate-staff-contract.php to the server.';
       } else {

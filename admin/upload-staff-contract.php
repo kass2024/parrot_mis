@@ -166,7 +166,7 @@ try {
     try {
         $preview = pcvc_staff_contract_generate_preview($conn, $staffId, $contract, null, false);
         $message .= ' Employee details were auto-filled into the Word contract.';
-        $message .= ' PDF preview will be created when the staff member opens their contract page (or use Regenerate PDF).';
+        $message .= ' A reminder email will be sent in the background when possible.';
         if (!empty($preview['position_warning'])) {
             $message .= $preview['position_warning'];
         }
@@ -180,24 +180,29 @@ try {
         ob_clean();
     }
 
+    echo json_encode([
+        'success' => true,
+        'message' => $message,
+        'preview_warning' => $previewWarning,
+    ]);
+
+    if (function_exists('fastcgi_finish_request')) {
+        fastcgi_finish_request();
+    }
+
     $emailNote = '';
     try {
         require_once __DIR__ . '/../helpers/staff_contract_notify.php';
         $notify = pcvc_staff_contract_notify_staff_pending($conn, $staffId);
         if (!empty($notify['ok']) && empty($notify['skipped'])) {
-            $emailNote = ' Reminder email sent to ' . ($notify['email'] ?? 'staff') . '.';
+            error_log('Staff contract upload: reminder email sent to ' . ($notify['email'] ?? 'staff'));
         } elseif (empty($notify['ok'])) {
-            $emailNote = ' Email reminder failed: ' . ($notify['error'] ?? 'unknown error') . '.';
+            error_log('Staff contract upload: email reminder failed: ' . ($notify['error'] ?? 'unknown error'));
         }
     } catch (Throwable $notifyError) {
-        $emailNote = ' Email reminder failed: ' . $notifyError->getMessage() . '.';
+        error_log('Staff contract upload: email reminder failed: ' . $notifyError->getMessage());
     }
-
-    echo json_encode([
-        'success' => true,
-        'message' => $message . $emailNote,
-        'preview_warning' => $previewWarning,
-    ]);
+    exit;
 } catch (Throwable $e) {
     if (ob_get_length()) {
         ob_clean();

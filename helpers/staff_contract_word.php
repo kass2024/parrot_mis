@@ -586,15 +586,26 @@ function pcvc_staff_contract_apply_placeholder_values(string $xml, array $values
             if (!isset($values[$key]) || in_array($key, $imageKeys, true)) {
                 continue;
             }
+            if (!pcvc_staff_contract_xml_has_unresolved_placeholder($xml, $key)) {
+                continue;
+            }
             $safe = (string) $values[$key];
-            $prev = '';
-            while ($xml !== $prev) {
+            $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
+            $xml = str_replace('${' . $key . '}', $safeXml, $xml);
+            if (!pcvc_staff_contract_xml_has_unresolved_placeholder($xml, $key)) {
+                continue;
+            }
+            for ($pass = 0; $pass < 4; $pass++) {
                 $prev = $xml;
-                $safeXml = htmlspecialchars($safe, ENT_XML1 | ENT_QUOTES, 'UTF-8');
-                $xml = str_replace('${' . $key . '}', $safeXml, $xml);
                 $xml = pcvc_staff_contract_replace_fragmented_placeholder($xml, $key, $safe);
                 $xml = pcvc_staff_contract_replace_key_split_placeholder($xml, $key, $safe);
                 $xml = pcvc_staff_contract_replace_split_placeholder($xml, $key, $safe);
+                if ($xml === $prev || !pcvc_staff_contract_xml_has_unresolved_placeholder($xml, $key)) {
+                    break;
+                }
+            }
+            if (strpos($xml, '${') === false) {
+                break;
             }
         }
     }
@@ -681,11 +692,37 @@ function pcvc_staff_contract_replace_split_placeholder(string $xml, string $key,
 }
 
 /**
+ * True when document.xml still has an unresolved placeholder for this key.
+ */
+function pcvc_staff_contract_xml_has_unresolved_placeholder(string $xml, string $key): bool
+{
+    if (strpos($xml, '${' . $key . '}') !== false) {
+        return true;
+    }
+    if (strpos($xml, '${') === false) {
+        return false;
+    }
+
+    $keyLen = strlen($key);
+    for ($splitAt = 1; $splitAt < $keyLen; $splitAt++) {
+        $part1 = substr($key, 0, $splitAt);
+        if (strpos($xml, '${' . $part1) !== false) {
+            return true;
+        }
+    }
+
+    return (bool) preg_match(
+        '/<w:t(?:\s[^>]*)?>' . preg_quote($key, '/') . '<\/w:t>/',
+        $xml
+    );
+}
+
+/**
  * Replace placeholders Word split inside the key (e.g. ${employer_ + name}).
  */
 function pcvc_staff_contract_replace_key_split_placeholder(string $xml, string $key, string $safe): string
 {
-    if (strpos($xml, '${' . $key . '}') !== false) {
+    if (strpos($xml, '${' . $key . '}') !== false || strpos($xml, '${') === false) {
         return $xml;
     }
 
@@ -694,6 +731,9 @@ function pcvc_staff_contract_replace_key_split_placeholder(string $xml, string $
 
     for ($splitAt = 1; $splitAt < $keyLen; $splitAt++) {
         $part1 = substr($key, 0, $splitAt);
+        if (strpos($xml, '${' . $part1) === false) {
+            continue;
+        }
         $part2 = substr($key, $splitAt);
         $pattern = '#(<w:r[^>]*>(?:<w:rPr>.*?<\/w:rPr>)?)<w:t(?:\s[^>]*)?>\s*\$\{'
             . preg_quote($part1, '/')
@@ -701,11 +741,25 @@ function pcvc_staff_contract_replace_key_split_placeholder(string $xml, string $
             . preg_quote($part2, '/')
             . '\}</w:t></w:r>#s';
 
-        $prev = '';
-        while ($xml !== $prev && preg_match($pattern, $xml, $km, PREG_OFFSET_CAPTURE)) {
-            $prev = $xml;
+        $offset = 0;
+        while (($pos = strpos($xml, '${' . $part1, $offset)) !== false) {
+            $paraStart = strrpos(substr($xml, 0, $pos), '<w:p');
+            $paraEnd = strpos($xml, '</w:p>', $pos);
+            if ($paraStart === false || $paraEnd === false) {
+                $offset = $pos + 1;
+                continue;
+            }
+            $paraEnd += strlen('</w:p>');
+            $para = substr($xml, $paraStart, $paraEnd - $paraStart);
+            if (!preg_match($pattern, $para, $km, PREG_OFFSET_CAPTURE)) {
+                $offset = $pos + 1;
+                continue;
+            }
+
             $replacement = $km[1][0] . '<w:t xml:space="preserve"> ' . $safeXml . '</w:t></w:r>';
-            $xml = substr($xml, 0, $km[0][1]) . $replacement . substr($xml, $km[0][1] + strlen($km[0][0]));
+            $newPara = substr($para, 0, $km[0][1]) . $replacement . substr($para, $km[0][1] + strlen($km[0][0]));
+            $xml = substr($xml, 0, $paraStart) . $newPara . substr($xml, $paraEnd);
+            $offset = $paraStart + strlen($newPara);
         }
     }
 
@@ -1444,7 +1498,11 @@ function pcvc_staff_contract_generate_signed(
         throw new RuntimeException('No Word contract template uploaded.');
     }
 
-    pcvc_staff_contract_require_pdf_helpers();
+    if (!pcvc_staff_contract_use_docx_preview()) {
+        pcvc_staff_contract_require_pdf_helpers();
+    } else {
+        require_once __DIR__ . '/contract_signature_image.php';
+    }
     pcvc_staff_contract_ensure_dirs();
     $docxAbs = pcvc_staff_contract_abs_path($docxRel);
     $stamp = time();

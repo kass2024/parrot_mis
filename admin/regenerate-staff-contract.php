@@ -49,16 +49,19 @@ try {
     }
 
     $autoload = __DIR__ . '/../vendor/autoload.php';
-    if (!is_file($autoload)) {
-        pcvc_regenerate_json_error('Composer dependencies missing on server. Run composer install in the project root.');
-    }
-    require_once $autoload;
-
     $wordHelper = __DIR__ . '/../helpers/staff_contract_word.php';
     if (!is_file($wordHelper)) {
         pcvc_regenerate_json_error('Contract helper missing on server. Deploy helpers/staff_contract_word.php');
     }
     require_once $wordHelper;
+
+    $needsComposer = !pcvc_staff_contract_use_docx_preview();
+    if ($needsComposer) {
+        if (!is_file($autoload)) {
+            pcvc_regenerate_json_error('Composer dependencies missing on server. Run composer install in the project root.');
+        }
+        require_once $autoload;
+    }
 
     if (!class_exists('ZipArchive')) {
         pcvc_regenerate_json_error('PHP Zip extension is required for contract regeneration.');
