@@ -790,53 +790,44 @@ function pcvc_staff_contract_strip_soft_page_hints(string $xml): string
 }
 
 /**
- * Replace empty page-break paragraphs with pageBreakBefore on the next paragraph.
- * Prevents blank pages in Word and browser preview while keeping nine pages.
+ * Restore hard page breaks from legacy pageBreakBefore markers (docx-preview needs w:type="page").
  */
-function pcvc_staff_contract_normalize_hard_page_breaks(string $xml): string
+function pcvc_staff_contract_restore_hard_page_breaks(string $xml): string
 {
-    $pattern = '#<w:p\b[^>]*>\s*<w:r[^>]*>\s*<w:br\s+w:type="page"\s*/>\s*</w:r>\s*</w:p>#';
-    $offset = 0;
-
-    while (preg_match($pattern, $xml, $match, PREG_OFFSET_CAPTURE, $offset)) {
-        $start = (int) $match[0][1];
-        $len = strlen($match[0][0]);
-        $after = $start + $len;
-        $nextP = strpos($xml, '<w:p', $after);
-        if ($nextP === false) {
-            break;
-        }
-
-        $xml = substr($xml, 0, $start) . substr($xml, $after);
-        $nextP = $start;
-        $pClose = strpos($xml, '>', $nextP);
-        if ($pClose === false) {
-            break;
-        }
-
-        $head = substr($xml, $nextP, $pClose - $nextP + 1);
-        if (strpos($head, 'w:pageBreakBefore') !== false) {
-            $offset = $nextP + 3;
-            continue;
-        }
-
-        $pPrPos = strpos($xml, '<w:pPr>', $nextP);
-        $pEnd = strpos($xml, '</w:p>', $nextP);
-        if ($pPrPos !== false && ($pEnd === false || $pPrPos < $pEnd)) {
-            $insertAt = $pPrPos + strlen('<w:pPr>');
-            $xml = substr($xml, 0, $insertAt)
-                . '<w:pageBreakBefore/>'
-                . substr($xml, $insertAt);
-        } else {
-            $xml = substr($xml, 0, $pClose + 1)
-                . '<w:pPr><w:pageBreakBefore/></w:pPr>'
-                . substr($xml, $pClose + 1);
-        }
-
-        $offset = $nextP + 3;
+    if (strpos($xml, 'w:pageBreakBefore') === false) {
+        return $xml;
     }
 
-    return $xml;
+    $breakPara = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>';
+
+    return preg_replace_callback(
+        '/<w:p\b([^>]*)>(\s*<w:pPr>)(.*?)(<\/w:pPr>)/s',
+        static function (array $m) use ($breakPara): string {
+            if (strpos($m[3], 'w:pageBreakBefore') === false) {
+                return $m[0];
+            }
+            $pPrInner = preg_replace('/<w:pageBreakBefore\s*\/>/', '', $m[3]) ?? $m[3];
+            if (trim($pPrInner) === '') {
+                return $breakPara . '<w:p' . $m[1] . '>';
+            }
+
+            return $breakPara . '<w:p' . $m[1] . '>' . $m[2] . $pPrInner . $m[4];
+        },
+        $xml
+    ) ?? $xml;
+}
+
+/**
+ * Count hard page breaks that docx-preview and Word both honour.
+ */
+function pcvc_staff_contract_hard_page_break_count(string $xml): int
+{
+    $hard = substr_count($xml, 'w:type="page"');
+    if ($hard > 0) {
+        return $hard;
+    }
+
+    return substr_count($xml, 'w:pageBreakBefore');
 }
 
 /**
@@ -845,14 +836,6 @@ function pcvc_staff_contract_normalize_hard_page_breaks(string $xml): string
 function pcvc_staff_contract_canonical_hard_page_break_count(): int
 {
     return 8;
-}
-
-/**
- * Count explicit page-break markers in document.xml.
- */
-function pcvc_staff_contract_hard_page_break_count(string $xml): int
-{
-    return substr_count($xml, 'w:type="page"') + substr_count($xml, 'w:pageBreakBefore');
 }
 
 /**
@@ -985,21 +968,23 @@ function pcvc_staff_contract_inject_page_break_after_anchor(string $xml, string 
 /**
  * Apply canonical page-break layout from Parrot Contract for Mutware.docx.
  *
- * Keeps the template's break positions, removes soft hints, and converts empty
- * page-break paragraphs to pageBreakBefore (no blank pages on sign or download).
+ * Preserves the uploaded template's hard page breaks (nine pages in docx-preview).
+ * Only removes soft hints and ghost breaks inside numbered lists.
  */
 function pcvc_staff_contract_apply_page_break_layout(string $xml): string
 {
+    $xml = pcvc_staff_contract_restore_hard_page_breaks($xml);
     $xml = pcvc_staff_contract_strip_soft_page_hints($xml);
     $xml = pcvc_staff_contract_clean_docx_layout_in_xml($xml);
 
-    if (pcvc_staff_contract_hard_page_break_count($xml) < pcvc_staff_contract_canonical_hard_page_break_count()) {
-        $xml = pcvc_staff_contract_strip_canonical_page_breaks($xml);
-        $xml = pcvc_staff_contract_inject_page_breaks_in_xml($xml);
-        $xml = pcvc_staff_contract_inject_page_break_after_anchor($xml, 'Quality of work');
+    if (substr_count($xml, 'w:type="page"') >= pcvc_staff_contract_canonical_hard_page_break_count()) {
+        return $xml;
     }
 
-    return pcvc_staff_contract_normalize_hard_page_breaks($xml);
+    $xml = pcvc_staff_contract_strip_canonical_page_breaks($xml);
+    $xml = pcvc_staff_contract_inject_page_breaks_in_xml($xml);
+
+    return pcvc_staff_contract_inject_page_break_after_anchor($xml, 'Quality of work');
 }
 
 function pcvc_staff_contract_paragraph_text(string $paragraphXml): string
@@ -1123,7 +1108,8 @@ function pcvc_staff_contract_patch_docx_layout(string $docxAbs): void
     }
 
     $needsFix = strpos($xml, 'lastRenderedPageBreak') !== false
-        || substr_count($xml, 'w:type="page"') > 0;
+        || strpos($xml, 'w:pageBreakBefore') !== false
+        || substr_count($xml, 'w:type="page"') < pcvc_staff_contract_canonical_hard_page_break_count();
     if (!$needsFix) {
         $zip->close();
         return;
