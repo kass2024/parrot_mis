@@ -745,11 +745,19 @@ function pcvc_staff_contract_merge_values(
     ?string $signingDate = null,
     ?string $signatureDataUrl = null
 ): array {
-    $signingDate = trim((string) ($signingDate ?? date('Y-m-d')));
-    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $signingDate)) {
-        $signingDateDisplay = date('F j, Y', strtotime($signingDate));
+    $hasEmployeeSign = trim((string) ($signatureDataUrl ?? '')) !== '';
+    $signingDateRaw = $signingDate !== null ? trim((string) $signingDate) : '';
+    if ($hasEmployeeSign) {
+        if ($signingDateRaw === '') {
+            $signingDateRaw = date('Y-m-d');
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $signingDateRaw)) {
+            $signingDateDisplay = date('F j, Y', strtotime($signingDateRaw));
+        } else {
+            $signingDateDisplay = $signingDateRaw;
+        }
     } else {
-        $signingDateDisplay = $signingDate;
+        $signingDateDisplay = '';
     }
 
     $monthly = $admin['monthly_salary'] ?? '';

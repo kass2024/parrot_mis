@@ -54,9 +54,34 @@ $docxUrl .= '&ts=' . time();
       background: #d7dee8;
       font-family: 'Times New Roman', Times, serif;
     }
+    #toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      background: #fff;
+      border-bottom: 1px solid #dbe3ef;
+      font: 14px/1.4 'Segoe UI', system-ui, sans-serif;
+    }
+    #toolbar button {
+      border: 1px solid #3661B9;
+      background: #fff;
+      color: #3661B9;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font: inherit;
+      cursor: pointer;
+    }
+    #toolbar button:hover {
+      background: #eff6ff;
+    }
     #status {
       font: 14px/1.4 'Segoe UI', system-ui, sans-serif;
-      color: #475569; padding: 1rem; text-align: center;
+      color: #475569; padding: .5rem 1rem; text-align: center;
     }
     #docx-container {
       padding: 16px 12px 32px;
@@ -113,6 +138,7 @@ $docxUrl .= '&ts=' . time();
         margin: 0;
         padding: 0;
       }
+      #toolbar,
       #status {
         display: none !important;
       }
@@ -141,6 +167,9 @@ $docxUrl .= '&ts=' . time();
   </style>
 </head>
 <body>
+  <div id="toolbar">
+    <button type="button" id="printBtn" title="Print or save as PDF">Print / Save as PDF</button>
+  </div>
   <div id="status">Loading contract…</div>
   <div id="docx-container"></div>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
@@ -214,6 +243,10 @@ $docxUrl .= '&ts=' . time();
       window.focus();
       window.print();
     };
+
+    document.getElementById('printBtn').addEventListener('click', function () {
+      window.printContract();
+    });
   })();
   </script>
 </body>
