@@ -1,6 +1,10 @@
 <?php
+declare(strict_types=1);
+
 session_start();
-require_once 'config_ai.php';
+require_once __DIR__ . '/helpers/env_bootstrap.php';
+require_once __DIR__ . '/helpers/document_vision_gemini.php';
+require_once __DIR__ . '/helpers/document_vision_claude.php';
 
 header('Content-Type: application/json');
 
@@ -26,10 +30,18 @@ if ($text === '') {
     exit;
 }
 
+if (!pcvc_docvision_claude_is_configured() && !pcvc_docvision_is_configured()) {
+    echo json_encode([
+        'error' => 'No AI provider configured. Set ANTHROPIC_API_KEY and/or GEMINI_API_KEY in .env.',
+    ]);
+    exit;
+}
+
 // ===============================
 // UTILS
 // ===============================
-function chunkText($text, $maxChars = 3500) {
+function chunkText(string $text, int $maxChars = 3500): array
+{
     $chunks = [];
     $current = '';
 
@@ -48,22 +60,8 @@ function chunkText($text, $maxChars = 3500) {
     return $chunks;
 }
 
-function extractJsonText(array $response): string {
-    $out = '';
-    foreach ($response['output'] ?? [] as $block) {
-        foreach ($block['content'] ?? [] as $c) {
-            if (($c['type'] ?? '') === 'output_text') {
-                $out .= $c['text'];
-            }
-        }
-    }
-    return $out;
-}
-
-// ===============================
-// STRONG PROMPT (ANTI-COMPRESSION)
-// ===============================
-function buildPrompt(string $text): string {
+function buildPrompt(string $text): string
+{
     return <<<PROMPT
 You are performing HIGH-ACCURACY DATA EXTRACTION.
 
@@ -97,75 +95,99 @@ $text
 PROMPT;
 }
 
-// ===============================
-// CHUNK INPUT (CRITICAL)
-// ===============================
-$chunks = chunkText($text);
-$allPrograms = [];
+/**
+ * Extract programs from one chunk: Claude first, Gemini fallback.
+ *
+ * @return array{programs: array<int, string>, provider: string|null, error: string|null}
+ */
+function extractProgramsFromChunk(string $chunk, string $systemPrompt): array
+{
+    $userContent = [
+        ['type' => 'input_text', 'text' => buildPrompt($chunk)],
+    ];
+
+    $lastError = null;
+
+    if (pcvc_docvision_claude_is_configured()) {
+        $result = pcvc_docvision_claude_generate_json($systemPrompt, $userContent, 2, 500);
+        if (empty($result['error'])) {
+            $programs = $result['json']['programs'] ?? [];
+            if (is_array($programs) && $programs !== []) {
+                return [
+                    'programs' => $programs,
+                    'provider' => (string)($result['provider'] ?? 'claude'),
+                    'error' => null,
+                ];
+            }
+        } else {
+            $lastError = (string)($result['error']['message'] ?? 'Claude extraction failed.');
+        }
+    }
+
+    if (pcvc_docvision_is_configured()) {
+        $result = pcvc_docvision_generate_json($systemPrompt, $userContent, 2, 400);
+        if (empty($result['error'])) {
+            $programs = $result['json']['programs'] ?? [];
+            if (is_array($programs) && $programs !== []) {
+                return [
+                    'programs' => $programs,
+                    'provider' => 'gemini',
+                    'error' => null,
+                ];
+            }
+        } else {
+            $lastError = (string)($result['error']['message'] ?? 'Gemini extraction failed.');
+        }
+    }
+
+    return [
+        'programs' => [],
+        'provider' => null,
+        'error' => $lastError,
+    ];
+}
 
 // ===============================
 // PROCESS EACH CHUNK
 // ===============================
+$systemPrompt = 'You extract university program names with absolute completeness.';
+$chunks = chunkText($text);
+$allPrograms = [];
+$usedProvider = null;
+$chunkErrors = [];
+
 foreach ($chunks as $chunk) {
+    $result = extractProgramsFromChunk($chunk, $systemPrompt);
 
-    $payload = [
-        "model" => "gpt-4.1",
-        "input" => [
-            [
-                "role" => "system",
-                "content" => [
-                    ["type" => "input_text", "text" => "You extract university program names with absolute completeness."]
-                ]
-            ],
-            [
-                "role" => "user",
-                "content" => [
-                    ["type" => "input_text", "text" => buildPrompt($chunk)]
-                ]
-            ]
-        ],
-        "text" => [
-            "format" => ["type" => "json_object"]
-        ]
-    ];
-
-    $ch = curl_init('https://api.openai.com/v1/responses');
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_POST => true,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Bearer ' . AI_API_KEY,
-            'Content-Type: application/json'
-        ],
-        CURLOPT_POSTFIELDS => json_encode($payload),
-        CURLOPT_TIMEOUT => 45
-    ]);
-
-    $response = curl_exec($ch);
-    curl_close($ch);
-
-    if (!$response) continue;
-
-    // Debug log (keep this!)
     file_put_contents(
         __DIR__ . '/ai_program_debug.log',
-        "\n==== " . date('Y-m-d H:i:s') . " ====\nCHUNK:\n$chunk\nAI RESPONSE:\n$response\n",
+        "\n==== " . date('Y-m-d H:i:s') . " ====\n"
+        . 'PROVIDER: ' . ($result['provider'] ?? 'none') . "\n"
+        . ($result['error'] ? 'ERROR: ' . $result['error'] . "\n" : '')
+        . "CHUNK:\n$chunk\n"
+        . 'PROGRAMS: ' . count($result['programs']) . "\n",
         FILE_APPEND
     );
 
-    $decoded = json_decode($response, true);
-    $jsonText = extractJsonText($decoded);
-    $ai = json_decode($jsonText, true);
+    if ($result['provider'] !== null && $usedProvider === null) {
+        $usedProvider = $result['provider'];
+    }
 
-    if (!empty($ai['programs']) && is_array($ai['programs'])) {
-        $allPrograms = array_merge($allPrograms, $ai['programs']);
+    if ($result['error'] !== null) {
+        $chunkErrors[] = $result['error'];
+    }
+
+    if ($result['programs'] !== []) {
+        $allPrograms = array_merge($allPrograms, $result['programs']);
     }
 }
 
 // ===============================
 // STRONG FALLBACK (INTERNATIONAL)
 // ===============================
-if (count($allPrograms) === 0) {
+$usedFallback = false;
+if ($allPrograms === []) {
+    $usedFallback = true;
     $lines = preg_split('/\r\n|\r|\n|,/', $text);
 
     foreach ($lines as $line) {
@@ -188,11 +210,19 @@ if (count($allPrograms) === 0) {
 // ===============================
 $allPrograms = array_values(array_unique(array_map('trim', $allPrograms)));
 
+if ($allPrograms === [] && $chunkErrors !== []) {
+    echo json_encode([
+        'error' => $chunkErrors[0],
+    ]);
+    exit;
+}
+
 // ===============================
 // RESPONSE
 // ===============================
 echo json_encode([
     'programs' => $allPrograms,
-    'count'    => count($allPrograms),
-    'fallback' => false
+    'count' => count($allPrograms),
+    'fallback' => $usedFallback,
+    'provider' => $usedProvider ?? ($usedFallback ? 'regex' : null),
 ]);
