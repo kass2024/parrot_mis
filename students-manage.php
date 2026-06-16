@@ -815,6 +815,23 @@ if ($uq) {
       background-color: rgba(242, 166, 90, 0.15);
     }
 
+    .editable-cell.saving {
+      opacity: 0.65;
+    }
+
+    .editable-cell.saved {
+      background: #ecfdf5 !important;
+    }
+
+    .editable-cell.save-failed {
+      background: #fef2f2 !important;
+    }
+
+    .cell-meta {
+      user-select: none;
+      pointer-events: none;
+    }
+
     /* ===== FORM CONTROLS ===== */
     .form-control-sm {
       font-size: 14px;
@@ -1173,20 +1190,31 @@ if ($uq) {
             <td><?= $counter++ ?></td>
 
             <!-- Name (first + last) + report-like time under name -->
-            <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>" data-field="first_name">
+            <?php
+              $fullNameDisplay = trim(ucfirst((string) ($s['first_name'] ?? '')) . ' ' . ucfirst((string) ($s['last_name'] ?? '')));
+              $fullNameOriginal = trim((string) ($s['first_name'] ?? '') . ' ' . (string) ($s['last_name'] ?? ''));
+            ?>
+            <td class="name-cell">
               <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
-                <div style="font-weight:700">
-                  <?= htmlspecialchars(ucfirst((string) ($s['first_name'] ?? '')) . ' ' . ucfirst((string) ($s['last_name'] ?? ''))) ?>
+                <div contenteditable="true"
+                     class="editable-cell editable-name"
+                     data-id="<?= (int) $s['id'] ?>"
+                     data-field="full_name"
+                     data-original="<?= htmlspecialchars($fullNameOriginal, ENT_QUOTES, 'UTF-8') ?>"
+                     spellcheck="false"
+                     style="font-weight:700;outline:none;min-width:40px">
+                  <?= htmlspecialchars($fullNameDisplay) ?>
                 </div>
                 <?php
                   $dtForNameTime = $s['source'] === 'student_applications'
                     ? ((string)($s['created_at'] ?? '') ?: (string)($s['application_date'] ?? ''))
                     : (string)($s['application_date'] ?? '');
                 ?>
-                <div class="application-time js-app-time"
+                <div class="application-time js-app-time cell-meta"
+                     contenteditable="false"
                      data-dt="<?= htmlspecialchars($dtForNameTime, ENT_QUOTES, 'UTF-8') ?>"
                      style="display:none;font-size:12px;font-weight:600"></div>
-                <div class="assigned-person-subline" style="font-size:11px;color:#475569;margin-top:3px;line-height:1.35;text-align:center">
+                <div class="assigned-person-subline cell-meta" contenteditable="false" style="font-size:11px;color:#475569;margin-top:3px;line-height:1.35;text-align:center">
                   <span style="color:#64748b;font-weight:600">Assigned:</span>
                   <?= htmlspecialchars($assignDisplay, ENT_QUOTES, 'UTF-8') ?>
                 </div>
@@ -1194,13 +1222,15 @@ if ($uq) {
             </td>
 
             <!-- Email -->
-            <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>" data-field="email">
+            <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>" data-field="email" data-original="<?= htmlspecialchars((string)($s['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" spellcheck="false">
               <?= htmlspecialchars($s['email'] ?? '') ?>
             </td>
 
             <!-- Phone Number -->
             <td contenteditable="true" class="editable-cell" data-id="<?= $s['id'] ?>"
-                data-field="<?= $s['source'] === 'malta_applications' ? 'contact_number' : ($s['source'] === 'turkey_applications' ? 'mobile' : 'phone_number') ?>">
+                data-field="<?= $s['source'] === 'malta_applications' ? 'contact_number' : ($s['source'] === 'turkey_applications' ? 'mobile' : 'phone_number') ?>"
+                data-original="<?= htmlspecialchars($phone, ENT_QUOTES, 'UTF-8') ?>"
+                spellcheck="false">
               <?= htmlspecialchars($phone) ?>
             </td>
 
@@ -1604,6 +1634,11 @@ if ($uq) {
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
   window.CAN_DELETE_STUDENT_APP = <?= json_encode($canDeleteApplication) ?>;
+  window.PCVC_APP_BASE = <?= json_encode(rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/') . '/') ?>;
+  window.pcvcApiUrl = function (path) {
+    const base = window.PCVC_APP_BASE || '/';
+    return base + String(path || '').replace(/^\//, '');
+  };
 </script>
 
 <script>
@@ -2139,23 +2174,80 @@ $(function() {
     });
   });
 
-  // Editable fields update
+  // Editable fields update (name, email, phone, etc.)
+  $(document).on('focus', '.editable-cell', function() {
+    const cell = $(this);
+    if (cell.data('original') === undefined) {
+      cell.data('original', cell.text().trim());
+    }
+  });
+
+  $(document).on('keydown', '.editable-cell', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      this.blur();
+    }
+  });
+
   $(document).on('blur', '.editable-cell', function() {
     const cell = $(this);
     const id = cell.data('id');
     const field = cell.data('field');
-    const value = cell.text().trim();
+    const source = cell.closest('tr').data('source') || 'student_applications';
+    const value = cell.text().replace(/\u00a0/g, ' ').trim();
+    const original = String(cell.data('original') ?? '').trim();
 
+    if (!id || !field) {
+      return;
+    }
+
+    if (value === original) {
+      return;
+    }
+
+    cell.removeClass('saved save-failed').addClass('saving');
     showLoading();
-    $.post('update-field.php', { id, field, value }, function(resp) {
-      hideLoading();
-      if (resp !== 'ok') {
-        alert('Failed to save field');
-      }
-    }).fail(function() {
-      hideLoading();
-      alert('Network error while saving field');
-    });
+
+    $.ajax({
+      url: (window.pcvcApiUrl || function (p) { return p; })('update-field.php'),
+      method: 'POST',
+      data: { id, field, value, source },
+      dataType: 'text'
+    })
+      .done(function(resp) {
+        const status = String(resp || '').trim();
+        hideLoading();
+        cell.removeClass('saving');
+
+        if (status === 'ok') {
+          cell.data('original', value);
+          cell.removeClass('save-failed').addClass('saved');
+          setTimeout(function() { cell.removeClass('saved'); }, 1200);
+
+          if (typeof window.showSuccessToast === 'function') {
+            window.showSuccessToast('Saved');
+          }
+        } else {
+          cell.addClass('save-failed');
+          cell.text(original);
+          cell.data('original', original);
+          alert('Failed to save field' + (status ? ': ' + status : ''));
+        }
+      })
+      .fail(function(xhr) {
+        hideLoading();
+        cell.removeClass('saving').addClass('save-failed');
+        cell.text(original);
+        cell.data('original', original);
+
+        let msg = String(xhr.responseText || '').trim();
+        if (xhr.status === 403) {
+          msg = 'Session expired or access denied. Refresh the page and log in again.';
+        } else if (!msg) {
+          msg = 'Network error while saving field';
+        }
+        alert(msg);
+      });
   });
 
   // DATE PICKER (if any datepickers exist)

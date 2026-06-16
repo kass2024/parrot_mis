@@ -19,6 +19,46 @@ function pcvc_is_superadmin_role($role): bool
     return $s === 'superadmin';
 }
 
+function pcvc_is_staff_role($role): bool
+{
+    $s = strtolower(pcvc_normalize_role_string($role));
+    $s = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $s);
+    $s = preg_replace('/[\s_\-]+/u', '', $s);
+
+    return $s === 'staff';
+}
+
+/** Staff or superadmin (session role and/or DB role). */
+function pcvc_current_user_is_staff_or_superadmin(mysqli $conn): bool
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    if ($adminPk <= 0) {
+        return false;
+    }
+
+    $sessionRole = (string) ($_SESSION['role'] ?? '');
+    if (pcvc_is_superadmin_role($sessionRole) || pcvc_is_staff_role($sessionRole)) {
+        return true;
+    }
+
+    $st = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('i', $adminPk);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+
+    $dbRole = (string) ($row['role'] ?? '');
+
+    return pcvc_is_superadmin_role($dbRole) || pcvc_is_staff_role($dbRole);
+}
+
 /**
  * SQL fragment: admins.role may own assigned student applications (staff or superadmin).
  * Superadmin normalization matches pcvc_is_superadmin_role() (spaces / underscores / hyphens removed).
