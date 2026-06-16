@@ -12,6 +12,7 @@
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/program_ai_utils.php';
 header('Content-Type: application/json');
 
 /* =====================================================
@@ -212,16 +213,9 @@ $LEVEL_KEYWORDS = [
 /* =====================================================
    5. LEVEL DETECTION FUNCTION
 ===================================================== */
-function detectProgramLevel(string $program, array $map): ?int {
-  $p = strtolower($program);
-  foreach ($map as $levelId => $keywords) {
-    foreach ($keywords as $kw) {
-      if (strpos($p, $kw) !== false) {
-        return $levelId;
-      }
-    }
-  }
-  return null;
+function detectProgramLevel(string $program, array $map, mysqli $conn): ?int
+{
+  return pcvc_detect_ai_program_level($program, $map, $conn);
 }
 
 /* =====================================================
@@ -274,7 +268,12 @@ foreach ($programs as $rawName) {
   /* -----------------------------
      AI MODE
   ----------------------------- */
-  $levelId = detectProgramLevel($name, $LEVEL_KEYWORDS);
+  $name = pcvc_normalize_ai_program_name($name);
+  if ($name === '') {
+    continue;
+  }
+
+  $levelId = detectProgramLevel($name, $LEVEL_KEYWORDS, $conn);
 
   if (!$levelId) {
     $invalid[] = [

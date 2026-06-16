@@ -3171,7 +3171,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <div class="alert alert-light small mb-0">
             <i class="bi bi-info-circle me-1"></i>
             Programs will be created for the selected <strong>University</strong>.
-            <span class="text-muted">(Program level is auto-detected in AI mode)</span>
+            <span class="text-muted">(Smart Paste saves vocational/college programs as <strong>Professional Course in …</strong> automatically)</span>
           </div>
         </div>
         <div class="modal-footer">
@@ -4398,14 +4398,15 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         saveProgramsBtn.addEventListener('click', async () => {
           const university = document.getElementById('program_university').value;
           const level = document.getElementById('program_level').value;
-          const programChips = document.querySelectorAll('#program_list [data-program]');
+          const mode = document.getElementById('mode_ai')?.checked ? 'ai' : 'manual';
+          const programChips = document.querySelectorAll('#program_list [data-program], #program_list .badge');
           
           if (!university) {
             showToast('Error', 'Please select a university', 'error');
             return;
           }
           
-          if (!level && document.getElementById('mode_manual').checked) {
+          if (mode === 'manual' && !level) {
             showToast('Error', 'Please select a program level', 'error');
             return;
           }
@@ -4415,28 +4416,50 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             return;
           }
           
-          const programs = Array.from(programChips).map(chip => chip.dataset.program);
+          const programs = Array.from(programChips).map(chip => {
+            if (chip.dataset.program) return chip.dataset.program;
+            return chip.textContent.replace('×', '').trim();
+          });
           
           try {
-            const response = await fetch('settings_actions.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                action: 'save_program',
-                university_id: university,
-                program_level_id: level,
-                programs: programs
-              })
-            });
-            
-            const data = await response.json();
+            let data;
+
+            if (mode === 'ai') {
+              const response = await fetch('ai_save_programs.php', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                  university_id: university,
+                  programs
+                })
+              });
+              data = await response.json();
+            } else {
+              const formData = new FormData();
+              formData.append('action', 'save_program');
+              formData.append('university_id', university);
+              formData.append('level_id', level);
+              programs.forEach(p => formData.append('programs[]', p));
+
+              const response = await fetch('settings-handler.php', {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin'
+              });
+              data = await response.json();
+            }
             
             if (data.ok) {
-              showToast('Success', 'Programs saved successfully', 'success');
+              const inserted = data.inserted ?? programs.length;
+              const skipped = data.skipped ?? 0;
+              const msg = skipped > 0
+                ? `${inserted} program(s) saved, ${skipped} duplicate(s) skipped`
+                : `${inserted} program(s) saved successfully`;
+              showToast('Success', msg, 'success');
               bootstrap.Modal.getInstance(document.getElementById('programModal')).hide();
-              // Reload the page to show updated data
               setTimeout(() => location.reload(), 1000);
             } else {
               showToast('Error', data.msg || 'Failed to save programs', 'error');

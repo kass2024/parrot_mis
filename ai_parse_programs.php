@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/helpers/env_bootstrap.php';
 require_once __DIR__ . '/helpers/document_vision_gemini.php';
 require_once __DIR__ . '/helpers/document_vision_claude.php';
+require_once __DIR__ . '/helpers/program_ai_utils.php';
 
 header('Content-Type: application/json');
 
@@ -63,30 +64,33 @@ function chunkText(string $text, int $maxChars = 3500): array
 function buildPrompt(string $text): string
 {
     return <<<PROMPT
-You are performing HIGH-ACCURACY DATA EXTRACTION.
+You are performing HIGH-ACCURACY DATA EXTRACTION for a college/university program catalogue.
 
 TASK:
-Extract EVERY academic program name exactly as written.
+Extract EVERY program/course name from the pasted list.
+
+FORMATTING RULES:
+- For vocational, certificate, diploma, trade, or college programs WITHOUT a formal degree title (BA, BSc, MSc, PhD, etc.), format each name exactly as:
+  Professional Course in {Program Title}
+- For formal degree programs (Bachelor, Master, PhD, MBA, etc.), keep the original degree wording.
+- Do NOT duplicate the prefix if it is already present.
+- One program = one array item.
 
 STRICT RULES (NO EXCEPTIONS):
 - DO NOT summarize
 - DO NOT merge similar programs
 - DO NOT remove Fall / Spring / Intake variations
-- Preserve wording exactly
-- One program = one array item
+- Preserve subject wording exactly
 - Extract ALL programs, even if more than 200
 - Do NOT invent or guess programs
 - Ignore headings, numbering, bullets
-
-Accepted degrees include (but are not limited to):
-BA, BSc, BEng, MA, MSc, MBA, MEng, PhD, Diploma, Certificate
 
 Return ONLY valid JSON:
 
 {
   "programs": [
-    "Exact program name 1",
-    "Exact program name 2"
+    "Professional Course in Machine Learning Analyst",
+    "BSc Computer Science"
   ]
 }
 
@@ -150,7 +154,7 @@ function extractProgramsFromChunk(string $chunk, string $systemPrompt): array
 // ===============================
 // PROCESS EACH CHUNK
 // ===============================
-$systemPrompt = 'You extract university program names with absolute completeness.';
+$systemPrompt = 'You extract university and college program names with absolute completeness. Use "Professional Course in {title}" for vocational/college programs without formal degree titles.';
 $chunks = chunkText($text);
 $allPrograms = [];
 $usedProvider = null;
@@ -193,14 +197,18 @@ if ($allPrograms === []) {
     foreach ($lines as $line) {
         $line = trim(preg_replace('/^[\d\.\-\•]+\s*/', '', $line));
 
+        if (strlen($line) <= 6) {
+            continue;
+        }
+
         if (
             preg_match(
-                '/\b(BA|BSc|BEng|MA|MSc|MBA|MEng|PhD|Diploma|Certificate)\b/i',
+                '/\b(BA|BSc|BEng|MA|MSc|MBA|MEng|PhD|Diploma|Certificate|Bachelor|Master)\b/i',
                 $line
             )
-            && strlen($line) > 6
+            || !pcvc_program_has_degree_marker($line)
         ) {
-            $allPrograms[] = $line;
+            $allPrograms[] = pcvc_normalize_ai_program_name($line);
         }
     }
 }
@@ -208,7 +216,10 @@ if ($allPrograms === []) {
 // ===============================
 // FINAL NORMALIZATION
 // ===============================
-$allPrograms = array_values(array_unique(array_map('trim', $allPrograms)));
+$allPrograms = array_values(array_unique(array_filter(array_map(
+    static fn ($name) => pcvc_normalize_ai_program_name((string) $name),
+    $allPrograms
+))));
 
 if ($allPrograms === [] && $chunkErrors !== []) {
     echo json_encode([
