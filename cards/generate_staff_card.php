@@ -202,6 +202,92 @@ function gdTrueCircleCrop(string $src, string $dest, int $size = 600): bool
     return true;
 }
 
+/**
+ * Wrap text to fit within a PDF width (mm).
+ *
+ * @return list<string>
+ */
+function staffCardWrapText(Fpdi $pdf, string $text, float $maxWidth): array
+{
+    $text = trim(preg_replace('/\s+/', ' ', $text));
+    if ($text === '') {
+        return [''];
+    }
+
+    $words = explode(' ', $text);
+    $lines = [];
+    $current = '';
+
+    foreach ($words as $word) {
+        $candidate = $current === '' ? $word : $current . ' ' . $word;
+        if ($pdf->GetStringWidth($candidate) <= $maxWidth) {
+            $current = $candidate;
+            continue;
+        }
+
+        if ($current !== '') {
+            $lines[] = $current;
+            $current = $word;
+            continue;
+        }
+
+        $lines[] = $word;
+    }
+
+    if ($current !== '') {
+        $lines[] = $current;
+    }
+
+    return $lines;
+}
+
+/**
+ * Draw centered, wrapped text inside a fixed box (auto-shrinks font if needed).
+ */
+function staffCardDrawWrappedCentered(
+    Fpdi $pdf,
+    string $text,
+    float $x,
+    float $y,
+    float $width,
+    float $maxHeight,
+    float $startFontSize,
+    int $r = 200,
+    int $g = 0,
+    int $b = 0
+): void {
+    $pdf->SetTextColor($r, $g, $b);
+    $usableWidth = max(10.0, $width - 2.0);
+
+    for ($fontSize = $startFontSize; $fontSize >= 5.5; $fontSize -= 0.5) {
+        $pdf->SetFont('Arial', 'B', $fontSize);
+        $lines = staffCardWrapText($pdf, $text, $usableWidth);
+        $lineHeight = max(2.6, $fontSize * 0.42);
+        $totalHeight = count($lines) * $lineHeight;
+
+        if ($totalHeight <= $maxHeight) {
+            $startY = $y + max(0.0, ($maxHeight - $totalHeight) / 2);
+            foreach ($lines as $index => $line) {
+                $pdf->SetXY($x, $startY + ($index * $lineHeight));
+                $pdf->Cell($width, $lineHeight, $line, 0, 0, 'C');
+            }
+            return;
+        }
+    }
+
+    $pdf->SetFont('Arial', 'B', 5.5);
+    $lines = staffCardWrapText($pdf, $text, $usableWidth);
+    $lineHeight = 2.6;
+    $startY = $y;
+    foreach ($lines as $index => $line) {
+        if (($index + 1) * $lineHeight > $maxHeight) {
+            break;
+        }
+        $pdf->SetXY($x, $startY + ($index * $lineHeight));
+        $pdf->Cell($width, $lineHeight, $line, 0, 0, 'C');
+    }
+}
+
 /* =====================================================
    PDF INIT (ORIGINAL SETTINGS)
 ===================================================== */
@@ -249,16 +335,29 @@ foreach ($staffIds as $staffId) {
     /* NAME BAR */
     $pdf->SetFillColor(200, 0, 0);
     $pdf->Rect(0, 61.5, 69.85, 7, 'F');
-    $pdf->SetFont('Arial', 'B', 12);
-    $pdf->SetTextColor(255, 255, 255);
-    $pdf->SetXY(0, 63.3);
-    $pdf->Cell(69.85, 4, $fullName, 0, 0, 'C');
+    staffCardDrawWrappedCentered(
+        $pdf,
+        $fullName,
+        0,
+        61.8,
+        69.85,
+        6.8,
+        12,
+        255,
+        255,
+        255
+    );
 
     /* POSITION */
-    $pdf->SetFont('Arial', 'B', 9);
-    $pdf->SetTextColor(200, 0, 0);
-    $pdf->SetXY(5, 71);
-    $pdf->Cell(59.85, 5, $position, 0, 0, 'C');
+    staffCardDrawWrappedCentered(
+        $pdf,
+        $position,
+        5,
+        70.5,
+        59.85,
+        8.5,
+        9
+    );
 
     /* PHONE */
     if ($cleanPhone !== '') {
