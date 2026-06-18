@@ -311,37 +311,49 @@ try {
 /* =====================================================
    7. GENERATE PDF (POST-COMMIT)
 ===================================================== */
-require_once __DIR__ . "/generate-contract-pdf.php";
+$pdfPath = null;
+$pdfError = null;
 
-if (!function_exists('generateContractPDF')) {
-    fail("PDF generator missing", 500);
-}
+try {
+    require_once __DIR__ . '/generate-contract-pdf.php';
 
-$pdfPath = generateContractPDF($contractId);
+    if (!function_exists('generateContractPDF')) {
+        throw new RuntimeException('PDF generator missing');
+    }
 
-if (!$pdfPath || !file_exists($pdfPath)) {
-    fail("PDF generation failed", 500);
+    $pdfPath = generateContractPDF($contractId);
+
+    if (!$pdfPath || !file_exists($pdfPath)) {
+        throw new RuntimeException('PDF file was not created');
+    }
+
+    $stmt = $conn->prepare('UPDATE student_contracts SET pdf_path = ? WHERE id = ?');
+    if (!$stmt) {
+        throw new RuntimeException('Failed to prepare pdf_path update');
+    }
+    $stmt->bind_param('si', $pdfPath, $contractId);
+    $stmt->execute();
+    $stmt->close();
+
+    logMsg('PDF generated', ['contract_id' => $contractId, 'pdf_path' => $pdfPath]);
+} catch (Throwable $e) {
+    $pdfError = $e->getMessage();
+    logMsg('PDF generation failed', [
+        'contract_id' => $contractId,
+        'message'     => $pdfError,
+        'line'        => $e->getLine(),
+        'file'        => $e->getFile(),
+    ]);
 }
 
 /* =====================================================
-   8. SAVE PDF PATH
-===================================================== */
-$stmt = $conn->prepare("
-    UPDATE student_contracts
-    SET pdf_path = ?
-    WHERE id = ?
-");
-$stmt->bind_param("si", $pdfPath, $contractId);
-$stmt->execute();
-$stmt->close();
-
-/* =====================================================
-   9. FINAL RESPONSE (ALWAYS JSON)
+   8. FINAL RESPONSE (ALWAYS JSON)
 ===================================================== */
 respond([
-    "success"      => true,
-    "status"       => "signed",
-    "contract_id"  => $contractId,
-    "student_id"   => $studentId,
-    "pdf_path"     => $pdfPath
+    'success'      => true,
+    'status'       => 'signed',
+    'contract_id'  => $contractId,
+    'student_id'   => $studentId,
+    'pdf_path'     => $pdfPath,
+    'pdf_error'    => $pdfError,
 ]);

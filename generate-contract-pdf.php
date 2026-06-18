@@ -6,6 +6,7 @@ use Dompdf\Options;
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/helpers/contract_price_highlight.php';
+require_once __DIR__ . '/helpers/contract_signature_image.php';
 
 /* =====================================================
    SAFE ESCAPE
@@ -13,6 +14,23 @@ require_once __DIR__ . '/helpers/contract_price_highlight.php';
 function esc(?string $v): string
 {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+
+function contractPdfPlainText(string $text): string
+{
+    $text = preg_replace('/[\x{1F300}-\x{1FAFF}\x{2600}-\x{26FF}\x{2700}-\x{27BF}]/u', '', $text) ?? $text;
+    return trim(preg_replace('/\s+/u', ' ', $text) ?? $text);
+}
+
+function contractPdfRenderFeeLine(string $line): string
+{
+    $parts = preg_split('/\s+—\s+/u', $line, 2) ?: [$line];
+    $main = highlightContractPrices(trim($parts[0]));
+    if (empty($parts[1])) {
+        return $main;
+    }
+
+    return $main . '<span class="fee-desc">' . esc(trim($parts[1])) . '</span>';
 }
 
 /* =====================================================
@@ -23,10 +41,25 @@ function getPackageDetails(string $code): array
     $packages = [
 
         /* =========================
-           7.1 USA – Loan Based
+           7.1 Partner Universities – Targeted Countries
+        ========================== */
+        'p70' => [
+            'title' => '7.1 FEES PAID BY STUDENTS FOR OUR PARTNER UNIVERSITIES, COMPANIES, AND SOME TARGETED COUNTRIES',
+            'lines' => [
+                'USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)',
+                'Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)',
+                'Europe – Registration and Application Fee: USD 150 (Paid before starting application)',
+                'South Korea – Registration and Application Fee: USD 250 (Paid before starting application)',
+                'Note: Students are responsible for all additional costs associated with their visa application and immigration process, including any fees charged by embassies, visa application centers, government agencies, medical institutions, or other relevant authorities.',
+            ],
+            'total' => null,
+        ],
+
+        /* =========================
+           7.2 USA – Loan Based
         ========================== */
         'p71' => [
-            'title' => '7.1 Study in the USA (Loan-Based)',
+            'title' => '7.2 Study in the USA (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)',
                 'After Loan Approval: USD 1,200',
@@ -37,10 +70,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.2 USA – Without Loan
+           7.3 USA – Without Loan
         ========================== */
         'p72' => [
-            'title' => '7.2 Study in the USA (Without Loan)',
+            'title' => '7.3 Study in the USA (Without Loan)',
             'lines' => [
                 'Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)',
                 'Mock Interview Preparation Fees: USD 150',
@@ -50,10 +83,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.3 Europe – Without Loan
+           7.4 Europe – Without Loan
         ========================== */
         'p73' => [
-            'title' => '7.3 Study in Europe (Without Loan)',
+            'title' => '7.4 Study in Europe (Without Loan)',
             'lines' => [
                 'Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)',
                 'Before Visa Application: USD 250',
@@ -63,10 +96,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.4 Canada – Loan Based
+           7.5 Canada – Loan Based
         ========================== */
         'p74' => [
-            'title' => '7.4 Study in Canada (Loan-Based)',
+            'title' => '7.5 Study in Canada (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'After Visa Approval: CAD 3,050',
@@ -76,24 +109,22 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.5 Canada – Without Loan
+           7.6 Canada – Without Loan
         ========================== */
         'p75' => [
-            'title' => '7.5 Study in Canada (Without Loan)',
+            'title' => '7.6 Study in Canada (Without Loan)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
-                'Before starting Visa Application: CAD 650',
-                'After Visa Approval: CAD 1,500',
-                'Note: Tuition deposit CAD 500–5,000 payable directly by the Student',
+                'After Visa Approval: CAD 2,050',
             ],
             'total' => 'CAD 2,500',
         ],
 
         /* =========================
-           7.6 Canada – High School (Loan)
+           7.7 Canada – High School (Loan)
         ========================== */
         'p76' => [
-            'title' => '7.6 Canada – High School Graduate (Loan-Based)',
+            'title' => '7.7 Canada – High School Graduate (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450',
                 'Study Permit Fees (Embassy): CAD 150',
@@ -107,10 +138,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.7 Canada – Own Admission Letter
+           7.8 Canada – Own Admission Letter
         ========================== */
         'p77ca' => [
-            'title' => '7.7 Study in Canada (With Your Own Admission Letter)',
+            'title' => '7.8 Study in Canada (With Your Own Admission Letter)',
             'lines' => [
                 'Document Handling, Visa Application & Biometric Fees: CAD 735',
                 'Service Fees (payable after visa approval): CAD 1,000',
@@ -119,10 +150,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.8 South Korea – Study
+           7.9 South Korea – Study
         ========================== */
         'p77' => [
-            'title' => '7.8 Study in South Korea (Self-Sponsored)',
+            'title' => '7.9 Study in South Korea (Self-Sponsored)',
             'lines' => [
                 'Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)',
                 'Self-Sponsored Service Fees – Bachelor: USD 2,000 (Includes free Korean language training for 3 months & Pre-Departure Orientation)',
@@ -135,10 +166,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.8 South Korea – Visit
+           7.10 South Korea – Visit
         ========================== */
         'p78' => [
-            'title' => '7.9 🇰🇷 South Korea Visitor Visa',
+            'title' => '7.10 🇰🇷 South Korea Visitor Visa',
             'lines' => [
                 'Registration & Application Fee: USD 500',
                 'Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500',
@@ -148,10 +179,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.9 Credit Transfer
+           7.11 Credit Transfer
         ========================== */
         'p79' => [
-            'title' => '7.10 Credit Transfer (Bachelor, Masters, PhD)',
+            'title' => '7.11 Credit Transfer (Bachelor, Masters, PhD)',
             'lines' => [
                 'Bachelor Program: USD 920',
                 'Masters Program: USD 1,220',
@@ -161,10 +192,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.10 Canada Visit Visa
+           7.12 Canada Visit Visa
         ========================== */
         'p710' => [
-            'title' => '7.11 Canada Visit Visa',
+            'title' => '7.12 Canada Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: CAD 100',
@@ -175,10 +206,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.11 USA Visit Visa
+           7.13 USA Visit Visa
         ========================== */
         'p711' => [
-            'title' => '7.12 USA Visit Visa',
+            'title' => '7.13 USA Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: USD 185',
@@ -188,10 +219,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.12 Europe Visit Visa
+           7.14 Europe Visit Visa
         ========================== */
         'p712' => [
-            'title' => '7.13 Europe Visit Visa',
+            'title' => '7.14 Europe Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: €600',
                 'Visa Application Fees: €85 – €500 (depending on country)',
@@ -201,10 +232,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.13 Asia Visit Visa
+           7.15 Asia Visit Visa
         ========================== */
         'p713' => [
-            'title' => '7.14 Asia Visit Visa',
+            'title' => '7.15 Asia Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 800',
                 'Visa Application Fees: USD 85 – USD 500',
@@ -214,10 +245,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.14 Short Courses - Canada
+           7.16 Short Courses - Canada
         ========================== */
         'p714' => [
-            'title' => '7.15 SHORT COURSES-CANADA',
+            'title' => '7.16 SHORT COURSES-CANADA',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)',
                 'Registration & Application Fee for Family Member: CAD 200 (If applicable)',
@@ -230,10 +261,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.15 Study PhD in Multiple Destinations
+           7.17 Study PhD in Multiple Destinations
         ========================== */
         'p715' => [
-            'title' => '7.16 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+            'title' => '7.17 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
             'lines' => [
                 'Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)',
                 'Registration & Application Fee for USA, Europe & Asia: USD 350 (Refundable if admission is not secured within 9 months)',
@@ -251,10 +282,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.17 WES Evaluation – International Equivalence
+           7.18 WES Evaluation – International Equivalence
         ========================== */
         'p716' => [
-            'title' => '7.17 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+            'title' => '7.18 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
             'lines' => [
                 '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the WES evaluation process.',
                 '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
@@ -263,6 +294,22 @@ function getPackageDetails(string $code): array
                 '5. Time, Administrative Work & Follow-up: CAD 200 — Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.',
             ],
             'total' => 'CAD 900',
+        ],
+
+        /* =========================
+           7.19 Guaranteed Evaluation Support
+        ========================== */
+        'p717' => [
+            'title' => '7.19 GUARANTEED EVALUATION SUPPORT!',
+            'lines' => [
+                '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the all evaluation process.',
+                '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
+                '3. University & Verification Coordination: CAD 100 — The service involves contacting universities, registrars, and authorized offices to ensure transcripts and academic records are properly verified and submitted.',
+                '4. Document Shipping & Delivery Expenses: CAD 100 — The cost also includes courier charges, document shipping, electronic submission support, and tracking to ensure documents safely reach on time.',
+                '5. Time, Administrative Work & Follow-up: CAD 200 — Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.',
+            ],
+            'total' => 'CAD 900',
+            'total_label' => 'Total packages',
         ],
     ];
 
@@ -283,25 +330,23 @@ $stmt = $conn->prepare("
     SELECT
         c.contract_token,
         c.selected_package_code,
+        c.selected_package_label,
 
-        /* Build full legal name from student applications data */
         COALESCE(
-            TRIM(CONCAT_WS(' ',
+            NULLIF(TRIM(CONCAT_WS(' ',
                 NULLIF(TRIM(s.first_name),  ''),
                 NULLIF(TRIM(s.middle_name),  ''),
                 NULLIF(TRIM(s.last_name),   '')
-            )),
+            )), ''),
+            NULLIF(TRIM(sig.student_name), ''),
             'Student'
         ) AS full_name,
 
-        s.email AS email,
-        s.dob AS dob,
-
-        /* Resolve nationality to country NAME whether stored as id or as name */
-        COALESCE(nat.name, s.nationality) AS nationality,
-
-        s.passport_number AS passport_number,
-        s.phone_number AS phone_number,
+        COALESCE(NULLIF(TRIM(s.email), ''), NULLIF(TRIM(sig.student_email), '')) AS email,
+        COALESCE(NULLIF(TRIM(s.dob), ''), '') AS dob,
+        COALESCE(NULLIF(TRIM(nat.name), ''), NULLIF(TRIM(s.nationality), '')) AS nationality,
+        COALESCE(NULLIF(TRIM(s.passport_number), ''), '') AS passport_number,
+        COALESCE(NULLIF(TRIM(s.phone_number), ''), '') AS phone_number,
 
         sig.signed_date,
         sig.signature_image
@@ -316,7 +361,9 @@ $stmt = $conn->prepare("
 ");
 
     $stmt->bind_param('i', $contractId);
-    $stmt->execute();
+    if (!$stmt->execute()) {
+        throw new RuntimeException('Failed to load contract data: ' . $stmt->error);
+    }
     $data = $stmt->get_result()->fetch_assoc();
     $stmt->close();
 
@@ -335,6 +382,15 @@ $stmt = $conn->prepare("
     }
 
     $studentSignature = $data['signature_image'];
+    $studentSignatureFile = contract_signature_save_standard_png($contractId, $studentSignature);
+    if ($studentSignatureFile !== null && is_file($studentSignatureFile)) {
+        $studentSignatureSrc = $studentSignatureFile;
+    } else {
+        $normalizedPng = contract_signature_to_display_png($studentSignature);
+        $studentSignatureSrc = $normalizedPng !== null
+            ? 'data:image/png;base64,' . base64_encode($normalizedPng)
+            : $studentSignature;
+    }
 
     $consultantSigPath = __DIR__ . '/admin/signature-manager.png';
     if (!file_exists($consultantSigPath)) {
@@ -457,9 +513,26 @@ td {
 }
 
 .signature-box img {
-    width: 100%;
-    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
     object-fit: contain;
+}
+
+.student-signature-line {
+    border-bottom: 1px solid #000;
+    height: 56px;
+    width: 280px;
+    position: relative;
+    margin-top: 6pt;
+    margin-bottom: 8pt;
+}
+
+.student-signature-line img {
+    max-height: 52px;
+    max-width: 270px;
+    position: absolute;
+    bottom: 2px;
+    left: 0;
 }
 
 /* =========================
@@ -502,6 +575,46 @@ a {
 
 .pricing-block {
     page-break-inside: avoid;
+}
+
+.selected-package-box {
+    border: 1px solid #333;
+    padding: 12pt 14pt;
+    margin: 10pt 0 14pt 0;
+    background: #fafafa;
+    page-break-inside: avoid;
+}
+
+.selected-package-box .package-title {
+    font-size: 12pt;
+    font-weight: bold;
+    margin: 0 0 10pt 0;
+    line-height: 1.45;
+    word-wrap: break-word;
+}
+
+.package-fees-list {
+    margin: 0 0 10pt 22pt;
+    padding: 0;
+}
+
+.package-fees-list li {
+    margin-bottom: 8pt;
+    text-align: justify;
+    line-height: 1.55;
+}
+
+.package-fees-list .fee-desc {
+    display: block;
+    margin-top: 3pt;
+    font-size: 11pt;
+    font-weight: normal;
+    color: #222;
+}
+
+.package-total {
+    margin: 10pt 0 0 0;
+    font-weight: bold;
 }
 
 </style>
@@ -643,17 +756,19 @@ subject to the specific service package selected by the Student under this Agree
 ========================= -->
 <h2>7. FEES &amp; PAYMENT TERMS (SELECTED PACKAGE)</h2>
 
-<p><strong><?= esc($package['title']) ?></strong></p>
+<div class="selected-package-box">
+<p class="package-title"><?= esc(contractPdfPlainText($package['title'])) ?></p>
 
 <ul class="package-fees-list">
 <?php foreach ($package['lines'] as $line): ?>
-    <li><?= highlightContractPrices($line) ?></li>
+    <li><?= contractPdfRenderFeeLine($line) ?></li>
 <?php endforeach; ?>
 </ul>
 
 <?php if (!empty($package['total'])): ?>
-<p><strong>Total Package: <?= highlightContractPrices($package['total']) ?></strong></p>
+<p class="package-total"><?= esc($package['total_label'] ?? 'Total Package') ?>: <?= highlightContractPrices($package['total']) ?></p>
 <?php endif; ?>
+</div>
 <h3>Additional Pricing Provisions (Without Loan &amp; Special Services)</h3>
 
 <div class="pricing-block">
@@ -816,17 +931,10 @@ Name: <?= esc($data['full_name']) ?><br>
 
 Signature:<br>
 
-<div class="signature-box" style="
-border:1px dashed #9ca3af;
-height:90px;
-width:300px;
-padding:6px;
-margin-top:6px;
-margin-bottom:8px;
-">
+<div class="student-signature-line">
 
-<?php if(!empty($studentSignature)): ?>
-<img src="<?= $studentSignature ?>" alt="Student Signature" style="max-height:78px;">
+<?php if (!empty($studentSignatureSrc)): ?>
+<img src="<?= str_replace('\\', '/', $studentSignatureSrc) ?>" alt="Student Signature">
 <?php endif; ?>
 
 </div>
@@ -851,7 +959,10 @@ Contract Reference: <?= esc($data['contract_token']) ?>
     /* =====================================================
        5. RENDER PDF
     ===================================================== */
-    $dompdf = new Dompdf(new Options(['isRemoteEnabled' => true]));
+    $dompdf = new Dompdf(new Options([
+        'isRemoteEnabled' => true,
+        'chroot' => __DIR__,
+    ]));
     $dompdf->loadHtml($html);
     $dompdf->setPaper('A4', 'portrait');
     $dompdf->render();

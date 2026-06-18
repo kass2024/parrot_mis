@@ -53,6 +53,9 @@ if (!$contract) {
  * 4. Contract state flag (DO NOT EXIT)
  */
 $isSigned = ($contract['status'] === 'signed');
+$selectedPackageCode = trim((string)($contract['selected_package_code'] ?? ''));
+$selectedPackageLabel = trim((string)($contract['selected_package_label'] ?? ''));
+$contractPdfPath = trim((string)($contract['pdf_path'] ?? ''));
 
 // Load student signature image (stored as data URL) when signed
 $studentSignatureData = null;
@@ -433,10 +436,7 @@ body {
    PACKAGE SELECTION - MOBILE
 ===================================================== */
 .package-label {
-  flex-wrap: wrap !important;
-  gap: 8px !important;
-  align-items: flex-start !important;
-  line-height: 1.4 !important;
+  line-height: 1.45 !important;
   font-size: 14px !important;
 }
 
@@ -518,24 +518,117 @@ body {
 ===================================================== */
 .package-item {
   margin-bottom: 18pt;
-  padding: 10pt 12pt;
-  border-radius: var(--radius-sm);
-  transition: background .15s ease;
+  padding: 12pt 14pt;
+  border-radius: var(--radius-md);
+  border: 2px solid #e5e7eb;
+  transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
 }
 
 .package-item:hover {
   background: var(--soft);
+  border-color: #cbd5e1;
+}
+
+.package-item.is-selected {
+  background: #f0fdf4;
+  border-color: #16a34a;
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.12);
 }
 
 .package-label {
   font-weight: 700;
   cursor: pointer;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  line-height: 1.45;
 }
 
 .package-label input {
-  margin-right: 10px;
+  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+  accent-color: #16a34a;
+  flex-shrink: 0;
+}
+
+.package-label-text {
+  min-width: 0;
+  word-break: break-word;
+}
+
+.article-7-intro {
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%);
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: #1e3a5f;
+}
+
+.article-7-intro strong {
+  color: #0f172a;
+}
+
+.signed-status-banner {
+  max-width: 900px;
+  margin: 0 auto 24px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+  border: 1px solid #86efac;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 16px rgba(22, 163, 74, 0.1);
+}
+
+.signed-status-banner h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: #14532d;
+}
+
+.signed-status-banner p {
+  margin: 0 0 14px;
+  text-align: left;
+  color: #166534;
+}
+
+.signed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.signed-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.signed-actions .btn-download {
+  background: #15803d;
+  color: #fff;
+}
+
+.signed-actions .btn-view {
+  background: #fff;
+  color: #15803d;
+  border: 2px solid #16a34a;
+}
+
+.contract-signed .package-label input {
+  pointer-events: none;
+}
+
+.contract-signed #clearSignature,
+.contract-signed #signContract {
+  display: none;
 }
 
 .package-details {
@@ -715,7 +808,24 @@ button {
 
 </head>
 
-<body>
+<body<?= $isSigned ? ' class="contract-signed"' : '' ?>>
+
+<?php if ($isSigned): ?>
+<div class="signed-status-banner">
+  <h2>Contract signed successfully</h2>
+  <p>
+    <?php if ($selectedPackageLabel !== ''): ?>
+      Selected package: <strong><?= htmlspecialchars($selectedPackageLabel) ?></strong>
+    <?php else: ?>
+      Your agreement has been recorded and a signed PDF is available.
+    <?php endif; ?>
+  </p>
+  <div class="signed-actions">
+    <a class="btn-download" href="download-contract.php?token=<?= urlencode($token) ?>">Download signed PDF</a>
+    <a class="btn-view" href="download-contract.php?token=<?= urlencode($token) ?>&amp;inline=1" target="_blank" rel="noopener">View PDF</a>
+  </div>
+</div>
+<?php endif; ?>
 
 <!-- ============================
      CONTRACT HEADER + ARTICLE 1
@@ -971,10 +1081,29 @@ button {
   Fees apply <strong>only</strong> to the selected package.
 </p>
 
+<div class="article-7-intro">
+  <strong>How to choose:</strong> Select one package radio button below. The fee details will expand underneath your selection.
+  <?= $isSigned ? 'This contract is signed — your selected package is shown below.' : 'You must choose a package before signing at the bottom of this page.' ?>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" value="p70" onclick="showPkg('p70')">
+    <span class="package-label-text">7.1 FEES PAID BY STUDENTS FOR OUR PARTNER UNIVERSITIES, COMPANIES, AND SOME TARGETED COUNTRIES</span>
+  </label>
+  <div id="p70" class="package-details">
+    ➤ USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)<br>
+    ➤ Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)<br>
+    ➤ Europe – Registration and Application Fee: USD 150 (Paid before starting application)<br>
+    ➤ South Korea – Registration and Application Fee: USD 250 (Paid before starting application)<br>
+    <em>Note: Students are responsible for all additional costs associated with their visa application and immigration process, including any fees charged by embassies, visa application centers, government agencies, medical institutions, or other relevant authorities.</em>
+  </div>
+</div>
+
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p71')">
-    7.1 🇺🇸 Study in the USA (Loan-Based)
+    7.2 🇺🇸 Study in the USA (Loan-Based)
   </label>
   <div id="p71" class="package-details">
     ✔ Admission Support<br>
@@ -989,7 +1118,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p72')">
-    7.2 🇺🇸 Study in the USA (Without Loan)
+    7.3 🇺🇸 Study in the USA (Without Loan)
   </label>
   <div id="p72" class="package-details">
     ✔ Admission Support<br>
@@ -1003,7 +1132,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p73')">
-    7.3 🇪🇺 Study in Europe (Without Loan)
+    7.4 🇪🇺 Study in Europe (Without Loan)
   </label>
   <div id="p73" class="package-details">
     ➤ Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)<br>
@@ -1016,7 +1145,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p74')">
-    7.4 🇨🇦 Study in Canada (Loan-Based)
+    7.5 🇨🇦 Study in Canada (Loan-Based)
   </label>
   <div id="p74" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
@@ -1029,21 +1158,19 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p75')">
-    7.5 🇨🇦 Study in Canada (Without Loan)
+    7.6 🇨🇦 Study in Canada (Without Loan)
   </label>
   <div id="p75" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
-    ➤ Before starting Visa Application: CAD 650<br>
-    ➤ After Visa Approval: CAD 1,500<br>
-    <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong><br>
-    <em>Note: Tuition deposit CAD 500–5,000 payable directly by the Student.</em>
+    ➤ After Visa Approval: CAD 2,050<br>
+    <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong>
   </div>
 </div>
 
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p76')">
-    7.6 🇨🇦 Canada – High School Graduate (Loan-Based)
+    7.7 🇨🇦 Canada – High School Graduate (Loan-Based)
   </label>
   <div id="p76" class="package-details">
     ➤ Registration & Application Fee: CAD 450<br>
@@ -1060,7 +1187,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77ca')">
-    7.7 🇨🇦 Study in Canada (With Your Own Admission Letter)
+    7.8 🇨🇦 Study in Canada (With Your Own Admission Letter)
   </label>
   <div id="p77ca" class="package-details">
     ➤ Document Handling, Visa Application & Biometric Fees: CAD 735<br>
@@ -1072,7 +1199,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77')">
-    7.8 🇰🇷 Study in South Korea (Self-Sponsored)
+    7.9 🇰🇷 Study in South Korea (Self-Sponsored)
   </label>
   <div id="p77" class="package-details">
     ➤ Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)<br>
@@ -1087,7 +1214,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p78')">
-    7.9 🇰🇷 South Korea Visitor Visa
+    7.10 🇰🇷 South Korea Visitor Visa
   </label>
   <div id="p78" class="package-details">
     ➤ Registration & Application Fee: USD 500<br>
@@ -1099,7 +1226,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p79')">
-    7.10 Credit Transfer (Bachelor, Masters, PhD)
+    7.11 Credit Transfer (Bachelor, Masters, PhD)
   </label>
   <div id="p79" class="package-details">
     ➤ Bachelor: USD 920<br>
@@ -1111,7 +1238,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710')">
-    7.11 🇨🇦 Canada Visit Visa
+    7.12 🇨🇦 Canada Visit Visa
   </label>
   <div id="p710" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1124,7 +1251,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p711')">
-    7.12 🇺🇸 USA Visit Visa
+    7.13 🇺🇸 USA Visit Visa
   </label>
   <div id="p711" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1136,7 +1263,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p712')">
-    7.13 🇪🇺 Europe Visit Visa
+    7.14 🇪🇺 Europe Visit Visa
   </label>
   <div id="p712" class="package-details">
     ➤ Documents & Invitation Letter: €600<br>
@@ -1148,7 +1275,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p713')">
-    7.14 Asia Visit Visa
+    7.15 Asia Visit Visa
   </label>
   <div id="p713" class="package-details">
     ➤ Documents & Invitation Letter: USD 800<br>
@@ -1160,7 +1287,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p714')">
-    7.15 SHORT COURSES-CANADA
+    7.16 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)<br>
@@ -1176,7 +1303,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p715')">
-    7.16 STUDY PhD IN CANADA-USA-EUROPE & ASIA
+    7.17 STUDY PhD IN CANADA-USA-EUROPE & ASIA
   </label>
   <div id="p715" class="package-details">
     ➤ Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)<br>
@@ -1196,7 +1323,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p716')">
-    7.17 WES EVALUATION – INTERNATIONAL EQUIVALENCE
+    7.18 WES EVALUATION – INTERNATIONAL EQUIVALENCE
   </label>
   <div id="p716" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
@@ -1210,6 +1337,26 @@ button {
     <strong>5. Time, Administrative Work &amp; Follow-up: CAD 200</strong><br>
     Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.<br><br>
     <strong>🔹 Total Package: CAD 900</strong>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p717')">
+    7.19 GUARANTEED EVALUATION SUPPORT!
+  </label>
+  <div id="p717" class="package-details">
+    <strong>1. Professional Service Fees: CAD 200</strong><br>
+    The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the all evaluation process.<br><br>
+    <strong>2. Application &amp; Processing Costs: CAD 300</strong><br>
+    The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.<br><br>
+    <strong>3. University &amp; Verification Coordination: CAD 100</strong><br>
+    The service involves contacting universities, registrars, and authorized offices to ensure transcripts and academic records are properly verified and submitted.<br><br>
+    <strong>4. Document Shipping &amp; Delivery Expenses: CAD 100</strong><br>
+    The cost also includes courier charges, document shipping, electronic submission support, and tracking to ensure documents safely reach on time.<br><br>
+    <strong>5. Time, Administrative Work &amp; Follow-up: CAD 200</strong><br>
+    Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.<br><br>
+    <strong>🔹 Total packages: CAD 900</strong>
   </div>
 </div>
 
@@ -1505,7 +1652,7 @@ transition:border-color 0.2s ease;
 <button id="clearSignature" type="button" style="flex:1;background:#f3f4f6;color:#374151;border:none;">Clear Signature</button>
 <button id="signContract" type="button" style="flex:2;background:#3b82f6;color:#ffffff;border:none;">Sign & Submit Contract</button>
 <input type="hidden" id="signatureData">
-<input type="hidden" id="selected_package_code" value="">
+<input type="hidden" id="selected_package_code" value="<?= htmlspecialchars($selectedPackageCode) ?>">
 </div>
 
 </div>
@@ -1529,6 +1676,9 @@ transition:border-color 0.2s ease;
      CONFIG & ELEMENTS
   ========================== */
   const canvas = document.querySelector('.signature-canvas');
+  if (!canvas) {
+    return;
+  }
   const ctx = canvas.getContext('2d');
 
   const btnClear = document.getElementById('clearSignature');
@@ -1849,6 +1999,42 @@ if (!payload.selected_package_label) {
   return;
 }
 
+if (!payload.selected_package_code) {
+  alert("Package code is missing. Please click a package under Article 7 again, then sign.");
+  return;
+}
+
+function resetSubmitButton() {
+  const btn = document.getElementById('signContract');
+  if (!btn) return;
+  btn.disabled = false;
+  btn.textContent = 'Sign & Submit Contract';
+  btn.style.background = '#3b82f6';
+}
+
+function extractServerErrorMessage(responseText, fallback) {
+  const trimmed = (responseText || '').trim();
+  if (!trimmed) {
+    return fallback;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (parsed && parsed.error) {
+      return parsed.error;
+    }
+  } catch (e) {
+    // not JSON
+  }
+
+  const textOnly = trimmed.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+  if (textOnly.length > 0 && textOnly.length <= 500) {
+    return textOnly;
+  }
+
+  return fallback;
+}
+
 /* ==========================
    SUBMIT TO BACKEND
 ========================== */
@@ -1873,11 +2059,16 @@ fetch("submit-signature.php", {
   } catch (e) {
     console.error('JSON parse error:', e);
     console.error('Response text that failed to parse:', responseText);
-    throw new Error("Invalid JSON response from server");
+    resetSubmitButton();
+    throw new Error(extractServerErrorMessage(
+      responseText,
+      'Server returned an invalid response while signing. Please try again or contact support.'
+    ));
   }
 
   // HTTP-level error but JSON returned
   if (!res.ok) {
+    resetSubmitButton();
     throw new Error(data.error || "Server error");
   }
 
@@ -1887,13 +2078,23 @@ fetch("submit-signature.php", {
 
   // ✅ SUCCESS
   if (data.success) {
-    alert(
-      "Contract signed successfully.\n\n" +
-      "You can now download or view the signed agreement."
-    );
+    if (data.pdf_error) {
+      alert(
+        "Contract signed successfully, but the PDF could not be generated automatically.\n\n" +
+        "Reason: " + data.pdf_error + "\n\n" +
+        "You can reload the page and try Download again."
+      );
+    } else {
+      alert(
+        "Contract signed successfully.\n\n" +
+        "You can now download or view the signed agreement."
+      );
+    }
     window.location.reload();
     return;
   }
+
+  resetSubmitButton();
 
   // ⚠️ EXPECTED CASE: already signed
   if (data.error && data.error.toLowerCase().includes("already signed")) {
@@ -1911,6 +2112,7 @@ fetch("submit-signature.php", {
 })
 .catch(err => {
   console.error("Signature submission error:", err);
+  resetSubmitButton();
 
   alert(err?.message || (
     "Unable to submit at this time.\n" +
@@ -2180,40 +2382,63 @@ window.showPkg = function (id) {
     selected.style.display = 'block';
   }
 
-  // ✅ SAVE SELECTED PACKAGE CODE
-  const holder = document.getElementById('selected_package_code');
-  if (holder) {
-    holder.value = id; // e.g. "p74"
-    console.log('Package code set to:', id); // Debug logging
-  }
-  
-  // ✅ ALSO UPDATE ANY RADIO BUTTON WITH CORRESPONDING VALUE
+  document.querySelectorAll('.package-item').forEach(item => {
+    item.classList.remove('is-selected');
+  });
+
   const radio = document.querySelector(`input[onclick*="showPkg('${id}')"]`);
   if (radio) {
-    radio.value = id;
-    console.log('Radio button value set to:', id);
+    radio.checked = true;
+    radio.closest('.package-item')?.classList.add('is-selected');
+    if (!radio.value) {
+      radio.value = id;
+    }
+  }
+
+  const holder = document.getElementById('selected_package_code');
+  if (holder) {
+    holder.value = id;
   }
 };
 
-// ✅ INITIALIZE PACKAGE CODE ON PAGE LOAD
 document.addEventListener('DOMContentLoaded', function() {
-  console.log('Initializing package selection...');
-  
-  // Check if any package is already selected
-  const checkedRadio = document.querySelector('input[name="package"]:checked');
-  if (checkedRadio) {
-    const onclick = checkedRadio.getAttribute('onclick');
-    const match = onclick.match(/showPkg\('([^']+)'\)/);
-    if (match) {
-      const packageId = match[1];
-      console.log('Pre-selected package found:', packageId);
-      
-      // Set the package code
-      const holder = document.getElementById('selected_package_code');
-      if (holder) {
-        holder.value = packageId;
-        console.log('Package code initialized to:', packageId);
+  document.querySelectorAll('input[name="package"]').forEach(radio => {
+    const match = (radio.getAttribute('onclick') || '').match(/showPkg\('([^']+)'\)/);
+    if (match && !radio.value) {
+      radio.value = match[1];
+    }
+
+    radio.addEventListener('change', function() {
+      const onclickMatch = (this.getAttribute('onclick') || '').match(/showPkg\('([^']+)'\)/);
+      if (onclickMatch) {
+        showPkg(onclickMatch[1]);
       }
+    });
+  });
+
+  if (document.body.classList.contains('contract-signed')) {
+    document.querySelectorAll('input[name="package"]').forEach(radio => {
+      radio.disabled = true;
+    });
+  }
+
+  const presetCode = document.getElementById('selected_package_code')?.value?.trim();
+  const checkedRadio = document.querySelector('input[name="package"]:checked');
+
+  if (presetCode) {
+    const presetRadio = document.querySelector(`input[name="package"][value="${presetCode}"]`)
+      || document.querySelector(`input[onclick*="showPkg('${presetCode}')"]`);
+    if (presetRadio) {
+      presetRadio.checked = true;
+    }
+    showPkg(presetCode);
+    return;
+  }
+
+  if (checkedRadio) {
+    const match = (checkedRadio.getAttribute('onclick') || '').match(/showPkg\('([^']+)'\)/);
+    if (match) {
+      showPkg(match[1]);
     }
   }
 });

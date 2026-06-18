@@ -71,21 +71,10 @@ function contract_signature_to_display_png(string $dataUrl): ?string
     for ($y = 0; $y < $h; $y++) {
         for ($x = 0; $x < $w; $x++) {
             $rgba = imagecolorat($src, $x, $y);
-            $r = ($rgba >> 16) & 0xFF;
-            $g = ($rgba >> 8) & 0xFF;
-            $b = $rgba & 0xFF;
             $alpha = ($rgba >> 24) & 0x7F;
 
-            // GD: 127 = transparent, 0 = opaque
-            if ($alpha >= 120) {
-                continue;
-            }
-
-            $max = max($r, $g, $b);
-            $lum = (int) round(0.299 * $r + 0.587 * $g + 0.114 * $b);
-
-            // Keep ink (strokes), drop near-black backgrounds
-            if ($max > 16 || $lum > 12) {
+            // GD: 127 = transparent, 0 = opaque — keep all visible ink (including black strokes)
+            if ($alpha < 120) {
                 imagesetpixel($dest, $x, $y, $black);
             }
         }
@@ -104,6 +93,37 @@ function contract_signature_to_display_png(string $dataUrl): ?string
 function contract_signature_storage_dir(): string
 {
     return dirname(__DIR__) . '/uploads/contracts_special';
+}
+
+function contract_signature_standard_file_path(int $contractId): string
+{
+    return dirname(__DIR__) . '/uploads/contracts/signature_' . $contractId . '.png';
+}
+
+/**
+ * Save signature PNG for standard student contracts (returns absolute path or null).
+ */
+function contract_signature_save_standard_png(int $contractId, string $dataUrl): ?string
+{
+    $png = contract_signature_to_display_png($dataUrl);
+    if ($png === null) {
+        $png = contract_signature_raw_bytes($dataUrl);
+    }
+    if ($png === null || $png === '') {
+        return null;
+    }
+
+    $dir = dirname(__DIR__) . '/uploads/contracts';
+    if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
+        return null;
+    }
+
+    $path = contract_signature_standard_file_path($contractId);
+    if (file_put_contents($path, $png) === false) {
+        return null;
+    }
+
+    return $path;
 }
 
 function contract_signature_file_path(int $contractId): string

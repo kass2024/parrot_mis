@@ -23,10 +23,25 @@ function getPackageDetails(string $code): array
     $packages = [
 
         /* =========================
-           7.1 USA – Loan-Based
+           7.1 Partner Universities – Targeted Countries
+        ========================== */
+        'p70' => [
+            'title' => '7.1 FEES PAID BY STUDENTS FOR OUR PARTNER UNIVERSITIES, COMPANIES, AND SOME TARGETED COUNTRIES',
+            'lines' => [
+                'USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)',
+                'Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)',
+                'Europe – Registration and Application Fee: USD 150 (Paid before starting application)',
+                'South Korea – Registration and Application Fee: USD 250 (Paid before starting application)',
+                'Note: Students are responsible for all additional costs associated with their visa application and immigration process, including any fees charged by embassies, visa application centers, government agencies, medical institutions, or other relevant authorities.',
+            ],
+            'total' => null,
+        ],
+
+        /* =========================
+           7.2 USA – Loan-Based
         ========================== */
         'p71' => [
-            'title' => '7.1 Study in the USA (Loan-Based)',
+            'title' => '7.2 Study in the USA (Loan-Based)',
             'lines' => [
                 'Admission Support',
                 'Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)',
@@ -38,10 +53,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.2 USA – Without Loan
+           7.3 USA – Without Loan
         ========================== */
         'p72' => [
-            'title' => '7.2 Study in the USA (Without Loan-Based)',
+            'title' => '7.3 Study in the USA (Without Loan-Based)',
             'lines' => [
                 'Admission Support',
                 'Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)',
@@ -52,10 +67,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.3 Europe – Without Loan
+           7.4 Europe – Without Loan
         ========================== */
         'p73' => [
-            'title' => '7.3 Study in Europe (Without Loan-Based)',
+            'title' => '7.4 Study in Europe (Without Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)',
                 'Fees payable before visa application: USD 250',
@@ -65,10 +80,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.4 Canada – Loan-Based
+           7.5 Canada – Loan-Based
         ========================== */
         'p74' => [
-            'title' => '7.4 Study in Canada (Loan-Based)',
+            'title' => '7.5 Study in Canada (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'Service Fees (payable after visa approval): CAD 3,050',
@@ -78,24 +93,22 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.5 Canada – Without Loan
+           7.6 Canada – Without Loan
         ========================== */
         'p75' => [
-            'title' => '7.5 Study in Canada (Without Loan-Based)',
+            'title' => '7.6 Study in Canada (Without Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
-                'Before starting Visa Application: CAD 650',
-                'After Visa Approval: CAD 1,500',
-                'Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.',
+                'After Visa Approval: CAD 2,050',
             ],
             'total' => 'CAD 2,500',
         ],
 
         /* =========================
-           7.6 Canada – High School Graduate
+           7.7 Canada – High School Graduate
         ========================== */
         'p76' => [
-            'title' => '7.6 Canada – High School Graduate (Loan-Based)',
+            'title' => '7.7 Canada – High School Graduate (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450',
                 'Study Permit Fees (Embassy): CAD 150',
@@ -109,10 +122,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.7 South Korea – Study
+           7.8 South Korea – Study
         ========================== */
         'p77' => [
-            'title' => '7.7 Study in South Korea (Self-Sponsored)',
+            'title' => '7.8 Study in South Korea (Self-Sponsored)',
             'lines' => [
                 'Registration & Application Fee: USD 500 (Refundable if admission is not secured)',
                 'Service Fees – Bachelor’s Program: USD 1,800',
@@ -126,10 +139,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.8 South Korea – Visit Visa
+           7.9 South Korea – Visit Visa
         ========================== */
         'p78' => [
-            'title' => '7.8 🇰🇷 South Korea Visitor Visa',
+            'title' => '7.9 🇰🇷 South Korea Visitor Visa',
             'lines' => [
                 'Registration & Application Fee: USD 500',
                 'Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500',
@@ -139,10 +152,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.9 Credit Transfer
+           7.10 Credit Transfer
         ========================== */
         'p79' => [
-            'title' => '7.9 Credit Transfer (Bachelor, Masters & PhD)',
+            'title' => '7.10 Credit Transfer (Bachelor, Masters & PhD)',
             'lines' => [
                 'Bachelor Program: USD 920',
                 'Masters Program: USD 1,220',
@@ -152,10 +165,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.10 Canada Visit Visa
+           7.11 Canada Visit Visa
         ========================== */
         'p710' => [
-            'title' => '7.10 Canada Visit Visa',
+            'title' => '7.11 Canada Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: USD 1,000',
                 'Visa Application Fees (Embassy): CAD 100',
@@ -166,10 +179,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.11 USA Visit Visa
+           7.12 USA Visit Visa
         ========================== */
         'p711' => [
-            'title' => '7.11 USA Visit Visa',
+            'title' => '7.12 USA Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: USD 1,000',
                 'Visa Application Fees (Embassy): USD 185',
@@ -179,10 +192,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.12 Europe Visit Visa
+           7.13 Europe Visit Visa
         ========================== */
         'p712' => [
-            'title' => '7.12 Europe Visit Visa',
+            'title' => '7.13 Europe Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: EUR 600',
                 'Visa Application Fees (Embassy): EUR 85 – EUR 500 (depending on country)',
@@ -192,10 +205,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.13 Asia Visit Visa
+           7.14 Asia Visit Visa
         ========================== */
         'p713' => [
-            'title' => '7.13 Asia Visit Visa',
+            'title' => '7.14 Asia Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: USD 800',
                 'Visa Application Fees (Embassy): USD 85 – USD 500',
