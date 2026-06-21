@@ -884,30 +884,31 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 <!-- ================= ROW 1 ================= -->
 <tr>
 
-<!-- COMPANY REPRESENTATIVE -->
+<!-- KIGALI OFFICE -->
 <td style="padding:10px 12px; vertical-align:top; width:50%;">
 
-<strong>For the Company Representative</strong><br><br>
+<strong>Company representative Kigali office</strong><br><br>
 
-Name: Jean Pierre TWAJAMAHORO<br>
-Title: Managing Director<br>
+Name: ___________________________<br><br>
+
+Position: ___________________________<br><br>
 
 Signature:<br>
-<div style="border-bottom:1px solid #000; height:50px; width:70%; position:relative;">
-  <img src="<?= $consultantSignature ?>" alt="Company Signature" style="max-height:48px; position:absolute; bottom:2px; left:0;">
-</div>
+<div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
 
-Date: <?= esc($data['signed_date']) ?>
+Date: ___________________________
 
 </td>
 
 
-<!-- NOTARY -->
+<!-- MUSANZE OFFICE -->
 <td style="padding:10px 12px; vertical-align:top; width:50%;">
 
-<strong>For the Notary</strong><br><br>
+<strong>Company representative Musanze Office</strong><br><br>
 
-Name: ___________________________<br>
+Name: ___________________________<br><br>
+
+Position: ___________________________<br><br>
 
 Signature:<br>
 <div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
@@ -920,6 +921,28 @@ Date: ___________________________
 
 
 <!-- ================= ROW 2 ================= -->
+<tr>
+
+<!-- NOTARY -->
+<td style="padding:10px 12px; vertical-align:top; width:50%;">
+
+<strong>For the Notary</strong><br><br>
+
+Name: ___________________________<br><br>
+
+Signature:<br>
+<div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
+
+Date: ___________________________
+
+</td>
+
+<td style="padding:10px 12px; vertical-align:top; width:50%;"></td>
+
+</tr>
+
+
+<!-- ================= ROW 3 ================= -->
 <tr>
 
 <!-- STUDENT -->

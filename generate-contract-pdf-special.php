@@ -692,27 +692,23 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 <table border="1">
 <tr>
 <td>
-<strong>For the Consultant</strong><br>
-Name: Jean Pierre TWAJAMAHORO<br>
-Title: Managing Director
+<strong>Company representative Kigali office</strong><br><br>
+Name: ___________________________<br><br>
+Position: ___________________________<br><br>
 
-<div class="signature-box">
-    <img src="<?= $consultantSignature ?>" alt="Consultant Signature">
-</div>
+<div class="signature-box"></div>
 
-Date: <?= esc($data['signed_date']) ?>
+Date: ___________________________
 </td>
 
 <td>
-<strong>For the Consultant Representative</strong><br><br>
-Name: Jean Pierre TWAJAMAHORO<br>
-Title: Managing Director<br>
+<strong>Company representative Musanze Office</strong><br><br>
+Name: ___________________________<br><br>
+Position: ___________________________<br><br>
 
-<div class="signature-box">
-    <img src="<?= $consultantSignature ?>" alt="Representative Signature">
-</div>
+<div class="signature-box"></div>
 
-Date: <?= esc($data['signed_date']) ?>
+Date: ___________________________
 </td>
 </tr>
 

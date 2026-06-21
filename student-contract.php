@@ -1521,25 +1521,54 @@ button {
 ============================ -->
 <div class="signature-grid">
 
-<!-- CONSULTANT REPRESENTATIVE -->
+<!-- COMPANY REPRESENTATIVE – KIGALI OFFICE -->
 <div class="signature-block">
 <p style="font-weight:700;margin-bottom:18px;font-size:16px;">
-For the Consultant Representative
+Company representative Kigali office
 </p>
 
 <div style="margin-bottom:18px;">
-<strong>Name:</strong> Jean Pierre TWAJAMAHORO
+<strong>Name:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 
 <div style="margin-bottom:18px;">
-<strong>Title:</strong> Managing Director
+<strong>Position:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 
 <div style="margin-bottom:18px;">
 <strong>Signature:</strong>
-<div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;position:relative;">
-  <img src="admin/signature-manager.png" style="max-height:55px;position:absolute;bottom:2px;left:0;" alt="Consultant Signature">
+<div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;"></div>
 </div>
+
+<div style="margin-bottom:18px;">
+<strong>Date:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+</div>
+
+</div>
+
+
+<!-- COMPANY REPRESENTATIVE – MUSANZE OFFICE -->
+<div class="signature-block">
+<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
+Company representative Musanze Office
+</p>
+
+<div style="margin-bottom:18px;">
+<strong>Name:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Position:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Signature:</strong>
+<div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;"></div>
 </div>
 
 <div style="margin-bottom:18px;">

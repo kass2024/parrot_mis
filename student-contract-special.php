@@ -1504,32 +1504,20 @@ button {
 <div>
 
   <!-- ============================
-       CONSULTANT
+       KIGALI OFFICE
   ============================ -->
   <p style="font-weight:700;margin-bottom:10px;">
-    For the Consultant
+    Company representative Kigali office
   </p>
 
-  <p>Name: <strong>Jean Pierre TWAJAMAHORO</strong></p>
-  <p>Title: <strong>Managing Director</strong></p>
+  <p>Name:</p>
+  <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+
+  <p>Position:</p>
+  <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
 
   <p style="margin-top:16px;">Signature:</p>
-
-  <!-- SIGNATURE LINE WITH TALLER IMAGE -->
-  <div style="
-    border-bottom:1px solid #000;
-    height:60px;
-    margin-bottom:10px;
-    position:relative;
-  ">
-    <img src="admin/signature-manager.png"
-         style="
-           max-height:55px;
-           position:absolute;
-           bottom:2px;
-           left:0;
-         ">
-  </div>
+  <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
 
   <p>Date: ______________________________</p>
 
@@ -1617,21 +1605,19 @@ button {
     ============================ -->
     <div>
 
-      <!-- REPRESENTATIVE -->
+      <!-- MUSANZE OFFICE -->
       <p style="font-weight:700;margin-bottom:8px;">
-        For the Representative of Consultant
+        Company representative Musanze Office
       </p>
 
-      <p>Name: <strong>Jean Pierre TWAJAMAHORO</strong></p>
-      <p>Title: <strong>Managing Director</strong></p>
-      <p>Branch: <strong>Nduba, Gasabo, Kigali</strong></p>
-      <p>Phone: <strong>+250788520750</strong></p>
+      <p>Name:</p>
+      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+
+      <p>Position:</p>
+      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
 
       <p style="margin-top:16px;">Signature:</p>
-      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;position:relative;">
-        <img src="admin/signature-manager.png"
-             style="max-height:55px;position:absolute;bottom:2px;left:0;">
-      </div>
+      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
 
       <p>Date: ____________________________</p>
 
