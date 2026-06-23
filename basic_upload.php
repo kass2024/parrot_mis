@@ -28,9 +28,9 @@ try {
         mkdir($uploadDir, 0755, true);
     }
     
-    // Generate filename
-    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = $field . '_' . time() . '_' . uniqid() . '.' . $ext;
+    // Generate filename (any extension or none)
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $filename = $field . '_' . time() . '_' . uniqid() . ($ext !== '' ? '.' . $ext : '');
     $targetPath = $uploadDir . $filename;
     
     // Move file

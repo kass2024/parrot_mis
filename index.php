@@ -265,13 +265,13 @@ $index_translations = [
         'card7_point2' => 'Fast processing',
         'card7_point3' => 'Document assistance',
         
-        // Card 8: Airticketing Reservation
-        'card8_title' => 'Airticketing Reservation',
-        'card8_subtitle' => 'Flight bookings for students & professionals',
-        'card8_description' => 'Hassle-free international and domestic flight booking.',
-        'card8_point1' => 'Exclusive student/academic fares',
-        'card8_point2' => 'Flexible change & cancellation',
-        'card8_point3' => 'End-to-end travel support',
+        // Card 8: Francophonie Mobility Work Visa
+        'card8_title' => 'Canada Francophonie Mobility',
+        'card8_subtitle' => 'Work visa — Mobilité Francophone',
+        'card8_description' => 'Apply for Canada Francophonie Mobility work visa opportunities with full candidate form support.',
+        'card8_point1' => 'French & English profile review',
+        'card8_point2' => 'Complete candidate form',
+        'card8_point3' => 'Email updates & document review',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -525,13 +525,13 @@ $index_translations = [
         'card7_point2' => 'Traitement rapide',
         'card7_point3' => 'Assistance documents',
         
-        // Card 8: Airticketing Reservation
-        'card8_title' => 'Réservation de Billets',
-        'card8_subtitle' => 'Vols pour étudiants & professionnels',
-        'card8_description' => 'Réservation de vols sans tracas.',
-        'card8_point1' => 'Tarifs étudiants',
-        'card8_point2' => 'Modification flexible',
-        'card8_point3' => 'Support voyage',
+        // Card 8: Francophonie Mobility
+        'card8_title' => 'Mobilité Francophone Canada',
+        'card8_subtitle' => 'Visa travail — Mobilité Francophone',
+        'card8_description' => 'Postulez au programme Mobilité Francophone pour opportunités de travail au Canada.',
+        'card8_point1' => 'Évaluation profil français & anglais',
+        'card8_point2' => 'Formulaire candidat complet',
+        'card8_point3' => 'Suivi par email & revue documents',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -593,6 +593,12 @@ $cardRetrievalMeta = [
         'table_label' => 'canada_medical_exams_requests',
         'placeholder' => 'MED_…',
         'example'     => 'MED_69daa0c4de4a2_1775935684',
+    ],
+    'francophonie' => [
+        'service'     => $current_lang === 'fr' ? 'Mobilité Francophone Canada' : 'Canada Francophonie Mobility',
+        'table_label' => 'francophonie_mobility_applications',
+        'placeholder' => 'fm_…',
+        'example'     => 'fm_a1b2c3d4e5f6_1719150000',
     ],
 ];
 
@@ -667,6 +673,16 @@ $cards = [
         'points_keys' => ['card7_point1', 'card7_point2', 'card7_point3'],
         'form' => 'canada-medical-exams-request.php',
         'color' => '#E21D1E'
+    ],
+    [
+        'id' => 'francophonie',
+        'icon' => '🍁',
+        'title_key' => 'card8_title',
+        'subtitle_key' => 'card8_subtitle',
+        'description_key' => 'card8_description',
+        'points_keys' => ['card8_point1', 'card8_point2', 'card8_point3'],
+        'form' => 'francophonie-mobility-request.php',
+        'color' => '#3661B9'
     ]
 ];
 
@@ -2226,6 +2242,10 @@ include 'header.php';
           break;
         case 'i20':
           targetUrl = `select-20.php?form=${encodeURIComponent(form)}&id=${encodeURIComponent(userId)}`;
+          break;
+        case 'medical':
+        case 'francophonie':
+          targetUrl = form;
           break;
         default:
           targetUrl = `${form}?id=${encodeURIComponent(userId)}`;

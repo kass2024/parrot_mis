@@ -297,6 +297,13 @@ $cards = [
       'canada-medical-exams-applications.php' => 'View Applications',
     ]
   ],
+  'francophonie_mobility' => [
+    'title' => 'Francophonie Mobility',
+    'icon' => 'bi-map',
+    'links' => [
+      'francophonie-mobility-applications.php' => 'View Applications',
+    ]
+  ],
   'refund_requests' => [
     'title' => 'Refund Requests',
     'icon' => 'bi-cash-stack',
@@ -346,7 +353,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'refund_requests', 'platform', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'refund_requests', 'platform', 'contracts', 'partner_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -354,7 +361,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -2142,6 +2149,36 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           Approved
         </a>
         <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=rejected', 'Rejected')">
+          <i class="bi bi-x-circle"></i>
+          Rejected
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('francophonie_mobility', $allowedSidebarItems)): ?>
+      <a href="#francophonie_mobility" class="sidebar-link" onclick="toggleSidebarMenu('francophonie_mobility')">
+        <i class="bi bi-map"></i>
+        <span>Francophonie Mobility</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_francophonie_mobility">
+        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php', 'Francophonie Mobility')">
+          <i class="bi bi-list-ul"></i>
+          View Applications
+        </a>
+        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=pending', 'Pending')">
+          <i class="bi bi-clock"></i>
+          Pending
+        </a>
+        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=under_review', 'Under Review')">
+          <i class="bi bi-eye"></i>
+          Under Review
+        </a>
+        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=approved', 'Approved')">
+          <i class="bi bi-check-circle"></i>
+          Approved
+        </a>
+        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=rejected', 'Rejected')">
           <i class="bi bi-x-circle"></i>
           Rejected
         </a>
