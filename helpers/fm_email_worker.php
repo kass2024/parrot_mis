@@ -91,7 +91,6 @@ function fm_send_new_application_emails(mysqli $conn, int $applicationId): bool
     $applicantOk = false;
     try {
         $applicantOk = fm_notify_applicant_received($mailRow);
-        fm_notify_admins_new_application($mailRow);
     } catch (Throwable $e) {
         error_log('FM background email: ' . $e->getMessage());
     }
@@ -106,4 +105,55 @@ function fm_send_new_application_emails(mysqli $conn, int $applicationId): bool
     }
 
     return $applicantOk;
+}
+
+function fm_spawn_cli_worker(string $scriptBasename, int $applicationId): bool
+{
+    $root = dirname(__DIR__);
+    $script = $root . DIRECTORY_SEPARATOR . $scriptBasename;
+    $php = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+    if (!is_file($script)) {
+        return false;
+    }
+    $id = (int) $applicationId;
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        $cmd = 'start /B "" ' . escapeshellarg($php) . ' ' . escapeshellarg($script) . ' ' . $id;
+        @pclose(@popen($cmd, 'r'));
+    } else {
+        $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' ' . $id . ' > /dev/null 2>&1 &';
+        @exec($cmd);
+    }
+    return true;
+}
+
+function fm_dispatch_approval_package(int $applicationId): bool
+{
+    return fm_spawn_cli_worker('fm_background_approval.php', $applicationId);
+}
+
+function fm_send_approval_package_job(mysqli $conn, int $applicationId): bool
+{
+    $st = $conn->prepare('SELECT * FROM francophonie_mobility_applications WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('i', $applicationId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$row) {
+        return false;
+    }
+
+    xander_load_env_file();
+    $ok = fm_send_approval_package($row);
+    if ($ok) {
+        $mark = $conn->prepare('UPDATE francophonie_mobility_applications SET approval_package_sent_at = NOW() WHERE id = ?');
+        if ($mark) {
+            $mark->bind_param('i', $applicationId);
+            $mark->execute();
+            $mark->close();
+        }
+    }
+    return $ok;
 }

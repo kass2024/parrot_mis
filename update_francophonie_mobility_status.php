@@ -9,6 +9,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 fm_ensure_schema($conn);
 require_once __DIR__ . '/helpers/francophonie_mobility_notify.php';
+require_once __DIR__ . '/helpers/fm_email_worker.php';
 require_once __DIR__ . '/helpers/env_load.php';
 
 header('Content-Type: application/json');
@@ -83,13 +84,12 @@ xander_load_env_file();
 $emailOk = fm_notify_applicant_status($app, $new_status, $note);
 
 $packageOk = null;
-if ($new_status === 'approved' && empty($app['approval_package_sent_at'])) {
-    $packageOk = fm_send_approval_package($app);
-    if ($packageOk) {
-        $mark = $conn->prepare('UPDATE francophonie_mobility_applications SET approval_package_sent_at = NOW() WHERE id = ?');
-        $mark->bind_param('i', $application_id);
-        $mark->execute();
-        $mark->close();
+$approvalEmail = fm_approval_recipient_email();
+if ($new_status === 'approved') {
+    if ($approvalEmail === '') {
+        $packageOk = false;
+    } else {
+        $packageOk = fm_dispatch_approval_package($application_id);
     }
 }
 
@@ -98,4 +98,5 @@ echo json_encode([
     'message' => 'Status updated',
     'email_sent' => $emailOk,
     'approval_package_sent' => $packageOk,
+    'approval_email' => $approvalEmail !== '' ? $approvalEmail : null,
 ]);

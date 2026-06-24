@@ -23,11 +23,12 @@ function xander_create_phpmailer_applicant_sender(): PHPMailer
 }
 
 /**
- * Simple HTML email send with optional attachments.
+ * Simple HTML email send with optional attachments and BCC copies.
  *
  * @param array<int, array{path:string, name?:string}> $attachments
+ * @param string[] $bcc
  */
-function sendSMTPMail(string $to, string $subject, string $htmlBody, array $attachments = []): bool
+function sendSMTPMail(string $to, string $subject, string $htmlBody, array $attachments = [], array $bcc = []): bool
 {
     $to = trim($to);
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
@@ -38,7 +39,14 @@ function sendSMTPMail(string $to, string $subject, string $htmlBody, array $atta
         $mail = xander_create_phpmailer_applicant_sender();
         $mail->clearAddresses();
         $mail->clearAttachments();
+        $mail->clearBCCs();
         $mail->addAddress($to);
+        foreach ($bcc as $copy) {
+            $copy = trim((string) $copy);
+            if ($copy !== '' && filter_var($copy, FILTER_VALIDATE_EMAIL) && strcasecmp($copy, $to) !== 0) {
+                $mail->addBCC($copy);
+            }
+        }
         $mail->Subject = $subject;
         $mail->Body = $htmlBody;
         $mail->AltBody = strip_tags(str_replace(['<br>', '<br/>', '<br />'], "\n", $htmlBody));

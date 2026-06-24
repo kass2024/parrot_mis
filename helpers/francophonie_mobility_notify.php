@@ -48,6 +48,27 @@ function fm_email_wrap(string $title, string $innerHtml): string
     </body></html>";
 }
 
+/** Office inbox from .env SMTP settings (for BCC copies). */
+function fm_office_smtp_email(): string
+{
+    xander_load_env_file();
+    $from = trim(xander_env_get('SMTP_FROM_EMAIL'));
+    if ($from !== '' && filter_var($from, FILTER_VALIDATE_EMAIL)) {
+        return $from;
+    }
+    $user = trim(xander_env_get('SMTP_USERNAME'));
+    if ($user !== '' && filter_var($user, FILTER_VALIDATE_EMAIL)) {
+        return $user;
+    }
+    return '';
+}
+
+function fm_office_bcc_list(): array
+{
+    $office = fm_office_smtp_email();
+    return $office !== '' ? [$office] : [];
+}
+
 function fm_notify_applicant_status(array $row, string $status, string $note = ''): bool
 {
     $to = trim((string) ($row['email'] ?? ''));
@@ -78,18 +99,14 @@ function fm_notify_applicant_status(array $row, string $status, string $note = '
     }
 
     $subject = 'Francophonie Mobility Application — ' . $statusLabel . ' — ' . ($row['reference_id'] ?? '');
-    return sendSMTPMail($to, $subject, fm_email_wrap('Application Update', $body));
+    return sendSMTPMail($to, $subject, fm_email_wrap('Application Update', $body), [], fm_office_bcc_list());
 }
 
+/** @deprecated Staff blast removed — office receives BCC via fm_office_smtp_email() only */
 function fm_notify_admins_new_application(array $row): void
 {
-    global $conn;
-    if (!isset($conn) || !($conn instanceof mysqli)) {
-        return;
-    }
-
-    $res = mysqli_query($conn, "SELECT email FROM admins WHERE role IN ('superadmin','staff')");
-    if (!$res) {
+    $office = fm_office_smtp_email();
+    if ($office === '') {
         return;
     }
 
@@ -108,14 +125,7 @@ function fm_notify_admins_new_application(array $row): void
         <p>Review it in the admin panel under <em>Francophonie Mobility</em>.</p>";
 
     $subject = 'New Francophonie Mobility Application — ' . ($row['reference_id'] ?? '');
-    $html = fm_email_wrap('New Candidate Form', $body);
-
-    while ($admin = mysqli_fetch_assoc($res)) {
-        $addr = trim((string) ($admin['email'] ?? ''));
-        if ($addr !== '') {
-            sendSMTPMail($addr, $subject, $html);
-        }
-    }
+    sendSMTPMail($office, $subject, fm_email_wrap('New Candidate Form', $body));
 }
 
 function fm_notify_applicant_received(array $row): bool
@@ -135,7 +145,7 @@ function fm_notify_applicant_received(array $row): bool
         <p>Our team will review your documents and contact you if anything else is needed.</p>";
 
     $subject = 'Francophonie Mobility — Application Received — ' . ($row['reference_id'] ?? '');
-    return sendSMTPMail($to, $subject, fm_email_wrap('Application Received', $body));
+    return sendSMTPMail($to, $subject, fm_email_wrap('Application Received', $body), [], fm_office_bcc_list());
 }
 
 function fm_build_form_summary_html(array $row): string
@@ -195,51 +205,46 @@ function fm_build_form_summary_html(array $row): string
 
 function fm_resolve_upload_path(string $relativePath): string
 {
-    $relativePath = trim($relativePath);
-    if ($relativePath === '') {
-        return '';
-    }
-    $full = realpath(__DIR__ . '/../' . ltrim($relativePath, '/'));
-    $uploadsRoot = realpath(__DIR__ . '/../uploads');
-    if ($full && $uploadsRoot && strpos($full, $uploadsRoot) === 0 && is_file($full)) {
-        return $full;
-    }
-    return '';
+    require_once __DIR__ . '/francophonie_mobility_files.php';
+    $abs = fm_abs_upload_path($relativePath);
+    return $abs ?? '';
 }
 
-/**
- * On approval: email full form + all documents to FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL (.env).
- */
-function fm_send_approval_package(array $row): bool
+function fm_approval_recipient_email(): string
 {
     xander_load_env_file();
     $to = trim(xander_env_get('FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL'));
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        error_log('FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL is not set or invalid in .env');
-        return false;
+        $to = trim(xander_env_get_from_dotenv_file('FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL'));
     }
+    return ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) ? $to : '';
+}
 
-    $ref = (string) ($row['reference_id'] ?? '');
-    $summary = fm_build_form_summary_html($row);
-    $body = '<p>Approved Francophonie Mobility candidate package. All form data and attachments are included.</p>'
-        . '<p><strong>Reference:</strong> ' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '</p>'
-        . $summary;
-
+/**
+ * @return array{attachments: array<int, array{path:string, name:string}>, labels: string[]}
+ */
+function fm_collect_approval_attachments(array $row): array
+{
     $attachments = [];
+    $labels = [];
+    $ref = (string) ($row['reference_id'] ?? '');
+
     $singleMap = [
         'cv_file' => 'CV',
-        'french_cert_file' => 'French_Certificate',
-        'english_cert_file' => 'English_Certificate',
+        'french_cert_file' => 'French Certificate',
+        'english_cert_file' => 'English Certificate',
     ];
     foreach ($singleMap as $col => $label) {
         $abs = fm_resolve_upload_path((string) ($row[$col] ?? ''));
-        if ($abs !== '') {
-            $ext = pathinfo($abs, PATHINFO_EXTENSION);
-            $attachments[] = [
-                'path' => $abs,
-                'name' => $ref . '_' . $label . ($ext ? '.' . $ext : ''),
-            ];
+        if ($abs === '') {
+            continue;
         }
+        $ext = pathinfo($abs, PATHINFO_EXTENSION);
+        $attachments[] = [
+            'path' => $abs,
+            'name' => $ref . '_' . str_replace(' ', '_', $label) . ($ext ? '.' . $ext : ''),
+        ];
+        $labels[] = $label;
     }
 
     require_once __DIR__ . '/francophonie_mobility_files.php';
@@ -250,13 +255,54 @@ function fm_send_approval_package(array $row): bool
             continue;
         }
         $ext = pathinfo($abs, PATHINFO_EXTENSION);
-        $suffix = count($academicPaths) > 1 ? '_' . ($i + 1) : '';
+        $suffix = count($academicPaths) > 1 ? ' ' . ($i + 1) : '';
+        $label = 'Academic Document' . $suffix;
         $attachments[] = [
             'path' => $abs,
-            'name' => $ref . '_Academic_Documents' . $suffix . ($ext ? '.' . $ext : ''),
+            'name' => $ref . '_Academic' . ($suffix !== '' ? '_' . ($i + 1) : '') . ($ext ? '.' . $ext : ''),
         ];
+        $labels[] = $label;
     }
 
+    return ['attachments' => $attachments, 'labels' => $labels];
+}
+
+/**
+ * On approval: email full form + all documents to FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL (.env).
+ */
+function fm_send_approval_package(array $row): bool
+{
+    $to = fm_approval_recipient_email();
+    if ($to === '') {
+        error_log('FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL is not set or invalid in .env');
+        return false;
+    }
+
+    $ref = (string) ($row['reference_id'] ?? '');
+    $summary = fm_build_form_summary_html($row);
+    $pack = fm_collect_approval_attachments($row);
+    $attachments = $pack['attachments'];
+    $labels = $pack['labels'];
+
+    $attachHtml = $labels === []
+        ? '<p><em>No document files were attached (none on file or paths missing).</em></p>'
+        : '<p><strong>Attached files (' . count($labels) . '):</strong></p><ul><li>'
+            . implode('</li><li>', array_map(static fn($l) => htmlspecialchars($l, ENT_QUOTES, 'UTF-8'), $labels))
+            . '</li></ul>';
+
+    $body = '<p>Approved Francophonie Mobility candidate package for <strong>'
+        . htmlspecialchars(fm_applicant_name($row), ENT_QUOTES, 'UTF-8')
+        . '</strong>.</p>'
+        . '<p><strong>Reference:</strong> ' . htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') . '</p>'
+        . '<p><strong>Candidate email:</strong> ' . htmlspecialchars((string) ($row['email'] ?? ''), ENT_QUOTES, 'UTF-8') . '</p>'
+        . $attachHtml
+        . '<hr style="border:0;border-top:1px solid #e2e8f0;margin:20px 0">'
+        . $summary;
+
     $subject = 'Approved Francophonie Mobility Package — ' . $ref;
-    return sendSMTPMail($to, $subject, fm_email_wrap('Approved Candidate Package', $body), $attachments);
+    $ok = sendSMTPMail($to, $subject, fm_email_wrap('Approved Candidate Package', $body), $attachments);
+    if (!$ok) {
+        error_log('FM approval package failed to send to ' . $to . ' ref ' . $ref);
+    }
+    return $ok;
 }

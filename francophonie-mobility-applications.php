@@ -253,7 +253,11 @@ function setStatus(id, status) {
     }).then(d => {
         let msg = 'Status updated.\nApplicant email: ' + (d.email_sent ? 'sent' : 'FAILED — check SMTP in .env');
         if (d.approval_package_sent !== null && d.approval_package_sent !== undefined) {
-            msg += '\nApproval package: ' + (d.approval_package_sent ? 'sent' : 'FAILED — check FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL');
+            if (d.approval_package_sent) {
+                msg += '\nApproval package: sending to ' + (d.approval_email || 'FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL') + ' (form + attachments)';
+            } else {
+                msg += '\nApproval package: FAILED — set FRANCOPHONIE_MOBILITY_APPROVAL_EMAIL in .env';
+            }
         }
         alert(msg);
         location.reload();
