@@ -36,7 +36,7 @@ function generateWebsiteSerial(mysqli $conn): string
 if (isset($_POST['action']) && $_POST['action'] === 'add') {
     $serial = generateWebsiteSerial($conn);
     $name = trim($_POST['website_name'] ?? '');
-    $link = trim($_POST['website_link'] ?? '');
+    $link = normalizeWebsiteLink(trim($_POST['website_link'] ?? ''));
     $user = trim($_POST['admin_username'] ?? '');
     $pass = trim($_POST['admin_password'] ?? '');
     $status = $_POST['status'] ?? 'Active';
@@ -58,7 +58,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'add') {
 if (isset($_POST['action']) && $_POST['action'] === 'edit') {
     $id = (int) ($_POST['id'] ?? 0);
     $name = trim($_POST['website_name'] ?? '');
-    $link = trim($_POST['website_link'] ?? '');
+    $link = normalizeWebsiteLink(trim($_POST['website_link'] ?? ''));
     $user = trim($_POST['admin_username'] ?? '');
     $pass = trim($_POST['admin_password'] ?? '');
     $status = $_POST['status'] ?? 'Active';
@@ -91,6 +91,17 @@ function previewLink(string $url): string
     }
     $clean = preg_replace('(^https?://)', '', $url);
     return strlen($clean) > 28 ? substr($clean, 0, 28) . '…' : $clean;
+}
+
+function normalizeWebsiteLink(string $link): string
+{
+    $link = trim($link);
+    if ($link === '') {
+        return '';
+    }
+    $link = preg_replace('#^https?://#i', '', $link);
+    $link = ltrim($link, '/');
+    return 'https://' . $link;
 }
 
 $totalCount = 0;
@@ -546,6 +557,125 @@ if (isset($_GET['added'])) {
             border-color: var(--wm-green);
             outline: none;
         }
+
+        .wm-url-group {
+            display: flex;
+            align-items: stretch;
+            border: 2px solid #e0ebe0;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            background: #fff;
+        }
+
+        .wm-url-group:focus-within {
+            border-color: var(--wm-green);
+            box-shadow: 0 0 0 3px rgba(46, 106, 44, 0.15);
+        }
+
+        .wm-url-prefix {
+            display: flex;
+            align-items: center;
+            padding: 0 0.85rem;
+            background: var(--wm-green-light);
+            color: var(--wm-green-dark);
+            font-weight: 700;
+            font-size: 0.9rem;
+            border-right: 1px solid #d5e8d5;
+            white-space: nowrap;
+        }
+
+        .wm-url-input {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            padding-left: 0.85rem !important;
+        }
+
+        .wm-url-input:focus {
+            box-shadow: none !important;
+        }
+
+        .wm-save-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 35, 15, 0.55);
+            backdrop-filter: blur(4px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.25s ease;
+        }
+
+        .wm-save-box {
+            background: #fff;
+            border-radius: 18px;
+            padding: 2rem 2.25rem;
+            width: min(420px, 92vw);
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+            animation: fadeSlideUp 0.35s ease;
+        }
+
+        .wm-save-box .wm-save-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--wm-green-light);
+            color: var(--wm-green);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .wm-save-box h4 {
+            margin: 0 0 0.35rem;
+            font-weight: 700;
+            color: var(--wm-green-dark);
+        }
+
+        .wm-save-box p {
+            margin: 0 0 1.25rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .wm-progress-track {
+            height: 10px;
+            background: #e8f0e8;
+            border-radius: 20px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .wm-progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--wm-green), #4caf50, var(--wm-green-dark));
+            background-size: 200% 100%;
+            border-radius: 20px;
+            transition: width 0.35s ease;
+            animation: progressShine 1.5s linear infinite;
+        }
+
+        .wm-progress-pct {
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--wm-green);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes progressShine {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
     </style>
 </head>
 <body>
@@ -553,6 +683,18 @@ if (isset($_GET['added'])) {
 <?php if ($flash): ?>
 <div class="wm-toast wm-toast-<?= $flashType ?>" id="flashToast"><?= htmlspecialchars($flash) ?></div>
 <?php endif; ?>
+
+<div id="saveOverlay" class="wm-save-overlay" style="display:none;" aria-live="polite">
+    <div class="wm-save-box">
+        <div class="wm-save-icon"><i class="bi bi-cloud-upload"></i></div>
+        <h4 id="saveOverlayTitle">Saving website…</h4>
+        <p id="saveOverlayMsg">Please wait while your data is being saved.</p>
+        <div class="wm-progress-track">
+            <div class="wm-progress-bar" id="saveProgressBar"></div>
+        </div>
+        <div class="wm-progress-pct" id="saveProgressPct">0%</div>
+    </div>
+</div>
 
 <div class="wm-page">
 
@@ -692,16 +834,20 @@ if (isset($_GET['added'])) {
                 <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add New Website</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="addForm" onsubmit="return handleSaveSubmit(this, 'Saving website…')">
                 <input type="hidden" name="action" value="add">
                 <div class="modal-body p-4">
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-globe wm-form-icon"></i>
                         <input type="text" name="website_name" class="form-control" placeholder="Website Name" required>
                     </div>
-                    <div class="wm-input-wrap mb-3">
-                        <i class="bi bi-link-45deg wm-form-icon"></i>
-                        <input type="url" name="website_link" class="form-control" placeholder="https://example.com">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1 ms-1">Website URL</label>
+                        <div class="wm-url-group">
+                            <span class="wm-url-prefix">https://</span>
+                            <input type="text" id="add_link_part" class="form-control wm-url-input" placeholder="example.com" autocomplete="off">
+                            <input type="hidden" name="website_link" id="add_website_link">
+                        </div>
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-person wm-form-icon"></i>
@@ -728,7 +874,7 @@ if (isset($_GET['added'])) {
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="wm-btn wm-btn-primary">
+                    <button type="submit" class="wm-btn wm-btn-primary" id="addSubmitBtn">
                         <i class="bi bi-check-lg"></i> Save Website
                     </button>
                 </div>
@@ -745,7 +891,7 @@ if (isset($_GET['added'])) {
                 <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Edit Website</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST">
+            <form method="POST" id="editForm" onsubmit="return handleSaveSubmit(this, 'Updating website…')">
                 <input type="hidden" name="action" value="edit">
                 <input type="hidden" name="id" id="edit_id">
                 <div class="modal-body p-4">
@@ -753,9 +899,13 @@ if (isset($_GET['added'])) {
                         <i class="bi bi-globe wm-form-icon"></i>
                         <input type="text" name="website_name" id="edit_name" class="form-control" placeholder="Website Name" required>
                     </div>
-                    <div class="wm-input-wrap mb-3">
-                        <i class="bi bi-link-45deg wm-form-icon"></i>
-                        <input type="url" name="website_link" id="edit_link" class="form-control" placeholder="Website Link">
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted mb-1 ms-1">Website URL</label>
+                        <div class="wm-url-group">
+                            <span class="wm-url-prefix">https://</span>
+                            <input type="text" id="edit_link_part" class="form-control wm-url-input" placeholder="example.com" autocomplete="off">
+                            <input type="hidden" name="website_link" id="edit_website_link">
+                        </div>
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-person wm-form-icon"></i>
@@ -782,7 +932,7 @@ if (isset($_GET['added'])) {
                 </div>
                 <div class="modal-footer border-0 px-4 pb-4">
                     <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="wm-btn wm-btn-primary">
+                    <button type="submit" class="wm-btn wm-btn-primary" id="editSubmitBtn">
                         <i class="bi bi-check-lg"></i> Update
                     </button>
                 </div>
@@ -858,6 +1008,52 @@ if (isset($_GET['added'])) {
 let viewPwdReal = '';
 let viewPwdVisible = false;
 let currentViewRow = null;
+let saveProgressTimer = null;
+
+function buildFullUrl(domainInput, hiddenInput) {
+    let part = (domainInput.value || '').trim();
+    part = part.replace(/^https?:\/\//i, '').replace(/^\/+/, '');
+    hiddenInput.value = part ? 'https://' + part : '';
+}
+
+function handleSaveSubmit(form, title) {
+    const linkPart = form.querySelector('.wm-url-input');
+    const linkHidden = form.querySelector('input[name="website_link"]');
+    if (linkPart && linkHidden) {
+        buildFullUrl(linkPart, linkHidden);
+    }
+
+    form.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+        btn.disabled = true;
+    });
+
+    showSaveProgress(title || 'Saving…');
+    return true;
+}
+
+function showSaveProgress(title) {
+    const overlay = document.getElementById('saveOverlay');
+    const bar = document.getElementById('saveProgressBar');
+    const pct = document.getElementById('saveProgressPct');
+    const titleEl = document.getElementById('saveOverlayTitle');
+
+    if (saveProgressTimer) clearInterval(saveProgressTimer);
+
+    titleEl.textContent = title;
+    bar.style.width = '0%';
+    pct.textContent = '0%';
+    overlay.style.display = 'flex';
+
+    let progress = 0;
+    saveProgressTimer = setInterval(function () {
+        if (progress < 90) {
+            progress += progress < 50 ? 4 : progress < 75 ? 2 : 1;
+            if (progress > 90) progress = 90;
+            bar.style.width = progress + '%';
+            pct.textContent = progress + '%';
+        }
+    }, 120);
+}
 
 $(document).ready(function () {
     $('#webTable').DataTable({
@@ -869,6 +1065,12 @@ $(document).ready(function () {
     <?php if ($openAdd): ?>
     openAddModal();
     <?php endif; ?>
+
+    document.querySelectorAll('.wm-url-input').forEach(function (input) {
+        input.addEventListener('input', function () {
+            this.value = this.value.replace(/^https?:\/\//i, '').replace(/^\/+/, '');
+        });
+    });
 
     setTimeout(function () {
         const t = document.getElementById('flashToast');
@@ -894,6 +1096,8 @@ function scrollToList() {
 }
 
 function openAddModal() {
+    document.getElementById('add_link_part').value = '';
+    document.getElementById('add_website_link').value = '';
     new bootstrap.Modal(document.getElementById('addModal')).show();
 }
 
@@ -929,7 +1133,9 @@ function toggleFieldPwd(fieldId, btn) {
 function editWebsite(row) {
     $('#edit_id').val(row.id);
     $('#edit_name').val(row.website_name);
-    $('#edit_link').val(row.website_link || '');
+    const domain = (row.website_link || '').replace(/^https?:\/\//i, '');
+    $('#edit_link_part').val(domain);
+    $('#edit_website_link').val(row.website_link || '');
     $('#edit_user').val(row.admin_username);
     $('#edit_pass').val(row.admin_password);
     $('#edit_status').val(row.status);
