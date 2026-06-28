@@ -64,12 +64,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'edit') {
     $status = $_POST['status'] ?? 'Active';
     $notes = trim($_POST['notes'] ?? '');
 
-    $stmt = $conn->prepare('
-        UPDATE websites
-        SET website_name=?, website_link=?, admin_username=?, admin_password=?, status=?, notes=?
-        WHERE id=?
-    ');
-    $stmt->bind_param('ssssssi', $name, $link, $user, $pass, $status, $notes, $id);
+    if ($pass === '') {
+        $stmt = $conn->prepare('
+            UPDATE websites
+            SET website_name=?, website_link=?, admin_username=?, status=?, notes=?
+            WHERE id=?
+        ');
+        $stmt->bind_param('sssssi', $name, $link, $user, $status, $notes, $id);
+    } else {
+        $stmt = $conn->prepare('
+            UPDATE websites
+            SET website_name=?, website_link=?, admin_username=?, admin_password=?, status=?, notes=?
+            WHERE id=?
+        ');
+        $stmt->bind_param('ssssssi', $name, $link, $user, $pass, $status, $notes, $id);
+    }
     $stmt->execute();
     $stmt->close();
 
@@ -839,7 +848,7 @@ if (isset($_GET['added'])) {
                 <div class="modal-body p-4">
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-globe wm-form-icon"></i>
-                        <input type="text" name="website_name" class="form-control" placeholder="Website Name" required>
+                        <input type="text" name="website_name" class="form-control" placeholder="Website Name">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-muted mb-1 ms-1">Website URL</label>
@@ -851,18 +860,18 @@ if (isset($_GET['added'])) {
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-person wm-form-icon"></i>
-                        <input type="text" name="admin_username" class="form-control" placeholder="Admin Username" required>
+                        <input type="text" name="admin_username" class="form-control" placeholder="Admin Username">
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-key wm-form-icon"></i>
-                        <input type="password" name="admin_password" id="add_pass" class="form-control" placeholder="Admin Password" required style="padding-right:2.5rem;">
+                        <input type="password" name="admin_password" id="add_pass" class="form-control" placeholder="Admin Password" style="padding-right:2.5rem;">
                         <button type="button" class="wm-pwd-toggle" onclick="toggleFieldPwd('add_pass', this)">
                             <i class="bi bi-eye"></i>
                         </button>
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-toggle-on wm-form-icon"></i>
-                        <select class="form-select" name="status" required>
+                        <select class="form-select" name="status">
                             <option value="Active">Active</option>
                             <option value="Not Active">Not Active</option>
                         </select>
@@ -897,7 +906,7 @@ if (isset($_GET['added'])) {
                 <div class="modal-body p-4">
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-globe wm-form-icon"></i>
-                        <input type="text" name="website_name" id="edit_name" class="form-control" placeholder="Website Name" required>
+                        <input type="text" name="website_name" id="edit_name" class="form-control" placeholder="Website Name">
                     </div>
                     <div class="mb-3">
                         <label class="form-label small fw-semibold text-muted mb-1 ms-1">Website URL</label>
@@ -909,18 +918,18 @@ if (isset($_GET['added'])) {
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-person wm-form-icon"></i>
-                        <input type="text" name="admin_username" id="edit_user" class="form-control" placeholder="Admin Username" required>
+                        <input type="text" name="admin_username" id="edit_user" class="form-control" placeholder="Admin Username">
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-key wm-form-icon"></i>
-                        <input type="password" name="admin_password" id="edit_pass" class="form-control" placeholder="Admin Password" required style="padding-right:2.5rem;">
+                        <input type="password" name="admin_password" id="edit_pass" class="form-control" placeholder="Admin Password" style="padding-right:2.5rem;">
                         <button type="button" class="wm-pwd-toggle" onclick="toggleFieldPwd('edit_pass', this)">
                             <i class="bi bi-eye"></i>
                         </button>
                     </div>
                     <div class="wm-input-wrap mb-3">
                         <i class="bi bi-toggle-on wm-form-icon"></i>
-                        <select class="form-select" id="edit_status" name="status" required>
+                        <select class="form-select" id="edit_status" name="status">
                             <option value="Active">Active</option>
                             <option value="Not Active">Not Active</option>
                         </select>
@@ -1137,7 +1146,8 @@ function editWebsite(row) {
     $('#edit_link_part').val(domain);
     $('#edit_website_link').val(row.website_link || '');
     $('#edit_user').val(row.admin_username);
-    $('#edit_pass').val(row.admin_password);
+    $('#edit_pass').val('');
+    $('#edit_pass').attr('placeholder', 'Leave blank to keep current password');
     $('#edit_status').val(row.status);
     $('#edit_notes').val(row.notes || '');
     const ep = document.getElementById('edit_pass');
