@@ -365,19 +365,19 @@ $sidebarAccess = [
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'schools', 'marketing', 'smart_brochure', 'visit_study_visa', 'platform', 'website_management'
+    'all_admissions', 'schools', 'marketing', 'smart_brochure', 'visit_study_visa', 'platform'
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'platform', 'website_management'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
     'agent_report', 'university_portal', 'commission_request', 'staff_attendance',
-    'schools', 'marketing', 'smart_brochure', 'visit_study_visa', 'platform', 'website_management'
+    'schools', 'marketing', 'smart_brochure', 'visit_study_visa', 'platform'
   ],
   'Catholic university of America' => [
-    'university_admissions', 'application_flag_summary', 'schools', 'marketing', 'smart_brochure', 'abroad', 'visit_study_visa', 'platform', 'website_management'
+    'university_admissions', 'application_flag_summary', 'schools', 'marketing', 'smart_brochure', 'abroad', 'visit_study_visa', 'platform'
   ]
 ];
 
@@ -2239,30 +2239,11 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       </div>
       <?php endif; ?>
 
-      <?php if (in_array('website_management', $allowedSidebarItems)): ?>
-      <a href="#website_management" class="sidebar-link" onclick="toggleSidebarMenu('website_management')">
+      <?php if ($isSuperExecutive): ?>
+      <a href="#" class="sidebar-link" onclick="loadInFrame('websites.php', 'Website Management')">
         <i class="bi bi-globe2"></i>
         <span>Website management</span>
-        <i class="bi bi-chevron-down arrow"></i>
       </a>
-      <div class="sidebar-submenu" id="submenu_website_management">
-        <a href="#" onclick="loadInFrame('websites.php', 'List All Websites')">
-          <i class="bi bi-list-ul"></i>
-          List all
-        </a>
-        <a href="#" onclick="loadInFrame('websites.php?open=add', 'Add New Website')">
-          <i class="bi bi-plus-circle"></i>
-          Add new
-        </a>
-        <a href="#" onclick="loadInFrame('websites.php', 'Edit Website')">
-          <i class="bi bi-pencil-square"></i>
-          Edit
-        </a>
-        <a href="#" onclick="loadInFrame('websites.php', 'View Password')">
-          <i class="bi bi-eye"></i>
-          View password
-        </a>
-      </div>
       <?php endif; ?>
       
       <?php if (in_array('contracts', $allowedSidebarItems)): ?>
