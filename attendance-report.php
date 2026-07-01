@@ -1,19 +1,22 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
-if (!isset($_SESSION['admin_id'])) {
-    die("Access denied.");
+require_once __DIR__ . '/helpers/role.php';
+
+$admin_id = $_SESSION['admin_id'] ?? $_SESSION['id'] ?? null;
+if (!$admin_id) {
+    die('Access denied.');
 }
 
-$admin_id = $_SESSION['admin_id'];
-
 // Fetch admin role
-$stmt = $conn->prepare("SELECT role FROM admins WHERE id = ?");
-$stmt->bind_param("i", $admin_id);
+$stmt = $conn->prepare('SELECT role FROM admins WHERE id = ?');
+$stmt->bind_param('i', $admin_id);
 $stmt->execute();
 $stmt->bind_result($role);
 $stmt->fetch();
 $stmt->close();
+
+$isSuperAdmin = pcvc_is_superadmin_role($role ?? '');
 ?>
 <!DOCTYPE html>
 <html>
@@ -258,7 +261,7 @@ body {
                     </div>
 
                     <!-- Staff Search -->
-                    <?php if ($role === 'superadmin'): ?>
+                    <?php if ($isSuperAdmin): ?>
                     <div class="col-md-3 position-relative">
                         <label class="form-label fw-bold">Search Staff</label>
                         <input type="text" class="form-control" name="staff" id="staff" autocomplete="off" placeholder="Type name...">

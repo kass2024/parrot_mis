@@ -83,7 +83,7 @@ $sqlAdmins = 'SELECT `id`, `full_name`, `role`, `salary_per_minute`, `profile_ph
 if ($extraAdminFields !== []) {
     $sqlAdmins .= ', `' . implode('`, `', $extraAdminFields) . '`';
 }
-$sqlAdmins .= " FROM `admins` WHERE `role` IN ('staff','superadmin') ORDER BY `full_name` ASC";
+$sqlAdmins .= ' FROM `admins` WHERE ' . pcvc_sql_is_payroll_employee_expr('`role`') . ' ORDER BY `full_name` ASC';
 
 $admins = [];
 $res = $conn->query($sqlAdmins);

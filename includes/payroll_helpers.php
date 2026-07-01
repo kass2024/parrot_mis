@@ -28,6 +28,50 @@ function pcvc_attendance_table_columns(mysqli $conn): array
 }
 
 /**
+ * Derive billable minutes from an attendance row when total_work_minutes was not saved.
+ */
+function pcvc_attendance_derived_work_minutes(array $row): int
+{
+    $stored = (int) ($row['total_work_minutes'] ?? 0);
+    if ($stored > 0) {
+        return $stored;
+    }
+
+    $checkIn  = trim((string) ($row['check_in_time'] ?? ''));
+    $checkOut = trim((string) ($row['check_out_time'] ?? ''));
+    if ($checkIn === '' || $checkOut === '') {
+        return 0;
+    }
+
+    $inTs  = strtotime($checkIn);
+    $outTs = strtotime($checkOut);
+    if ($inTs === false || $outTs === false || $outTs <= $inTs) {
+        return 0;
+    }
+
+    $break = (int) ($row['break_duration_minutes'] ?? 0);
+
+    return max(0, (int) floor(($outTs - $inTs) / 60) - $break);
+}
+
+/**
+ * SQL expression for billable minutes (stored value, else check-in/out delta minus break).
+ */
+function pcvc_sql_attendance_work_minutes_expr(): string
+{
+    return "CASE
+        WHEN COALESCE(`total_work_minutes`, 0) > 0 THEN COALESCE(`total_work_minutes`, 0)
+        WHEN `check_in_time` IS NOT NULL AND `check_out_time` IS NOT NULL
+          THEN GREATEST(
+            0,
+            TIMESTAMPDIFF(MINUTE, `check_in_time`, `check_out_time`)
+              - COALESCE(`break_duration_minutes`, 0)
+          )
+        ELSE 0
+      END";
+}
+
+/**
  * Load one row per (admin_id, date) with optional clock times (dedupes duplicate rows).
  * Prefers checkout-stored pay (daily_salary_rwf / total_payment_rwf) when present so payroll
  * matches the same rules as attendance (e.g. full-day rules), else falls back to rate × minutes.
@@ -60,9 +104,11 @@ function pcvc_payroll_load_attendance_by_admin(
         $payExpr = '0';
     }
 
+    $minutesExpr = pcvc_sql_attendance_work_minutes_expr();
+
     // DATE() so DATETIME columns still match the selected calendar month
     $sql = "SELECT `admin_id`, DATE(`date`) AS `work_date`,
-              SUM(COALESCE(`total_work_minutes`,0)) AS `total_work_minutes`,
+              SUM({$minutesExpr}) AS `total_work_minutes`,
               {$payExpr} AS `stored_daily_pay`,
               {$inExpr} AS `check_in_time`,
               {$outExpr} AS `check_out_time`,

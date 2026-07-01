@@ -37,7 +37,8 @@ if ($target_admin_id <= 0) {
 }
 
 /* Load admin info (staff & superadmin payroll export only) */
-$stmt = $conn->prepare("SELECT full_name, role, salary_per_minute FROM admins WHERE id = ? AND role IN ('staff','superadmin')");
+$payrollRoleSql = pcvc_sql_is_payroll_employee_expr('role');
+$stmt = $conn->prepare("SELECT full_name, role, salary_per_minute FROM admins WHERE id = ? AND {$payrollRoleSql}");
 $stmt->bind_param("i", $target_admin_id);
 $stmt->execute();
 $stmt->bind_result($name, $role, $rate);

@@ -107,14 +107,34 @@ function pcvc_current_user_is_superadmin(mysqli $conn): bool
 }
 
 /**
+ * Compact admins.role for SQL comparisons (matches pcvc_is_superadmin_role / pcvc_is_staff_role).
+ */
+function pcvc_sql_role_compact_expr(string $column = 'role'): string
+{
+    $col = trim($column) !== '' ? $column : 'role';
+
+    return "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$col}, ''))), CHAR(10), ''), CHAR(13), ''), ' ', ''), '_', ''), '-', '')";
+}
+
+/**
+ * SQL expression: TRUE when admins.role is staff or superadmin (any common variant).
+ */
+function pcvc_sql_is_payroll_employee_expr(string $column = 'role'): string
+{
+    $compact = pcvc_sql_role_compact_expr($column);
+
+    return "({$compact} = 'staff' OR {$compact} = 'superadmin')";
+}
+
+/**
  * SQL expression: TRUE when admins.role is any superadmin variant.
  * Normalization matches pcvc_is_superadmin_role().
  */
 function pcvc_sql_is_superadmin_role_expr(string $column = 'role'): string
 {
-    $col = trim($column) !== '' ? $column : 'role';
+    $compact = pcvc_sql_role_compact_expr($column);
 
-    return "REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE({$col}, ''))), ' ', ''), '_', ''), '-', '') = 'superadmin'";
+    return "{$compact} = 'superadmin'";
 }
 
 /**
