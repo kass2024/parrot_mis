@@ -21,17 +21,19 @@
     return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
   }
 
+  function getInitials(name) {
+    if (!name || typeof name !== 'string') return 'U';
+
+    var words = name.trim().split(/\s+/).filter(Boolean);
+    if (words.length === 0) return 'U';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+
+  /** @deprecated use getInitials */
   function initialsFor(name) {
-    var skip = { co: 1, ltd: 1, llc: 1, inc: 1, the: 1, and: 1 };
-    var parts = String(name || '').trim().split(/\s+/).filter(function (p) {
-      return p && !skip[p.toLowerCase().replace(/\./g, '')];
-    });
-    if (parts.length === 0) {
-      parts = String(name || '').trim().split(/\s+/).filter(Boolean);
-    }
-    if (parts.length === 0) return '?';
-    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-    return ((parts[0][0] || '') + (parts[parts.length - 1][0] || '')).toUpperCase();
+    return getInitials(name);
   }
 
   function colorForName(name) {
@@ -241,17 +243,12 @@
     overlay.setAttribute('data-fm-name', normalizeName(name));
     overlay.innerHTML = '';
 
+    var content = document.createElement('div');
+    content.className = 'fm-avatar-content';
+
     var circle = document.createElement('div');
     circle.className = 'fm-avatar-circle';
     var avatarUrl = resolveAvatarUrl(name);
-    var tileRect = frame.getBoundingClientRect();
-    var tileMin = Math.min(tileRect.width, tileRect.height);
-    if (tileMin > 0) {
-      var size = Math.max(56, Math.min(140, Math.round(tileMin * 0.34)));
-      circle.style.width = size + 'px';
-      circle.style.height = size + 'px';
-      circle.style.fontSize = Math.max(14, Math.round(size * 0.34)) + 'px';
-    }
 
     if (avatarUrl) {
       var img = document.createElement('img');
@@ -262,18 +259,25 @@
       img.src = avatarUrl;
       img.onerror = function () {
         img.remove();
-        circle.style.background = colorForName(name);
-        circle.textContent = initialsFor(name);
         circle.classList.add('fm-avatar-initials');
+        circle.style.background = colorForName(name);
+        circle.textContent = getInitials(name);
       };
       circle.appendChild(img);
     } else {
-      circle.style.background = colorForName(name);
-      circle.textContent = initialsFor(name);
       circle.classList.add('fm-avatar-initials');
+      circle.style.background = colorForName(name);
+      circle.textContent = getInitials(name);
     }
 
-    overlay.appendChild(circle);
+    var nameEl = document.createElement('div');
+    nameEl.className = 'fm-avatar-name';
+    nameEl.textContent = name;
+    nameEl.title = name;
+
+    content.appendChild(circle);
+    content.appendChild(nameEl);
+    overlay.appendChild(content);
   }
 
   function enhanceVideoFrames(root) {
@@ -960,6 +964,7 @@
     refreshParticipantLayout: refreshParticipantLayout,
     showZoomRoot: showZoomRoot,
     startAvatarEnhancer: startAvatarEnhancer,
-    stopAvatarEnhancer: stopAvatarEnhancer
+    stopAvatarEnhancer: stopAvatarEnhancer,
+    getInitials: getInitials
   };
 })(window);

@@ -174,7 +174,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Join meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
     <?php if (!$gateMode && !$left && $sdkError === ''): ?>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=9">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=10">
     <?php endif; ?>
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
@@ -253,7 +253,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
     <div class="err" id="joinBootErr" style="display:none"></div>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=9"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=10"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
