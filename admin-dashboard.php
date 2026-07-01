@@ -304,6 +304,13 @@ $cards = [
       'francophonie-mobility-applications.php' => 'View Applications',
     ]
   ],
+  'meeting_invitation' => [
+    'title' => 'Meeting Invitation',
+    'icon' => 'bi-camera-video',
+    'links' => [
+      'francophonie-meeting-invitation.php' => 'Meeting Invitation',
+    ]
+  ],
   'refund_requests' => [
     'title' => 'Refund Requests',
     'icon' => 'bi-cash-stack',
@@ -361,7 +368,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -369,7 +376,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'meeting_invitation', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -2191,6 +2198,13 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           Rejected
         </a>
       </div>
+      <?php endif; ?>
+
+      <?php if (in_array('meeting_invitation', $allowedSidebarItems)): ?>
+      <a href="#" class="sidebar-link" onclick="loadInFrame('francophonie-meeting-invitation.php', 'Meeting Invitation')">
+        <i class="bi bi-camera-video"></i>
+        <span>Meeting Invitation</span>
+      </a>
       <?php endif; ?>
       
       <?php if (in_array('refund_requests', $allowedSidebarItems)): ?>

@@ -157,6 +157,17 @@ function xander_env_get(string $key): string
             'WHATSAPP_COMMISSION_TEMPLATE_LANG' => true,
             'WHATSAPP_COMMISSION_TEMPLATE_PARAMS' => true,
             'APP_PUBLIC_URL' => true,
+            'ZOOM_ACCOUNT_ID' => true,
+            'ZOOM_CLIENT_ID' => true,
+            'ZOOM_CLIENT_SECRET' => true,
+            'ZOOM_HOST_USER_ID' => true,
+            'ZOOM_EMBED_CLIENT_ID' => true,
+            'ZOOM_EMBED_CLIENT_SECRET' => true,
+            'PARROT_LEARNING_FRONTEND_URL' => true,
+            'STAFF_CONTRACT_SMTP_USERNAME' => true,
+            'STAFF_CONTRACT_SMTP_PASSWORD' => true,
+            'STAFF_CONTRACT_SMTP_FROM_EMAIL' => true,
+            'STAFF_CONTRACT_SMTP_FROM_NAME' => true,
         ];
     }
     if (isset($directKeys[$key])) {

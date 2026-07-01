@@ -30,13 +30,29 @@ function xander_create_phpmailer_applicant_sender(): PHPMailer
  */
 function sendSMTPMail(string $to, string $subject, string $htmlBody, array $attachments = [], array $bcc = []): bool
 {
+    return sendSMTPMailDetailed($to, $subject, $htmlBody, $attachments, $bcc)['ok'];
+}
+
+/**
+ * @param array<int, array{path:string, name?:string}> $attachments
+ * @param string[] $bcc
+ * @return array{ok: bool, error?: string}
+ */
+function sendSMTPMailDetailed(
+    string $to,
+    string $subject,
+    string $htmlBody,
+    array $attachments = [],
+    array $bcc = [],
+    ?callable $mailerFactory = null
+): array {
     $to = trim($to);
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        return false;
+        return ['ok' => false, 'error' => 'Invalid recipient email'];
     }
 
     try {
-        $mail = xander_create_phpmailer_applicant_sender();
+        $mail = $mailerFactory ? $mailerFactory() : xander_create_phpmailer_applicant_sender();
         $mail->clearAddresses();
         $mail->clearAttachments();
         $mail->clearBCCs();
@@ -59,9 +75,12 @@ function sendSMTPMail(string $to, string $subject, string $htmlBody, array $atta
         }
 
         $mail->send();
-        return true;
+
+        return ['ok' => true];
     } catch (Throwable $e) {
-        error_log('sendSMTPMail failed: ' . $e->getMessage());
-        return false;
+        $msg = trim($e->getMessage());
+        error_log('sendSMTPMail failed: ' . $msg);
+
+        return ['ok' => false, 'error' => $msg !== '' ? $msg : 'SMTP send failed'];
     }
 }

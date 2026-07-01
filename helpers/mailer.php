@@ -31,6 +31,9 @@ function app_mailer(?string $fromNameOverride = null): PHPMailer
     $host = xander_env_get('SMTP_HOST') ?: 'visaconsultantcanada.com';
     $username = xander_env_get('SMTP_USERNAME') ?: 'admission@visaconsultantcanada.com';
     $password = xander_env_get('SMTP_PASSWORD');
+    if ($password === '') {
+        $password = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
+    }
     $portStr = xander_env_get('SMTP_PORT');
     $port = $portStr !== '' ? (int) $portStr : 465;
     $fromEmail = xander_env_get('SMTP_FROM_EMAIL') ?: $username;
@@ -50,6 +53,7 @@ function app_mailer(?string $fromNameOverride = null): PHPMailer
     $mail->SMTPDebug = SMTP::DEBUG_OFF;
     $mail->isHTML(true);
     $mail->setFrom($fromEmail, $fromName);
+    pcvc_smtp_apply_deliverability($mail, $fromEmail);
 
     return $mail;
 }

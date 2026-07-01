@@ -1,0 +1,53 @@
+/* Zoom Client View layout — screen share + participant tiles (parrot_mis) */
+html.zoom-client-meeting-active,
+body.zoom-client-meeting-active {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible !important;
+}
+
+#zmmtg-root {
+  display: none;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  z-index: 1;
+}
+
+html.zoom-client-meeting-active #zmmtg-root,
+body.zoom-client-meeting-active #zmmtg-root {
+  display: block;
+}
+
+/* During screen share: keep shared content full-size; dock self/participant tiles */
+body.fm-zoom-share-active #zmmtg-root [class*="share-content"],
+body.fm-zoom-share-active #zmmtg-root [class*="ShareContent"],
+body.fm-zoom-share-active #zmmtg-root [class*="sharing-layout"],
+body.fm-zoom-share-active #zmmtg-root [class*="SharingLayout"] {
+  width: 100% !important;
+  height: calc(100% - 72px) !important;
+  max-width: none !important;
+  max-height: none !important;
+}
+
+body.fm-zoom-share-active #zmmtg-root .fm-docked-participant-tile {
+  position: fixed !important;
+  right: 12px !important;
+  left: auto !important;
+  top: auto !important;
+  bottom: 96px !important;
+  width: 200px !important;
+  max-width: 200px !important;
+  height: 112px !important;
+  max-height: 112px !important;
+  z-index: 12 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45) !important;
+}
