@@ -571,7 +571,7 @@
       videoDrag: true,
       videoHeader: true,
       isLockBottom: true,
-      disablePreview: false,
+      disablePreview: true,
       enableHD: false,
       enableFullHD: false,
       isSupportPolling: false,
@@ -742,21 +742,47 @@
     }
 
     function joinMeeting() {
-      var pass = sdk.password || '';
-      var tries = isHost
-        ? [{ p: pass, z: true }, { p: pass, z: false }, { p: '', z: false }]
-        : [{ p: pass, z: false }, { p: '', z: false }];
-      var i = 0;
+      var passwords = [];
+      if (Array.isArray(sdk.password_candidates) && sdk.password_candidates.length) {
+        sdk.password_candidates.forEach(function (p) {
+          var v = String(p || '').trim();
+          if (passwords.indexOf(v) === -1) passwords.push(v);
+        });
+      }
+      var primary = String(sdk.password || '').trim();
+      if (primary !== '' && passwords.indexOf(primary) === -1) passwords.unshift(primary);
+      if (passwords.length === 0) passwords.push('');
+
+      var zakModes = isHost && sdk.zak ? [true, false] : [false];
+      var lastError = 'Join failed';
+      var zi = 0;
+      var pi = 0;
+      var firstTry = true;
 
       function next(err) {
-        if (i >= tries.length) {
-          var msg = err && err.message ? err.message : 'Join failed';
-          onError(msg);
-          return Promise.reject(err || new Error(msg));
+        if (err) {
+          lastError = err && err.message ? err.message : lastError;
+          if (!/password|passcode|wrong|zak/i.test(lastError)) {
+            onError(lastError);
+            return Promise.reject(err);
+          }
         }
-        var t = tries[i++];
-        onStatus(i === 1 ? 'Joining meeting…' : 'Retrying connection…');
-        return doJoin(t.p, !!t.z).catch(next);
+        if (zi >= zakModes.length) {
+          onError(lastError);
+          return Promise.reject(new Error(lastError));
+        }
+        if (pi >= passwords.length) {
+          zi += 1;
+          pi = 0;
+          return next();
+        }
+        var pass = passwords[pi++];
+        var useZak = zakModes[zi];
+        onStatus(firstTry
+          ? (isHost ? 'Joining as host…' : 'Joining meeting…')
+          : 'Retrying connection…');
+        firstTry = false;
+        return doJoin(pass, useZak).catch(next);
       }
 
       return next();

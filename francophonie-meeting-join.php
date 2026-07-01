@@ -125,6 +125,9 @@ if ($invitationId > 0) {
             );
             if ($sdkResult['ok']) {
                 $sdkAuth = $sdkResult['sdk'];
+                if ($password !== '') {
+                    $sdkAuth['password_candidates'] = array_values(array_unique([$password, '']));
+                }
             } else {
                 $sdkError = (string) ($sdkResult['message'] ?? 'SDK auth failed');
             }
@@ -171,7 +174,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Join meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
     <?php if (!$gateMode && !$left && $sdkError === ''): ?>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=7">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=8">
     <?php endif; ?>
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
@@ -250,7 +253,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
     <div class="err" id="joinBootErr" style="display:none"></div>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=7"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=8"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
@@ -324,10 +327,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
         isHost: false,
         avatarBranding: avatarBranding,
         onStatus: function (msg) { bootTitle.textContent = msg; },
-        onPreJoin: function () {
-            bootTitle.textContent = 'Allow camera/microphone if prompted, then tap Join';
-            hideBoot();
-        },
+        onPreJoin: function () { hideBoot(); },
         onJoined: function () {
             recordAttendance('join');
             hideBoot();
