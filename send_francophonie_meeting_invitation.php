@@ -133,6 +133,14 @@ if ($uniqueRecipients === []) {
     exit;
 }
 
+if (!fm_meeting_public_url_configured()) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Set app.baseURL=https://visaconsultantcanada.com/ in .env so invitation emails contain a working domain link.',
+    ]);
+    exit;
+}
+
 $zoomResult = zoom_api_create_scheduled_meeting([
     'topic' => $topic,
     'agenda' => $agenda,
@@ -260,10 +268,24 @@ if ($failed > 0) {
 }
 $message .= '.';
 
+$historyRow = fm_meeting_invitation_history_payload($conn, [
+    'id' => $invitationId,
+    'topic' => $topic,
+    'start_time' => $startMysql,
+    'duration_minutes' => $duration,
+    'recipient_count' => $recipientCount,
+    'emails_sent' => $sent,
+    'emails_failed' => $failed,
+    'zoom_meeting_number' => $zoomMeetingNumber,
+    'zoom_password' => $password,
+    'guest_join_token' => $guestJoinToken,
+]);
+
 echo json_encode([
     'success' => true,
     'message' => $message,
     'invitation_id' => $invitationId,
+    'meeting' => $historyRow,
     'host_room_url' => fm_meeting_host_room_url($invitationId),
     'participant_join_url' => fm_meeting_participant_join_url($invitationId),
     'guest_join_url' => fm_meeting_guest_join_url($invitationId, $guestJoinToken),

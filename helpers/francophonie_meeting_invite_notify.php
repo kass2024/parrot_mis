@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/mail_smtp.php';
 require_once __DIR__ . '/francophonie_mobility_notify.php';
+require_once __DIR__ . '/zoom_meeting_sdk.php';
 
 /**
  * @param array<string, mixed> $meeting
@@ -14,7 +15,8 @@ function fm_meeting_invitation_email_html(
 ): string {
     $name = htmlspecialchars($recipientName !== '' ? $recipientName : 'Applicant', ENT_QUOTES, 'UTF-8');
     $topic = htmlspecialchars((string) ($meeting['topic'] ?? 'Meeting'), ENT_QUOTES, 'UTF-8');
-    $joinUrl = htmlspecialchars((string) ($meeting['join_url'] ?? ''), ENT_QUOTES, 'UTF-8');
+    $joinUrlRaw = fm_meeting_normalize_public_url((string) ($meeting['join_url'] ?? ''));
+    $joinUrlAttr = htmlspecialchars($joinUrlRaw, ENT_QUOTES, 'UTF-8');
     $password = htmlspecialchars((string) ($meeting['password'] ?? ''), ENT_QUOTES, 'UTF-8');
     $meetingNumber = htmlspecialchars((string) ($meeting['meeting_number'] ?? ''), ENT_QUOTES, 'UTF-8');
 
@@ -46,10 +48,10 @@ function fm_meeting_invitation_email_html(
         {$pwdRow}
       </table>
       <p style='text-align:center;margin:28px 0'>
-        <a href='{$joinUrl}' style='display:inline-block;background:linear-gradient(135deg,#1e4d2b,#3661B9);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:16px'>Join in your browser</a>
+        <a href='{$joinUrlAttr}' style='display:inline-block;background:linear-gradient(135deg,#1e4d2b,#3661B9);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:16px'>Join in your browser</a>
       </p>
       <p style='font-size:13px;color:#64748b;text-align:center;margin:-12px 0 20px'>No Zoom app required — opens directly in your web browser.</p>
-      <p style='font-size:13px;color:#64748b;word-break:break-all'>Or copy this link: <a href='{$joinUrl}' style='color:#3661B9'>{$joinUrl}</a></p>
+      <p style='font-size:13px;color:#64748b;word-break:break-all'>Or copy this link: <a href='{$joinUrlAttr}' style='color:#3661B9'>{$joinUrlAttr}</a></p>
       <p style='font-size:13px;color:#64748b;margin-top:20px'>Please join a few minutes early. If you have technical issues, reply to this email.</p>";
 
     return fm_email_wrap('Meeting Invitation — Mobilité Francophone', $inner);

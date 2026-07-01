@@ -195,7 +195,7 @@ function zoom_api_create_scheduled_meeting(array $data): array
             'mute_upon_entry' => true,
             'host_video' => true,
             'participant_video' => false,
-            'auto_recording' => 'none',
+            'auto_recording' => 'cloud',
             'approval_type' => 2,
             'registrants_email_notification' => false,
         ],
@@ -385,4 +385,60 @@ function zoom_api_resolve_host_join_identity(bool $forceRefresh = false): array
         'name' => $name !== '' ? $name : 'Host',
         'email' => $email,
     ];
+}
+
+/**
+ * List cloud recordings for the configured Zoom host user.
+ *
+ * @return array{meetings: list<array<string, mixed>>, total_records: int, next_page_token: string|null}
+ */
+function zoom_api_list_user_recordings(string $from, string $to, ?string $searchKey = null, ?string $pageToken = null, int $pageSize = 50): array
+{
+    $userId = zoom_api_host_user_id();
+    $query = [
+        'from' => $from,
+        'to' => $to,
+        'page_size' => max(1, min(300, $pageSize)),
+    ];
+    if ($searchKey !== null && trim($searchKey) !== '') {
+        $query['search_key'] = trim($searchKey);
+    }
+    if ($pageToken !== null && trim($pageToken) !== '') {
+        $query['next_page_token'] = trim($pageToken);
+    }
+
+    $path = '/users/' . rawurlencode($userId) . '/recordings?' . http_build_query($query);
+    $result = zoom_api_request('GET', $path, null);
+    if (!$result['ok']) {
+        throw new RuntimeException((string) ($result['message'] ?? 'Failed to list Zoom recordings.'));
+    }
+
+    $data = $result['data'] ?? [];
+
+    return [
+        'meetings' => is_array($data['meetings'] ?? null) ? $data['meetings'] : [],
+        'total_records' => (int) ($data['total_records'] ?? 0),
+        'next_page_token' => isset($data['next_page_token']) && $data['next_page_token'] !== ''
+            ? (string) $data['next_page_token']
+            : null,
+    ];
+}
+
+/**
+ * Delete all cloud recording files for a meeting.
+ *
+ * @param string $meetingId Zoom meeting ID (numeric) or UUID
+ */
+function zoom_api_delete_meeting_recordings(string $meetingId, string $action = 'delete'): void
+{
+    $numeric = preg_replace('/\D+/', '', $meetingId);
+    $encoded = $numeric !== ''
+        ? rawurlencode($numeric)
+        : rawurlencode(rawurlencode($meetingId));
+
+    $path = '/meetings/' . $encoded . '/recordings?action=' . rawurlencode($action);
+    $result = zoom_api_request('DELETE', $path, null);
+    if (!$result['ok']) {
+        throw new RuntimeException((string) ($result['message'] ?? 'Failed to delete Zoom recording.'));
+    }
 }

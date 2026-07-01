@@ -38,7 +38,7 @@ $publicBase = fm_zoom_public_base_url();
 $assetBase = $publicBase . '/assets/zoom-meetingsdk';
 $meetingJs = fm_zoom_meeting_js_file();
 $assetsOk = fm_zoom_sdk_assets_installed();
-$leaveUrl = fm_meeting_participant_join_path($invitationId, $token !== '' ? $token : null) . '&left=1';
+$leaveUrl = fm_meeting_participant_join_url($invitationId, $token !== '' ? $token : null) . '&left=1';
 
 if ($invitationId > 0) {
     $st = $conn->prepare(

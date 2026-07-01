@@ -309,6 +309,7 @@ $cards = [
     'icon' => 'bi-camera-video',
     'links' => [
       'francophonie-meeting-invitation.php' => 'Meeting Invitation',
+      'francophonie-meeting-recordings.php' => 'Meeting Recordings',
     ]
   ],
   'refund_requests' => [
@@ -2201,10 +2202,21 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       <?php endif; ?>
 
       <?php if (in_array('meeting_invitation', $allowedSidebarItems)): ?>
-      <a href="#" class="sidebar-link" onclick="loadInFrame('francophonie-meeting-invitation.php', 'Meeting Invitation')">
+      <a href="#meeting_invitation" class="sidebar-link" onclick="toggleSidebarMenu('meeting_invitation')">
         <i class="bi bi-camera-video"></i>
         <span>Meeting Invitation</span>
+        <i class="bi bi-chevron-down arrow"></i>
       </a>
+      <div class="sidebar-submenu" id="submenu_meeting_invitation">
+        <a href="#" onclick="loadInFrame('francophonie-meeting-invitation.php', 'Meeting Invitation')">
+          <i class="bi bi-envelope-open"></i>
+          Meeting Invitation
+        </a>
+        <a href="#" onclick="loadInFrame('francophonie-meeting-recordings.php', 'Meeting Recordings')">
+          <i class="bi bi-cloud-download"></i>
+          Meeting Recordings
+        </a>
+      </div>
       <?php endif; ?>
       
       <?php if (in_array('refund_requests', $allowedSidebarItems)): ?>

@@ -92,7 +92,7 @@ if (!zoom_sdk_is_configured() && $sdkError === '') {
     $sdkError = 'Zoom embed credentials missing. Set ZOOM_EMBED_CLIENT_ID and ZOOM_EMBED_CLIENT_SECRET in .env.';
 }
 
-$leaveUrl = $publicBase . '/francophonie-meeting-invitation.php';
+$leaveUrl = fm_meeting_absolute_url('francophonie-meeting-invitation.php');
 $zoomLibUrl = $assetBase . '/dist/lib';
 $zoomCssHref = $assetBase . '/dist/ui/zoom-meetingsdk.css';
 $hostAttendanceMeta = [

@@ -157,6 +157,7 @@ function xander_env_get(string $key): string
             'WHATSAPP_COMMISSION_TEMPLATE_LANG' => true,
             'WHATSAPP_COMMISSION_TEMPLATE_PARAMS' => true,
             'APP_PUBLIC_URL' => true,
+            'app.baseURL' => true,
             'ZOOM_ACCOUNT_ID' => true,
             'ZOOM_CLIENT_ID' => true,
             'ZOOM_CLIENT_SECRET' => true,

@@ -7,6 +7,7 @@ header('Content-Type: application/json; charset=utf-8');
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/env_load.php';
 require_once __DIR__ . '/helpers/francophonie_meeting_attendance.php';
+require_once __DIR__ . '/helpers/zoom_meeting_sdk.php';
 
 xander_load_env_file();
 fm_meeting_ensure_schema($conn);

@@ -22,8 +22,8 @@ const PCVC_COMPANY_SUPPORT_EMAIL = 'admission@visaconsultantcanada.com';
 const PCVC_DEFAULT_ASSIGNED_PERSON_LABEL = 'Parrot Canada';
 
 /**
- * Public base URL for this MIS install (receipt email, webhooks, internal curl).
- * Set APP_PUBLIC_URL in .env on production, e.g. https://mis.visaconsultantcanada.com
+ * Public base URL for this MIS install (receipt email, webhooks, internal curl, meeting links).
+ * Prefers app.baseURL from .env (e.g. https://visaconsultantcanada.com/), then APP_PUBLIC_URL.
  */
 function pcvc_public_base_url(): string
 {
@@ -36,13 +36,29 @@ function pcvc_public_base_url(): string
 
     $env = '';
     if (function_exists('xander_env_get')) {
-        $env = trim((string) xander_env_get('APP_PUBLIC_URL'));
+        foreach (['app.baseURL', 'APP_PUBLIC_URL'] as $key) {
+            $candidate = trim((string) xander_env_get($key));
+            $candidate = trim($candidate, "\"'");
+            if ($candidate !== '') {
+                $env = $candidate;
+                break;
+            }
+        }
     }
     if ($env !== '') {
         return rtrim($env, '/');
     }
 
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $scheme = 'http';
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        $scheme = 'https';
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+        $forwarded = strtolower(trim((string) strtok((string) $_SERVER['HTTP_X_FORWARDED_PROTO'], ',')));
+        if ($forwarded === 'https') {
+            $scheme = 'https';
+        }
+    }
+
     $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $dir    = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
     return rtrim($scheme . '://' . $host . $dir, '/');

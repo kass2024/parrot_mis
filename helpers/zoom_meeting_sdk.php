@@ -155,9 +155,15 @@ function fm_meeting_embed_room_path(
     return '/meeting/room?' . http_build_query($params);
 }
 
-function fm_meeting_host_room_url(int $invitationId): string
+function fm_meeting_host_room_path(int $invitationId): string
 {
     return 'francophonie-meeting-host.php?invitation_id=' . $invitationId;
+}
+
+/** Full https URL for host room (admin + emails). */
+function fm_meeting_host_room_url(int $invitationId): string
+{
+    return fm_meeting_absolute_url(fm_meeting_host_room_path($invitationId));
 }
 
 function fm_meeting_generate_join_token(): string
@@ -165,14 +171,31 @@ function fm_meeting_generate_join_token(): string
     return bin2hex(random_bytes(16));
 }
 
-function fm_meeting_participant_join_url(int $invitationId, ?string $joinToken = null): string
+/** Ensure invitation links always include scheme + domain (never relative). */
+function fm_meeting_normalize_public_url(string $url): string
 {
-    $path = 'francophonie-meeting-join.php?invitation_id=' . $invitationId;
-    if ($joinToken !== null && $joinToken !== '') {
-        $path .= '&token=' . rawurlencode($joinToken);
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+    if (preg_match('#^https?://#i', $url)) {
+        return $url;
     }
 
-    return fm_zoom_public_base_url() . '/' . $path;
+    return fm_meeting_absolute_url($url);
+}
+
+function fm_meeting_absolute_url(string $relativePath): string
+{
+    $base = rtrim(fm_zoom_public_base_url(), '/');
+    $path = ltrim(str_replace('\\', '/', $relativePath), '/');
+
+    return $base . '/' . $path;
+}
+
+function fm_meeting_participant_join_url(int $invitationId, ?string $joinToken = null): string
+{
+    return fm_meeting_normalize_public_url(fm_meeting_participant_join_path($invitationId, $joinToken));
 }
 
 function fm_meeting_participant_join_path(int $invitationId, ?string $joinToken = null): string
@@ -193,16 +216,30 @@ function fm_meeting_guest_join_path(int $invitationId, string $guestToken): stri
 
 function fm_meeting_guest_join_url(int $invitationId, string $guestToken): string
 {
-    return fm_zoom_public_base_url() . '/' . fm_meeting_guest_join_path($invitationId, $guestToken);
+    return fm_meeting_normalize_public_url(fm_meeting_guest_join_path($invitationId, $guestToken));
 }
 
 function fm_zoom_public_base_url(): string
 {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+    if (!function_exists('pcvc_public_base_url')) {
+        require_once __DIR__ . '/../includes/company_branding.php';
+    }
 
-    return $scheme . '://' . $host . $dir;
+    return pcvc_public_base_url();
+}
+
+/** True when invitation links will include a usable public domain. */
+function fm_meeting_public_url_configured(): bool
+{
+    $base = fm_zoom_public_base_url();
+    if ($base === '' || !preg_match('#^https?://#i', $base)) {
+        return false;
+    }
+    if (stripos($base, 'localhost') !== false || stripos($base, '127.0.0.1') !== false) {
+        return true;
+    }
+
+    return (bool) preg_match('#^https://#i', $base);
 }
 
 function fm_zoom_meeting_js_file(): string

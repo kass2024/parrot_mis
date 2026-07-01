@@ -450,9 +450,9 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
     </form>
 
     <?php if ($history !== []): ?>
-    <div class="mt-4">
-        <h2 class="h6 text-muted mb-2"><i class="fas fa-history me-1"></i> Previous meetings (<?= count($history) ?>)</h2>
-        <div class="history-table-wrap table-responsive">
+    <div class="mt-4" id="historySection">
+        <h2 class="h6 text-muted mb-2" id="historyTitle"><i class="fas fa-history me-1"></i> Previous meetings (<?= count($history) ?>)</h2>
+        <div class="history-table-wrap table-responsive" id="historyTableWrap">
             <table class="table history-table table-hover mb-0">
                 <thead>
                     <tr>
@@ -463,14 +463,13 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="historyTableBody">
                     <?php foreach ($history as $h):
                         $hid = (int) $h['id'];
                         $guestTok = trim((string) ($h['guest_join_token'] ?? ''));
                         if ($guestTok === '') {
                             $guestTok = fm_meeting_ensure_guest_join_token($conn, $hid);
                         }
-                        $guestJoinPath = fm_meeting_guest_join_path($hid, $guestTok);
                     ?>
                     <tr id="meeting-row-<?= (int) $h['id'] ?>">
                         <td>
@@ -496,7 +495,7 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
                             <a href="francophonie-meeting-host.php?invitation_id=<?= $hid ?>" target="_blank" rel="noopener" class="btn btn-sm btn-success" title="Start as Zoom host">
                                 <i class="fas fa-play"></i>
                             </a>
-                            <button type="button" class="btn btn-sm btn-outline-primary btn-copy-guest-link" data-url="<?= htmlspecialchars(fm_zoom_public_base_url() . '/' . $guestJoinPath, ENT_QUOTES, 'UTF-8') ?>" title="Copy external guest link">
+                            <button type="button" class="btn btn-sm btn-outline-primary btn-copy-guest-link" data-url="<?= htmlspecialchars(fm_meeting_guest_join_url($hid, $guestTok), ENT_QUOTES, 'UTF-8') ?>" title="Copy external guest link">
                                 <i class="fas fa-user-plus"></i>
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-secondary btn-attendance-report" data-id="<?= $hid ?>" title="Attendance report">
@@ -511,9 +510,29 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
                 </tbody>
             </table>
         </div>
+        <div class="mt-3 text-muted small <?= $history === [] ? '' : 'd-none' ?>" id="historyEmpty">
+            <i class="fas fa-info-circle me-1"></i>No previous meetings yet.
+        </div>
     </div>
     <?php else: ?>
-    <div class="mt-4 text-muted small"><i class="fas fa-info-circle me-1"></i>No previous meetings yet.</div>
+    <div class="mt-4" id="historySection">
+        <h2 class="h6 text-muted mb-2" id="historyTitle"><i class="fas fa-history me-1"></i> Previous meetings (0)</h2>
+        <div class="history-table-wrap table-responsive d-none" id="historyTableWrap">
+            <table class="table history-table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Topic</th>
+                        <th>Scheduled</th>
+                        <th>Meeting ID</th>
+                        <th>Emails</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody"></tbody>
+            </table>
+        </div>
+        <div class="text-muted small" id="historyEmpty"><i class="fas fa-info-circle me-1"></i>No previous meetings yet.</div>
+    </div>
     <?php endif; ?>
 </div>
 
@@ -539,6 +558,74 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
     const sendResult = document.getElementById('sendResult');
     const selectedCount = document.getElementById('selectedCount');
     const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_THROW_ON_ERROR) ?>;
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function updateHistoryCount() {
+        const title = document.getElementById('historyTitle');
+        const body = document.getElementById('historyTableBody');
+        if (!title || !body) return;
+        const count = body.querySelectorAll('tr').length;
+        title.innerHTML = '<i class="fas fa-history me-1"></i> Previous meetings (' + count + ')';
+    }
+
+    function buildMeetingRowHtml(meeting) {
+        const id = meeting.id;
+        const topic = escapeHtml(meeting.topic || '');
+        const topicAttr = escapeHtml(meeting.topic || '');
+        const duration = Number(meeting.duration_minutes || 0);
+        const recipients = Number(meeting.recipient_count || 0);
+        const startDisplay = escapeHtml(meeting.start_time_display || meeting.start_time || '');
+        const meetingNumber = escapeHtml(meeting.zoom_meeting_number || '—');
+        const password = meeting.zoom_password ? String(meeting.zoom_password) : '';
+        const sent = Number(meeting.emails_sent || 0);
+        const failed = Number(meeting.emails_failed || 0);
+        const guestUrl = escapeHtml(meeting.guest_join_url || '');
+        const hostUrl = 'francophonie-meeting-host.php?invitation_id=' + encodeURIComponent(id);
+
+        let html = '<tr id="meeting-row-' + id + '">';
+        html += '<td><div class="fw-semibold">' + topic + '</div>';
+        html += '<div class="text-muted small">' + duration + ' min · ' + recipients + ' invited</div></td>';
+        html += '<td class="small text-nowrap">' + startDisplay + '</td>';
+        html += '<td class="small font-monospace">' + meetingNumber;
+        if (password) {
+            html += '<div class="text-muted">pwd: ' + escapeHtml(password) + '</div>';
+        }
+        html += '</td><td class="small"><span class="text-success">' + sent + ' sent</span>';
+        if (failed > 0) {
+            html += '<span class="text-danger"> · ' + failed + ' failed</span>';
+        }
+        html += '</td><td class="text-end text-nowrap">';
+        html += '<a href="' + hostUrl + '" target="_blank" rel="noopener" class="btn btn-sm btn-success" title="Start as Zoom host"><i class="fas fa-play"></i></a> ';
+        html += '<button type="button" class="btn btn-sm btn-outline-primary btn-copy-guest-link" data-url="' + guestUrl + '" title="Copy external guest link"><i class="fas fa-user-plus"></i></button> ';
+        html += '<button type="button" class="btn btn-sm btn-outline-secondary btn-attendance-report" data-id="' + id + '" title="Attendance report"><i class="fas fa-clipboard-list"></i></button> ';
+        html += '<button type="button" class="btn btn-sm btn-outline-danger btn-delete-meeting" data-id="' + id + '" data-topic="' + topicAttr + '" title="Delete"><i class="fas fa-trash"></i></button>';
+        html += '</td></tr>';
+        return html;
+    }
+
+    function prependMeetingRow(meeting) {
+        if (!meeting || !meeting.id) return;
+        const body = document.getElementById('historyTableBody');
+        const wrap = document.getElementById('historyTableWrap');
+        const empty = document.getElementById('historyEmpty');
+        if (!body) return;
+
+        if (document.getElementById('meeting-row-' + meeting.id)) {
+            return;
+        }
+
+        body.insertAdjacentHTML('afterbegin', buildMeetingRowHtml(meeting));
+        wrap?.classList.remove('d-none');
+        empty?.classList.add('d-none');
+        updateHistoryCount();
+    }
 
     function updateCount() {
         const n = document.querySelectorAll('.recipient-check:checked').length;
@@ -607,6 +694,9 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
             if (data.success) {
                 form.querySelectorAll('.recipient-check:checked').forEach(cb => { cb.checked = false; });
                 updateCount();
+                if (data.meeting) {
+                    prependMeetingRow(data.meeting);
+                }
             }
         } catch (err) {
             sendResult.style.display = 'block';
@@ -620,24 +710,26 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
 
     updateCount();
 
-    document.querySelectorAll('.btn-copy-guest-link').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-            const url = btn.getAttribute('data-url') || '';
+    const attendanceModal = document.getElementById('attendanceModal');
+    const attendanceBody = document.getElementById('attendanceModalBody');
+
+    document.getElementById('historySection')?.addEventListener('click', async function (e) {
+        const copyBtn = e.target.closest('.btn-copy-guest-link');
+        if (copyBtn) {
+            const url = copyBtn.getAttribute('data-url') || '';
             if (!url) return;
             try {
                 await navigator.clipboard.writeText(url);
                 alert('External guest link copied. Share it with people not on the invite list.');
-            } catch (e) {
+            } catch (err) {
                 prompt('Copy this external guest link:', url);
             }
-        });
-    });
+            return;
+        }
 
-    const attendanceModal = document.getElementById('attendanceModal');
-    const attendanceBody = document.getElementById('attendanceModalBody');
-    document.querySelectorAll('.btn-attendance-report').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-            const id = btn.getAttribute('data-id');
+        const attendanceBtn = e.target.closest('.btn-attendance-report');
+        if (attendanceBtn) {
+            const id = attendanceBtn.getAttribute('data-id');
             if (!id || !attendanceModal || !attendanceBody) return;
             attendanceBody.innerHTML = '<div class="text-muted small">Loading…</div>';
             bootstrap.Modal.getOrCreateInstance(attendanceModal).show();
@@ -665,21 +757,21 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
                 });
                 html += '</tbody></table></div>';
                 attendanceBody.innerHTML = html;
-            } catch (e) {
+            } catch (err) {
                 attendanceBody.innerHTML = '<div class="text-danger">Could not load attendance report.</div>';
             }
-        });
-    });
+            return;
+        }
 
-    document.querySelectorAll('.btn-delete-meeting').forEach(function (btn) {
-        btn.addEventListener('click', async function () {
-            const id = btn.getAttribute('data-id');
-            const topic = btn.getAttribute('data-topic') || 'this meeting';
+        const deleteBtn = e.target.closest('.btn-delete-meeting');
+        if (deleteBtn) {
+            const id = deleteBtn.getAttribute('data-id');
+            const topic = deleteBtn.getAttribute('data-topic') || 'this meeting';
             if (!id) return;
             if (!confirm('Delete "' + topic + '" from the list and remove the Zoom meeting?')) {
                 return;
             }
-            btn.disabled = true;
+            deleteBtn.disabled = true;
             try {
                 const fd = new FormData();
                 fd.append('csrf_token', csrfToken);
@@ -693,15 +785,23 @@ $defaultStart = (new DateTime('now', new DateTimeZone('America/Toronto')))
                 const data = await res.json();
                 if (!data.success) {
                     alert(data.message || 'Delete failed');
-                    btn.disabled = false;
+                    deleteBtn.disabled = false;
                     return;
                 }
                 document.getElementById('meeting-row-' + id)?.remove();
-            } catch (e) {
+                updateHistoryCount();
+                const body = document.getElementById('historyTableBody');
+                const empty = document.getElementById('historyEmpty');
+                const wrap = document.getElementById('historyTableWrap');
+                if (body && body.querySelectorAll('tr').length === 0) {
+                    wrap?.classList.add('d-none');
+                    empty?.classList.remove('d-none');
+                }
+            } catch (err) {
                 alert('Delete request failed.');
-                btn.disabled = false;
+                deleteBtn.disabled = false;
             }
-        });
+        }
     });
 })();
 </script>

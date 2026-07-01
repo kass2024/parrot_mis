@@ -122,3 +122,36 @@ function fm_meeting_ensure_schema(mysqli $conn): void
          WHERE guest_join_token IS NULL OR guest_join_token = ''"
     );
 }
+
+/**
+ * @param array<string, mixed> $row DB row from francophonie_mobility_meeting_invitations
+ * @return array<string, mixed>
+ */
+function fm_meeting_invitation_history_payload(mysqli $conn, array $row): array
+{
+    require_once __DIR__ . '/zoom_meeting_sdk.php';
+
+    $hid = (int) ($row['id'] ?? 0);
+    $guestTok = trim((string) ($row['guest_join_token'] ?? ''));
+    if ($guestTok === '' && $hid > 0) {
+        $guestTok = fm_meeting_ensure_guest_join_token($conn, $hid);
+    }
+
+    $startRaw = (string) ($row['start_time'] ?? '');
+    $startTs = strtotime($startRaw);
+
+    return [
+        'id' => $hid,
+        'topic' => (string) ($row['topic'] ?? ''),
+        'start_time' => $startRaw,
+        'start_time_display' => $startTs ? date('M j, Y g:i A', $startTs) : $startRaw,
+        'duration_minutes' => (int) ($row['duration_minutes'] ?? 60),
+        'recipient_count' => (int) ($row['recipient_count'] ?? 0),
+        'emails_sent' => (int) ($row['emails_sent'] ?? 0),
+        'emails_failed' => (int) ($row['emails_failed'] ?? 0),
+        'zoom_meeting_number' => (string) ($row['zoom_meeting_number'] ?? ''),
+        'zoom_password' => (string) ($row['zoom_password'] ?? ''),
+        'guest_join_url' => $hid > 0 ? fm_meeting_guest_join_url($hid, $guestTok) : '',
+        'host_room_url' => $hid > 0 ? fm_meeting_host_room_url($hid) : '',
+    ];
+}
