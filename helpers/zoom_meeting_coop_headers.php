@@ -12,4 +12,5 @@ function fm_zoom_send_coop_headers(): void
     }
     header('Cross-Origin-Opener-Policy: same-origin');
     header('Cross-Origin-Embedder-Policy: credentialless');
+    header('Permissions-Policy: camera=(self), microphone=(self)');
 }

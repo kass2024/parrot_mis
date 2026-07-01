@@ -6,17 +6,19 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/env_load.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_meeting_attendance.php';
 require_once __DIR__ . '/helpers/zoom_meeting_sdk.php';
 
 xander_load_env_file();
 fm_meeting_ensure_schema($conn);
 
-if (empty($_SESSION['id']) || !in_array($_SESSION['role'] ?? '', ['superadmin', 'staff'], true)) {
+if (empty($_SESSION['id'])) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'message' => 'Access denied']);
     exit;
 }
+pcvc_require_staff_or_superadmin($conn, true);
 
 $invitationId = (int) ($_GET['invitation_id'] ?? 0);
 if ($invitationId <= 0) {

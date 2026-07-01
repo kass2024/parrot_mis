@@ -7,16 +7,19 @@ declare(strict_types=1);
 session_start();
 header('Content-Type: application/json; charset=utf-8');
 
+require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/env_load.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/zoom_meeting_sdk.php';
 
 xander_load_env_file();
 
-if (empty($_SESSION['id']) || !in_array($_SESSION['role'] ?? '', ['superadmin', 'staff'], true)) {
+if (empty($_SESSION['id'])) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'message' => 'Unauthorized']);
     exit;
 }
+pcvc_require_staff_or_superadmin($conn, true);
 
 if (!zoom_sdk_is_configured()) {
     http_response_code(503);

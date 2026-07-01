@@ -12,6 +12,241 @@
   var assetsLoadPromise = null;
   var preparePromise = null;
   var initPromise = null;
+  var avatarObserver = null;
+  var avatarRefreshTimer = null;
+  var avatarLookup = {};
+  var avatarBrandingConfig = null;
+
+  function normalizeName(value) {
+    return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function initialsFor(name) {
+    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '?';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return ((parts[0][0] || '') + (parts[parts.length - 1][0] || '')).toUpperCase();
+  }
+
+  function colorForName(name) {
+    var palette = ['#1e4d2b', '#3661B9', '#0e72ed', '#7c3aed', '#b45309', '#be123c', '#0f766e'];
+    var key = normalizeName(name);
+    var hash = 0;
+    for (var i = 0; i < key.length; i++) {
+      hash = ((hash << 5) - hash) + key.charCodeAt(i);
+      hash |= 0;
+    }
+    return palette[Math.abs(hash) % palette.length];
+  }
+
+  function buildAvatarLookup(branding) {
+    var map = {};
+    if (!branding) return map;
+    if (branding.self && branding.self.name) {
+      map[normalizeName(branding.self.name)] = branding.self.avatar_url || '';
+    }
+    (branding.participants || []).forEach(function (p) {
+      if (!p || !p.name) return;
+      map[normalizeName(p.name)] = p.avatar_url || '';
+    });
+    return map;
+  }
+
+  function resolveAvatarUrl(name) {
+    var key = normalizeName(name);
+    if (avatarLookup[key]) return avatarLookup[key];
+    var keys = Object.keys(avatarLookup);
+    for (var i = 0; i < keys.length; i++) {
+      var candidate = keys[i];
+      if (key.indexOf(candidate) !== -1 || candidate.indexOf(key) !== -1) {
+        return avatarLookup[candidate];
+      }
+    }
+    return '';
+  }
+
+  function frameHasActiveVideo(frame) {
+    if (!frame) return false;
+    var videos = frame.querySelectorAll('video');
+    for (var i = 0; i < videos.length; i++) {
+      var video = videos[i];
+      if (!video) continue;
+      var rect = video.getBoundingClientRect();
+      if (rect.width < 24 || rect.height < 24) continue;
+      if (!video.paused && video.readyState >= 2 && video.videoWidth > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function extractParticipantName(frame) {
+    if (!frame) return '';
+    var selectors = [
+      '[class*="participant-name"]',
+      '[class*="ParticipantName"]',
+      '[class*="video-avatar__avatar-title"]',
+      '[class*="avatar-name"]',
+      '[class*="AvatarName"]',
+      '[class*="video-avatar"] span',
+      '[class*="footer"] span',
+      '[class*="name-card"]',
+    ];
+    for (var s = 0; s < selectors.length; s++) {
+      var nodes = frame.querySelectorAll(selectors[s]);
+      for (var i = 0; i < nodes.length; i++) {
+        var text = (nodes[i].textContent || '').trim();
+        if (text.length >= 2 && text.length <= 80) return text;
+      }
+    }
+    var labelled = frame.querySelector('[aria-label]');
+    if (labelled) {
+      var label = (labelled.getAttribute('aria-label') || '').trim();
+      if (label.length >= 2 && label.length <= 80) return label;
+    }
+    return '';
+  }
+
+  function patchSdkAvatarImages(root) {
+    if (!root) return;
+    var images = root.querySelectorAll('[class*="avatar"] img, [class*="Avatar"] img, img[src*="zoom.us"], img[src*="zoomcdn"], img[src*="gravatar"]');
+    for (var i = 0; i < images.length; i++) {
+      var img = images[i];
+      if (!img || img.getAttribute('data-fm-avatar-patched') === '1') continue;
+      img.referrerPolicy = 'no-referrer';
+      img.crossOrigin = 'anonymous';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '9999px';
+      img.setAttribute('data-fm-avatar-patched', '1');
+    }
+  }
+
+  function ensureAvatarOverlay(frame, name) {
+    if (!frame || !name) return;
+    var hasVideo = frameHasActiveVideo(frame);
+    frame.classList.toggle('fm-has-active-video', hasVideo);
+
+    var overlay = frame.querySelector('.fm-avatar-overlay');
+    if (hasVideo) {
+      if (overlay) overlay.style.display = 'none';
+      return;
+    }
+
+    if (!overlay) {
+      overlay = document.createElement('div');
+      overlay.className = 'fm-avatar-overlay';
+      frame.appendChild(overlay);
+    }
+    overlay.style.display = 'flex';
+
+    var existingKey = overlay.getAttribute('data-fm-name');
+    if (existingKey === normalizeName(name) && overlay.querySelector('.fm-avatar-circle')) {
+      return;
+    }
+    overlay.setAttribute('data-fm-name', normalizeName(name));
+    overlay.innerHTML = '';
+
+    var circle = document.createElement('div');
+    circle.className = 'fm-avatar-circle';
+    var avatarUrl = resolveAvatarUrl(name);
+
+    if (avatarUrl) {
+      var img = document.createElement('img');
+      img.className = 'fm-avatar-img';
+      img.alt = name;
+      img.referrerPolicy = 'no-referrer';
+      img.crossOrigin = 'anonymous';
+      img.src = avatarUrl;
+      img.onerror = function () {
+        img.remove();
+        circle.style.background = colorForName(name);
+        circle.textContent = initialsFor(name);
+        circle.classList.add('fm-avatar-initials');
+      };
+      circle.appendChild(img);
+    } else {
+      circle.style.background = colorForName(name);
+      circle.textContent = initialsFor(name);
+      circle.classList.add('fm-avatar-initials');
+    }
+
+    overlay.appendChild(circle);
+  }
+
+  function enhanceVideoFrames(root) {
+    if (!root) return;
+    patchSdkAvatarImages(root);
+
+    var frames = root.querySelectorAll('[class*="video-frame"], [class*="VideoFrame"], [class*="video-avatar"], [class*="VideoAvatar"]');
+    for (var i = 0; i < frames.length; i++) {
+      var frame = frames[i];
+      if (!frame || frame.closest('[class*="share"], [class*="Share"]')) continue;
+      var rect = frame.getBoundingClientRect();
+      if (rect.width < 48 || rect.height < 48) continue;
+      var name = extractParticipantName(frame);
+      if (!name) continue;
+      if (frame.classList.contains('fm-avatar-enhanced') === false) {
+        frame.classList.add('fm-avatar-enhanced');
+      }
+      ensureAvatarOverlay(frame, name);
+    }
+  }
+
+  function refreshAvatarLookupFromZoom() {
+    if (typeof ZoomMtg === 'undefined' || typeof ZoomMtg.getAttendeeslist !== 'function') return;
+    try {
+      ZoomMtg.getAttendeeslist({
+        success: function (list) {
+          if (!Array.isArray(list)) return;
+          list.forEach(function (att) {
+            if (!att) return;
+            var name = att.userName || att.displayName || '';
+            var avatar = att.avatar || att.picUrl || att.profilePicture || '';
+            if (name && avatar) {
+              avatarLookup[normalizeName(name)] = avatar;
+            }
+          });
+          enhanceVideoFrames(document.getElementById('zmmtg-root'));
+        }
+      });
+    } catch (e) { /* ignore */ }
+  }
+
+  function startAvatarEnhancer(branding) {
+    stopAvatarEnhancer();
+    avatarBrandingConfig = branding || null;
+    avatarLookup = buildAvatarLookup(branding);
+    var root = document.getElementById('zmmtg-root');
+    if (!root) return;
+
+    enhanceVideoFrames(root);
+    refreshAvatarLookupFromZoom();
+
+    avatarObserver = new MutationObserver(function () {
+      if (avatarRefreshTimer) window.clearTimeout(avatarRefreshTimer);
+      avatarRefreshTimer = window.setTimeout(function () {
+        avatarRefreshTimer = null;
+        enhanceVideoFrames(root);
+      }, 120);
+    });
+    avatarObserver.observe(root, { childList: true, subtree: true, attributes: true });
+
+    window.setInterval(function () {
+      enhanceVideoFrames(root);
+      refreshAvatarLookupFromZoom();
+    }, 2500);
+  }
+
+  function stopAvatarEnhancer() {
+    if (avatarObserver) {
+      avatarObserver.disconnect();
+      avatarObserver = null;
+    }
+    if (avatarRefreshTimer) {
+      window.clearTimeout(avatarRefreshTimer);
+      avatarRefreshTimer = null;
+    }
+  }
 
   function errMsg(err) {
     if (!err || typeof err !== 'object') return 'Zoom error';
@@ -311,6 +546,7 @@
       window.clearTimeout(dockTimer);
       dockTimer = null;
     }
+    stopAvatarEnhancer();
     clearShareLayout();
     setParticipantCountClasses(0);
     shareListenersBound = false;
@@ -335,7 +571,7 @@
       videoDrag: true,
       videoHeader: true,
       isLockBottom: true,
-      disablePreview: true,
+      disablePreview: false,
       enableHD: false,
       enableFullHD: false,
       isSupportPolling: false,
@@ -415,6 +651,7 @@
     var onStatus = typeof cfg.onStatus === 'function' ? cfg.onStatus : function () {};
     var onJoined = typeof cfg.onJoined === 'function' ? cfg.onJoined : function () {};
     var onError = typeof cfg.onError === 'function' ? cfg.onError : function () {};
+    var avatarBranding = cfg.avatarBranding || null;
 
     if (!sdk || !sdk.signature) {
       onError('SDK credentials missing.');
@@ -515,7 +752,12 @@
       })
       .then(function () {
         onJoined();
-        window.setTimeout(refreshParticipantLayout, 1500);
+        document.body.classList.add('fm-meeting-active');
+        startAvatarEnhancer(avatarBranding);
+        window.setTimeout(function () {
+          refreshParticipantLayout();
+          enhanceVideoFrames(document.getElementById('zmmtg-root'));
+        }, 1500);
       })
       .catch(function (e) {
         onError(e && e.message ? e.message : String(e));
@@ -532,6 +774,8 @@
     stopShareWatch: stopShareWatch,
     applyPureShareLayout: applyPureShareLayout,
     refreshParticipantLayout: refreshParticipantLayout,
-    showZoomRoot: showZoomRoot
+    showZoomRoot: showZoomRoot,
+    startAvatarEnhancer: startAvatarEnhancer,
+    stopAvatarEnhancer: stopAvatarEnhancer
   };
 })(window);

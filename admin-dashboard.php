@@ -360,7 +360,7 @@ $allowedCardsByRole = [
   'superadmin' => array_merge(array_keys($cards), ['application_flag_summary','agent_report','university_portal','admin_chat','start_fish','schools','marketing','abroad']),
   'standard' => ['university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions','agent_report','university_portal','commission_request','staff_attendance','schools','marketing'],
   'Catholic university of America' => ['university_admissions', 'application_flag_summary','schools','marketing','abroad'],
-  'staff' => ['staff_attendance','agent_report','university_portal','commission_request','all_admissions','loan_applications','schools','marketing','contracts'],
+  'staff' => ['staff_attendance','agent_report','university_portal','commission_request','all_admissions','loan_applications','schools','marketing','contracts','meeting_invitation'],
   'agent' => ['staff_attendance','agent_report','university_portal','commission_request','all_admissions','schools','marketing']
 ];
 
@@ -392,6 +392,9 @@ $sidebarAccess = [
 // Get current role's allowed sidebar items (normalized — DB role may contain stray newlines)
 $dashboardRoleKey = pcvc_resolve_dashboard_role_key($role, $sidebarAccess, 'standard');
 $allowedSidebarItems = $sidebarAccess[$dashboardRoleKey] ?? $sidebarAccess['standard'];
+if (pcvc_current_user_is_staff_or_superadmin($conn) && !in_array('meeting_invitation', $allowedSidebarItems, true)) {
+    $allowedSidebarItems[] = 'meeting_invitation';
+}
 $allowedDashboardCards = $allowedCardsByRole[$dashboardRoleKey] ?? ($allowedCardsByRole['standard'] ?? []);
 
 // Get agent data for chart

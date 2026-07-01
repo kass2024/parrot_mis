@@ -23,9 +23,9 @@ function pcvc_is_staff_role($role): bool
 {
     $s = strtolower(pcvc_normalize_role_string($role));
     $s = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $s);
-    $s = preg_replace('/[\s_\-]+/u', '', $s);
+    $compact = preg_replace('/[\s_\-]+/u', '', $s);
 
-    return $s === 'staff';
+    return $compact === 'staff' || $compact === 'staffadmin';
 }
 
 /** Staff or superadmin (session role and/or DB role). */
@@ -131,6 +131,10 @@ function pcvc_resolve_dashboard_role_key(string $role, array $accessMap, string 
         return isset($accessMap['superadmin']) ? 'superadmin' : $fallback;
     }
 
+    if (pcvc_is_staff_role($role)) {
+        return isset($accessMap['staff']) ? 'staff' : $fallback;
+    }
+
     $normalized = pcvc_normalize_role_string($role);
     if ($normalized !== '' && isset($accessMap[$normalized])) {
         return $normalized;
@@ -144,6 +148,24 @@ function pcvc_resolve_dashboard_role_key(string $role, array $accessMap, string 
     }
 
     return isset($accessMap[$fallback]) ? $fallback : (string) array_key_first($accessMap);
+}
+
+/** Meeting invitation / recordings pages: superadmin and staff (incl. staff admin variants). */
+function pcvc_require_staff_or_superadmin(mysqli $conn, bool $json = false): void
+{
+    if (pcvc_current_user_is_staff_or_superadmin($conn)) {
+        return;
+    }
+
+    if ($json) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode(['success' => false, 'message' => 'Access denied']);
+        exit;
+    }
+
+    header('Location: admin-login.php');
+    exit;
 }
 
 function pcvc_require_superadmin(mysqli $conn, bool $json = false): void

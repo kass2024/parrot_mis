@@ -1,11 +1,13 @@
-/* Zoom Client View layout — gallery (3+) + speaker strip (2) + screen share */
+/* Zoom Client View layout — gallery (3+) + speaker strip (2) + screen share + avatars */
 html.zoom-client-meeting-active,
 body.zoom-client-meeting-active {
   margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  overflow: visible !important;
+  height: 100dvh;
+  overflow: hidden !important;
+  -webkit-text-size-adjust: 100%;
 }
 
 #zmmtg-root {
@@ -16,8 +18,122 @@ body.zoom-client-meeting-active {
   height: 100dvh;
   max-width: none;
   max-height: none;
-  overflow: visible;
+  overflow: hidden;
   z-index: 1;
+  background: #1a1a1a;
+}
+
+/* Profile avatars when camera is off */
+#zmmtg-root [class*="video-frame"],
+#zmmtg-root [class*="video-avatar"],
+#zmmtg-root [class*="VideoAvatar"] {
+  position: relative !important;
+}
+
+#zmmtg-root .fm-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 6;
+  background: #1a1a1a;
+}
+
+#zmmtg-root .fm-avatar-circle {
+  width: min(26vw, 112px);
+  height: min(26vw, 112px);
+  max-width: 112px;
+  max-height: 112px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+#zmmtg-root .fm-avatar-circle.fm-avatar-initials {
+  color: #fff;
+  font-weight: 700;
+  font-size: clamp(1.1rem, 4vw, 2rem);
+  letter-spacing: 0.04em;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+#zmmtg-root .fm-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+/* Hide Zoom's oversized name text when camera is off */
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="avatar-name"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="AvatarName"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="video-avatar__avatar-title"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="avatar-title"] {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+}
+
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="video-avatar"] > div:not(.fm-avatar-overlay):not([class*="footer"]):not([class*="Footer"]) {
+  font-size: 0 !important;
+  color: transparent !important;
+}
+
+#zmmtg-root [class*="video-avatar"] img,
+#zmmtg-root [class*="VideoAvatar"] img,
+#zmmtg-root [class*="participant-avatar"] img,
+#zmmtg-root [class*="avatar-name"] img {
+  width: min(26vw, 112px) !important;
+  height: min(26vw, 112px) !important;
+  max-width: 112px !important;
+  max-height: 112px !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+}
+
+#zmmtg-root .fm-has-active-video .fm-avatar-overlay {
+  display: none !important;
+}
+
+body.fm-meeting-active .back-link {
+  z-index: 2147483000;
+}
+
+@media (max-width: 768px) {
+  body.fm-meeting-active .back-link {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    font-size: 0.78rem;
+    padding: 0.35rem 0.6rem;
+  }
+
+  #zmmtg-root .fm-avatar-circle {
+    width: min(34vw, 88px);
+    height: min(34vw, 88px);
+    max-width: 88px;
+    max-height: 88px;
+  }
+
+  #zmmtg-root [class*="video-avatar"] img,
+  #zmmtg-root [class*="VideoAvatar"] img {
+    width: min(34vw, 88px) !important;
+    height: min(34vw, 88px) !important;
+    max-width: 88px !important;
+    max-height: 88px !important;
+  }
+
+  body.fm-participant-count-3plus #zmmtg-root [class*="gallery-video-container"] {
+    height: calc(100dvh - env(safe-area-inset-bottom, 0px)) !important;
+  }
 }
 
 html.zoom-client-meeting-active #zmmtg-root,

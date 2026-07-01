@@ -7,16 +7,18 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/env_load.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_meeting_invitation_schema.php';
 require_once __DIR__ . '/helpers/zoom_meeting_api.php';
 
 xander_load_env_file();
 fm_meeting_ensure_schema($conn);
 
-if (empty($_SESSION['id']) || !in_array($_SESSION['role'] ?? '', ['superadmin', 'staff'], true)) {
+if (empty($_SESSION['id'])) {
     header('Location: admin-login.php');
     exit;
 }
+pcvc_require_staff_or_superadmin($conn);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));

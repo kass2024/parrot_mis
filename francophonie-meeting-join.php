@@ -10,6 +10,7 @@ require_once __DIR__ . '/helpers/francophonie_meeting_invitation_schema.php';
 require_once __DIR__ . '/helpers/francophonie_meeting_attendance.php';
 require_once __DIR__ . '/helpers/zoom_meeting_sdk.php';
 require_once __DIR__ . '/helpers/zoom_meeting_coop_headers.php';
+require_once __DIR__ . '/helpers/fm_meeting_avatars.php';
 fm_zoom_send_coop_headers();
 
 xander_load_env_file();
@@ -154,15 +155,22 @@ $attendanceMeta = [
     'source_type' => $sourceType,
     'source_id' => $sourceId,
 ];
+$avatarBranding = fm_meeting_participant_avatar_branding(
+    $conn,
+    $invitationId,
+    $displayName,
+    $userEmail,
+    $publicBase
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Join meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
     <?php if (!$gateMode && !$left && $sdkError === ''): ?>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=5">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=6">
     <?php endif; ?>
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
@@ -241,7 +249,7 @@ $attendanceMeta = [
     <div class="err" id="joinBootErr" style="display:none"></div>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=5"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=6"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
@@ -252,6 +260,7 @@ $attendanceMeta = [
     var meetingJs = <?= json_encode($meetingJs, JSON_UNESCAPED_UNICODE) ?>;
     var zoomCssHref = <?= json_encode($zoomCssHref, JSON_UNESCAPED_UNICODE) ?>;
     var attendanceMeta = <?= json_encode($attendanceMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var avatarBranding = <?= json_encode($avatarBranding, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var fmAttendanceId = 0;
 
     var boot = document.getElementById('joinBoot');
@@ -312,6 +321,7 @@ $attendanceMeta = [
         meetingJs: meetingJs,
         zoomCssHref: zoomCssHref,
         isHost: false,
+        avatarBranding: avatarBranding,
         onStatus: function (msg) { bootTitle.textContent = msg; },
         onJoined: function () {
             recordAttendance('join');

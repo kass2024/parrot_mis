@@ -7,18 +7,21 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/env_load.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_meeting_invitation_schema.php';
 require_once __DIR__ . '/helpers/zoom_meeting_sdk.php';
 require_once __DIR__ . '/helpers/zoom_meeting_coop_headers.php';
+require_once __DIR__ . '/helpers/fm_meeting_avatars.php';
 fm_zoom_send_coop_headers();
 
 xander_load_env_file();
 fm_meeting_ensure_schema($conn);
 
-if (empty($_SESSION['id']) || !in_array($_SESSION['role'] ?? '', ['superadmin', 'staff'], true)) {
+if (empty($_SESSION['id'])) {
     header('Location: admin-login.php');
     exit;
 }
+pcvc_require_staff_or_superadmin($conn);
 
 $invitationId = (int) ($_GET['invitation_id'] ?? 0);
 $topic = 'Meeting';
@@ -101,14 +104,21 @@ $hostAttendanceMeta = [
     'participant_name' => is_array($sdkAuth) ? (string) ($sdkAuth['user_name'] ?? $adminName) : $adminName,
     'participant_email' => is_array($sdkAuth) ? (string) ($sdkAuth['user_email'] ?? $adminEmail) : $adminEmail,
 ];
+$avatarBranding = fm_meeting_host_avatar_branding(
+    $conn,
+    (int) ($_SESSION['id'] ?? 0),
+    is_array($sdkAuth) ? (string) ($sdkAuth['user_name'] ?? $adminName) : $adminName,
+    $adminEmail,
+    $publicBase
+);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Host meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=5">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=6">
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
         .host-boot {
@@ -146,7 +156,7 @@ $hostAttendanceMeta = [
     <?php endif; ?>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=5"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=6"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
@@ -157,6 +167,7 @@ $hostAttendanceMeta = [
     var meetingJs = <?= json_encode($meetingJs, JSON_UNESCAPED_UNICODE) ?>;
     var zoomCssHref = <?= json_encode($zoomCssHref, JSON_UNESCAPED_UNICODE) ?>;
     var attendanceMeta = <?= json_encode($hostAttendanceMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var avatarBranding = <?= json_encode($avatarBranding, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var fmAttendanceId = 0;
 
     function recordAttendance(action) {
@@ -218,6 +229,7 @@ $hostAttendanceMeta = [
         meetingJs: meetingJs,
         zoomCssHref: zoomCssHref,
         isHost: true,
+        avatarBranding: avatarBranding,
         onStatus: function (msg) { bootTitle.textContent = msg; },
         onJoined: function () {
             recordAttendance('join');
