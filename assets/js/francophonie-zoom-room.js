@@ -22,7 +22,13 @@
   }
 
   function initialsFor(name) {
-    var parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    var skip = { co: 1, ltd: 1, llc: 1, inc: 1, the: 1, and: 1 };
+    var parts = String(name || '').trim().split(/\s+/).filter(function (p) {
+      return p && !skip[p.toLowerCase().replace(/\./g, '')];
+    });
+    if (parts.length === 0) {
+      parts = String(name || '').trim().split(/\s+/).filter(Boolean);
+    }
     if (parts.length === 0) return '?';
     if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
     return ((parts[0][0] || '') + (parts[parts.length - 1][0] || '')).toUpperCase();
@@ -80,31 +86,115 @@
     return false;
   }
 
+  function isFooterOrNameTag(el) {
+    if (!el || !el.closest) return false;
+    return !!el.closest(
+      '[class*="footer"], [class*="Footer"], [class*="name-card"], [class*="name-tag"], [class*="NameTag"]'
+    );
+  }
+
   function extractParticipantName(frame) {
     if (!frame) return '';
+
+    var footerSelectors = [
+      '[class*="video-footer"] span',
+      '[class*="video-footer"] [class*="name"]',
+      '[class*="footer-bar"] span',
+      '[class*="footer"] [class*="name"]',
+      '[class*="name-card"]',
+      '[class*="participant-name"]',
+      '[class*="ParticipantName"]',
+    ];
+    for (var f = 0; f < footerSelectors.length; f++) {
+      var footers = frame.querySelectorAll(footerSelectors[f]);
+      for (var j = 0; j < footers.length; j++) {
+        var footText = (footers[j].textContent || '').trim();
+        if (footText.length >= 2 && footText.length <= 80) return footText;
+      }
+    }
+
     var selectors = [
       '[class*="participant-name"]',
       '[class*="ParticipantName"]',
       '[class*="video-avatar__avatar-title"]',
       '[class*="avatar-name"]',
       '[class*="AvatarName"]',
-      '[class*="video-avatar"] span',
-      '[class*="footer"] span',
-      '[class*="name-card"]',
+      '[class*="avatar-title"]',
     ];
     for (var s = 0; s < selectors.length; s++) {
       var nodes = frame.querySelectorAll(selectors[s]);
       for (var i = 0; i < nodes.length; i++) {
+        if (isFooterOrNameTag(nodes[i])) continue;
         var text = (nodes[i].textContent || '').trim();
         if (text.length >= 2 && text.length <= 80) return text;
       }
     }
+
     var labelled = frame.querySelector('[aria-label]');
-    if (labelled) {
+    if (labelled && !isFooterOrNameTag(labelled)) {
       var label = (labelled.getAttribute('aria-label') || '').trim();
       if (label.length >= 2 && label.length <= 80) return label;
     }
     return '';
+  }
+
+  function findAvatarTileRoot(node, root) {
+    var current = node;
+    var best = null;
+    var bestArea = 0;
+    while (current && current !== root) {
+      if (current.className && typeof current.className === 'string') {
+        var cls = current.className;
+        if (
+          cls.indexOf('video-frame') !== -1 ||
+          cls.indexOf('VideoFrame') !== -1 ||
+          cls.indexOf('video-avatar') !== -1 ||
+          cls.indexOf('VideoAvatar') !== -1
+        ) {
+          var rect = current.getBoundingClientRect();
+          var area = rect.width * rect.height;
+          if (rect.width >= 64 && rect.height >= 48 && area > bestArea) {
+            best = current;
+            bestArea = area;
+          }
+        }
+      }
+      current = current.parentElement;
+    }
+    return best || node;
+  }
+
+  function suppressSdkNamePlates(frame) {
+    if (!frame || frameHasActiveVideo(frame)) return;
+
+    var children = frame.querySelectorAll('*');
+    for (var i = 0; i < children.length; i++) {
+      var el = children[i];
+      if (!el || el.classList.contains('fm-avatar-overlay') || el.closest('.fm-avatar-overlay')) continue;
+      if (isFooterOrNameTag(el)) continue;
+      if (el.tagName === 'VIDEO' || el.tagName === 'CANVAS' || el.tagName === 'IMG') continue;
+
+      var text = (el.textContent || '').trim();
+      if (text.length < 2 || text.length > 120) continue;
+
+      var rect = el.getBoundingClientRect();
+      if (rect.width < 40 || rect.height < 24) continue;
+
+      var style = window.getComputedStyle(el);
+      var fontSize = parseFloat(style.fontSize) || 0;
+      var isLeafy = el.children.length === 0 || (el.children.length === 1 && el.children[0].tagName === 'SPAN');
+      var looksLikeNamePlate =
+        fontSize >= 22 ||
+        (rect.height >= 72 && rect.width >= 100 && text.split(/\s+/).length <= 12);
+
+      if (looksLikeNamePlate && isLeafy) {
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+        el.style.setProperty('font-size', '0', 'important');
+        el.style.setProperty('color', 'transparent', 'important');
+        el.setAttribute('data-fm-name-plate-hidden', '1');
+      }
+    }
   }
 
   function patchSdkAvatarImages(root) {
@@ -125,16 +215,21 @@
     if (!frame || !name) return;
     var hasVideo = frameHasActiveVideo(frame);
     frame.classList.toggle('fm-has-active-video', hasVideo);
+    frame.classList.add('fm-avatar-enhanced');
 
-    var overlay = frame.querySelector('.fm-avatar-overlay');
     if (hasVideo) {
-      if (overlay) overlay.style.display = 'none';
+      var existing = frame.querySelector('.fm-avatar-overlay');
+      if (existing) existing.style.display = 'none';
       return;
     }
 
+    suppressSdkNamePlates(frame);
+
+    var overlay = frame.querySelector('.fm-avatar-overlay');
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.className = 'fm-avatar-overlay';
+      overlay.setAttribute('aria-hidden', 'true');
       frame.appendChild(overlay);
     }
     overlay.style.display = 'flex';
@@ -149,6 +244,14 @@
     var circle = document.createElement('div');
     circle.className = 'fm-avatar-circle';
     var avatarUrl = resolveAvatarUrl(name);
+    var tileRect = frame.getBoundingClientRect();
+    var tileMin = Math.min(tileRect.width, tileRect.height);
+    if (tileMin > 0) {
+      var size = Math.max(56, Math.min(140, Math.round(tileMin * 0.34)));
+      circle.style.width = size + 'px';
+      circle.style.height = size + 'px';
+      circle.style.fontSize = Math.max(14, Math.round(size * 0.34)) + 'px';
+    }
 
     if (avatarUrl) {
       var img = document.createElement('img');
@@ -177,19 +280,30 @@
     if (!root) return;
     patchSdkAvatarImages(root);
 
-    var frames = root.querySelectorAll('[class*="video-frame"], [class*="VideoFrame"], [class*="video-avatar"], [class*="VideoAvatar"]');
-    for (var i = 0; i < frames.length; i++) {
-      var frame = frames[i];
-      if (!frame || frame.closest('[class*="share"], [class*="Share"]')) continue;
-      var rect = frame.getBoundingClientRect();
-      if (rect.width < 48 || rect.height < 48) continue;
-      var name = extractParticipantName(frame);
+    var seen = new Set();
+    var candidates = root.querySelectorAll(
+      '[class*="video-frame"], [class*="VideoFrame"], [class*="video-avatar"], [class*="VideoAvatar"]'
+    );
+
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i];
+      if (!candidate || candidate.closest('[class*="share"], [class*="Share"]')) continue;
+
+      var tile = findAvatarTileRoot(candidate, root);
+      if (!tile || seen.has(tile)) continue;
+
+      var rect = tile.getBoundingClientRect();
+      if (rect.width < 64 || rect.height < 48) continue;
+
+      var name = extractParticipantName(tile);
       if (!name) continue;
-      if (frame.classList.contains('fm-avatar-enhanced') === false) {
-        frame.classList.add('fm-avatar-enhanced');
-      }
-      ensureAvatarOverlay(frame, name);
+
+      seen.add(tile);
+      ensureAvatarOverlay(tile, name);
     }
+
+    var anyCameraOff = root.querySelector('.fm-avatar-enhanced:not(.fm-has-active-video)');
+    document.body.classList.toggle('fm-zoom-camera-off', !!anyCameraOff);
   }
 
   function refreshAvatarLookupFromZoom() {
@@ -798,6 +912,9 @@
       .then(function () {
         onStatus('Initializing meeting room…');
         showZoomRoot();
+        if (avatarBranding) {
+          startAvatarEnhancer(avatarBranding);
+        }
         return initClient(leaveUrl);
       })
       .then(function () {
@@ -815,11 +932,16 @@
       .then(function () {
         onJoined();
         document.body.classList.add('fm-meeting-active');
-        startAvatarEnhancer(avatarBranding);
+        if (!avatarObserver) {
+          startAvatarEnhancer(avatarBranding);
+        }
         window.setTimeout(function () {
           refreshParticipantLayout();
           enhanceVideoFrames(document.getElementById('zmmtg-root'));
-        }, 1500);
+        }, 400);
+        window.setTimeout(function () {
+          enhanceVideoFrames(document.getElementById('zmmtg-root'));
+        }, 2000);
       })
       .catch(function (e) {
         onError(e && e.message ? e.message : String(e));

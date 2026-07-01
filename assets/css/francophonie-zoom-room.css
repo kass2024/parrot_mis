@@ -23,11 +23,12 @@ body.zoom-client-meeting-active {
   background: #1a1a1a;
 }
 
-/* Profile avatars when camera is off */
+/* Profile avatars when camera is off — hide Zoom oversized name plates */
 #zmmtg-root [class*="video-frame"],
 #zmmtg-root [class*="video-avatar"],
 #zmmtg-root [class*="VideoAvatar"] {
   position: relative !important;
+  overflow: hidden;
 }
 
 #zmmtg-root .fm-avatar-overlay {
@@ -37,30 +38,31 @@ body.zoom-client-meeting-active {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  z-index: 6;
+  z-index: 50 !important;
   background: #1a1a1a;
 }
 
 #zmmtg-root .fm-avatar-circle {
-  width: min(26vw, 112px);
-  height: min(26vw, 112px);
-  max-width: 112px;
-  max-height: 112px;
+  width: clamp(64px, 22vmin, 140px);
+  height: clamp(64px, 22vmin, 140px);
   border-radius: 50%;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
-  border: 2px solid rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  border: 3px solid rgba(255, 255, 255, 0.15);
 }
 
 #zmmtg-root .fm-avatar-circle.fm-avatar-initials {
   color: #fff;
   font-weight: 700;
-  font-size: clamp(1.1rem, 4vw, 2rem);
-  letter-spacing: 0.04em;
-  font-family: Arial, Helvetica, sans-serif;
+  font-size: clamp(1rem, 4.5vmin, 2.25rem);
+  letter-spacing: 0.05em;
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+  user-select: none;
 }
 
 #zmmtg-root .fm-avatar-img {
@@ -71,37 +73,61 @@ body.zoom-client-meeting-active {
   display: block;
 }
 
-/* Hide Zoom's oversized name text when camera is off */
+/* Hide Zoom's giant centered name text when camera is off */
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [data-fm-name-plate-hidden="1"],
 #zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="avatar-name"],
 #zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="AvatarName"],
 #zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="video-avatar__avatar-title"],
-#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="avatar-title"] {
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="avatar-title"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="avatar-img__inner"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="no-video"] {
+  visibility: hidden !important;
+  opacity: 0 !important;
   font-size: 0 !important;
   line-height: 0 !important;
   color: transparent !important;
+  pointer-events: none !important;
+}
+
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) > *:not(.fm-avatar-overlay):not([class*="footer"]):not([class*="Footer"]):not([class*="name-card"]):not([class*="name-tag"]) {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="footer"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="Footer"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="name-card"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="name-tag"],
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) .fm-avatar-overlay,
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) .fm-avatar-overlay * {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) video,
+#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) canvas {
   opacity: 0 !important;
   visibility: hidden !important;
 }
 
-#zmmtg-root .fm-avatar-enhanced:not(.fm-has-active-video) [class*="video-avatar"] > div:not(.fm-avatar-overlay):not([class*="footer"]):not([class*="Footer"]) {
-  font-size: 0 !important;
-  color: transparent !important;
-}
-
-#zmmtg-root [class*="video-avatar"] img,
-#zmmtg-root [class*="VideoAvatar"] img,
-#zmmtg-root [class*="participant-avatar"] img,
-#zmmtg-root [class*="avatar-name"] img {
-  width: min(26vw, 112px) !important;
-  height: min(26vw, 112px) !important;
-  max-width: 112px !important;
-  max-height: 112px !important;
+#zmmtg-root [class*="video-avatar"] img:not(.fm-avatar-img),
+#zmmtg-root [class*="VideoAvatar"] img:not(.fm-avatar-img) {
+  width: clamp(64px, 22vmin, 140px) !important;
+  height: clamp(64px, 22vmin, 140px) !important;
+  max-width: 140px !important;
+  max-height: 140px !important;
   object-fit: cover !important;
   border-radius: 50% !important;
+  margin: auto !important;
 }
 
 #zmmtg-root .fm-has-active-video .fm-avatar-overlay {
   display: none !important;
+}
+
+body.fm-zoom-camera-off #zmmtg-root [class*="video-avatar"],
+body.fm-zoom-camera-off #zmmtg-root [class*="video-frame"] {
+  background: #1a1a1a !important;
 }
 
 body.fm-meeting-active .back-link {
@@ -117,18 +143,16 @@ body.fm-meeting-active .back-link {
   }
 
   #zmmtg-root .fm-avatar-circle {
-    width: min(34vw, 88px);
-    height: min(34vw, 88px);
-    max-width: 88px;
-    max-height: 88px;
+    width: clamp(56px, 28vmin, 96px);
+    height: clamp(56px, 28vmin, 96px);
   }
 
-  #zmmtg-root [class*="video-avatar"] img,
-  #zmmtg-root [class*="VideoAvatar"] img {
-    width: min(34vw, 88px) !important;
-    height: min(34vw, 88px) !important;
-    max-width: 88px !important;
-    max-height: 88px !important;
+  #zmmtg-root [class*="video-avatar"] img:not(.fm-avatar-img),
+  #zmmtg-root [class*="VideoAvatar"] img:not(.fm-avatar-img) {
+    width: clamp(56px, 28vmin, 96px) !important;
+    height: clamp(56px, 28vmin, 96px) !important;
+    max-width: 96px !important;
+    max-height: 96px !important;
   }
 
   body.fm-participant-count-3plus #zmmtg-root [class*="gallery-video-container"] {

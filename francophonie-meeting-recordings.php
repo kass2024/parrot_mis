@@ -185,9 +185,12 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
                 <div class="recording-player-wrap">
                     <video id="recordingPlayerVideo" controls playsinline preload="metadata" style="display:none;"></video>
                     <div id="recordingPlayerStatus" class="recording-player-status" style="display:none;">
-                        <i class="fas fa-hourglass-half"></i>
-                        <div class="fw-semibold mb-1">The recording is processing</div>
-                        <div class="small">Zoom is still preparing the MP4 file. Please try again in a few minutes.</div>
+                        <i class="fas fa-hourglass-half" id="recordingPlayerStatusIcon"></i>
+                        <div class="fw-semibold mb-1" id="recordingPlayerStatusTitle">The recording is processing</div>
+                        <div class="small" id="recordingPlayerStatusText">Zoom is still preparing the MP4 file. This page will check again automatically.</div>
+                        <button type="button" class="btn btn-sm btn-outline-light mt-3" id="recordingPlayerRetry" style="display:none;">
+                            <i class="fas fa-redo me-1"></i> Check again
+                        </button>
                     </div>
                     <div id="recordingPlayerLoading" class="recording-player-status">
                         <span class="spinner-border text-light mb-2"></span>
@@ -221,6 +224,8 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
     const playerMeta = document.getElementById('recordingPlayerMeta');
     let activeRow = null;
     let recordingsCache = [];
+    let playerPollTimer = null;
+    let playerCurrentItem = null;
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -252,14 +257,131 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
         playerLoading?.style.setProperty('display', 'none');
     }
 
-    function showPlayerProcessing() {
+    const playerRetry = document.getElementById('recordingPlayerRetry');
+    const playerStatusTitle = document.getElementById('recordingPlayerStatusTitle');
+    const playerStatusText = document.getElementById('recordingPlayerStatusText');
+    const playerStatusIcon = document.getElementById('recordingPlayerStatusIcon');
+
+    function clearPlayerPoll() {
+        if (playerPollTimer) {
+            window.clearInterval(playerPollTimer);
+            playerPollTimer = null;
+        }
+    }
+
+    function showPlayerError(title, message) {
         resetPlayerUi();
         playerLoading?.style.setProperty('display', 'none');
         playerStatus?.style.setProperty('display', 'block');
+        if (playerStatusIcon) {
+            playerStatusIcon.className = 'fas fa-exclamation-circle';
+            playerStatusIcon.style.color = '#f87171';
+        }
+        if (playerStatusTitle) playerStatusTitle.textContent = title;
+        if (playerStatusText) playerStatusText.textContent = message;
+        if (playerRetry) playerRetry.style.display = 'inline-block';
+    }
+
+    function showPlayerProcessing(message, autoPoll) {
+        resetPlayerUi();
+        playerLoading?.style.setProperty('display', 'none');
+        playerStatus?.style.setProperty('display', 'block');
+        if (playerStatusIcon) {
+            playerStatusIcon.className = 'fas fa-hourglass-half';
+            playerStatusIcon.style.color = '#fbbf24';
+        }
+        if (playerStatusTitle) playerStatusTitle.textContent = 'The recording is processing';
+        if (playerStatusText) {
+            playerStatusText.textContent = message || 'Zoom is still preparing the MP4 file. This page will check again automatically.';
+        }
+        if (playerRetry) playerRetry.style.display = 'inline-block';
+
+        clearPlayerPoll();
+        if (autoPoll && playerCurrentItem) {
+            playerPollTimer = window.setInterval(function () {
+                attemptPlayback(playerCurrentItem, true);
+            }, 20000);
+        }
+    }
+
+    async function fetchRecordingStatus(meetingNumber) {
+        const res = await fetch(
+            'fm_meeting_recording_status.php?meeting_number=' + encodeURIComponent(meetingNumber),
+            { credentials: 'same-origin' }
+        );
+        return res.json();
+    }
+
+    function startVideoPlayback(streamUrl) {
+        return new Promise(function (resolve, reject) {
+            if (!playerVideo) {
+                reject(new Error('Video player missing'));
+                return;
+            }
+
+            playerVideo.onloadeddata = function () {
+                playerLoading.style.display = 'none';
+                playerStatus.style.display = 'none';
+                playerVideo.style.display = 'block';
+                resolve();
+            };
+            playerVideo.onerror = function () {
+                reject(new Error('Could not load video stream'));
+            };
+
+            const url = streamUrl + (streamUrl.indexOf('?') >= 0 ? '&' : '?') + '_ts=' + Date.now();
+            playerVideo.src = url;
+            playerVideo.load();
+        });
+    }
+
+    async function attemptPlayback(item, silent) {
+        if (!item || !item.meeting_number) return;
+
+        if (!silent) {
+            resetPlayerUi();
+            playerLoading?.style.setProperty('display', 'block');
+        }
+
+        try {
+            const status = await fetchRecordingStatus(item.meeting_number);
+            if (!status.success) {
+                showPlayerError('Recording unavailable', status.message || 'Could not load recording from Zoom.');
+                return;
+            }
+
+            if (item.meeting_number && recordingsCache.length) {
+                const cached = recordingsCache.find(function (row) {
+                    return String(row.meeting_number || '') === String(item.meeting_number);
+                });
+                if (cached) {
+                    cached.recording_status = status.status || cached.recording_status;
+                    cached.can_play_inline = !!status.ready;
+                }
+            }
+
+            if (!status.ready) {
+                showPlayerProcessing(status.message, true);
+                return;
+            }
+
+            clearPlayerPoll();
+            const streamUrl = status.stream_url || item.stream_url ||
+                ('fm_meeting_recording_stream.php?meeting_number=' + encodeURIComponent(item.meeting_number));
+            await startVideoPlayback(streamUrl);
+        } catch (err) {
+            showPlayerError(
+                'Playback failed',
+                (err && err.message) ? err.message : 'Could not play this recording. Try again or download the MP4.'
+            );
+        }
     }
 
     function openInlinePlayer(item) {
         if (!playerModal || !item) return;
+
+        playerCurrentItem = item;
+        clearPlayerPoll();
 
         if (activeRow) {
             activeRow.classList.remove('recording-row-active');
@@ -267,36 +389,25 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
         activeRow = document.querySelector('tr[data-meeting-number="' + item.meeting_number + '"]');
         activeRow?.classList.add('recording-row-active');
 
-        resetPlayerUi();
-        playerLoading?.style.setProperty('display', 'block');
         playerTitle.textContent = item.topic || 'Recording';
         playerMeta.textContent = (item.start_time_display || '') + (item.meeting_number ? ' · Meeting ' + item.meeting_number : '');
         playerModal.show();
 
-        if (item.recording_status && item.recording_status !== 'completed') {
-            showPlayerProcessing();
-            return;
-        }
+        attemptPlayback(item, false);
+    }
 
-        if (!item.stream_url && !item.can_play_inline) {
-            showPlayerProcessing();
-            return;
-        }
-
-        const streamUrl = item.stream_url || ('fm_meeting_recording_stream.php?meeting_number=' + encodeURIComponent(item.meeting_number || ''));
-        playerVideo.onloadeddata = function () {
-            playerLoading.style.display = 'none';
-            playerVideo.style.display = 'block';
-        };
-        playerVideo.onerror = function () {
-            showPlayerProcessing();
-        };
-        playerVideo.src = streamUrl;
-        playerVideo.load();
+    if (playerRetry) {
+        playerRetry.addEventListener('click', function () {
+            if (playerCurrentItem) {
+                attemptPlayback(playerCurrentItem, false);
+            }
+        });
     }
 
     if (playerModalEl) {
         playerModalEl.addEventListener('hidden.bs.modal', function () {
+            clearPlayerPoll();
+            playerCurrentItem = null;
             resetPlayerUi();
             activeRow?.classList.remove('recording-row-active');
             activeRow = null;
@@ -333,7 +444,8 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
             html += '<button type="button" class="btn btn-sm btn-success btn-play-recording" data-meeting-number="' + meetingNumber + '" title="Play inline"><i class="fas fa-play"></i></button> ';
         }
         if (downloadUrl) {
-            html += '<a href="' + escapeHtml(downloadUrl) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="Download MP4 from Zoom"><i class="fas fa-download"></i></a> ';
+            const proxyDownload = 'fm_meeting_recording_stream.php?meeting_number=' + encodeURIComponent(item.meeting_number || '') + '&download=1';
+            html += '<a href="' + escapeHtml(proxyDownload) + '" class="btn btn-sm btn-outline-primary" title="Download MP4"><i class="fas fa-download"></i></a> ';
         }
         html += '<button type="button" class="btn btn-sm btn-outline-danger btn-delete-recording" data-meeting-number="' + meetingNumber + '" data-topic="' + topicAttr + '" title="Delete from Zoom cloud"><i class="fas fa-trash"></i></button>';
         html += '</td></tr>';

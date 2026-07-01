@@ -123,7 +123,7 @@ $avatarBranding = fm_meeting_host_avatar_branding(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Host meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=8">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=9">
     <style>
         html, body { margin:0; padding:0; background:#1a1a1a; font-family:Arial,sans-serif; }
         #zmmtg-root { display:none; }
@@ -165,7 +165,7 @@ $avatarBranding = fm_meeting_host_avatar_branding(
     <?php endif; ?>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=8"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=9"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;

@@ -32,6 +32,113 @@ function fm_meeting_invitations_by_zoom_number(mysqli $conn): array
 }
 
 /**
+ * Pick the best MP4 file for playback (completed, preferred layout, largest).
+ *
+ * @return array{download_url: string, play_url: string, status: string, file_size: int, recording_type: string}|null
+ */
+function fm_meeting_pick_best_mp4_from_files(array $files): ?array
+{
+    $mp4s = [];
+    foreach ($files as $file) {
+        if (!is_array($file)) {
+            continue;
+        }
+        if (strtoupper((string) ($file['file_type'] ?? '')) !== 'MP4') {
+            continue;
+        }
+        $mp4s[] = $file;
+    }
+    if ($mp4s === []) {
+        return null;
+    }
+
+    $typePriority = [
+        'shared_screen_with_speaker_view' => 100,
+        'shared_screen_with_gallery_view' => 90,
+        'active_speaker' => 80,
+        'gallery_view' => 70,
+        'shared_screen' => 60,
+        'audio_only' => 10,
+    ];
+
+    usort($mp4s, static function (array $a, array $b) use ($typePriority): int {
+        $sa = strtolower((string) ($a['status'] ?? 'completed'));
+        $sb = strtolower((string) ($b['status'] ?? 'completed'));
+        if ($sa === '') {
+            $sa = 'completed';
+        }
+        if ($sb === '') {
+            $sb = 'completed';
+        }
+        $ca = $sa === 'completed' ? 1 : 0;
+        $cb = $sb === 'completed' ? 1 : 0;
+        if ($ca !== $cb) {
+            return $cb <=> $ca;
+        }
+
+        $ta = $typePriority[strtolower((string) ($a['recording_type'] ?? ''))] ?? 50;
+        $tb = $typePriority[strtolower((string) ($b['recording_type'] ?? ''))] ?? 50;
+        if ($ta !== $tb) {
+            return $tb <=> $ta;
+        }
+
+        return (int) ($b['file_size'] ?? 0) <=> (int) ($a['file_size'] ?? 0);
+    });
+
+    $best = $mp4s[0];
+    $status = strtolower((string) ($best['status'] ?? 'completed'));
+    if ($status === '') {
+        $status = 'completed';
+    }
+
+    return [
+        'download_url' => (string) ($best['download_url'] ?? ''),
+        'play_url' => (string) ($best['play_url'] ?? ''),
+        'status' => $status,
+        'file_size' => (int) ($best['file_size'] ?? 0),
+        'recording_type' => (string) ($best['recording_type'] ?? ''),
+    ];
+}
+
+/**
+ * @return array{ok: bool, message?: string, ready?: bool, status?: string, download_url?: string, file_size?: int, recording_type?: string, stream_url?: string}
+ */
+function fm_meeting_recording_playback_info(string $meetingNumber): array
+{
+    $meetingNumber = preg_replace('/\D+/', '', $meetingNumber);
+    if ($meetingNumber === '') {
+        return ['ok' => false, 'message' => 'Invalid meeting number'];
+    }
+
+    $result = zoom_api_request('GET', '/meetings/' . rawurlencode($meetingNumber) . '/recordings');
+    if (!$result['ok']) {
+        return [
+            'ok' => false,
+            'message' => (string) ($result['message'] ?? 'Recording not found on Zoom'),
+            'status' => 'missing',
+        ];
+    }
+
+    $files = $result['data']['recording_files'] ?? [];
+    $best = fm_meeting_pick_best_mp4_from_files(is_array($files) ? $files : []);
+    if ($best === null || ($best['download_url'] ?? '') === '') {
+        return ['ok' => false, 'message' => 'No MP4 recording file found', 'status' => 'missing'];
+    }
+
+    $status = (string) ($best['status'] ?? 'unknown');
+
+    return [
+        'ok' => true,
+        'ready' => $status === 'completed',
+        'status' => $status,
+        'download_url' => $best['download_url'],
+        'file_size' => (int) ($best['file_size'] ?? 0),
+        'recording_type' => (string) ($best['recording_type'] ?? ''),
+        'stream_url' => 'fm_meeting_recording_stream.php?meeting_number=' . rawurlencode($meetingNumber),
+    ];
+}
+
+/**
  * @return list<array<string, mixed>>
  */
 function fm_meeting_pick_recording_play_url(array $recordingFiles): array
@@ -49,14 +156,17 @@ function fm_meeting_pick_recording_play_url(array $recordingFiles): array
         if ($type !== '') {
             $fileTypes[] = $type;
         }
-        if ($type === 'MP4') {
-            $status = strtolower((string) ($file['status'] ?? 'completed'));
-            if ($downloadUrl === '' && !empty($file['download_url'])) {
-                $downloadUrl = (string) $file['download_url'];
-            }
-        }
         if ($playUrl === '' && !empty($file['play_url'])) {
             $playUrl = (string) $file['play_url'];
+        }
+    }
+
+    $best = fm_meeting_pick_best_mp4_from_files($recordingFiles);
+    if ($best !== null) {
+        $status = (string) ($best['status'] ?? 'unknown');
+        $downloadUrl = (string) ($best['download_url'] ?? '');
+        if ($playUrl === '' && ($best['play_url'] ?? '') !== '') {
+            $playUrl = (string) $best['play_url'];
         }
     }
 
@@ -74,37 +184,16 @@ function fm_meeting_pick_recording_play_url(array $recordingFiles): array
  */
 function fm_meeting_fetch_meeting_mp4(string $meetingNumber): ?array
 {
-    $meetingNumber = preg_replace('/\D+/', '', $meetingNumber);
-    if ($meetingNumber === '') {
+    $info = fm_meeting_recording_playback_info($meetingNumber);
+    if (empty($info['ok']) || ($info['download_url'] ?? '') === '') {
         return null;
     }
 
-    $result = zoom_api_request('GET', '/meetings/' . rawurlencode($meetingNumber) . '/recordings');
-    if (!$result['ok']) {
-        return null;
-    }
-
-    $files = $result['data']['recording_files'] ?? [];
-    if (!is_array($files)) {
-        return null;
-    }
-
-    foreach ($files as $file) {
-        if (!is_array($file)) {
-            continue;
-        }
-        if (strtoupper((string) ($file['file_type'] ?? '')) !== 'MP4') {
-            continue;
-        }
-
-        return [
-            'download_url' => (string) ($file['download_url'] ?? ''),
-            'status' => strtolower((string) ($file['status'] ?? 'completed')),
-            'file_size' => (int) ($file['file_size'] ?? 0),
-        ];
-    }
-
-    return null;
+    return [
+        'download_url' => (string) $info['download_url'],
+        'status' => (string) ($info['status'] ?? 'unknown'),
+        'file_size' => (int) ($info['file_size'] ?? 0),
+    ];
 }
 
 /**

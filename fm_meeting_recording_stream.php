@@ -73,6 +73,10 @@ if (!headers_sent()) {
     header('Content-Type: video/mp4');
     header('Accept-Ranges: bytes');
     header('Cache-Control: private, no-store');
+    if (isset($_GET['download']) && (string) $_GET['download'] === '1') {
+        $safeName = 'meeting-' . $meetingNumber . '-recording.mp4';
+        header('Content-Disposition: attachment; filename="' . $safeName . '"');
+    }
 }
 
 fm_meeting_proxy_zoom_recording_download((string) $mp4['download_url'], (string) $tokenResult['token']);
