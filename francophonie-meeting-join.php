@@ -36,10 +36,11 @@ $sourceId = 0;
 $participantType = 'guest';
 
 $publicBase = fm_zoom_public_base_url();
-$assetBase = $publicBase . '/assets/zoom-meetingsdk';
+$requestBase = fm_zoom_request_base_url();
+$assetBase = $requestBase . '/assets/zoom-meetingsdk';
 $meetingJs = fm_zoom_meeting_js_file();
 $assetsOk = fm_zoom_sdk_assets_installed();
-$leaveUrl = fm_meeting_participant_join_url($invitationId, $token !== '' ? $token : null) . '&left=1';
+$leaveUrl = $requestBase . '/' . fm_meeting_participant_join_path($invitationId, $token !== '' ? $token : null) . '&left=1';
 
 if ($invitationId > 0) {
     $st = $conn->prepare(
@@ -170,7 +171,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Join meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
     <?php if (!$gateMode && !$left && $sdkError === ''): ?>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=6">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=7">
     <?php endif; ?>
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
@@ -249,7 +250,7 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
     <div class="err" id="joinBootErr" style="display:none"></div>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=6"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=7"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
@@ -323,6 +324,10 @@ $avatarBranding = fm_meeting_participant_avatar_branding(
         isHost: false,
         avatarBranding: avatarBranding,
         onStatus: function (msg) { bootTitle.textContent = msg; },
+        onPreJoin: function () {
+            bootTitle.textContent = 'Allow camera/microphone if prompted, then tap Join';
+            hideBoot();
+        },
         onJoined: function () {
             recordAttendance('join');
             hideBoot();

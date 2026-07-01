@@ -39,6 +39,7 @@ function fm_meeting_pick_recording_play_url(array $recordingFiles): array
     $playUrl = '';
     $downloadUrl = '';
     $fileTypes = [];
+    $status = 'unknown';
 
     foreach ($recordingFiles as $file) {
         if (!is_array($file)) {
@@ -48,11 +49,14 @@ function fm_meeting_pick_recording_play_url(array $recordingFiles): array
         if ($type !== '') {
             $fileTypes[] = $type;
         }
+        if ($type === 'MP4') {
+            $status = strtolower((string) ($file['status'] ?? 'completed'));
+            if ($downloadUrl === '' && !empty($file['download_url'])) {
+                $downloadUrl = (string) $file['download_url'];
+            }
+        }
         if ($playUrl === '' && !empty($file['play_url'])) {
             $playUrl = (string) $file['play_url'];
-        }
-        if ($downloadUrl === '' && !empty($file['download_url']) && $type === 'MP4') {
-            $downloadUrl = (string) $file['download_url'];
         }
     }
 
@@ -60,7 +64,104 @@ function fm_meeting_pick_recording_play_url(array $recordingFiles): array
         'play_url' => $playUrl,
         'download_url' => $downloadUrl,
         'file_types' => array_values(array_unique($fileTypes)),
+        'recording_status' => $status,
+        'can_play_inline' => $status === 'completed' && $downloadUrl !== '',
     ];
+}
+
+/**
+ * @return array{download_url: string, status: string, file_size: int}|null
+ */
+function fm_meeting_fetch_meeting_mp4(string $meetingNumber): ?array
+{
+    $meetingNumber = preg_replace('/\D+/', '', $meetingNumber);
+    if ($meetingNumber === '') {
+        return null;
+    }
+
+    $result = zoom_api_request('GET', '/meetings/' . rawurlencode($meetingNumber) . '/recordings');
+    if (!$result['ok']) {
+        return null;
+    }
+
+    $files = $result['data']['recording_files'] ?? [];
+    if (!is_array($files)) {
+        return null;
+    }
+
+    foreach ($files as $file) {
+        if (!is_array($file)) {
+            continue;
+        }
+        if (strtoupper((string) ($file['file_type'] ?? '')) !== 'MP4') {
+            continue;
+        }
+
+        return [
+            'download_url' => (string) ($file['download_url'] ?? ''),
+            'status' => strtolower((string) ($file['status'] ?? 'completed')),
+            'file_size' => (int) ($file['file_size'] ?? 0),
+        ];
+    }
+
+    return null;
+}
+
+/**
+ * Stream a Zoom cloud MP4 through this server (keeps OAuth token server-side).
+ */
+function fm_meeting_proxy_zoom_recording_download(string $downloadUrl, string $accessToken): void
+{
+    $url = $downloadUrl;
+    if (stripos($url, 'access_token=') === false) {
+        $url .= (str_contains($url, '?') ? '&' : '?') . 'access_token=' . rawurlencode($accessToken);
+    }
+
+    $forwardHeaders = [];
+    if (!empty($_SERVER['HTTP_RANGE'])) {
+        $forwardHeaders[] = 'Range: ' . $_SERVER['HTTP_RANGE'];
+    }
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 0,
+        CURLOPT_HTTPHEADER => $forwardHeaders,
+        CURLOPT_HEADER => false,
+        CURLOPT_HEADERFUNCTION => static function ($curl, string $headerLine): int {
+            $len = strlen($headerLine);
+            $trim = trim($headerLine);
+            if ($trim === '') {
+                return $len;
+            }
+            if (preg_match('/^HTTP\/\S+\s+(\d+)/', $trim, $m)) {
+                http_response_code((int) $m[1]);
+
+                return $len;
+            }
+            if (preg_match('/^(Content-Type|Content-Length|Content-Range|Accept-Ranges):/i', $trim)) {
+                header($trim, false);
+            }
+
+            return $len;
+        },
+        CURLOPT_WRITEFUNCTION => static function ($curl, string $chunk): int {
+            echo $chunk;
+
+            return strlen($chunk);
+        },
+    ]);
+
+    $ok = curl_exec($ch);
+    if ($ok === false) {
+        if (!headers_sent()) {
+            http_response_code(502);
+            header('Content-Type: text/plain; charset=utf-8');
+        }
+        echo 'Could not stream recording from Zoom.';
+    }
+    curl_close($ch);
 }
 
 /**
@@ -156,6 +257,9 @@ function fm_meeting_fetch_cloud_recordings(
             'play_url' => $media['play_url'],
             'download_url' => $media['download_url'],
             'file_types' => $media['file_types'],
+            'recording_status' => $media['recording_status'],
+            'can_play_inline' => !empty($media['can_play_inline']),
+            'stream_url' => 'fm_meeting_recording_stream.php?meeting_number=' . rawurlencode($meetingNumber),
         ];
     }
 

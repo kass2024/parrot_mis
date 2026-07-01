@@ -585,6 +585,18 @@
     if (preparePromise) return preparePromise;
 
     preparePromise = new Promise(function (resolve, reject) {
+      var settled = false;
+      function finish(ok, val) {
+        if (settled) return;
+        settled = true;
+        ok ? resolve(val) : reject(val);
+      }
+
+      var timeout = window.setTimeout(function () {
+        preparePromise = null;
+        finish(false, new Error('Zoom audio/video preparation timed out. Refresh and try again.'));
+      }, 45000);
+
       try {
         if (typeof ZoomMtg.setZoomJSLib === 'function') {
           ZoomMtg.setZoomJSLib(zoomLibUrl, '/av');
@@ -592,13 +604,24 @@
         ZoomMtg.preLoadWasm();
         var prep = ZoomMtg.prepareWebSDK();
         if (prep && typeof prep.then === 'function') {
-          prep.then(resolve).catch(reject);
+          prep.then(function () {
+            window.clearTimeout(timeout);
+            finish(true);
+          }).catch(function (err) {
+            window.clearTimeout(timeout);
+            preparePromise = null;
+            finish(false, err);
+          });
         } else {
-          window.setTimeout(resolve, 300);
+          window.setTimeout(function () {
+            window.clearTimeout(timeout);
+            finish(true);
+          }, 300);
         }
       } catch (e) {
+        window.clearTimeout(timeout);
         preparePromise = null;
-        reject(e);
+        finish(false, e);
       }
     });
 
@@ -649,6 +672,7 @@
     var zoomCssHref = cfg.zoomCssHref;
     var isHost = !!cfg.isHost;
     var onStatus = typeof cfg.onStatus === 'function' ? cfg.onStatus : function () {};
+    var onPreJoin = typeof cfg.onPreJoin === 'function' ? cfg.onPreJoin : function () {};
     var onJoined = typeof cfg.onJoined === 'function' ? cfg.onJoined : function () {};
     var onError = typeof cfg.onError === 'function' ? cfg.onError : function () {};
     var avatarBranding = cfg.avatarBranding || null;
@@ -656,15 +680,6 @@
     if (!sdk || !sdk.signature) {
       onError('SDK credentials missing.');
       return Promise.reject(new Error('SDK credentials missing.'));
-    }
-
-    var joinStatusBound = false;
-    function bindJoinStatusOnce(done) {
-      if (joinStatusBound || typeof ZoomMtg === 'undefined') return;
-      joinStatusBound = true;
-      ZoomMtg.inMeetingServiceListener('onMeetingStatus', function (data) {
-        if (data && data.status === 2) done();
-      });
     }
 
     function doJoin(passWord, useZak) {
@@ -675,14 +690,24 @@
           finished = true;
           ok ? resolve(val) : reject(val);
         }
-        var timer = window.setTimeout(function () {
-          finish(false, new Error('Join timed out. Close other tabs and try again.'));
-        }, 75000);
 
-        bindJoinStatusOnce(function () {
-          window.clearTimeout(timer);
-          finish(true);
-        });
+        var timer = window.setTimeout(function () {
+          finish(false, new Error('Join timed out. If you see a pre-join screen, tap Join or allow camera/microphone.'));
+        }, 120000);
+
+        var statusHandler = function (data) {
+          if (data && data.status === 2) {
+            window.clearTimeout(timer);
+            finish(true);
+          } else if (data && data.status === 3) {
+            window.clearTimeout(timer);
+            finish(false, new Error('Disconnected from the Zoom meeting.'));
+          }
+        };
+
+        if (typeof ZoomMtg.inMeetingServiceListener === 'function') {
+          ZoomMtg.inMeetingServiceListener('onMeetingStatus', statusHandler);
+        }
 
         var payload = {
           signature: sdk.signature,
@@ -693,15 +718,25 @@
             window.setTimeout(function () {
               window.clearTimeout(timer);
               finish(true);
-            }, 800);
+            }, 2500);
           },
           error: function (err) {
             window.clearTimeout(timer);
             finish(false, new Error(errMsg(err)));
           }
         };
-        if (sdk.user_email) payload.userEmail = sdk.user_email;
-        if (useZak && sdk.zak) payload.zak = sdk.zak;
+
+        var sdkKey = sdk.sdk_key || sdk.sdkKey || '';
+        if (sdkKey) {
+          payload.sdkKey = sdkKey;
+        }
+        if (sdk.user_email) {
+          payload.userEmail = sdk.user_email;
+        }
+        if (useZak && isHost && sdk.zak) {
+          payload.zak = sdk.zak;
+        }
+
         ZoomMtg.join(payload);
       });
     }
@@ -710,7 +745,7 @@
       var pass = sdk.password || '';
       var tries = isHost
         ? [{ p: pass, z: true }, { p: pass, z: false }, { p: '', z: false }]
-        : [{ p: pass }, { p: '' }];
+        : [{ p: pass, z: false }, { p: '', z: false }];
       var i = 0;
 
       function next(err) {
@@ -720,7 +755,7 @@
           return Promise.reject(err || new Error(msg));
         }
         var t = tries[i++];
-        onStatus('Joining meeting…');
+        onStatus(i === 1 ? 'Joining meeting…' : 'Retrying connection…');
         return doJoin(t.p, !!t.z).catch(next);
       }
 
@@ -748,6 +783,7 @@
         }
       })
       .then(function () {
+        onPreJoin();
         return joinMeeting();
       })
       .then(function () {

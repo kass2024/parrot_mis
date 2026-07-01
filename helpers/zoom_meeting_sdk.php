@@ -228,6 +228,33 @@ function fm_zoom_public_base_url(): string
     return pcvc_public_base_url();
 }
 
+/**
+ * Current browser request origin (MIS host). Use for SDK assets + meeting leave URLs.
+ * app.baseURL may point at the marketing site — never use that for in-page Zoom assets.
+ */
+function fm_zoom_request_base_url(): string
+{
+    $scheme = 'http';
+    if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+        $scheme = 'https';
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+        $forwarded = strtolower(trim((string) strtok((string) $_SERVER['HTTP_X_FORWARDED_PROTO'], ',')));
+        if ($forwarded === 'https') {
+            $scheme = 'https';
+        }
+    }
+
+    $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+    $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/index.php')), '/');
+
+    return rtrim($scheme . '://' . $host . $dir, '/');
+}
+
+function fm_zoom_asset_base_url(): string
+{
+    return fm_zoom_request_base_url();
+}
+
 /** True when invitation links will include a usable public domain. */
 function fm_meeting_public_url_configured(): bool
 {

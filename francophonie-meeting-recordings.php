@@ -59,6 +59,45 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
         .recordings-table th { background:#f8fafc; font-weight:600; white-space:nowrap; }
         .recordings-table td { vertical-align:middle; }
         .filter-label { font-size:.8rem; color:#64748b; font-weight:600; }
+        .recording-player-modal .modal-content {
+            border: none;
+            border-radius: 14px;
+            overflow: hidden;
+        }
+        .recording-player-modal .modal-header {
+            background: linear-gradient(135deg, var(--fm-green), var(--fm-blue));
+            color: #fff;
+        }
+        .recording-player-modal .btn-close {
+            filter: invert(1);
+        }
+        .recording-player-wrap {
+            background: #0f172a;
+            min-height: 220px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .recording-player-wrap video {
+            width: 100%;
+            max-height: 70vh;
+            background: #000;
+            display: block;
+        }
+        .recording-player-status {
+            color: #cbd5e1;
+            text-align: center;
+            padding: 2rem 1.5rem;
+        }
+        .recording-player-status i {
+            font-size: 2rem;
+            margin-bottom: .75rem;
+            display: block;
+            color: #fbbf24;
+        }
+        tr.recording-row-active {
+            background: #ecfdf5 !important;
+        }
     </style>
 </head>
 <body>
@@ -135,6 +174,35 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
     <div class="small text-muted mt-2" id="resultsMeta"></div>
 </div>
 
+<div class="modal fade recording-player-modal" id="recordingPlayerModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="recordingPlayerTitle">Recording</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="recording-player-wrap">
+                    <video id="recordingPlayerVideo" controls playsinline preload="metadata" style="display:none;"></video>
+                    <div id="recordingPlayerStatus" class="recording-player-status" style="display:none;">
+                        <i class="fas fa-hourglass-half"></i>
+                        <div class="fw-semibold mb-1">The recording is processing</div>
+                        <div class="small">Zoom is still preparing the MP4 file. Please try again in a few minutes.</div>
+                    </div>
+                    <div id="recordingPlayerLoading" class="recording-player-status">
+                        <span class="spinner-border text-light mb-2"></span>
+                        <div>Loading recording…</div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-between">
+                <div class="small text-muted" id="recordingPlayerMeta"></div>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function () {
@@ -144,6 +212,15 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
     const listAlert = document.getElementById('listAlert');
     const searchBtn = document.getElementById('searchBtn');
     const csrfToken = <?= json_encode($_SESSION['csrf_token'] ?? '', JSON_THROW_ON_ERROR) ?>;
+    const playerModalEl = document.getElementById('recordingPlayerModal');
+    const playerModal = playerModalEl ? bootstrap.Modal.getOrCreateInstance(playerModalEl) : null;
+    const playerVideo = document.getElementById('recordingPlayerVideo');
+    const playerStatus = document.getElementById('recordingPlayerStatus');
+    const playerLoading = document.getElementById('recordingPlayerLoading');
+    const playerTitle = document.getElementById('recordingPlayerTitle');
+    const playerMeta = document.getElementById('recordingPlayerMeta');
+    let activeRow = null;
+    let recordingsCache = [];
 
     function escapeHtml(value) {
         return String(value ?? '')
@@ -164,6 +241,68 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
         listAlert?.classList.add('d-none');
     }
 
+    function resetPlayerUi() {
+        if (playerVideo) {
+            playerVideo.pause();
+            playerVideo.removeAttribute('src');
+            playerVideo.load();
+            playerVideo.style.display = 'none';
+        }
+        playerStatus?.style.setProperty('display', 'none');
+        playerLoading?.style.setProperty('display', 'none');
+    }
+
+    function showPlayerProcessing() {
+        resetPlayerUi();
+        playerLoading?.style.setProperty('display', 'none');
+        playerStatus?.style.setProperty('display', 'block');
+    }
+
+    function openInlinePlayer(item) {
+        if (!playerModal || !item) return;
+
+        if (activeRow) {
+            activeRow.classList.remove('recording-row-active');
+        }
+        activeRow = document.querySelector('tr[data-meeting-number="' + item.meeting_number + '"]');
+        activeRow?.classList.add('recording-row-active');
+
+        resetPlayerUi();
+        playerLoading?.style.setProperty('display', 'block');
+        playerTitle.textContent = item.topic || 'Recording';
+        playerMeta.textContent = (item.start_time_display || '') + (item.meeting_number ? ' · Meeting ' + item.meeting_number : '');
+        playerModal.show();
+
+        if (item.recording_status && item.recording_status !== 'completed') {
+            showPlayerProcessing();
+            return;
+        }
+
+        if (!item.stream_url && !item.can_play_inline) {
+            showPlayerProcessing();
+            return;
+        }
+
+        const streamUrl = item.stream_url || ('fm_meeting_recording_stream.php?meeting_number=' + encodeURIComponent(item.meeting_number || ''));
+        playerVideo.onloadeddata = function () {
+            playerLoading.style.display = 'none';
+            playerVideo.style.display = 'block';
+        };
+        playerVideo.onerror = function () {
+            showPlayerProcessing();
+        };
+        playerVideo.src = streamUrl;
+        playerVideo.load();
+    }
+
+    if (playerModalEl) {
+        playerModalEl.addEventListener('hidden.bs.modal', function () {
+            resetPlayerUi();
+            activeRow?.classList.remove('recording-row-active');
+            activeRow = null;
+        });
+    }
+
     function buildRow(item) {
         const topic = escapeHtml(item.topic || 'Untitled recording');
         const topicAttr = escapeHtml(item.topic || '');
@@ -174,6 +313,7 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
         const size = item.total_size_bytes ? ' · ' + escapeHtml(item.total_size_label || '') : '';
         const playUrl = item.play_url || '';
         const downloadUrl = item.download_url || '';
+        const canPlay = item.can_play_inline || item.recording_status === 'completed' || playUrl !== '' || item.stream_url;
 
         let html = '<tr data-meeting-number="' + meetingNumber + '">';
         html += '<td><div class="fw-semibold">' + topic + '</div>';
@@ -189,11 +329,11 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
             html += '<div class="text-muted">' + escapeHtml(types) + size + '</div>';
         }
         html += '</td><td class="text-end text-nowrap">';
-        if (playUrl) {
-            html += '<a href="' + escapeHtml(playUrl) + '" target="_blank" rel="noopener" class="btn btn-sm btn-success" title="Play in Zoom"><i class="fas fa-play"></i></a> ';
+        if (canPlay) {
+            html += '<button type="button" class="btn btn-sm btn-success btn-play-recording" data-meeting-number="' + meetingNumber + '" title="Play inline"><i class="fas fa-play"></i></button> ';
         }
         if (downloadUrl) {
-            html += '<a href="' + escapeHtml(downloadUrl) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="Download MP4"><i class="fas fa-download"></i></a> ';
+            html += '<a href="' + escapeHtml(downloadUrl) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary" title="Download MP4 from Zoom"><i class="fas fa-download"></i></a> ';
         }
         html += '<button type="button" class="btn btn-sm btn-outline-danger btn-delete-recording" data-meeting-number="' + meetingNumber + '" data-topic="' + topicAttr + '" title="Delete from Zoom cloud"><i class="fas fa-trash"></i></button>';
         html += '</td></tr>';
@@ -216,6 +356,7 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
             }
 
             const items = data.items || [];
+            recordingsCache = items;
             if (items.length === 0) {
                 body.innerHTML = '<tr><td colspan="5" class="text-muted small py-4 text-center">No cloud recordings found for Francophonie meetings in this date range.</td></tr>';
             } else {
@@ -236,6 +377,20 @@ $defaultTo = (new DateTime('now'))->format('Y-m-d');
     });
 
     document.querySelector('.recordings-table-wrap')?.addEventListener('click', async function (e) {
+        const playBtn = e.target.closest('.btn-play-recording');
+        if (playBtn) {
+            const meetingNumber = playBtn.getAttribute('data-meeting-number') || '';
+            const item = recordingsCache.find(function (row) {
+                return String(row.meeting_number || '') === meetingNumber;
+            });
+            if (!item) {
+                showAlert('danger', 'Recording not found. Refresh the list and try again.');
+                return;
+            }
+            openInlinePlayer(item);
+            return;
+        }
+
         const btn = e.target.closest('.btn-delete-recording');
         if (!btn) return;
 

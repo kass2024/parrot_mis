@@ -32,7 +32,8 @@ $adminName = 'Host';
 $adminEmail = '';
 
 $publicBase = fm_zoom_public_base_url();
-$assetBase = $publicBase . '/assets/zoom-meetingsdk';
+$requestBase = fm_zoom_request_base_url();
+$assetBase = $requestBase . '/assets/zoom-meetingsdk';
 $meetingJs = fm_zoom_meeting_js_file();
 $assetsOk = fm_zoom_sdk_assets_installed();
 
@@ -73,7 +74,7 @@ if ($invitationId > 0) {
                 1,
                 $password,
                 $adminEmail !== '' ? $adminEmail : null,
-                false
+                true
             );
             if ($sdkResult['ok']) {
                 $sdkAuth = $sdkResult['sdk'];
@@ -95,7 +96,7 @@ if (!zoom_sdk_is_configured() && $sdkError === '') {
     $sdkError = 'Zoom embed credentials missing. Set ZOOM_EMBED_CLIENT_ID and ZOOM_EMBED_CLIENT_SECRET in .env.';
 }
 
-$leaveUrl = fm_meeting_absolute_url('francophonie-meeting-invitation.php');
+$leaveUrl = $requestBase . '/francophonie-meeting-invitation.php';
 $zoomLibUrl = $assetBase . '/dist/lib';
 $zoomCssHref = $assetBase . '/dist/ui/zoom-meetingsdk.css';
 $hostAttendanceMeta = [
@@ -118,7 +119,7 @@ $avatarBranding = fm_meeting_host_avatar_branding(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Host meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=6">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=7">
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
         .host-boot {
@@ -156,7 +157,7 @@ $avatarBranding = fm_meeting_host_avatar_branding(
     <?php endif; ?>
 </div>
 
-<script src="assets/js/francophonie-zoom-room.js?v=6"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=7"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
@@ -231,6 +232,10 @@ $avatarBranding = fm_meeting_host_avatar_branding(
         isHost: true,
         avatarBranding: avatarBranding,
         onStatus: function (msg) { bootTitle.textContent = msg; },
+        onPreJoin: function () {
+            bootTitle.textContent = 'Allow camera/microphone if prompted, then tap Join';
+            hideBoot();
+        },
         onJoined: function () {
             recordAttendance('join');
             hideBoot();
