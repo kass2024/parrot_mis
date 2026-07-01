@@ -8,6 +8,7 @@ header('Content-Type: application/json; charset=UTF-8');
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/includes/company_branding.php';
 require_once dirname(__DIR__) . '/includes/momo_phone.php';
+require_once dirname(__DIR__) . '/helpers/role.php';
 require_once dirname(__DIR__) . '/payments/mopay/salary_payout.php';
 require_once dirname(__DIR__) . '/helpers/mopay_wallet_transactions.php';
 
@@ -34,7 +35,7 @@ $resRole = $stmt->get_result();
 $row = $resRole ? $resRole->fetch_assoc() : null;
 $stmt->close();
 
-if (!$row || ($row['role'] ?? '') !== 'superadmin') {
+if (!$row || !pcvc_is_superadmin_role($row['role'] ?? '')) {
     respond(['ok' => false, 'error' => 'Only superadmin can send MoMo salary payments.'], 403);
 }
 

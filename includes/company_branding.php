@@ -21,6 +21,9 @@ const PCVC_COMPANY_SUPPORT_EMAIL = 'admission@visaconsultantcanada.com';
 /** Shown when no staff member is assigned on an application (admin lists) */
 const PCVC_DEFAULT_ASSIGNED_PERSON_LABEL = 'Parrot Canada';
 
+/** Payroll and salary report display currency */
+const PCVC_PAYROLL_CURRENCY = 'RWF';
+
 /**
  * Public base URL for this MIS install (receipt email, webhooks, internal curl, meeting links).
  * Prefers app.baseURL from .env (e.g. https://visaconsultantcanada.com/), then APP_PUBLIC_URL.

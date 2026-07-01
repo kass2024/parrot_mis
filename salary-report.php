@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
+require_once __DIR__ . '/includes/payroll_helpers.php';
 $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
 /* ===========================================================
    PERMISSION CHECK
@@ -47,6 +48,7 @@ $available_months = [];
 while ($month_row = $months_result->fetch_assoc()) {
     $available_months[] = $month_row['month'];
 }
+$available_months = pcvc_payroll_month_range($available_months);
 
 // Debug: Log available months
 error_log("Available months: " . print_r($available_months, true));
@@ -1211,32 +1213,11 @@ $result->data_seek(0);
             <i class="bi bi-calendar3 month-picker-icon"></i>
             <select id="monthDropdown" class="month-dropdown">
                 <option value="">All Months</option>
-                <?php 
-                // Generate months from actual data
-                $displayed_months = [];
-                
-                // Add months from database
-                foreach ($available_months as $month): 
-                    $displayed_months[] = $month;
-                ?>
-                <option value="<?= $month ?>" <?= $filter_month == $month ? 'selected' : '' ?>>
+                <?php foreach ($available_months as $month): ?>
+                <option value="<?= htmlspecialchars($month) ?>" <?= $filter_month == $month ? 'selected' : '' ?>>
                     <?= date('F Y', strtotime($month . '-01')) ?>
                 </option>
                 <?php endforeach; ?>
-                
-                <!-- Also add the sample months from your image -->
-                <?php 
-                $sample_months = ['2026-01', '2026-02'];
-                foreach ($sample_months as $month): 
-                    if (!in_array($month, $displayed_months)):
-                ?>
-                <option value="<?= $month ?>" <?= $filter_month == $month ? 'selected' : '' ?>>
-                    <?= date('F Y', strtotime($month . '-01')) ?>
-                </option>
-                <?php 
-                    endif;
-                endforeach; 
-                ?>
             </select>
             <?php if (!empty($filter_month)): ?>
             <button type="button" class="month-clear-btn" onclick="clearMonthFilter()" title="Clear month filter">

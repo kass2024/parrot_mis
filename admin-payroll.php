@@ -4,6 +4,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/includes/payroll_helpers.php';
 require_once __DIR__ . '/includes/momo_phone.php';
+require_once __DIR__ . '/helpers/role.php';
 date_default_timezone_set('Africa/Kigali');
 
 $companyName = PCVC_COMPANY_DISPLAY_NAME;
@@ -18,6 +19,8 @@ if (!$admin_id) {
     exit("🔐 Access denied. Login required.");
 }
 
+pcvc_require_superadmin($conn);
+
 $stmt = $conn->prepare("SELECT role, full_name, profile_photo, position FROM admins WHERE id = ?");
 $stmt->bind_param("i", $admin_id);
 $stmt->execute();
@@ -25,13 +28,9 @@ $stmt->bind_result($user_role, $user_name, $user_photo, $user_position);
 $stmt->fetch();
 $stmt->close();
 
-$payrollViewerRoles = ['superadmin', 'staff', 'agent', 'admin', 'hr'];
-if (!in_array($user_role, $payrollViewerRoles, true)) {
-    http_response_code(403);
-    exit('⛔ Access denied. Admin access required.');
-}
+$user_role = pcvc_normalize_role_string($user_role ?? '');
 
-$isSuperAdmin = ($user_role === 'superadmin');
+$isSuperAdmin = true;
 
 $payrollMomoCsrf = '';
 if ($isSuperAdmin) {

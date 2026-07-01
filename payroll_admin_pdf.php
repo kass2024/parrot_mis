@@ -3,6 +3,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/includes/payroll_helpers.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/vendor/autoload.php'; // Dompdf autoload
 
 use Dompdf\Dompdf;
@@ -17,17 +18,14 @@ if (!$viewer_id) {
     exit("🔐 Access denied. Login required.");
 }
 
+pcvc_require_superadmin($conn);
+
 $stmt = $conn->prepare("SELECT role, full_name FROM admins WHERE id = ?");
 $stmt->bind_param("i", $viewer_id);
 $stmt->execute();
 $stmt->bind_result($viewer_role, $viewer_name);
 $stmt->fetch();
 $stmt->close();
-
-if (!in_array($viewer_role, ['staff','superadmin'])) {
-    http_response_code(403);
-    exit("⛔ Access denied. Staff or Superadmin only.");
-}
 
 /* ----------------------- Inputs ----------------------- */
 $target_admin_id = isset($_GET['admin_id']) ? (int)$_GET['admin_id'] : 0;

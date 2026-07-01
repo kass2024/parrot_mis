@@ -121,3 +121,55 @@ function pcvc_payroll_format_clock(?string $mysqlDateTime): string
 
     return $ts ? date('H:i', $ts) : '—';
 }
+
+/**
+ * Fill gaps between earliest month in data and the through month (default: current month).
+ *
+ * @param list<string> $monthsFromDb
+ * @return list<string>
+ */
+function pcvc_payroll_month_range(array $monthsFromDb, ?string $throughMonth = null): array
+{
+    $throughMonth = $throughMonth ?? date('Y-m');
+    if (!preg_match('/^\d{4}-\d{2}$/', $throughMonth)) {
+        $throughMonth = date('Y-m');
+    }
+
+    $valid = [];
+    foreach ($monthsFromDb as $month) {
+        $month = trim((string) $month);
+        if (preg_match('/^\d{4}-\d{2}$/', $month)) {
+            $valid[$month] = true;
+        }
+    }
+
+    if ($valid === []) {
+        $startMonth = date('Y-01', strtotime($throughMonth . '-01'));
+    } else {
+        $keys = array_keys($valid);
+        sort($keys);
+        $startMonth = $keys[0];
+    }
+
+    $endMonth = $throughMonth;
+    if ($valid !== []) {
+        $keys = array_keys($valid);
+        sort($keys);
+        $dbMax = end($keys);
+        if ($dbMax > $endMonth) {
+            $endMonth = $dbMax;
+        }
+    }
+
+    $cursor = strtotime($startMonth . '-01');
+    $endTs  = strtotime($endMonth . '-01');
+    $range  = [];
+    while ($cursor <= $endTs) {
+        $range[] = date('Y-m', $cursor);
+        $cursor  = strtotime('+1 month', $cursor);
+    }
+
+    rsort($range);
+
+    return $range;
+}
