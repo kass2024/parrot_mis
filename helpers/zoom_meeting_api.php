@@ -356,11 +356,20 @@ function zoom_api_host_display_name(?array $profile): string
  */
 function zoom_api_resolve_host_join_identity(bool $forceRefresh = false): array
 {
+    xander_load_env_file();
+    $override = trim(xander_env_get('ZOOM_HOST_DISPLAY_NAME'));
+    $configured = trim(zoom_api_host_user_id());
+    if (!$forceRefresh && $override !== '' && str_contains($configured, '@')) {
+        return [
+            'name' => $override,
+            'email' => $configured,
+        ];
+    }
+
     $profile = zoom_api_fetch_host_profile($forceRefresh);
     $name = zoom_api_host_display_name($profile);
     $email = is_array($profile) ? trim((string) ($profile['email'] ?? '')) : '';
 
-    $configured = trim(zoom_api_host_user_id());
     if ($email === '' && str_contains($configured, '@')) {
         $email = $configured;
     }

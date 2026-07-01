@@ -9,6 +9,8 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/env_load.php';
 require_once __DIR__ . '/helpers/francophonie_meeting_invitation_schema.php';
 require_once __DIR__ . '/helpers/zoom_meeting_sdk.php';
+require_once __DIR__ . '/helpers/zoom_meeting_coop_headers.php';
+fm_zoom_send_coop_headers();
 
 xander_load_env_file();
 fm_meeting_ensure_schema($conn);
@@ -46,7 +48,7 @@ if ($invitationId > 0) {
         $password = (string) ($row['zoom_password'] ?? '');
         $startUrl = (string) ($row['zoom_start_url'] ?? '');
 
-        $hostIdentity = zoom_api_resolve_host_join_identity(true);
+        $hostIdentity = zoom_api_resolve_host_join_identity(false);
         $adminName = $hostIdentity['name'];
         $adminEmail = $hostIdentity['email'];
 
@@ -68,7 +70,7 @@ if ($invitationId > 0) {
                 1,
                 $password,
                 $adminEmail !== '' ? $adminEmail : null,
-                true
+                false
             );
             if ($sdkResult['ok']) {
                 $sdkAuth = $sdkResult['sdk'];
@@ -92,6 +94,7 @@ if (!zoom_sdk_is_configured() && $sdkError === '') {
 
 $leaveUrl = $publicBase . '/francophonie-meeting-invitation.php';
 $zoomLibUrl = $assetBase . '/dist/lib';
+$zoomCssHref = $assetBase . '/dist/ui/zoom-meetingsdk.css';
 $hostAttendanceMeta = [
     'invitation_id' => $invitationId,
     'participant_type' => 'host',
@@ -100,13 +103,12 @@ $hostAttendanceMeta = [
 ];
 ?>
 <!DOCTYPE html>
-<html lang="en" class="zoom-client-meeting-active">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Host meeting — <?= htmlspecialchars($topic, ENT_QUOTES, 'UTF-8') ?></title>
-    <link rel="stylesheet" href="<?= htmlspecialchars($assetBase . '/dist/ui/zoom-meetingsdk.css', ENT_QUOTES, 'UTF-8') ?>">
-    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css">
+    <link rel="stylesheet" href="assets/css/francophonie-zoom-room.css?v=5">
     <style>
         html, body { background:#1a1a1a; font-family:Arial,sans-serif; }
         .host-boot {
@@ -128,7 +130,7 @@ $hostAttendanceMeta = [
         }
     </style>
 </head>
-<body class="zoom-client-meeting-active">
+<body>
 <a class="back-link" href="francophonie-meeting-invitation.php">&larr; Invitations</a>
 <div id="zmmtg-root"></div>
 <div class="host-boot" id="hostBoot">
@@ -144,21 +146,18 @@ $hostAttendanceMeta = [
     <?php endif; ?>
 </div>
 
-<script src="<?= htmlspecialchars($assetBase . '/vendor/react.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
-<script src="<?= htmlspecialchars($assetBase . '/vendor/react-dom.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
-<script src="<?= htmlspecialchars($assetBase . '/vendor/redux.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
-<script src="<?= htmlspecialchars($assetBase . '/vendor/redux-thunk.min.js', ENT_QUOTES, 'UTF-8') ?>"></script>
-<script src="<?= htmlspecialchars($assetBase . '/dist/' . $meetingJs, ENT_QUOTES, 'UTF-8') ?>"></script>
-<script src="assets/js/francophonie-zoom-room.js"></script>
+<script src="assets/js/francophonie-zoom-room.js?v=5"></script>
 <script>
 (function () {
     var sdk = <?= $sdkAuth ? json_encode($sdkAuth, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) : 'null' ?>;
     var serverError = <?= json_encode($sdkError, JSON_UNESCAPED_UNICODE) ?>;
     var leaveUrl = <?= json_encode($leaveUrl, JSON_UNESCAPED_UNICODE) ?>;
     var zoomLibUrl = <?= json_encode($zoomLibUrl, JSON_UNESCAPED_UNICODE) ?>;
+    var assetBase = <?= json_encode($assetBase, JSON_UNESCAPED_UNICODE) ?>;
+    var meetingJs = <?= json_encode($meetingJs, JSON_UNESCAPED_UNICODE) ?>;
+    var zoomCssHref = <?= json_encode($zoomCssHref, JSON_UNESCAPED_UNICODE) ?>;
     var attendanceMeta = <?= json_encode($hostAttendanceMeta, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var fmAttendanceId = 0;
-    var errMsg = (window.FmZoomRoom && FmZoomRoom.errMsg) ? FmZoomRoom.errMsg : function (e) { return String(e); };
 
     function recordAttendance(action) {
         var body = Object.assign({ action: action }, attendanceMeta);
@@ -204,86 +203,28 @@ $hostAttendanceMeta = [
         setTimeout(function () { boot.style.display = 'none'; }, 350);
     }
 
-    function showZoomRoot() {
-        document.documentElement.classList.add('zoom-client-meeting-active');
-        document.body.classList.add('zoom-client-meeting-active');
-        var root = document.getElementById('zmmtg-root');
-        if (root) root.style.display = 'block';
-    }
-
-    function doJoin(passWord, useZak) {
-        return new Promise(function (resolve, reject) {
-            var done = false;
-            function finish(ok, val) {
-                if (done) return;
-                done = true;
-                ok ? resolve(val) : reject(val);
-            }
-            var timer = setTimeout(function () {
-                finish(false, new Error('Join timed out. Use “Open in Zoom app” below.'));
-            }, 90000);
-
-            ZoomMtg.inMeetingServiceListener('onMeetingStatus', function (data) {
-                if (data && data.status === 2) {
-                    clearTimeout(timer);
-                    finish(true);
-                }
-            });
-
-            var payload = {
-                signature: sdk.signature,
-                meetingNumber: String(sdk.meeting_number),
-                userName: sdk.user_name || 'Host',
-                passWord: passWord,
-                success: function () {
-                    setTimeout(function () { clearTimeout(timer); finish(true); }, 1500);
-                },
-                error: function (err) {
-                    clearTimeout(timer);
-                    finish(false, new Error(errMsg(err)));
-                }
-            };
-            if (sdk.user_email) payload.userEmail = sdk.user_email;
-            if (useZak && sdk.zak) payload.zak = sdk.zak;
-            ZoomMtg.join(payload);
-        });
-    }
-
-    function joinMeeting() {
-        var passwords = [sdk.password || '', ''];
-        var tries = [{ p: passwords[0], z: true }, { p: passwords[0], z: false }, { p: '', z: false }];
-        var i = 0;
-        function next(err) {
-            if (i >= tries.length) {
-                showError(err && err.message ? err.message : 'Join failed');
-                return;
-            }
-            var t = tries[i++];
-            bootTitle.textContent = 'Joining meeting…';
-            doJoin(t.p, t.z).then(function () {
-                recordAttendance('join');
-                hideBoot();
-            }).catch(next);
-        }
-        next();
-    }
-
     if (serverError) { showError(serverError); return; }
     if (!sdk || !sdk.signature) { showError('SDK credentials missing.'); return; }
-    if (typeof ZoomMtg === 'undefined' || !window.FmZoomRoom) { showError('Zoom SDK not loaded. Run npm install.'); return; }
+    if (!window.FmZoomRoom || typeof FmZoomRoom.startMeeting !== 'function') {
+        showError('Zoom loader missing. Refresh the page.');
+        return;
+    }
 
-    bootTitle.textContent = 'Loading Zoom…';
-    showZoomRoot();
-    FmZoomRoom.prepareSdk(zoomLibUrl)
-        .then(function () {
-            bootTitle.textContent = 'Initializing…';
-            return FmZoomRoom.initClient(leaveUrl);
-        })
-        .then(function () {
+    FmZoomRoom.startMeeting({
+        sdk: sdk,
+        leaveUrl: leaveUrl,
+        zoomLibUrl: zoomLibUrl,
+        assetBase: assetBase,
+        meetingJs: meetingJs,
+        zoomCssHref: zoomCssHref,
+        isHost: true,
+        onStatus: function (msg) { bootTitle.textContent = msg; },
+        onJoined: function () {
+            recordAttendance('join');
             hideBoot();
-            joinMeeting();
-        })
-        .catch(function (e) { showError(e.message || String(e)); });
+        },
+        onError: function (msg) { showError(msg); }
+    });
 })();
 </script>
 </body>

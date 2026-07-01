@@ -1,4 +1,4 @@
-/* Zoom Client View layout — screen share + participant tiles (parrot_mis) */
+/* Zoom Client View layout — gallery (3+) + speaker strip (2) + screen share */
 html.zoom-client-meeting-active,
 body.zoom-client-meeting-active {
   margin: 0;
@@ -23,6 +23,79 @@ body.zoom-client-meeting-active {
 html.zoom-client-meeting-active #zmmtg-root,
 body.zoom-client-meeting-active #zmmtg-root {
   display: block;
+}
+
+/* 2 participants: speaker strip at top (SDK speak-view) */
+body.fm-participant-count-2 #zmmtg-root [class*="speaker-bar-container"] {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 120px !important;
+  height: 120px !important;
+  z-index: 6 !important;
+}
+
+body.fm-participant-count-2 #zmmtg-root [class*="speaker-bar-container"] [class*="video-frame"] {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+body.fm-participant-count-2 #zmmtg-root [class*="main-view--speak-view"] {
+  height: calc(100% - 120px) !important;
+  max-height: calc(100% - 120px) !important;
+}
+
+/* 3+ participants: gallery grid — all avatars visible */
+body.fm-participant-count-3plus #zmmtg-root [class*="speaker-bar-container"] {
+  display: none !important;
+}
+
+body.fm-participant-count-3plus #zmmtg-root [class*="gallery-video-container__main-view"],
+body.fm-gallery-active #zmmtg-root [class*="gallery-video-container__main-view"] {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+body.fm-participant-count-3plus #zmmtg-root [class*="main-view--speak-view"],
+body.fm-gallery-active #zmmtg-root [class*="main-view--speak-view"] {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+body.fm-participant-count-3plus #zmmtg-root [class*="gallery-video-container"] [class*="video-frame"],
+body.fm-gallery-active #zmmtg-root [class*="gallery-video-container"] [class*="video-frame"] {
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+body.fm-participant-count-3plus #zmmtg-root [class*="gallery-video-container__hidden"],
+body.fm-gallery-active #zmmtg-root [class*="gallery-video-container__hidden"] {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+body.fm-participant-count-3plus #zmmtg-root [class*="video-avatar"],
+body.fm-gallery-active #zmmtg-root [class*="video-avatar"] {
+  visibility: visible !important;
+}
+
+/* Banner when COOP/COEP headers missing — gallery cannot activate */
+body.fm-gallery-blocked #zmmtg-root::before {
+  content: "Gallery view needs server headers (COOP/COEP). Deploy latest .htaccess and hard-refresh.";
+  position: fixed;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2147483000;
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font: 13px/1.4 Arial, sans-serif;
+  max-width: min(520px, 92vw);
+  text-align: center;
+  pointer-events: none;
 }
 
 /* During screen share: keep shared content full-size; dock self/participant tiles */
