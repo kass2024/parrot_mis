@@ -144,32 +144,32 @@ if ($st) {
                         <input class="form-control" id="full_name" name="full_name" required maxlength="200">
                     </div>
                     <div class="col-12 col-md-4">
-                        <label class="form-label fm-label required" for="age">Age</label>
-                        <input type="number" class="form-control" id="age" name="age" min="18" max="99" required>
+                        <label class="form-label fm-label" for="age">Age</label>
+                        <input type="number" class="form-control" id="age" name="age" min="18" max="99">
                     </div>
                     <div class="col-12 col-md-4">
-                        <label class="form-label fm-label required" for="nationality">Nationality</label>
-                        <input class="form-control" id="nationality" name="nationality" required>
+                        <label class="form-label fm-label" for="nationality">Nationality</label>
+                        <input class="form-control" id="nationality" name="nationality">
                     </div>
                     <div class="col-12 col-md-4">
-                        <label class="form-label fm-label required" for="country_of_residence">Current Country of Residence</label>
-                        <input class="form-control" id="country_of_residence" name="country_of_residence" required>
+                        <label class="form-label fm-label" for="country_of_residence">Current Country of Residence</label>
+                        <input class="form-control" id="country_of_residence" name="country_of_residence">
                     </div>
                     <div class="col-12 col-sm-6">
-                        <label class="form-label fm-label required" for="profession">Current Profession / Occupation</label>
-                        <input class="form-control" id="profession" name="profession" required>
+                        <label class="form-label fm-label" for="profession">Current Profession / Occupation</label>
+                        <input class="form-control" id="profession" name="profession">
                     </div>
                     <div class="col-12 col-sm-6">
-                        <label class="form-label fm-label required" for="years_experience">Years of Professional Experience</label>
-                        <input class="form-control" id="years_experience" name="years_experience" required placeholder="e.g. 5">
+                        <label class="form-label fm-label" for="years_experience">Years of Professional Experience</label>
+                        <input class="form-control" id="years_experience" name="years_experience" placeholder="e.g. 5">
                     </div>
                     <div class="col-12 col-sm-6">
                         <label class="form-label fm-label required" for="email">Email (all communication)</label>
                         <input type="email" class="form-control" id="email" name="email" required>
                     </div>
                     <div class="col-12 col-sm-6">
-                        <label class="form-label fm-label required" for="phone">Phone</label>
-                        <input type="tel" class="form-control" id="phone" required>
+                        <label class="form-label fm-label" for="phone">Phone</label>
+                        <input type="tel" class="form-control" id="phone">
                         <input type="hidden" name="phone_area_code" id="phone_area_code">
                         <input type="hidden" name="phone_number" id="phone_number">
                     </div>
@@ -181,24 +181,24 @@ if ($st) {
                 <h2><span>2.</span> Education Background</h2>
                 <div class="row g-3">
                     <div class="col-12 col-sm-6">
-                        <label class="form-label fm-label required" for="highest_degree">Highest Degree Obtained</label>
-                        <input class="form-control" id="highest_degree" name="highest_degree" required>
+                        <label class="form-label fm-label" for="highest_degree">Highest Degree Obtained</label>
+                        <input class="form-control" id="highest_degree" name="highest_degree">
                     </div>
                     <div class="col-12 col-sm-6">
-                        <label class="form-label fm-label required" for="field_of_study">Field of Study</label>
-                        <input class="form-control" id="field_of_study" name="field_of_study" required>
+                        <label class="form-label fm-label" for="field_of_study">Field of Study</label>
+                        <input class="form-control" id="field_of_study" name="field_of_study">
                     </div>
                     <div class="col-12 col-sm-6">
-                        <label class="form-label fm-label required" for="university_name">University / College Name</label>
-                        <input class="form-control" id="university_name" name="university_name" required>
+                        <label class="form-label fm-label" for="university_name">University / College Name</label>
+                        <input class="form-control" id="university_name" name="university_name">
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label fm-label required" for="country_of_study">Country of Study</label>
-                        <input class="form-control" id="country_of_study" name="country_of_study" required>
+                        <label class="form-label fm-label" for="country_of_study">Country of Study</label>
+                        <input class="form-control" id="country_of_study" name="country_of_study">
                     </div>
                     <div class="col-12 col-md-6">
-                        <label class="form-label fm-label required" for="graduation_year">Graduation Year</label>
-                        <input class="form-control" id="graduation_year" name="graduation_year" required placeholder="YYYY">
+                        <label class="form-label fm-label" for="graduation_year">Graduation Year</label>
+                        <input class="form-control" id="graduation_year" name="graduation_year" placeholder="YYYY">
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="other_certifications">Other Relevant Certifications or Training (if any)</label>
@@ -213,11 +213,11 @@ if ($st) {
                 <div class="lang-block">
                     <h3 class="h6 fw-bold text-danger mb-3">French Language</h3>
                     <div class="mb-3">
-                        <label class="form-label fm-label required">French Level</label>
+                        <label class="form-label fm-label">French Level</label>
                         <div class="lang-options">
                             <?php foreach (['beginner'=>'Beginner','intermediate'=>'Intermediate','advanced'=>'Advanced','fluent'=>'Fluent'] as $v=>$l): ?>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="french_level" id="fr_<?= $v ?>" value="<?= $v ?>" required>
+                                <input class="form-check-input" type="radio" name="french_level" id="fr_<?= $v ?>" value="<?= $v ?>">
                                 <label class="form-check-label" for="fr_<?= $v ?>"><?= $l ?></label>
                             </div>
                             <?php endforeach; ?>
@@ -229,19 +229,19 @@ if ($st) {
                         <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="french_tcf" id="french_tcf" value="1"><label class="form-check-label" for="french_tcf">TCF</label></div>
                     </div>
                     <div>
-                        <label class="form-label fm-label required">Can you work professionally in French?</label>
-                        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="french_professional" id="fr_pro_yes" value="yes" required><label class="form-check-label" for="fr_pro_yes">Yes</label></div>
+                        <label class="form-label fm-label">Can you work professionally in French?</label>
+                        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="french_professional" id="fr_pro_yes" value="yes"><label class="form-check-label" for="fr_pro_yes">Yes</label></div>
                         <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="french_professional" id="fr_pro_no" value="no"><label class="form-check-label" for="fr_pro_no">No</label></div>
                     </div>
                 </div>
                 <div class="lang-block mb-0">
                     <h3 class="h6 fw-bold text-primary mb-3">English Language</h3>
                     <div class="mb-3">
-                        <label class="form-label fm-label required">English Level</label>
+                        <label class="form-label fm-label">English Level</label>
                         <div class="lang-options">
                             <?php foreach (['beginner'=>'Beginner','intermediate'=>'Intermediate','advanced'=>'Advanced','fluent'=>'Fluent'] as $v=>$l): ?>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="english_level" id="en_<?= $v ?>" value="<?= $v ?>" required>
+                                <input class="form-check-input" type="radio" name="english_level" id="en_<?= $v ?>" value="<?= $v ?>">
                                 <label class="form-check-label" for="en_<?= $v ?>"><?= $l ?></label>
                             </div>
                             <?php endforeach; ?>
@@ -253,8 +253,8 @@ if ($st) {
                         <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="english_ielts" id="english_ielts" value="1"><label class="form-check-label" for="english_ielts">IELTS</label></div>
                     </div>
                     <div>
-                        <label class="form-label fm-label required">Can you work professionally in English?</label>
-                        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="english_professional" id="en_pro_yes" value="yes" required><label class="form-check-label" for="en_pro_yes">Yes</label></div>
+                        <label class="form-label fm-label">Can you work professionally in English?</label>
+                        <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="english_professional" id="en_pro_yes" value="yes"><label class="form-check-label" for="en_pro_yes">Yes</label></div>
                         <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="english_professional" id="en_pro_no" value="no"><label class="form-check-label" for="en_pro_no">No</label></div>
                     </div>
                 </div>
@@ -263,14 +263,14 @@ if ($st) {
             <!-- 4. WES -->
             <section class="fm-section">
                 <h2><span>4.</span> Do you have WES?</h2>
-                <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="has_wes" id="wes_yes" value="yes" required><label class="form-check-label" for="wes_yes">Yes</label></div>
+                <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="has_wes" id="wes_yes" value="yes"><label class="form-check-label" for="wes_yes">Yes</label></div>
                 <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="has_wes" id="wes_no" value="no"><label class="form-check-label" for="wes_no">No</label></div>
             </section>
 
-            <!-- Attachments (all optional) -->
+            <!-- Attachments (at least one required) -->
             <section class="fm-section">
-                <h2><span>5.</span> Attachments <span class="text-muted fw-normal small">(optional)</span></h2>
-                <p class="small text-muted mb-3">Upload documents now — each file is saved as soon as it finishes uploading. Any file type is accepted. Academic documents accept multiple files.</p>
+                <h2><span>5.</span> Attachments <span class="text-danger fw-normal small">(at least one required *)</span></h2>
+                <p class="small text-muted mb-3">Upload at least one document — CV, language certificate, or academic file. Each file is saved as soon as it finishes uploading.</p>
                 <div class="row g-3">
                     <?php
                     $singleFiles = [
@@ -536,23 +536,37 @@ if ($st) {
             });
     }
 
-    function collectMissing() {
+    function hasAtLeastOneAttachment() {
+        const singlePaths = ['cv_path', 'french_cert_path', 'english_cert_path'];
+        for (const id of singlePaths) {
+            const el = document.getElementById(id);
+            if (el && String(el.value || '').trim() !== '') {
+                return true;
+            }
+        }
+        if (academicUploads.length > 0) {
+            return true;
+        }
+        const academicHidden = document.getElementById('academic_docs_path');
+        return !!(academicHidden && String(academicHidden.value || '').trim() !== '');
+    }
+
+    function collectMinimumRequired() {
         const missing = [];
-        form.querySelectorAll('input[name][required], textarea[name][required], select[name][required]').forEach(el => {
-            if (el.type === 'radio' || el.type === 'checkbox') return;
-            if (!String(el.value || '').trim()) {
-                missing.push(fieldLabels[el.name] || el.name);
-            }
-        });
-        ['french_level', 'french_professional', 'english_level', 'english_professional', 'has_wes'].forEach(name => {
-            if (!form.querySelector(`input[name="${name}"]:checked`)) {
-                missing.push(fieldLabels[name] || name);
-            }
-        });
-        const email = document.getElementById('email');
-        if (email && email.value && !email.validity.valid) missing.push('Valid Email');
-        if (!phoneIti.isValidNumber()) missing.push('Valid Phone');
-        return [...new Set(missing)];
+        const fullName = document.getElementById('full_name');
+        if (!fullName || !String(fullName.value || '').trim()) {
+            missing.push('Full Name');
+        }
+        const emailEl = document.getElementById('email');
+        if (!emailEl || !String(emailEl.value || '').trim()) {
+            missing.push('Email');
+        } else if (!emailEl.validity.valid) {
+            missing.push('Valid Email');
+        }
+        if (!hasAtLeastOneAttachment()) {
+            missing.push('At least one attachment (CV, certificate, or academic document)');
+        }
+        return missing;
     }
 
     form.addEventListener('submit', function(e) {
@@ -561,7 +575,7 @@ if ($st) {
 
         const dial = phoneIti.getSelectedCountryData();
         document.getElementById('phone_area_code').value = dial.dialCode || '';
-        let digits = (phoneIti.getNumber() || '').replace(/\D/g, '');
+        let digits = (phoneIti.getNumber() || document.getElementById('phone').value || '').replace(/\D/g, '');
         const code = (dial.dialCode || '').replace(/\D/g, '');
         if (code && digits.startsWith(code)) digits = digits.slice(code.length);
         document.getElementById('phone_number').value = digits;
@@ -573,7 +587,7 @@ if ($st) {
             return;
         }
 
-        const missing = collectMissing();
+        const missing = collectMinimumRequired();
         if (missing.length) {
             showErrors(missing);
             return;
