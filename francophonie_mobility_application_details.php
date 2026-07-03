@@ -94,6 +94,9 @@ if ($row['english_ielts']) $englishCerts[] = 'IELTS';
                         <i class="fas fa-file-export"></i> Resend approval package
                     </button>
                     <?php endif; ?>
+                    <a href="admin-generate-fm-contract.php?application_id=<?= (int)$row['id'] ?>" target="_blank" class="btn btn-outline-dark btn-sm">
+                        <i class="fas fa-file-signature"></i> Issue E-Sign Contract
+                    </a>
                     <a href="mailto:<?= htmlspecialchars($row['email'], ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-envelope"></i> Open in mail client
                     </a>

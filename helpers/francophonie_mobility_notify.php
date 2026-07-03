@@ -171,8 +171,11 @@ function fm_build_form_summary_html(array $row): string
     <h3 style="margin-top:0;color:#1e4d2b">1. Personal Information</h3>
     <table style="width:100%;border-collapse:collapse;margin-bottom:20px;font-size:14px">
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0;width:40%"><strong>Full Name</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc(fm_applicant_name($row)) . '</td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Date of Birth</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['date_of_birth'] ?? '') . '</td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Passport Number</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['passport_number'] ?? '') . '</td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Age</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['age'] ?? '') . '</td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Nationality</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['nationality'] ?? '') . '</td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Address</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . nl2br($esc($row['address'] ?? '')) . '</td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Country of Residence</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['country_of_residence'] ?? '') . '</td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Profession</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['profession'] ?? '') . '</td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0"><strong>Years of Experience</strong></td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc($row['years_experience'] ?? '') . '</td></tr>

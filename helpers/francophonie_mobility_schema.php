@@ -27,6 +27,9 @@ function fm_ensure_schema(mysqli $conn): void
           `email` varchar(150) NOT NULL,
           `phone_area_code` varchar(10) DEFAULT NULL,
           `phone_number` varchar(20) NOT NULL,
+          `date_of_birth` date DEFAULT NULL,
+          `passport_number` varchar(64) DEFAULT NULL,
+          `address` text DEFAULT NULL,
           `age` tinyint(3) unsigned DEFAULT NULL,
           `nationality` varchar(100) NOT NULL,
           `country_of_residence` varchar(100) NOT NULL,
@@ -94,5 +97,20 @@ function fm_ensure_schema(mysqli $conn): void
     }
     if ($colCheck) {
         $colCheck->free();
+    }
+
+    $contractFieldAlters = [
+        'date_of_birth'   => 'ADD COLUMN `date_of_birth` date NULL DEFAULT NULL AFTER `phone_number`',
+        'passport_number' => 'ADD COLUMN `passport_number` varchar(64) NULL DEFAULT NULL AFTER `date_of_birth`',
+        'address'         => 'ADD COLUMN `address` text NULL DEFAULT NULL AFTER `passport_number`',
+    ];
+    foreach ($contractFieldAlters as $colName => $alterSql) {
+        $chk = $conn->query("SHOW COLUMNS FROM francophonie_mobility_applications LIKE '{$colName}'");
+        if ($chk && $chk->num_rows === 0) {
+            $conn->query("ALTER TABLE francophonie_mobility_applications {$alterSql}");
+        }
+        if ($chk) {
+            $chk->free();
+        }
     }
 }

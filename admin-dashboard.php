@@ -302,6 +302,8 @@ $cards = [
     'icon' => 'bi-map',
     'links' => [
       'francophonie-mobility-applications.php' => 'View Applications',
+      'admin-generate-fm-contract.php' => 'Issue E-Sign Contract',
+      'admin-fm-contracts.php' => 'Signed Contracts',
     ]
   ],
   'meeting_invitation' => [
@@ -2200,6 +2202,14 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=rejected', 'Rejected')">
           <i class="bi bi-x-circle"></i>
           Rejected
+        </a>
+        <a href="#" onclick="loadInFrame('admin-generate-fm-contract.php', 'Issue E-Sign Contract')">
+          <i class="bi bi-file-earmark-text"></i>
+          Issue E-Sign Contract
+        </a>
+        <a href="#" onclick="loadInFrame('admin-fm-contracts.php', 'Signed Mobility Contracts')">
+          <i class="bi bi-file-earmark-check"></i>
+          Signed Contracts
         </a>
       </div>
       <?php endif; ?>

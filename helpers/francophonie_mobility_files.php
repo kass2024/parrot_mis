@@ -197,6 +197,9 @@ function fm_human_field_label(string $key): string
 {
     $map = [
         'full_name' => 'Full Name',
+        'date_of_birth' => 'Date of Birth',
+        'passport_number' => 'Passport Number',
+        'address' => 'Full Address',
         'age' => 'Age',
         'nationality' => 'Nationality',
         'country_of_residence' => 'Current Country of Residence',

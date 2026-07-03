@@ -77,6 +77,38 @@ if (!$email) {
     $missing[] = 'Valid Email';
 }
 
+$date_of_birth_raw = trim((string) ($_POST['date_of_birth'] ?? ''));
+$date_of_birth = null;
+if ($date_of_birth_raw === '') {
+    $missing[] = 'Date of Birth';
+} else {
+    $dobTs = strtotime($date_of_birth_raw);
+    if ($dobTs === false) {
+        $missing[] = 'Valid Date of Birth';
+    } else {
+        $date_of_birth = date('Y-m-d', $dobTs);
+        $ageFromDob = (int) date('Y') - (int) date('Y', $dobTs);
+        if ($ageFromDob < 18 || $ageFromDob > 99) {
+            $missing[] = 'You must be between 18 and 99 years old';
+        }
+    }
+}
+
+$passport_number = strtoupper(trim((string) ($_POST['passport_number'] ?? '')));
+if ($passport_number === '') {
+    $missing[] = 'Passport Number';
+}
+
+$address = trim((string) ($_POST['address'] ?? ''));
+if ($address === '') {
+    $missing[] = 'Full Address';
+}
+
+$nationality_check = trim((string) ($_POST['nationality'] ?? ''));
+if ($nationality_check === '') {
+    $missing[] = 'Nationality';
+}
+
 $rawAttachmentPaths = [
     trim((string) ($_POST['cv_file'] ?? '')),
     trim((string) ($_POST['french_cert_file'] ?? '')),
@@ -180,14 +212,15 @@ $conn->begin_transaction();
 
 $sql = 'INSERT INTO francophonie_mobility_applications (
     user_id, reference_id, first_name, last_name, email,
-    phone_area_code, phone_number, age, nationality, country_of_residence,
+    phone_area_code, phone_number, date_of_birth, passport_number, address,
+    age, nationality, country_of_residence,
     profession, years_experience, highest_degree, field_of_study, university_name,
     country_of_study, graduation_year, other_certifications,
     french_level, french_tef, french_tcf, french_professional,
     english_level, english_toefl, english_ielts, english_professional,
     has_wes, cv_file, french_cert_file, english_cert_file, academic_docs_file,
     status, created_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
@@ -201,9 +234,10 @@ $english_db = $english_cert_file !== '' ? $english_cert_file : '';
 $academic_db = $academic_docs_file !== '' ? $academic_docs_file : '';
 
 $stmt->bind_param(
-    'sssssssissssssssssisiississssss',
+    'ssssssssssisssssssssssiissiissssss',
     $user_id, $reference_id, $first_name, $last_name, $email,
-    $phone_area_code, $phone_number, $age, $nationality, $country_of_residence,
+    $phone_area_code, $phone_number, $date_of_birth, $passport_number, $address,
+    $age, $nationality, $country_of_residence,
     $profession, $years_experience, $highest_degree, $field_of_study, $university_name,
     $country_of_study, $graduation_year, $other_certifications,
     $french_level, $french_tef, $french_tcf, $french_professional,

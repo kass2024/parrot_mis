@@ -141,19 +141,32 @@ if ($st) {
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label fm-label required" for="full_name">Full Name</label>
-                        <input class="form-control" id="full_name" name="full_name" required maxlength="200">
+                        <input class="form-control" id="full_name" name="full_name" required maxlength="200" autocomplete="name">
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label fm-label required" for="date_of_birth">Date of Birth</label>
+                        <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" required autocomplete="bday">
+                    </div>
+                    <div class="col-12 col-md-4">
+                        <label class="form-label fm-label required" for="passport_number">Passport Number</label>
+                        <input class="form-control" id="passport_number" name="passport_number" required maxlength="64" autocomplete="off" placeholder="As shown on passport">
                     </div>
                     <div class="col-12 col-md-4">
                         <label class="form-label fm-label" for="age">Age</label>
-                        <input type="number" class="form-control" id="age" name="age" min="18" max="99">
+                        <input type="number" class="form-control" id="age" name="age" min="18" max="99" placeholder="Optional">
                     </div>
-                    <div class="col-12 col-md-4">
-                        <label class="form-label fm-label" for="nationality">Nationality</label>
-                        <input class="form-control" id="nationality" name="nationality">
+                    <div class="col-12 col-md-6">
+                        <label class="form-label fm-label required" for="nationality">Nationality</label>
+                        <input class="form-control" id="nationality" name="nationality" required autocomplete="country-name">
                     </div>
-                    <div class="col-12 col-md-4">
+                    <div class="col-12 col-md-6">
                         <label class="form-label fm-label" for="country_of_residence">Current Country of Residence</label>
-                        <input class="form-control" id="country_of_residence" name="country_of_residence">
+                        <input class="form-control" id="country_of_residence" name="country_of_residence" autocomplete="country">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label fm-label required" for="address">Full Address</label>
+                        <textarea class="form-control" id="address" name="address" rows="2" required maxlength="500" placeholder="Street, city, province/state, postal code, country" autocomplete="street-address"></textarea>
+                        <div class="form-text">Required for your service agreement — include your complete residential address.</div>
                     </div>
                     <div class="col-12 col-sm-6">
                         <label class="form-label fm-label" for="profession">Current Profession / Occupation</label>
@@ -562,6 +575,22 @@ if ($st) {
             missing.push('Email');
         } else if (!emailEl.validity.valid) {
             missing.push('Valid Email');
+        }
+        const dobEl = document.getElementById('date_of_birth');
+        if (!dobEl || !String(dobEl.value || '').trim()) {
+            missing.push('Date of Birth');
+        }
+        const passportEl = document.getElementById('passport_number');
+        if (!passportEl || !String(passportEl.value || '').trim()) {
+            missing.push('Passport Number');
+        }
+        const nationalityEl = document.getElementById('nationality');
+        if (!nationalityEl || !String(nationalityEl.value || '').trim()) {
+            missing.push('Nationality');
+        }
+        const addressEl = document.getElementById('address');
+        if (!addressEl || !String(addressEl.value || '').trim()) {
+            missing.push('Full Address');
         }
         if (!hasAtLeastOneAttachment()) {
             missing.push('At least one attachment (CV, certificate, or academic document)');
