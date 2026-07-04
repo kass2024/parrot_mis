@@ -5,6 +5,7 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
 require_once __DIR__ . '/../helpers/csrf.php';
 require_once __DIR__ . '/../helpers/urls.php';
+require_once __DIR__ . '/../helpers/secure_file.php';
 require_once __DIR__ . '/auth.php';
 
 pcvc_student_portal_ensure_schema($conn);
@@ -74,7 +75,7 @@ function pcvc_material_link_html(string $relPath, string $label = 'View'): strin
 {
     $relPath = pcvc_norm_rel_path($relPath);
     if ($relPath === '') return '';
-    $url = pcvc_url('/' . $relPath);
+    $url = pcvc_secure_file_url($relPath, ['inline' => true]);
     return '<a class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener" href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</a>';
 }
 

@@ -1,5 +1,8 @@
 <?php
 // applicant_cards.php
+if (!function_exists('pcvc_secure_file_url')) {
+    require_once __DIR__ . '/helpers/secure_file.php';
+}
 foreach($applicants as $applicant): 
     // Parse documents
     $documents = [];
@@ -96,10 +99,10 @@ foreach($applicants as $applicant):
                                     </div>
                                 </div>
                                 <div class="document-actions">
-                                    <a href="<?= htmlspecialchars($doc['path']) ?>" class="doc-btn download" download title="Download">
+                                    <a href="<?= htmlspecialchars(pcvc_secure_file_url($doc['path'])) ?>" class="doc-btn download" download title="Download">
                                         <i class="fas fa-download"></i>
                                     </a>
-                                    <a href="<?= htmlspecialchars($doc['path']) ?>" class="doc-btn" target="_blank" title="View">
+                                    <a href="<?= htmlspecialchars(pcvc_secure_file_url($doc['path'], ['inline' => true])) ?>" class="doc-btn" target="_blank" title="View">
                                         <i class="fas fa-eye"></i>
                                     </a>
                                 </div>

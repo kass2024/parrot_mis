@@ -6,6 +6,7 @@
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 
 // Check if admin is logged in
 $admin_id = $_SESSION['id'] ?? null;
@@ -55,10 +56,12 @@ function displayFile($file_path, $label) {
     
     error_log("File exists - Canada Medical: " . ($canada_medical_exists ? "YES" : "NO") . ", Uploads: " . ($uploads_exists ? "YES" : "NO"));
     
-    // Use the correct path
-    $file_url = $canada_medical_exists ? 
-        'uploads/canada_medical/' . basename($file_path) : 
-        'uploads/' . basename($file_path);
+    // Use secure proxy URL (direct /uploads/ access is blocked)
+    $file_url = pcvc_secure_file_url(
+        $canada_medical_exists
+            ? 'uploads/canada_medical/' . basename($file_path)
+            : 'uploads/' . basename($file_path)
+    );
     
     error_log("Using file URL: " . $file_url);
     

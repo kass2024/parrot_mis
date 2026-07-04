@@ -8,6 +8,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/env_load.php';
 require_once __DIR__ . '/student_status_notify.php';
 require_once __DIR__ . '/marketing_brochure_send.php';
+require_once __DIR__ . '/secure_file.php';
 
 /** @return array<string,array{label:string,column:string,multiple:bool}> */
 function pcvc_app_document_types(): array
@@ -70,17 +71,20 @@ function pcvc_app_documents_for_view(array $appRow): array
         $col = $def['column'];
         $raw = $appRow[$col] ?? null;
         $paths = [];
+        $urls  = [];
         if ($def['multiple']) {
             $arr = is_array($raw) ? $raw : json_decode((string) $raw, true);
             if (is_array($arr)) {
                 foreach ($arr as $p) {
                     if (is_string($p) && trim($p) !== '') {
                         $paths[] = $p;
+                        $urls[]  = pcvc_secure_file_url($p);
                     }
                 }
             }
         } elseif (is_string($raw) && trim($raw) !== '') {
             $paths[] = $raw;
+            $urls[]  = pcvc_secure_file_url($raw);
         }
         $items[] = [
             'key'      => $key,
@@ -88,6 +92,7 @@ function pcvc_app_documents_for_view(array $appRow): array
             'column'   => $col,
             'multiple' => $def['multiple'],
             'paths'    => $paths,
+            'urls'     => $urls,
             'present'  => count($paths) > 0,
         ];
     }

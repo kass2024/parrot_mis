@@ -1,6 +1,7 @@
 <?php
 require_once 'auth.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 // Function to parse JSON or comma-separated tags
 function parseTags($value) {
     if(!$value || $value === 'null' || $value === 'NULL') return [];
@@ -869,7 +870,7 @@ $colors = [
                                                     </div>
                                                 </div>
                                                 <div class="document-actions">
-                                                    <a href="<?= htmlspecialchars($doc['path']) ?>" class="doc-btn download" download title="Download">
+                                                    <a href="<?= htmlspecialchars(pcvc_secure_file_url($doc['path'])) ?>" class="doc-btn download" download title="Download">
                                                         <i class="fas fa-download"></i>
                                                     </a>
                                                 </div>
@@ -955,6 +956,8 @@ $colors = [
     </div>
 
     <script>
+        <?= pcvc_secure_file_js() ?>
+
         // Applicants data from PHP
         const applicants = <?= json_encode($applicants, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
         const searchInput = document.getElementById('searchInput');
@@ -1165,7 +1168,7 @@ $colors = [
                                                     </div>
                                                 </div>
                                                 <div class="document-actions">
-                                                    <a href="${doc.path}" class="doc-btn download" download title="Download">
+                                                    <a href="${pcvcSecureFileUrl(doc.path)}" class="doc-btn download" download title="Download">
                                                         <i class="fas fa-download"></i>
                                                     </a>
                                                 </div>
@@ -1253,10 +1256,10 @@ $colors = [
                             <small style="color: #666;">${doc.filename}</small>
                         </div>
                         <div>
-                            <a href="${doc.path}" class="doc-btn download" download style="display: inline-flex; margin-right: 5px;">
+                            <a href="${pcvcSecureFileUrl(doc.path)}" class="doc-btn download" download style="display: inline-flex; margin-right: 5px;">
                                 <i class="fas fa-download"></i> Download
                             </a>
-                            <a href="${doc.path}" class="doc-btn" target="_blank" style="display: inline-flex;">
+                            <a href="${pcvcSecureFileUrl(doc.path, true)}" class="doc-btn" target="_blank" style="display: inline-flex;">
                                 <i class="fas fa-eye"></i> View
                             </a>
                         </div>

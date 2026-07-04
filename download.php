@@ -1,33 +1,18 @@
 <?php
 /**
- * Secure file proxy for uploaded documents.
+ * Secure file proxy for uploaded documents (admin + student portal only).
  *
  * Usage (client side):
  *   const href = 'download.php?f=' + encodeURIComponent(btoa('uploads/applications/abc123/transcript.pdf'));
  *   // Optional: &inline=1   -> try to open in browser (PDF/images)
  *   // Optional: &name=...   -> override display filename
- *
- * Why:
- * - Avoids direct /uploads access that can hit 403 due to Apache rules.
- * - Sanitizes/normalizes paths; blocks traversal outside allowed roots.
- * - Sets correct headers for inline/attachment and UTF-8 filenames.
  */
 
-// --------- 1) CONFIG: allowlist base directories (relative to this script) ---------
-$ALLOWED_BASES = [
-  // main apps
-  realpath(__DIR__ . '/uploads/applications'),
-  // if you also keep one-page or country-specific uploads elsewhere, add them:
-  realpath(__DIR__ . '/uploads'),                // general
-  realpath(__DIR__ . '/uploads/malta'),          // malta
-  realpath(__DIR__ . '/uploads/turkey'),         // turkey
-  realpath(__DIR__ . '/uploads/georgia'),        // georgia
-];
-// Remove false entries (in case a folder doesn’t exist yet)
-$ALLOWED_BASES = array_values(array_filter($ALLOWED_BASES));
+require_once __DIR__ . '/helpers/secure_file.php';
 
-// Hard-fail if no base exists
-if (empty($ALLOWED_BASES)) {
+pcvc_secure_file_require_auth();
+
+if (empty(pcvc_secure_file_allowed_bases())) {
   http_response_code(500);
   exit('No upload base directories are configured.');
 }
@@ -50,44 +35,17 @@ if ($decoded === false) {
 $overrideName = isset($_GET['name']) ? trim((string)$_GET['name']) : '';
 $forceInline  = isset($_GET['inline']) && $_GET['inline'] == '1';
 
-// --------- 3) Normalize path (strip quotes, backslashes, clip before "uploads/") ---------
-$path = str_replace("\0", '', $decoded);      // remove any NUL bytes
-$path = trim($path, "\"' \t\r\n");
-$path = str_replace('\\', '/', $path);
-
-// if string contains 'uploads/', cut to relative portion
-$pos = stripos($path, 'uploads/');
-if ($pos !== false) {
-  $path = substr($path, $pos);
-}
-
-// Remove leading slashes to enforce "relative"
-$path = ltrim($path, '/');
-
-// Reject if nothing left
+// --------- 3) Normalize and resolve path ---------
+$path = pcvc_norm_upload_rel_path($decoded);
 if ($path === '') {
   http_response_code(400);
   exit('Empty path.');
 }
 
-// --------- 4) Resolve real path and ensure it stays inside allowlisted roots ---------
-$full = realpath(__DIR__ . '/' . $path);
-if ($full === false || !is_file($full)) {
+$full = pcvc_secure_file_resolve($path);
+if ($full === null) {
   http_response_code(404);
   exit('File not found.');
-}
-
-// Check $full is inside at least one allowed base dir
-$insideAllowed = false;
-foreach ($ALLOWED_BASES as $base) {
-  if ($base && strpos($full, $base) === 0) {
-    $insideAllowed = true;
-    break;
-  }
-}
-if (!$insideAllowed) {
-  http_response_code(403);
-  exit('Forbidden.');
 }
 
 // --------- 5) Headers ---------
@@ -110,6 +68,7 @@ header('Content-Type: ' . $mime);
 if ($size !== false) header('Content-Length: ' . $size);
 header(sprintf('Content-Disposition: %s; filename="%s"; filename*=UTF-8\'\'%s', $dispositionType, $asciiName, $utf8Name));
 header('X-Content-Type-Options: nosniff');
+header('X-Robots-Tag: noindex, nofollow, noarchive');
 // Safer default: private, no-transform (tweak as needed)
 header('Cache-Control: private, max-age=3600, no-transform');
 

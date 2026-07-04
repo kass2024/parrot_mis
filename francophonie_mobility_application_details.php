@@ -10,6 +10,7 @@ require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 fm_ensure_schema($conn);
 require_once __DIR__ . '/helpers/francophonie_mobility_notify.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_files.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 
 if (empty($_SESSION['id'])) {
     http_response_code(403);
@@ -36,22 +37,7 @@ if (!$row) {
 
 function fm_doc_link(string $relPath, string $label): string
 {
-    $relPath = trim($relPath);
-    if ($relPath === '') {
-        return '<div class="text-muted small">' . htmlspecialchars($label) . ': not uploaded</div>';
-    }
-    $url = htmlspecialchars($relPath, ENT_QUOTES, 'UTF-8');
-    $abs = fm_resolve_upload_path($relPath);
-    if ($abs === '') {
-        return '<div class="text-warning small">' . htmlspecialchars($label) . ': file missing on server</div>';
-    }
-    return '<div class="doc-row border rounded p-2 mb-2 d-flex flex-column flex-sm-row justify-content-between align-items-stretch align-items-sm-center gap-2">
-        <span class="text-break"><i class="fas fa-file me-2"></i>' . htmlspecialchars($label) . '</span>
-        <span class="d-flex flex-wrap gap-1">
-            <a href="' . $url . '" target="_blank" class="btn btn-sm btn-outline-primary flex-fill flex-sm-grow-0"><i class="fas fa-eye"></i> View</a>
-            <a href="' . $url . '" download class="btn btn-sm btn-primary flex-fill flex-sm-grow-0"><i class="fas fa-download"></i> Download</a>
-        </span>
-    </div>';
+    return pcvc_secure_file_links_html($relPath, $label);
 }
 
 $name = htmlspecialchars(trim($row['first_name'] . ' ' . $row['last_name']), ENT_QUOTES, 'UTF-8');

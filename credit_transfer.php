@@ -2591,7 +2591,7 @@ const CT_STAGE_META = <?php echo json_encode([
       prev.appendChild(icon);
       prev.appendChild(document.createTextNode(' '));
       var a = document.createElement('a');
-      a.href = relPath;
+      a.href = 'download.php?f=' + encodeURIComponent(btoa(unescape(encodeURIComponent(relPath)))) + '&inline=1';
       a.target = '_blank';
       a.rel = 'noopener';
       a.textContent = <?php echo json_encode($current_lang === 'fr' ? 'Document déjà enregistré' : 'Document already on file', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;

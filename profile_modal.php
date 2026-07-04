@@ -1,4 +1,5 @@
 <!-- Profile Modal -->
+<?php if (!function_exists('pcvc_profile_photo_url')) { require_once __DIR__ . '/helpers/secure_file.php'; } ?>
 <div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <form action="profile_update.php" method="POST" enctype="multipart/form-data" class="modal-content">
@@ -14,7 +15,7 @@
 
         <!-- Profile Photo -->
         <div class="text-center mb-4">
-          <img src="uploads/<?= htmlspecialchars($admin['profile_photo'] ?? 'default_avatar.png') ?>"
+          <img src="<?= htmlspecialchars(pcvc_profile_photo_url($admin['profile_photo'] ?? '')) ?>"
                class="rounded-circle mb-2"
                style="width:90px;height:90px;object-fit:cover;">
           <input type="file" name="profile_photo" class="form-control mt-2">

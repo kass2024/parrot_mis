@@ -3,6 +3,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/includes/payroll_helpers.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
 /* ===========================================================
    PERMISSION CHECK
@@ -1313,7 +1314,7 @@ $result->data_seek(0);
                                 <div class="employee-info">
                                     <?php if (!empty($row['profile_photo'])): ?>
                                     <div class="profile-img-container">
-                                        <img src="uploads/<?= htmlspecialchars($row['profile_photo']) ?>" 
+                                        <img src="<?= htmlspecialchars(pcvc_profile_photo_url($row['profile_photo'] ?? '')) ?>" 
                                              alt="Profile" class="profile-img">
                                     </div>
                                     <?php else: ?>

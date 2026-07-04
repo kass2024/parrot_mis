@@ -1,6 +1,7 @@
 <?php
 require_once 'auth.php';
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 // Initialize search variables
 $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
 $whereClause = '';
@@ -801,10 +802,10 @@ $fileFields = [
                                                     </div>
                                                 </div>
                                                 <div class="document-actions">
-                                                    <a href="<?= htmlspecialchars($filePath) ?>" class="doc-btn download" download title="Download">
+                                                    <a href="<?= htmlspecialchars(pcvc_secure_file_url($filePath)) ?>" class="doc-btn download" download title="Download">
                                                         <i class="fas fa-download"></i>
                                                     </a>
-                                                    <a href="<?= htmlspecialchars($filePath) ?>" class="doc-btn" target="_blank" title="View">
+                                                    <a href="<?= htmlspecialchars(pcvc_secure_file_url($filePath, ['inline' => true])) ?>" class="doc-btn" target="_blank" title="View">
                                                         <i class="fas fa-eye"></i>
                                                     </a>
                                                 </div>

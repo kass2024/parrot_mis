@@ -3,6 +3,7 @@
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
 /* ============================================================
    SECURITY CHECK 
@@ -944,7 +945,7 @@ unset($_SESSION['success'], $_SESSION['error']);
                                 <div class="profile-upload-wrap" data-staff-id="<?= (int) $row['id'] ?>">
                                     <?php if (!empty($row['profile_photo'])): ?>
                                     <div class="profile-img-container">
-                                        <img src="uploads/<?= htmlspecialchars($row['profile_photo'], ENT_QUOTES, 'UTF-8') ?>"
+                                        <img src="<?= htmlspecialchars(pcvc_profile_photo_url($row['profile_photo'] ?? '')) ?>"
                                              alt="Profile" class="profile-img profile-preview">
                                     </div>
                                     <?php else: ?>
@@ -1195,11 +1196,12 @@ $(function() {
                 alert(data.error || 'Upload failed.');
                 return;
             }
+            const photoSrc = data.photo_url + (data.photo_url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
             if (preview && preview.tagName === 'IMG') {
-                preview.src = data.photo_url + '?t=' + Date.now();
+                preview.src = photoSrc;
             } else if (preview && wrap) {
                 const img = document.createElement('img');
-                img.src = data.photo_url + '?t=' + Date.now();
+                img.src = photoSrc;
                 img.alt = 'Profile';
                 img.className = 'profile-img profile-preview';
                 preview.replaceWith(img);

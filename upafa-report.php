@@ -1,5 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/auth.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 /* ===============================
    SEARCH
 ================================ */
@@ -174,7 +176,7 @@ body {
                                 <div class="file-box">
                                     <strong><?= ucfirst(str_replace('_',' ',$f['file_type'])) ?></strong><br>
                                     <small><?= htmlspecialchars($f['original_name']) ?></small><br>
-                                    <a href="<?= htmlspecialchars($f['storage_path']) ?>"
+                                    <a href="download_file.php?id=<?= (int) $f['id'] ?>"
                                        class="btn btn-sm btn-outline-primary mt-2"
                                        download>
                                         ⬇ Download

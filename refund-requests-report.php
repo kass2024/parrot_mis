@@ -7,6 +7,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/refund_requests_schema.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 require_once __DIR__ . '/includes/company_branding.php';
 
 $adminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
@@ -222,7 +223,7 @@ $colors = ['navy' => '#427431', 'gold' => '#E21D1E', 'blue' => '#3661B9', 'white
             <span style="font-size:0.78rem;color:#64748b;"><?= htmlspecialchars((string) ($r['created_at'] ?? '')) ?></span>
             <div style="display:flex;gap:6px;">
               <?php if ($proof !== ''): ?>
-                <a class="btn btn-proof" href="<?= htmlspecialchars($proof) ?>" target="_blank" rel="noopener"><i class="fas fa-file"></i> Proof</a>
+                <a class="btn btn-proof" href="<?= htmlspecialchars(pcvc_secure_file_url($proof, ['inline' => true])) ?>" target="_blank" rel="noopener"><i class="fas fa-file"></i> Proof</a>
               <?php endif; ?>
               <button type="button" class="btn btn-manage open-refund-modal" data-refund="<?= htmlspecialchars(json_encode($payload, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
                 <i class="fas fa-cog"></i> Manage

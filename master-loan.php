@@ -2225,7 +2225,7 @@ const ML_STAGE_META = <?php echo json_encode([
     p.appendChild(icon);
     p.appendChild(document.createTextNode(' '));
     var a = document.createElement('a');
-    a.href = relPath;
+    a.href = 'download.php?f=' + encodeURIComponent(btoa(unescape(encodeURIComponent(relPath)))) + '&inline=1';
     a.target = '_blank';
     a.rel = 'noopener';
     a.style.cssText = 'color: var(--accent-teal); text-decoration: none; font-weight: 600;';

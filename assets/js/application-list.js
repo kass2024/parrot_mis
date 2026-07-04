@@ -3,6 +3,18 @@
  * API URL (works inside admin-dashboard iframe + subfolders)
  * =====================================================
  */
+function pcvcSecureFileUrl(relPath, inline) {
+    if (!relPath) return "#";
+    try {
+        const enc = btoa(unescape(encodeURIComponent(relPath)));
+        let u = "download.php?f=" + encodeURIComponent(enc);
+        if (inline) u += "&inline=1";
+        return u;
+    } catch (e) {
+        return "#";
+    }
+}
+
 function projectApiPath(relativePath) {
     const rel = String(relativePath || "").replace(/^\//, "");
     const base =
@@ -1458,8 +1470,10 @@ function buildDocumentAdminCard(item) {
     const key = String(item.key || "");
     const label = String(item.label || key.replace(/_/g, " "));
     const paths = Array.isArray(item.paths) ? item.paths.filter(Boolean) : [];
+    const urls = Array.isArray(item.urls) ? item.urls.filter(Boolean) : [];
     const present = paths.length > 0 || item.present === true;
     const primaryPath = paths[0] || "";
+    const primaryUrl = urls[0] || (primaryPath ? pcvcSecureFileUrl(primaryPath, true) : "");
     const fileName = primaryPath ? primaryPath.split("/").pop() : "";
 
     const div = document.createElement("div");
@@ -1476,7 +1490,7 @@ function buildDocumentAdminCard(item) {
         : `<span class="text-xs text-amber-700">Not uploaded yet</span>`;
 
     const viewBtn = present
-        ? `<a href="${escapeAttr(primaryPath)}" target="_blank" rel="noopener" class="text-blue-600 text-xs font-semibold hover:underline shrink-0">View</a>`
+        ? `<a href="${escapeAttr(primaryUrl)}" target="_blank" rel="noopener" class="text-blue-600 text-xs font-semibold hover:underline shrink-0">View</a>`
         : "";
 
     const actionLabel = present ? "Replace" : "Upload";

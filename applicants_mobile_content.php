@@ -1,4 +1,8 @@
-<?php foreach($applicants as $applicant): 
+<?php
+if (!function_exists('pcvc_secure_file_url')) {
+    require_once __DIR__ . '/helpers/secure_file.php';
+}
+foreach($applicants as $applicant): 
     // Parse documents
     $documents = [];
     if(!empty($applicant['documents'])) {
@@ -94,10 +98,10 @@
                         </div>
                     </div>
                     <div class="document-mini-actions">
-                        <a href="<?= htmlspecialchars($doc['path']) ?>" class="mini-btn download" download title="Download">
+                        <a href="<?= htmlspecialchars(pcvc_secure_file_url($doc['path'])) ?>" class="mini-btn download" download title="Download">
                             <i class="fas fa-download"></i>
                         </a>
-                        <a href="<?= htmlspecialchars($doc['path']) ?>" class="mini-btn" target="_blank" title="View">
+                        <a href="<?= htmlspecialchars(pcvc_secure_file_url($doc['path'], ['inline' => true])) ?>" class="mini-btn" target="_blank" title="View">
                             <i class="fas fa-eye"></i>
                         </a>
                     </div>

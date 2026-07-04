@@ -5,6 +5,7 @@ require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/includes/payroll_helpers.php';
 require_once __DIR__ . '/includes/momo_phone.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 date_default_timezone_set('Africa/Kigali');
 
 $companyName = PCVC_COMPANY_DISPLAY_NAME;
@@ -1156,7 +1157,7 @@ $payrollDefaultAvatarDataUri = 'data:image/svg+xml,' . rawurlencode(
     <div class="page-header" style="margin-bottom: 12px;">
         <div class="user-info">
             <div class="profile-img-container">
-                <img src="<?= !empty($user_photo) ? 'uploads/' . htmlspecialchars($user_photo) : htmlspecialchars($payrollDefaultAvatarDataUri, ENT_QUOTES, 'UTF-8') ?>"
+                <img src="<?= !empty($user_photo) ? htmlspecialchars(pcvc_profile_photo_url($user_photo)) : htmlspecialchars($payrollDefaultAvatarDataUri, ENT_QUOTES, 'UTF-8') ?>"
                      alt=""
                      class="profile-img"
                      width="44"
@@ -1278,7 +1279,7 @@ $payrollDefaultAvatarDataUri = 'data:image/svg+xml,' . rawurlencode(
                     </label>
                     <?php endif; ?>
                     <div class="profile-img-container">
-                        <img src="<?= !empty($a['photo']) ? 'uploads/' . htmlspecialchars($a['photo']) : htmlspecialchars($payrollDefaultAvatarDataUri, ENT_QUOTES, 'UTF-8') ?>"
+                        <img src="<?= !empty($a['photo']) ? htmlspecialchars(pcvc_profile_photo_url($a['photo'])) : htmlspecialchars($payrollDefaultAvatarDataUri, ENT_QUOTES, 'UTF-8') ?>"
                              alt=""
                              class="profile-img"
                              width="44"

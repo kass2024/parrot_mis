@@ -3,6 +3,7 @@ session_start();
 header('Content-Type: application/json; charset=UTF-8');
 
 require_once dirname(__DIR__) . '/db.php';
+require_once dirname(__DIR__) . '/helpers/secure_file.php';
 
 if (!isset($_SESSION['id']) || ($_SESSION['role'] ?? '') !== 'superadmin') {
     http_response_code(403);
@@ -97,5 +98,5 @@ if ($oldPhoto !== '' && $oldPhoto !== 'default_avatar.png') {
 echo json_encode([
     'ok' => true,
     'photo' => $photoName,
-    'photo_url' => 'uploads/' . $photoName,
+    'photo_url' => pcvc_profile_photo_url($photoName),
 ]);

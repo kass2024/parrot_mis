@@ -3,6 +3,7 @@ session_start();
 // Main database (e.g. student_applications)
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
 
@@ -2406,7 +2407,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <!-- User Profile Dropdown -->
           <div class="dropdown">
             <div class="user-profile-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
-              <img src="uploads/<?= htmlspecialchars($admin['profile_photo'] ?? 'default_avatar.png') ?>" 
+              <img src="<?= htmlspecialchars(pcvc_profile_photo_url($admin['profile_photo'] ?? '')) ?>" 
                    class="user-avatar" alt="Profile">
               <div class="user-info">
                 <div class="user-name"><?= htmlspecialchars($admin['first_name'] . ' ' . $admin['last_name']) ?></div>

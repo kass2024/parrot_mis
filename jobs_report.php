@@ -3,6 +3,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
 /* ===========================================================
    AUTHENTICATION & AUTHORIZATION
@@ -1071,7 +1072,7 @@ $tableColCount = $isSuperAdmin ? 9 : 8;
         <div class="admin-info">
             <?php if (!empty($admin_info['profile_photo'])): ?>
             <div class="profile-img-container">
-                <img src="uploads/<?= htmlspecialchars($admin_info['profile_photo']) ?>" 
+                <img src="<?= htmlspecialchars(pcvc_profile_photo_url($admin_info['profile_photo'] ?? '')) ?>" 
                      alt="Profile" class="profile-img">
             </div>
             <?php else: ?>
