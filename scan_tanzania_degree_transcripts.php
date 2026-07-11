@@ -6,7 +6,7 @@
  * analyze each with Gemini (GEMINI_API_KEY or GOOGLE_AI_API_KEY from .env),
  * and flag documents issued by Tanzanian universities.
  *
- * Usage (browser, admin login required):
+ * Usage (browser):
  *   /scan_tanzania_degree_transcripts.php
  *   /scan_tanzania_degree_transcripts.php?format=json
  *   /scan_tanzania_degree_transcripts.php?limit=20&only_tanzania=1
@@ -30,24 +30,6 @@ const TANZANIA_SCAN_LOG = __DIR__ . '/logs/tanzania_degree_scan.log';
 function tanzania_scan_is_cli(): bool
 {
     return PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg';
-}
-
-function tanzania_scan_require_admin(): void
-{
-    if (tanzania_scan_is_cli()) {
-        return;
-    }
-
-    if (session_status() !== PHP_SESSION_ACTIVE) {
-        session_start();
-    }
-
-    if (empty($_SESSION['admin_id'])) {
-        http_response_code(403);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo 'Admin login required.';
-        exit;
-    }
 }
 
 /** @return array<string, mixed> */
@@ -460,7 +442,6 @@ a{color:#2563eb}
 
 // ── Main ──────────────────────────────────────────────────────────────────
 
-tanzania_scan_require_admin();
 $options = tanzania_scan_options();
 
 if (!pcvc_docvision_is_configured()) {
