@@ -1517,14 +1517,15 @@ button {
 </h3>
 
 <!-- ============================
-     SIGNATURE GRID - 2x2 LAYOUT
-     Row 1: Managing Director | Kigali
-     Row 2: Musanze | Student
+     MANAGING DIRECTOR (TOP ONLY)
 ============================ -->
-<div class="signature-grid">
-
-<!-- MANAGING DIRECTOR -->
-<div class="signature-block managing-director-block">
+<div class="managing-director-block" style="
+margin-bottom:32px;
+padding:20px;
+border:1px solid #e5e7eb;
+border-radius:12px;
+background:#fafafa;
+">
 <p style="font-weight:700;margin-bottom:18px;font-size:16px;">
 Company Managing Director
 </p>
@@ -1562,6 +1563,11 @@ Managing Director
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 </div>
+
+<!-- ============================
+     SIGNATURE GRID - KIGALI | MUSANZE
+============================ -->
+<div class="signature-grid">
 
 <!-- COMPANY REPRESENTATIVE – KIGALI OFFICE -->
 <div class="signature-block">
@@ -1620,10 +1626,22 @@ Company representative Musanze Office
 
 </div>
 
+</div> <!-- End signature grid -->
 
-<!-- FOR THE STUDENT -->
-<div class="signature-block student-signature-block">
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
+
+<!-- ============================
+     STUDENT SIGNATURE - CENTERED
+============================ -->
+<div style="
+max-width:500px;
+margin:40px auto 0;
+padding:20px;
+background:#f9fafb;
+border-radius:12px;
+border:1px solid #e5e7eb;
+">
+
+<p style="font-weight:700;margin-bottom:20px;font-size:18px;text-align:center;">
 For the Student
 </p>
 
@@ -1691,8 +1709,6 @@ transition:border-color 0.2s ease;
 </div>
 
 </div>
-
-</div> <!-- End signature grid -->
 
 </div>
   <!-- FOOTER REF -->

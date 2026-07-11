@@ -1495,66 +1495,45 @@ button {
     15. SIGNATURES
   </h3>
 
+  <!-- MANAGING DIRECTOR (TOP ONLY) -->
+  <div class="managing-director-block" style="
+    margin-bottom:28px;
+    padding:18px;
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    background:#fafafa;
+  ">
+    <p style="font-weight:700;margin-bottom:10px;">
+      Company Managing Director
+    </p>
+
+    <p>Name:</p>
+    <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
+      Dr. TWAJAMAHORO JEAN PIEERE
+    </div>
+
+    <p>Position:</p>
+    <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
+      Managing Director
+    </div>
+
+    <p style="margin-top:16px;">Signature:</p>
+    <div style="margin-bottom:12px;">
+      <img src="admin/signature-manager.png" alt="Managing Director Signature" style="max-height:70px;max-width:280px;display:block;">
+    </div>
+
+    <p>Company Stamp:</p>
+    <div style="margin-bottom:12px;">
+      <img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
+    </div>
+
+    <p>Date: ______________________________</p>
+  </div>
+
   <!-- TWO-COLUMN WORD-LIKE LAYOUT -->
   <div class="signatures-layout">
 
-    <!-- LEFT COLUMN: MANAGING DIRECTOR + MUSANZE -->
-    <div>
-
-      <!-- MANAGING DIRECTOR -->
-      <div class="managing-director-block">
-        <p style="font-weight:700;margin-bottom:10px;">
-          Company Managing Director
-        </p>
-
-        <p>Name:</p>
-        <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
-          Dr. TWAJAMAHORO JEAN PIEERE
-        </div>
-
-        <p>Position:</p>
-        <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
-          Managing Director
-        </div>
-
-        <p style="margin-top:16px;">Signature:</p>
-        <div style="margin-bottom:12px;">
-          <img src="admin/signature-manager.png" alt="Managing Director Signature" style="max-height:70px;max-width:280px;display:block;">
-        </div>
-
-        <p>Company Stamp:</p>
-        <div style="margin-bottom:12px;">
-          <img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
-        </div>
-
-        <p>Date: ______________________________</p>
-      </div>
-
-      <div style="height:28px;"></div>
-
-      <!-- MUSANZE OFFICE -->
-      <p style="font-weight:700;margin-bottom:8px;">
-        Company representative Musanze Office
-      </p>
-
-      <p>Name:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
-
-      <p>Position:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
-
-      <p style="margin-top:16px;">Signature:</p>
-      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
-
-      <p>Date: ____________________________</p>
-
-    </div>
-
-
-    <!-- VERTICAL DIVIDER -->
-    <div class="signatures-divider" aria-hidden="true"></div>
-
-    <!-- RIGHT COLUMN: KIGALI + STUDENT -->
+    <!-- LEFT COLUMN: KIGALI + STUDENT -->
     <div>
 
       <!-- KIGALI OFFICE -->
@@ -1640,6 +1619,31 @@ button {
     </div>
   </div>
   <?php endif; ?>
+
+</div>
+
+
+    <!-- VERTICAL DIVIDER -->
+    <div class="signatures-divider" aria-hidden="true"></div>
+
+    <!-- RIGHT COLUMN: MUSANZE -->
+    <div>
+
+      <!-- MUSANZE OFFICE -->
+      <p style="font-weight:700;margin-bottom:8px;">
+        Company representative Musanze Office
+      </p>
+
+      <p>Name:</p>
+      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+
+      <p>Position:</p>
+      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+
+      <p style="margin-top:16px;">Signature:</p>
+      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
+
+      <p>Date: ____________________________</p>
 
     </div>
 

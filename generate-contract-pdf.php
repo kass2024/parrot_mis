@@ -902,11 +902,9 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 
 <table style="width:100%; border-collapse:collapse;">
 
-<!-- ================= ROW 1: MANAGING DIRECTOR | KIGALI ================= -->
+<!-- ================= ROW 0 – MANAGING DIRECTOR (TOP ONLY) ================= -->
 <tr>
-
-<!-- MANAGING DIRECTOR -->
-<td style="padding:10px 12px; vertical-align:top; width:50%;" class="managing-director-block">
+<td colspan="2" style="padding:10px 12px; vertical-align:top;" class="managing-director-block">
 
 <strong>Company Managing Director</strong><br><br>
 
@@ -927,6 +925,10 @@ Company Stamp:<br>
 Date: ___________________________
 
 </td>
+</tr>
+
+<!-- ================= ROW 1: KIGALI | MUSANZE ================= -->
+<tr>
 
 <!-- KIGALI OFFICE -->
 <td style="padding:10px 12px; vertical-align:top; width:50%;">
@@ -944,12 +946,6 @@ Date: ___________________________
 
 </td>
 
-</tr>
-
-
-<!-- ================= ROW 2: MUSANZE | STUDENT ================= -->
-<tr>
-
 <!-- MUSANZE OFFICE -->
 <td style="padding:10px 12px; vertical-align:top; width:50%;">
 
@@ -966,12 +962,18 @@ Date: ___________________________
 
 </td>
 
+</tr>
+
+
+<!-- ================= ROW 2: STUDENT ================= -->
+<tr>
+
 <!-- STUDENT -->
-<td style="padding:10px 12px; vertical-align:top; width:50%;">
+<td colspan="2" style="padding:12px; text-align:left;">
 
 <strong>For the Student</strong><br><br>
 
-Name: <?= esc($data['full_name']) ?><br><br>
+Name: <?= esc($data['full_name']) ?><br>
 
 Signature:<br>
 

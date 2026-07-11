@@ -697,7 +697,7 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 
 <table border="1">
 <tr>
-<td>
+<td colspan="2">
 <strong>Company Managing Director</strong><br><br>
 Name: Dr. TWAJAMAHORO JEAN PIEERE<br><br>
 Position: Managing Director<br><br>
@@ -711,9 +711,20 @@ Company Stamp:<br>
 </div><br>
 Date: ___________________________
 </td>
-
+</tr>
+<tr>
 <td>
 <strong>Company representative Kigali office</strong><br><br>
+Name: ___________________________<br><br>
+Position: ___________________________<br><br>
+
+<div class="signature-box"></div>
+
+Date: ___________________________
+</td>
+
+<td>
+<strong>Company representative Musanze Office</strong><br><br>
 Name: ___________________________<br><br>
 Position: ___________________________<br><br>
 
@@ -724,17 +735,7 @@ Date: ___________________________
 </tr>
 
 <tr>
-<td>
-<strong>Company representative Musanze Office</strong><br><br>
-Name: ___________________________<br><br>
-Position: ___________________________<br><br>
-
-<div class="signature-box"></div>
-
-Date: ___________________________
-</td>
-
-<td>
+<td colspan="2">
 <strong>For the Student</strong><br>
 Name: <?= esc($data['full_name']) ?>
 
