@@ -392,13 +392,19 @@ $stmt = $conn->prepare("
             : $studentSignature;
     }
 
-    $consultantSigPath = __DIR__ . '/admin/signature-manager.png';
-    if (!file_exists($consultantSigPath)) {
-        throw new RuntimeException('Consultant signature missing.');
+    $managerSigPath = __DIR__ . '/admin/signature-manager.png';
+    $companyStampPath = __DIR__ . '/admin/employer-signature.png';
+    if (!file_exists($managerSigPath)) {
+        throw new RuntimeException('Managing director signature missing.');
+    }
+    if (!file_exists($companyStampPath)) {
+        throw new RuntimeException('Company stamp missing.');
     }
 
-    $consultantSignature =
-        'data:image/png;base64,' . base64_encode(file_get_contents($consultantSigPath));
+    $managerSignature =
+        'data:image/png;base64,' . base64_encode(file_get_contents($managerSigPath));
+    $companyStamp =
+        'data:image/png;base64,' . base64_encode(file_get_contents($companyStampPath));
 
     /* =====================================================
        3. ARTICLE 7 – SELECTED PACKAGE
@@ -571,6 +577,21 @@ a {
 .signatures-section tr,
 .signatures-section td {
     page-break-inside: avoid;
+}
+
+.managing-director-block {
+    margin-bottom: 18pt;
+    page-break-inside: avoid;
+}
+
+.managing-director-block .manager-signature img {
+    max-height: 52pt;
+    max-width: 240pt;
+}
+
+.managing-director-block .company-stamp img {
+    max-height: 110pt;
+    max-width: 280pt;
 }
 
 .pricing-block {
@@ -881,6 +902,31 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 
 <table style="width:100%; border-collapse:collapse;">
 
+<!-- ================= ROW 0 – MANAGING DIRECTOR ================= -->
+<tr>
+<td colspan="2" style="padding:10px 12px; vertical-align:top;" class="managing-director-block">
+
+<strong>Company Managing Director</strong><br><br>
+
+Name: TWAJAMAHORO JEAN PIEERE<br><br>
+
+Position: Managing Director<br><br>
+
+Signature:<br>
+<div class="manager-signature" style="border-bottom:1px solid #000; min-height:54pt; width:72%; padding-top:2pt;">
+<img src="<?= $managerSignature ?>" alt="Managing Director Signature">
+</div><br>
+
+Company Stamp:<br>
+<div class="company-stamp" style="min-height:112pt; width:72%; padding-top:4pt;">
+<img src="<?= $companyStamp ?>" alt="Company Stamp">
+</div><br>
+
+Date: ___________________________
+
+</td>
+</tr>
+
 <!-- ================= ROW 1 ================= -->
 <tr>
 
@@ -921,28 +967,6 @@ Date: ___________________________
 
 
 <!-- ================= ROW 2 ================= -->
-<tr>
-
-<!-- NOTARY -->
-<td style="padding:10px 12px; vertical-align:top; width:50%;">
-
-<strong>For the Notary</strong><br><br>
-
-Name: ___________________________<br><br>
-
-Signature:<br>
-<div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
-
-Date: ___________________________
-
-</td>
-
-<td style="padding:10px 12px; vertical-align:top; width:50%;"></td>
-
-</tr>
-
-
-<!-- ================= ROW 3 ================= -->
 <tr>
 
 <!-- STUDENT -->

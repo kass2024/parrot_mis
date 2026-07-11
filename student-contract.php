@@ -1517,6 +1517,54 @@ button {
 </h3>
 
 <!-- ============================
+     MANAGING DIRECTOR
+============================ -->
+<div class="managing-director-block" style="
+margin-bottom:32px;
+padding:20px;
+border:1px solid #e5e7eb;
+border-radius:12px;
+background:#fafafa;
+">
+<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
+Company Managing Director
+</p>
+
+<div style="margin-bottom:18px;">
+<strong>Name:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
+TWAJAMAHORO JEAN PIEERE
+</div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Position:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
+Managing Director
+</div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Signature:</strong>
+<div style="margin-top:6px;width:85%;">
+<img src="admin/signature-manager.png" alt="Managing Director Signature" style="max-height:70px;max-width:280px;display:block;">
+</div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Company Stamp:</strong>
+<div style="margin-top:6px;width:85%;">
+<img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
+</div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Date:</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+</div>
+</div>
+
+<!-- ============================
      SIGNATURE GRID - MOBILE FIRST
 ============================ -->
 <div class="signature-grid">
@@ -1569,30 +1617,6 @@ Company representative Musanze Office
 <div style="margin-bottom:18px;">
 <strong>Signature:</strong>
 <div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Date:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-</div>
-
-
-<!-- NOTARY -->
-<div class="signature-block">
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
-For the Notary
-</p>
-
-<div style="margin-bottom:18px;">
-<strong>Name:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Signature:</strong>
-<div style="border-bottom:1px solid #000;height:45px;width:85%;margin-top:6px;"></div>
 </div>
 
 <div style="margin-bottom:18px;">

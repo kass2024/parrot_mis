@@ -292,13 +292,19 @@ $stmt = $conn->prepare("
         $studentSignature = 'data:image/png;base64,' . base64_encode($normalizedPng);
     }
 
-    $consultantSigPath = __DIR__ . '/admin/signature-manager.png';
-    if (!file_exists($consultantSigPath)) {
-        throw new RuntimeException('Consultant signature missing.');
+    $managerSigPath = __DIR__ . '/admin/signature-manager.png';
+    $companyStampPath = __DIR__ . '/admin/employer-signature.png';
+    if (!file_exists($managerSigPath)) {
+        throw new RuntimeException('Managing director signature missing.');
+    }
+    if (!file_exists($companyStampPath)) {
+        throw new RuntimeException('Company stamp missing.');
     }
 
-    $consultantSignature =
-        'data:image/png;base64,' . base64_encode(file_get_contents($consultantSigPath));
+    $managerSignature =
+        'data:image/png;base64,' . base64_encode(file_get_contents($managerSigPath));
+    $companyStamp =
+        'data:image/png;base64,' . base64_encode(file_get_contents($companyStampPath));
 
     /* =====================================================
        3. ARTICLE 7 – SELECTED PACKAGE
@@ -691,6 +697,22 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 
 <table border="1">
 <tr>
+<td colspan="2">
+<strong>Company Managing Director</strong><br><br>
+Name: TWAJAMAHORO JEAN PIEERE<br><br>
+Position: Managing Director<br><br>
+Signature:<br>
+<div class="signature-box">
+    <img src="<?= $managerSignature ?>" alt="Managing Director Signature" style="max-height:52pt;max-width:240pt;">
+</div><br>
+Company Stamp:<br>
+<div class="signature-box" style="min-height:112pt;">
+    <img src="<?= $companyStamp ?>" alt="Company Stamp" style="max-height:110pt;max-width:280pt;">
+</div><br>
+Date: ___________________________
+</td>
+</tr>
+<tr>
 <td>
 <strong>Company representative Kigali office</strong><br><br>
 Name: ___________________________<br><br>
@@ -724,12 +746,7 @@ Name: <?= esc($data['full_name']) ?>
 Date: <?= esc($data['signed_date']) ?>
 </td>
 
-<td>
-<strong>For the Notary</strong><br><br>
-Name: ___________________________<br>
-Signature: ______________________<br>
-Date: ___________________________
-</td>
+<td></td>
 </tr>
 </table>
 

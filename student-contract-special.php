@@ -1495,6 +1495,41 @@ button {
     15. SIGNATURES
   </h3>
 
+  <!-- MANAGING DIRECTOR -->
+  <div class="managing-director-block" style="
+    margin-bottom:28px;
+    padding:18px;
+    border:1px solid #e5e7eb;
+    border-radius:12px;
+    background:#fafafa;
+  ">
+    <p style="font-weight:700;margin-bottom:10px;">
+      Company Managing Director
+    </p>
+
+    <p>Name:</p>
+    <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
+      TWAJAMAHORO JEAN PIEERE
+    </div>
+
+    <p>Position:</p>
+    <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
+      Managing Director
+    </div>
+
+    <p style="margin-top:16px;">Signature:</p>
+    <div style="margin-bottom:12px;">
+      <img src="admin/signature-manager.png" alt="Managing Director Signature" style="max-height:70px;max-width:280px;display:block;">
+    </div>
+
+    <p>Company Stamp:</p>
+    <div style="margin-bottom:12px;">
+      <img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
+    </div>
+
+    <p>Date: ______________________________</p>
+  </div>
+
   <!-- TWO-COLUMN WORD-LIKE LAYOUT -->
   <div class="signatures-layout">
 
@@ -1618,25 +1653,6 @@ button {
 
       <p style="margin-top:16px;">Signature:</p>
       <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
-
-      <p>Date: ____________________________</p>
-
-      <!-- SPACING -->
-      <div style="height:36px;"></div>
-
-      <!-- NOTARY -->
-      <p style="font-weight:700;margin-bottom:8px;">
-        For the Notary
-      </p>
-
-      <p>Name:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
-
-      <p>Phone:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:14px;"></div>
-
-      <p>Signature:</p>
-      <div style="border-bottom:1px solid #000;height:38px;margin-bottom:8px;"></div>
 
       <p>Date: ____________________________</p>
 
