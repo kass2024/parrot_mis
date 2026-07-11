@@ -7,9 +7,9 @@
  * and flag documents issued by Tanzanian universities.
  *
  * Usage (browser):
- *   /scan_tanzania_degree_transcripts.php
- *   /scan_tanzania_degree_transcripts.php?format=json
- *   /scan_tanzania_degree_transcripts.php?limit=20&only_tanzania=1
+ *   /scan_tanzania_degree_transcripts.php              ← safe preview (no Gemini calls)
+ *   /scan_tanzania_degree_transcripts.php?run=1&limit=10
+ *   /scan_tanzania_degree_transcripts.php?format=json&dry_run=1
  *
  * Usage (CLI):
  *   php scan_tanzania_degree_transcripts.php
@@ -26,6 +26,8 @@ require_once __DIR__ . '/helpers/document_vision_gemini.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 
 const TANZANIA_SCAN_LOG = __DIR__ . '/logs/tanzania_degree_scan.log';
+const TANZANIA_SCAN_DEFAULT_LIMIT = 10;
+const TANZANIA_SCAN_MAX_LIMIT = 30;
 
 function tanzania_scan_is_cli(): bool
 {
@@ -36,24 +38,43 @@ function tanzania_scan_is_cli(): bool
 function tanzania_scan_options(): array
 {
     if (tanzania_scan_is_cli()) {
-        $opts = getopt('', ['limit:', 'only-tanzania', 'format:', 'application-id:', 'source-table:', 'dry-run']);
+        $opts = getopt('', ['limit:', 'only-tanzania', 'format:', 'application-id:', 'source-table:', 'dry-run', 'run']);
+        $dryRun = array_key_exists('dry-run', $opts);
+        if (!$dryRun && !array_key_exists('run', $opts)) {
+            $dryRun = true;
+        }
+        $limit = isset($opts['limit']) ? max(1, min(TANZANIA_SCAN_MAX_LIMIT, (int) $opts['limit'])) : TANZANIA_SCAN_DEFAULT_LIMIT;
+        if ($dryRun) {
+            $limit = isset($opts['limit']) ? max(1, (int) $opts['limit']) : 0;
+        }
         return [
-            'limit'          => isset($opts['limit']) ? max(1, (int) $opts['limit']) : 0,
+            'limit'          => $limit,
             'only_tanzania'  => array_key_exists('only-tanzania', $opts),
             'format'         => (string) ($opts['format'] ?? 'html'),
             'application_id' => isset($opts['application-id']) ? (int) $opts['application-id'] : 0,
             'source_table'   => trim((string) ($opts['source-table'] ?? '')),
-            'dry_run'        => array_key_exists('dry-run', $opts),
+            'dry_run'        => $dryRun,
+            'run'            => !$dryRun,
+            'total_found'    => 0,
         ];
     }
 
+    $run = !empty($_GET['run']);
+    $dryRun = !$run || !empty($_GET['dry_run']);
+    $limit = isset($_GET['limit']) ? max(1, min(TANZANIA_SCAN_MAX_LIMIT, (int) $_GET['limit'])) : TANZANIA_SCAN_DEFAULT_LIMIT;
+    if ($dryRun && !isset($_GET['limit'])) {
+        $limit = 50;
+    }
+
     return [
-        'limit'          => isset($_GET['limit']) ? max(1, (int) $_GET['limit']) : 0,
+        'limit'          => $limit,
         'only_tanzania'  => !empty($_GET['only_tanzania']),
         'format'         => strtolower(trim((string) ($_GET['format'] ?? 'html'))),
         'application_id' => isset($_GET['application_id']) ? (int) $_GET['application_id'] : 0,
         'source_table'   => trim((string) ($_GET['source_table'] ?? '')),
-        'dry_run'        => !empty($_GET['dry_run']),
+        'dry_run'        => $dryRun,
+        'run'            => $run && !$dryRun,
+        'total_found'    => 0,
     ];
 }
 
@@ -361,12 +382,39 @@ th{background:#f1f5f9;font-size:12px;text-transform:uppercase;letter-spacing:.03
 .err{color:#b91c1c;font-size:12px}
 .summary{max-width:320px;line-height:1.45}
 a{color:#2563eb}
+.notice{background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:14px 16px;margin-bottom:20px;font-size:14px;line-height:1.5}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px}
+.actions a{display:inline-block;background:#2563eb;color:#fff;padding:10px 14px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600}
+.actions a.secondary{background:#64748b}
 </style>
 </head>
 <body>
 <h1>Tanzania university degree &amp; transcript scan</h1>
 <p class="meta">Gemini model: <?= htmlspecialchars((string) ($report['model'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
  · Scanned at <?= htmlspecialchars((string) ($report['scanned_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
+
+<?php if (!empty($report['options']['dry_run'])): ?>
+<div class="notice">
+  <strong>Preview mode.</strong> No Gemini API calls were made (safe for the server).
+  Found <?= (int) ($report['stats']['total_in_db'] ?? 0) ?> document(s) in the database.
+  Use the buttons below to analyze a small batch only.
+</div>
+<div class="actions">
+  <a href="?run=1&limit=10">Analyze 10 with Gemini</a>
+  <a href="?run=1&limit=20">Analyze 20 with Gemini</a>
+  <a href="?run=1&limit=10&only_tanzania=1">Analyze 10 (Tanzania only)</a>
+  <a class="secondary" href="/">Back to MIS home</a>
+</div>
+<?php else: ?>
+<div class="notice">
+  Gemini analysis ran on <?= (int) ($report['stats']['analyzed'] ?? 0) ?> file(s)
+  (limit <?= (int) ($report['options']['limit'] ?? 0) ?>).
+</div>
+<div class="actions">
+  <a class="secondary" href="?">Back to safe preview</a>
+  <a class="secondary" href="/">MIS home</a>
+</div>
+<?php endif; ?>
 
 <div class="stats">
   <div class="stat"><strong><?= (int) ($stats['total'] ?? 0) ?></strong>Documents found</div>
@@ -465,6 +513,9 @@ try {
     exit(1);
 }
 
+$totalInDb = count($catalog);
+$options['total_found'] = $totalInDb;
+
 if ($options['limit'] > 0) {
     $catalog = array_slice($catalog, 0, $options['limit']);
 }
@@ -472,6 +523,7 @@ if ($options['limit'] > 0) {
 $results = [];
 $stats = [
     'total'            => count($catalog),
+    'total_in_db'      => $totalInDb,
     'analyzed'         => 0,
     'tanzania_matches' => 0,
     'errors'           => 0,
