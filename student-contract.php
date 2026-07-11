@@ -1517,15 +1517,14 @@ button {
 </h3>
 
 <!-- ============================
-     MANAGING DIRECTOR
+     SIGNATURE GRID - 2x2 LAYOUT
+     Row 1: Managing Director | Kigali
+     Row 2: Musanze | Student
 ============================ -->
-<div class="managing-director-block" style="
-margin-bottom:32px;
-padding:20px;
-border:1px solid #e5e7eb;
-border-radius:12px;
-background:#fafafa;
-">
+<div class="signature-grid">
+
+<!-- MANAGING DIRECTOR -->
+<div class="signature-block managing-director-block">
 <p style="font-weight:700;margin-bottom:18px;font-size:16px;">
 Company Managing Director
 </p>
@@ -1533,7 +1532,7 @@ Company Managing Director
 <div style="margin-bottom:18px;">
 <strong>Name:</strong>
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
-TWAJAMAHORO JEAN PIEERE
+Dr. TWAJAMAHORO JEAN PIEERE
 </div>
 </div>
 
@@ -1563,11 +1562,6 @@ Managing Director
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 </div>
-
-<!-- ============================
-     SIGNATURE GRID - MOBILE FIRST
-============================ -->
-<div class="signature-grid">
 
 <!-- COMPANY REPRESENTATIVE – KIGALI OFFICE -->
 <div class="signature-block">
@@ -1626,22 +1620,10 @@ Company representative Musanze Office
 
 </div>
 
-</div> <!-- End signature grid -->
 
-
-<!-- ============================
-     STUDENT SIGNATURE - CENTERED
-============================ -->
-<div style="
-max-width:500px;
-margin:40px auto 0;
-padding:20px;
-background:#f9fafb;
-border-radius:12px;
-border:1px solid #e5e7eb;
-">
-
-<p style="font-weight:700;margin-bottom:20px;font-size:18px;text-align:center;">
+<!-- FOR THE STUDENT -->
+<div class="signature-block student-signature-block">
+<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
 For the Student
 </p>
 
@@ -1709,6 +1691,8 @@ transition:border-color 0.2s ease;
 </div>
 
 </div>
+
+</div> <!-- End signature grid -->
 
 </div>
   <!-- FOOTER REF -->
