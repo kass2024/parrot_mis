@@ -94,25 +94,29 @@ function tanzania_scan_log(string $message): void
 function tanzania_scan_system_prompt(): string
 {
     return <<<'PROMPT'
-You are an academic document analyst for university admissions screening in East Africa.
+You are an OCR and document analyst for university admissions in East Africa.
 
-Analyze the uploaded document and determine whether it is a degree certificate, diploma, or academic transcript,
-and whether it was issued by a university or college in Tanzania (United Republic of Tanzania).
+IMPORTANT: Perform full OCR on every page/image/PDF, including scanned documents, CamScanner exports, and photos.
+Read stamps, seals, letterheads, footers, watermarks, and small print.
 
-Known Tanzanian institutions include (not exhaustive):
-University of Dar es Salaam (UDSM), University of Dodoma (UDOM), Sokoine University of Agriculture (SUA),
-Ardhi University, Muhimbili University of Health and Allied Sciences, Open University of Tanzania,
-Nelson Mandela African Institution of Science and Technology (NM-AIST), State University of Zanzibar (SUZA),
-Catholic University of Health and Allied Sciences (CUHAS), Hubert Kairuki Memorial University,
-St. Augustine University of Tanzania, University of Iringa, Teofilo Kisanji University, etc.
+Determine whether the document is a degree certificate, diploma, academic transcript, or other document,
+and whether it contains ANY connection to Tanzania (United Republic of Tanzania).
 
-Use visible text, logos, seals, letterheads, Swahili/English wording, cities (Dar es Salaam, Dodoma, Morogoro, etc.),
-and "United Republic of Tanzania" references. Do NOT require online verification.
+Mark is_tanzania_related=true if ANY of these appear (visible or OCR):
+- Country: Tanzania, Tanzanian, United Republic of Tanzania, Jamhuri ya Muungano wa Tanzania
+- Cities: Dar es Salaam, Dodoma, Arusha, Mwanza, Mbeya, Morogoro, Tanga, Zanzibar, Moshi, Iringa, etc.
+- Phone: +255, 255..., or Tanzanian mobile/landline formats (e.g. 071x, 075x, 078x)
+- Email/website domains: .tz, .ac.tz, .go.tz, .co.tz (e.g. udsm.ac.tz, dudoma.ac.tz)
+- Tanzanian universities: UDSM, UDOM, SUA, Ardhi, Muhimbili, OUT, NM-AIST, SUZA, CUHAS, etc.
+- Swahili institutional wording on official academic documents
 
-Return ONLY valid JSON with this exact schema:
+is_tanzania_university=true only when the issuing institution is clearly a Tanzanian university/college.
+
+Return ONLY valid JSON:
 {
   "is_degree_or_transcript": true or false,
   "document_type": "degree|transcript|diploma|certificate|other",
+  "is_tanzania_related": true or false,
   "is_tanzania_university": true or false,
   "university_name": "",
   "university_city": "",
@@ -120,6 +124,11 @@ Return ONLY valid JSON with this exact schema:
   "student_name": "",
   "program_or_degree": "",
   "graduation_or_issue_date": "",
+  "tanzania_cities_found": [],
+  "tanzania_phones_found": [],
+  "tanzania_domains_found": [],
+  "tanzania_other_signals": [],
+  "ocr_used": true or false,
   "appears_authentic": true or false,
   "confidence": 0.0,
   "summary": "",
@@ -130,7 +139,132 @@ PROMPT;
 
 function tanzania_scan_user_instruction(): string
 {
-    return 'Classify this document. If it is not a university degree or academic transcript, set is_degree_or_transcript=false and is_tanzania_university=false.';
+    return <<<'TXT'
+Analyze this uploaded document with full OCR (including scanned PDFs and images).
+Extract all visible text and classify the document.
+List every Tanzania city, +255 phone number, .tz domain, or Tanzania country/university reference you find.
+If the document is scanned or image-based, rely on visual OCR — do not assume missing text means absent information.
+TXT;
+}
+
+/** @return array<int, string> */
+function tanzania_scan_signal_patterns(): array
+{
+    return [
+        'country'  => '/\b(?:United Republic of)?\s*Tanzania\b|\bTanzanian\b|\bJamhuri ya Muungano wa Tanzania\b/i',
+        'phone'    => '/(?:\+?255|(?<!\d)0)(?:[67]\d{8}|[2-9]\d{7,8})\b/',
+        'domain'   => '/\b[a-z0-9][a-z0-9.-]*\.(?:ac|go|or|co|ne)\.tz\b/i',
+        'city_dsm' => '/\bDar(?:\s+es|\s+)?Salaam\b/i',
+        'city'     => '/\b(?:Dodoma|Arusha|Mwanza|Mbeya|Morogoro|Tanga|Zanzibar|Moshi|Iringa|Dodoma|Musoma|Kigoma|Singida|Tabora|Lindi|Mtwara|Shinyanga|Bukoba|Sumbawanga)\b/i',
+        'univ'     => '/\b(?:University of Dar es Salaam|UDSM|University of Dodoma|UDOM|Sokoine|Muhimbili|Ardhi University|OUT|Open University of Tanzania|NM-AIST|SUZA|CUHAS|Teofilo Kisanji|St\.?\s*Augustine University of Tanzania)\b/i',
+    ];
+}
+
+/**
+ * Local text heuristics (filename + extracted text) — works without Gemini.
+ *
+ * @return array{is_tanzania_related:bool,signals:array<int,string>,text_sample:string}
+ */
+function tanzania_scan_local_signals(string $absPath, string $fileName): array
+{
+    if ($absPath === '' || !is_file($absPath)) {
+        return ['is_tanzania_related' => false, 'signals' => [], 'text_sample' => ''];
+    }
+
+    $blob = $fileName . "\n";
+    $ext = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));
+
+    if ($ext === 'pdf') {
+        $blob .= pcvc_docvision_pdf_extract_text($absPath);
+    } elseif ($ext === 'docx') {
+        $zip = new ZipArchive();
+        if ($zip->open($absPath) === true) {
+            $xml = $zip->getFromName('word/document.xml');
+            $zip->close();
+            if ($xml) {
+                $blob .= trim((string) preg_replace('/\s+/u', ' ', strip_tags($xml)));
+            }
+        }
+    }
+
+    $signals = [];
+    foreach (tanzania_scan_signal_patterns() as $label => $pattern) {
+        if (preg_match($pattern, $blob)) {
+            $signals[] = $label;
+        }
+    }
+
+    $isScannedHint = preg_match('/camscanner|scan/i', $fileName) === 1;
+    if ($isScannedHint) {
+        $signals[] = 'likely_scanned';
+    }
+
+    $tzSignals = array_values(array_filter($signals, static fn ($s) => $s !== 'likely_scanned'));
+
+    return [
+        'is_tanzania_related' => $tzSignals !== [],
+        'signals'             => array_values(array_unique($signals)),
+        'text_sample'         => mb_substr(trim($blob), 0, 400, 'UTF-8'),
+        'likely_scanned'      => $isScannedHint,
+    ];
+}
+
+/**
+ * Always send document to Gemini with vision/OCR (never text-only shortcut).
+ *
+ * @return array<int, array<string, string>>
+ */
+function tanzania_scan_build_ocr_content(string $absPath, string $fileName, array &$cleanup): array
+{
+    $header = "File name: {$fileName}\n" . tanzania_scan_user_instruction();
+    $blocks = [['type' => 'input_text', 'text' => $header]];
+
+    $local = tanzania_scan_local_signals($absPath, $fileName);
+    if ($local['signals'] !== []) {
+        $blocks[0]['text'] .= "\n\nLocal pre-scan hints (verify visually): " . implode(', ', $local['signals']);
+    }
+    if ($local['text_sample'] !== '') {
+        $blocks[0]['text'] .= "\n\nExtracted text sample:\n" . $local['text_sample'];
+    }
+
+    $ext = strtolower(pathinfo($absPath, PATHINFO_EXTENSION));
+    $maxPages = 6;
+    $dpi = 200;
+
+    if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'tif', 'tiff'], true)) {
+        return array_merge($blocks, pcvc_docvision_build_document_content($absPath, $fileName, $cleanup, 1, $dpi));
+    }
+
+    if ($ext === 'pdf') {
+        $extracted = pcvc_docvision_pdf_extract_text($absPath);
+        $isScanned = pcvc_docvision_is_scanned_pdf($absPath)
+            || preg_match('/camscanner|scan/i', $fileName)
+            || mb_strlen(trim($extracted), 'UTF-8') < 80;
+
+        if ($isScanned) {
+            return array_merge(
+                $blocks,
+                pcvc_docvision_build_document_content($absPath, $fileName, $cleanup, $maxPages, $dpi)
+            );
+        }
+
+        $pdfData = @file_get_contents($absPath);
+        if ($pdfData !== false && $pdfData !== '') {
+            $blocks[] = [
+                'type' => 'input_pdf',
+                'mime' => 'application/pdf',
+                'data' => base64_encode($pdfData),
+            ];
+        }
+
+        return $blocks;
+    }
+
+    if ($ext === 'docx') {
+        return array_merge($blocks, pcvc_docvision_build_document_content($absPath, $fileName, $cleanup, 1, $dpi));
+    }
+
+    throw new RuntimeException('Unsupported file type for OCR.');
 }
 
 function tanzania_scan_resolve_abs_path(string $storedPath): ?string
@@ -295,23 +429,23 @@ function tanzania_scan_analyze_one(array $item): array
     }
 
     $cleanup = [];
+    $localSignals = tanzania_scan_local_signals($abs, basename($abs));
     try {
-        $userContent = pcvc_docvision_build_analysis_content(
-            $abs,
-            basename($abs),
-            $cleanup,
-            tanzania_scan_user_instruction(),
-            '',
-            4,
-            168
-        );
+        $userContent = tanzania_scan_build_ocr_content($abs, basename($abs), $cleanup);
 
-        $result = pcvc_docvision_generate_json(tanzania_scan_system_prompt(), $userContent, 2, 600, 0.0);
+        $result = pcvc_docvision_generate_json(
+            tanzania_scan_system_prompt(),
+            $userContent,
+            3,
+            800,
+            0.0
+        );
     } catch (Throwable $e) {
         return [
-            'ok'    => false,
-            'error' => $e->getMessage(),
-            'item'  => $item,
+            'ok'            => false,
+            'error'         => $e->getMessage(),
+            'item'          => $item,
+            'local_signals' => $localSignals,
         ];
     } finally {
         foreach ($cleanup as $path) {
@@ -325,20 +459,28 @@ function tanzania_scan_analyze_one(array $item): array
 
     if (!empty($result['error'])) {
         return [
-            'ok'    => false,
-            'error' => (string) ($result['error']['message'] ?? 'Gemini error'),
-            'item'  => $item,
+            'ok'            => false,
+            'error'         => (string) ($result['error']['message'] ?? 'Gemini error'),
+            'item'          => $item,
+            'local_signals' => $localSignals,
+            'raw_text'      => (string) ($result['raw_text'] ?? ''),
         ];
     }
 
     $json = is_array($result['json'] ?? null) ? $result['json'] : [];
+    if ($json === [] && !empty($result['raw_text'])) {
+        $json = pcvc_docvision_decode_json((string) $result['raw_text']);
+    }
+
+    $json = tanzania_scan_merge_analysis($json, $localSignals);
 
     return [
-        'ok'       => true,
-        'item'     => $item,
-        'analysis' => $json,
-        'model'    => pcvc_docvision_model(),
-        'file'     => [
+        'ok'            => true,
+        'item'          => $item,
+        'analysis'      => $json,
+        'local_signals' => $localSignals,
+        'model'         => pcvc_docvision_model(),
+        'file'          => [
             'absolute' => $abs,
             'size'     => filesize($abs) ?: 0,
             'mtime'    => filemtime($abs) ?: 0,
@@ -346,10 +488,102 @@ function tanzania_scan_analyze_one(array $item): array
     ];
 }
 
+/** @param array<string, mixed> $analysis @param array<string, mixed> $local */
+function tanzania_scan_merge_analysis(array $analysis, array $local): array
+{
+    $localTz = array_values(array_filter(
+        (array) ($local['signals'] ?? []),
+        static fn ($s) => $s !== 'likely_scanned'
+    ));
+
+    if ($localTz !== []) {
+        $analysis['is_tanzania_related'] = true;
+        $existing = $analysis['tanzania_other_signals'] ?? [];
+        if (!is_array($existing)) {
+            $existing = [];
+        }
+        foreach ($localTz as $sig) {
+            $existing[] = 'local:' . $sig;
+        }
+        $analysis['tanzania_other_signals'] = array_values(array_unique($existing));
+    }
+
+    if (!empty($local['likely_scanned'])) {
+        $analysis['ocr_used'] = true;
+    }
+
+    if (empty($analysis['summary']) && $localTz !== []) {
+        $analysis['summary'] = 'Local pre-scan found: ' . implode(', ', $localTz);
+    }
+
+    return $analysis;
+}
+
 function tanzania_scan_is_tanzania_match(array $analysis): bool
 {
-    return !empty($analysis['is_tanzania_university'])
-        && !empty($analysis['is_degree_or_transcript']);
+    if (!empty($analysis['is_tanzania_related']) || !empty($analysis['is_tanzania_university'])) {
+        return true;
+    }
+
+    $signals = array_merge(
+        (array) ($analysis['tanzania_cities_found'] ?? []),
+        (array) ($analysis['tanzania_phones_found'] ?? []),
+        (array) ($analysis['tanzania_domains_found'] ?? []),
+        (array) ($analysis['tanzania_other_signals'] ?? [])
+    );
+
+    return $signals !== [];
+}
+
+/**
+ * Prefer files that exist on disk so Analyze N actually processes N documents.
+ *
+ * @param array<int, array<string, mixed>> $items
+ * @return array<int, array<string, mixed>>
+ */
+function tanzania_scan_prepare_batch(array $items, int $limit, bool $requireResolvable): array
+{
+    if ($limit <= 0) {
+        return $items;
+    }
+
+    if (!$requireResolvable) {
+        return array_slice($items, 0, $limit);
+    }
+
+    $batch = [];
+    foreach ($items as $item) {
+        if (tanzania_scan_resolve_abs_path((string) ($item['stored_path'] ?? '')) === null) {
+            continue;
+        }
+        $batch[] = $item;
+        if (count($batch) >= $limit) {
+            break;
+        }
+    }
+
+    return $batch;
+}
+
+function tanzania_scan_gemini_status(): array
+{
+    if (!pcvc_docvision_is_configured()) {
+        return ['ok' => false, 'message' => 'No API key in .env'];
+    }
+
+    $probe = pcvc_docvision_generate_json(
+        'Reply with JSON only: {"ok":true}',
+        [['type' => 'input_text', 'text' => 'ping']],
+        1,
+        0,
+        0.0
+    );
+
+    if (!empty($probe['error'])) {
+        return ['ok' => false, 'message' => (string) ($probe['error']['message'] ?? 'Gemini error')];
+    }
+
+    return ['ok' => true, 'message' => 'Connected'];
 }
 
 /** @param array<int, array<string, mixed>> $results */
@@ -391,13 +625,14 @@ a{color:#2563eb}
 <body>
 <h1>Tanzania university degree &amp; transcript scan</h1>
 <p class="meta">Gemini model: <?= htmlspecialchars((string) ($report['model'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+ · API: <?= !empty($report['gemini_status']['ok']) ? 'connected' : htmlspecialchars((string) ($report['gemini_status']['message'] ?? 'unknown'), ENT_QUOTES, 'UTF-8') ?>
  · Scanned at <?= htmlspecialchars((string) ($report['scanned_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
 
 <?php if (!empty($report['options']['dry_run'])): ?>
 <div class="notice">
-  <strong>Preview mode.</strong> No Gemini API calls were made (safe for the server).
+  <strong>Preview mode.</strong> Local text scan only (filename + PDF text if readable).
+  Scanned/CamScanner PDFs need <strong>Analyze with Gemini</strong> for full OCR.
   Found <?= (int) ($report['stats']['total_in_db'] ?? 0) ?> document(s) in the database.
-  Use the buttons below to analyze a small batch only.
 </div>
 <div class="actions">
   <a href="?run=1&limit=10">Analyze 10 with Gemini</a>
@@ -405,10 +640,14 @@ a{color:#2563eb}
   <a href="?run=1&limit=10&only_tanzania=1">Analyze 10 (Tanzania only)</a>
   <a class="secondary" href="/">Back to MIS home</a>
 </div>
+<p class="meta">Gemini OCR on scanned PDFs can take 2–5 minutes per batch. Keep this tab open until the page finishes loading.</p>
 <?php else: ?>
 <div class="notice">
   Gemini analysis ran on <?= (int) ($report['stats']['analyzed'] ?? 0) ?> file(s)
   (limit <?= (int) ($report['options']['limit'] ?? 0) ?>).
+  <?php if ((int) ($report['stats']['errors'] ?? 0) > 0): ?>
+  <strong><?= (int) ($report['stats']['errors'] ?? 0) ?> error(s)</strong> — see red messages in the table.
+  <?php endif; ?>
 </div>
 <div class="actions">
   <a class="secondary" href="?">Back to safe preview</a>
@@ -419,7 +658,7 @@ a{color:#2563eb}
 <div class="stats">
   <div class="stat"><strong><?= (int) ($stats['total'] ?? 0) ?></strong>Documents found</div>
   <div class="stat"><strong><?= (int) ($stats['analyzed'] ?? 0) ?></strong>Analyzed</div>
-  <div class="stat"><strong><?= (int) ($stats['tanzania_matches'] ?? 0) ?></strong>Tanzania university</div>
+  <div class="stat"><strong><?= (int) ($stats['tanzania_matches'] ?? 0) ?></strong>Tanzania related</div>
   <div class="stat"><strong><?= (int) ($stats['errors'] ?? 0) ?></strong>Errors</div>
 </div>
 
@@ -431,6 +670,7 @@ a{color:#2563eb}
   <th>Document</th>
   <th>Type</th>
   <th>Tanzania</th>
+  <th>Signals</th>
   <th>University</th>
   <th>Authentic</th>
   <th>Summary</th>
@@ -441,7 +681,21 @@ a{color:#2563eb}
 <?php
     $item = $row['item'] ?? [];
     $analysis = $row['analysis'] ?? [];
-    $isTz = tanzania_scan_is_tanzania_match($analysis);
+    $isPreview = !empty($report['options']['dry_run']);
+    $localPreview = is_array($row['local_signals'] ?? null)
+        ? $row['local_signals']
+        : ['signals' => [], 'is_tanzania_related' => false];
+    $isTz = !$isPreview && tanzania_scan_is_tanzania_match($analysis);
+    if ($isPreview && !empty($localPreview['is_tanzania_related'])) {
+        $isTz = true;
+    }
+    $signalList = array_merge(
+        (array) ($analysis['tanzania_cities_found'] ?? []),
+        (array) ($analysis['tanzania_phones_found'] ?? []),
+        (array) ($analysis['tanzania_domains_found'] ?? []),
+        (array) ($analysis['tanzania_other_signals'] ?? []),
+        $isPreview ? (array) ($localPreview['signals'] ?? []) : []
+    );
 ?>
 <tr>
   <td>
@@ -460,25 +714,32 @@ a{color:#2563eb}
     <?php endif; ?>
     <?php if (!empty($row['error'])): ?><div class="err"><?= htmlspecialchars((string) $row['error'], ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
   </td>
-  <td><?= htmlspecialchars((string) ($analysis['document_type'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
+  <td><?= $isPreview ? '—' : htmlspecialchars((string) ($analysis['document_type'] ?? '—'), ENT_QUOTES, 'UTF-8') ?></td>
   <td>
-    <?php if (($row['ok'] ?? false) && $isTz): ?>
+    <?php if ($isPreview && empty($localPreview['signals'])): ?>
+      <span class="tag tag-warn">Preview</span>
+    <?php elseif ($isTz): ?>
       <span class="tag tag-yes">Yes</span>
+    <?php elseif ($isPreview): ?>
+      <span class="tag tag-yes">Likely</span>
     <?php elseif ($row['ok'] ?? false): ?>
       <span class="tag tag-no">No</span>
     <?php else: ?>
       <span class="tag tag-warn">—</span>
     <?php endif; ?>
   </td>
+  <td><small><?= htmlspecialchars(implode(', ', $signalList), ENT_QUOTES, 'UTF-8') ?></small></td>
   <td><?= htmlspecialchars((string) ($analysis['university_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
   <td>
-    <?php if (!empty($analysis['appears_authentic'])): ?>
+    <?php if ($isPreview): ?>
+      <span class="tag tag-warn">—</span>
+    <?php elseif (!empty($analysis['appears_authentic'])): ?>
       <span class="tag tag-yes">Yes</span>
     <?php elseif ($row['ok'] ?? false): ?>
       <span class="tag tag-no">No</span>
     <?php else: ?>—<?php endif; ?>
   </td>
-  <td class="summary"><?= htmlspecialchars((string) ($analysis['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+  <td class="summary"><?= htmlspecialchars((string) ($analysis['summary'] ?? ($isPreview ? 'Preview — click Analyze to run Gemini OCR.' : '')), ENT_QUOTES, 'UTF-8') ?></td>
 </tr>
 <?php endforeach; ?>
 </tbody>
@@ -517,7 +778,11 @@ $totalInDb = count($catalog);
 $options['total_found'] = $totalInDb;
 
 if ($options['limit'] > 0) {
-    $catalog = array_slice($catalog, 0, $options['limit']);
+    if ($options['dry_run']) {
+        $catalog = array_slice($catalog, 0, $options['limit']);
+    } else {
+        $catalog = tanzania_scan_prepare_batch($catalog, $options['limit'], true);
+    }
 }
 
 $results = [];
@@ -531,7 +796,36 @@ $stats = [
 
 if ($options['dry_run']) {
     foreach ($catalog as $item) {
-        $results[] = ['ok' => true, 'item' => $item, 'analysis' => ['summary' => 'Dry run — not sent to Gemini.']];
+        $abs = tanzania_scan_resolve_abs_path((string) ($item['stored_path'] ?? ''));
+        if (!$abs) {
+            $results[] = [
+                'ok'            => true,
+                'item'          => $item,
+                'local_signals' => ['signals' => [], 'is_tanzania_related' => false],
+                'analysis'      => [
+                    'summary' => 'Preview — file missing on server (cannot scan locally).',
+                ],
+            ];
+            continue;
+        }
+        $local = tanzania_scan_local_signals($abs, basename($abs));
+        $summary = 'Preview — local text scan only. Click Analyze to run Gemini OCR.';
+        if (!empty($local['signals'])) {
+            $summary = 'Local hints: ' . implode(', ', (array) $local['signals']) . '. Click Analyze for full Gemini OCR.';
+        }
+        $results[] = [
+            'ok'            => true,
+            'item'          => $item,
+            'local_signals' => $local,
+            'analysis'      => [
+                'summary'              => $summary,
+                'tanzania_other_signals' => $local['signals'] ?? [],
+                'is_tanzania_related'  => !empty($local['is_tanzania_related']),
+            ],
+        ];
+        if (!empty($local['is_tanzania_related'])) {
+            $stats['tanzania_matches']++;
+        }
     }
 } else {
     foreach ($catalog as $item) {
@@ -560,12 +854,13 @@ if ($options['dry_run']) {
 }
 
 $report = [
-    'ok'         => true,
-    'model'      => pcvc_docvision_model(),
-    'scanned_at' => gmdate('c'),
-    'options'    => $options,
-    'stats'      => $stats,
-    'results'    => $results,
+    'ok'            => true,
+    'model'         => pcvc_docvision_model(),
+    'gemini_status' => $options['dry_run'] ? tanzania_scan_gemini_status() : ['ok' => true, 'message' => 'Used during analysis'],
+    'scanned_at'    => gmdate('c'),
+    'options'       => $options,
+    'stats'         => $stats,
+    'results'       => $results,
 ];
 
 if ($options['format'] === 'json' || tanzania_scan_is_cli()) {
