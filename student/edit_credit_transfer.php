@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers/student_portal_schema.php';
+require_once __DIR__ . '/../helpers/credit_transfer_programs.php';
 require_once __DIR__ . '/../helpers/csrf.php';
 require_once __DIR__ . '/../helpers/urls.php';
 require_once __DIR__ . '/auth.php';
@@ -179,9 +180,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         // Match credit_transfer.php / save_credit_transfer.php behavior
         $university = trim((string)($_POST['university'] ?? ''));
-        $allowedUniversities = ['UPAFA', 'DPHU', 'IST'];
+        $allowedUniversities = pcvc_credit_transfer_university_codes();
         if ($university !== '' && !in_array($university, $allowedUniversities, true)) {
-            $_SESSION['pcvc_flash_error_credit_transfer'] = 'Invalid university. Choose UPAFA, DPHU or IST.';
+            $_SESSION['pcvc_flash_error_credit_transfer'] = 'Invalid university. Choose UPAFA, DPHU, IST or USOJ.';
             header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
             exit;
         }
@@ -292,6 +293,7 @@ require_once __DIR__ . '/layout.php';
               <option value="UPAFA" <?= ((string)($credit['university'] ?? '') === 'UPAFA') ? 'selected' : '' ?>>Université Africaine Franco-Arabe (UPAFA)</option>
               <option value="DPHU" <?= ((string)($credit['university'] ?? '') === 'DPHU') ? 'selected' : '' ?>>Distant Production house University (DPHU)</option>
               <option value="IST" <?= ((string)($credit['university'] ?? '') === 'IST') ? 'selected' : '' ?>>Institut Supérieur de Burkina Faso (IST)</option>
+              <option value="USOJ" <?= ((string)($credit['university'] ?? '') === 'USOJ') ? 'selected' : '' ?>>University of Saint Joseph Mbarara (USOJ)</option>
             </select>
           </div>
           <div class="col-md-4">
@@ -427,39 +429,8 @@ require_once __DIR__ . '/layout.php';
 
 <script>
   // University -> Proposed program datalist (same idea as `credit_transfer.php`).
-  // Note: this list is intentionally identical in structure (UPAFA/DPHU/IST) and enforces selecting from suggestions.
-  const CT_PROGRAMS = {
-    UPAFA: [
-      "Management Information Systems","General Computing","Economy","Corporate and Market Finance",
-      "Business Administration and Aviation","Business Administration in International Marketing",
-      "Maintenance – Networks and Telecommunications","Marketing & Public Relations","Hotel Management and Tourism",
-      "Supply Chain Management and Logistics","Business Management and Administration","Accounting",
-      "Economic and Financial Analysis","Islamic Finance","Home Economics","Finance Bank","Transport Logistics",
-      "Customs Transit","Project Planning and Management","Finance","Information and Communication Technology (ICT)",
-      "Computer and Multimedia Networks","Data Science","Risk Management and Insurance Digital and Customers",
-      "Human Resources Management","Public Administration","Audit","Legal Sciences","Journalism and Communication",
-      "International Relations and Diplomacy","Civil Engineering","Electrical and Electronic Engineering",
-      "Mechanical Engineering","Industrial Engineering","Nursing","Pharmacy","Public Health"
-    ],
-    DPHU: [
-      "MBA","Transport and Logistics Management","Human Resource Management","Project Management",
-      "Economic Development","Information and Communications Technology","International Criminal & Justice",
-      "Land Administration and Management","Open Distance Learning","Psychology",
-      "Computer Science","Information Technology Management","Social Work","Economics",
-      "International Relations and Diplomacy","Accounting and Financial Sciences and Techniques",
-      "Banking and Corporate Finance","Computer Networks and Telecommunications","Civil Engineering – Public Works",
-      "Electrical Engineering","Mechanical Engineering","Nursing Sciences","Hospital Management"
-    ],
-    // IST is grouped in the main form; for the portal we flatten all programs.
-    IST: [
-      "Electrical Engineering","Mechanical Engineering","Mechanical and Manufacturing Engineering",
-      "Aerospace Engineering","Civil Engineering and Management","Automotive and Power Engineering",
-      "Mining Engineering – Geology option","Mining Engineering – Metallurgy option","Mining Engineering – Mineralurgy option",
-      "Thermal & Energy Engineering","Industrial Engineering","Networks & Computer Systems (IT)",
-      "Agro-industry","Agribusiness Engineering","Business Administration and Finance","Finance & Accounting",
-      "Marketing & Business Communication","Banking & Microfinance","Medical Laboratory Sciences","Nursing","Pharmacy"
-    ]
-  };
+  // Static programmes from helpers/credit_transfer_programs.php (copied into MIS, not from e-learning API).
+  const CT_PROGRAMS = <?= json_encode(pcvc_credit_transfer_programs_flat(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 
   function ctPopulatePrograms(university) {
     const datalist = document.getElementById('ctProgramOptions');

@@ -156,9 +156,10 @@ if ($step === 'step2') {
 
   // ✅ YOUR EXACT UNIVERSITY VALIDATION (with IST added to match your form)
   $university = $_POST['university'] ?? '';
-  $allowedUniversities = ['UPAFA', 'DPHU', 'IST']; // Added IST to match your form's datalist
+  require_once __DIR__ . '/helpers/credit_transfer_programs.php';
+  $allowedUniversities = pcvc_credit_transfer_university_codes();
   if (!in_array($university, $allowedUniversities, true)) {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid university. Choose UPAFA, DPHU or IST.']);
+    echo json_encode(['status' => 'error', 'message' => 'Invalid university. Choose UPAFA, DPHU, IST or USOJ.']);
     $conn->close();
     exit;
   }
