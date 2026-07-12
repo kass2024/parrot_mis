@@ -124,8 +124,9 @@ $appId = (int) $row['id'];
                     <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($publicVideoUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
                         <i class="fas fa-external-link-alt me-1"></i> Open public page
                     </a>
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="fmCopyVideoLink"
-                            data-copy="<?= htmlspecialchars($copyBundle, ENT_QUOTES, 'UTF-8') ?>">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-copy="<?= htmlspecialchars($copyBundle, ENT_QUOTES, 'UTF-8') ?>"
+                            onclick="copyFmFromBtn(this)">
                         <i class="fas fa-copy me-1"></i> Copy public link + owner details
                     </button>
                     <?php endif; ?>
@@ -138,7 +139,7 @@ $appId = (int) $row['id'];
                 <?php if ($publicVideoUrl !== ''): ?>
                 <div class="input-group input-group-sm">
                     <input type="text" class="form-control" id="fmPublicVideoUrl" readonly value="<?= htmlspecialchars($publicVideoUrl, ENT_QUOTES, 'UTF-8') ?>">
-                    <button type="button" class="btn btn-outline-secondary" id="fmCopyPublicUrl">Copy URL</button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="copyFmInput('fmPublicVideoUrl', this)">Copy URL</button>
                 </div>
                 <?php endif; ?>
             </div>
@@ -160,12 +161,14 @@ $appId = (int) $row['id'];
                 </div>
                 <div class="input-group input-group-sm mb-2">
                     <input type="text" class="form-control" id="fmInviteUrl" readonly value="<?= htmlspecialchars($inviteUrl, ENT_QUOTES, 'UTF-8') ?>">
-                    <button type="button" class="btn btn-outline-secondary" id="fmCopyInviteUrl"
-                            data-copy="<?= htmlspecialchars($inviteUrl, ENT_QUOTES, 'UTF-8') ?>">Copy link</button>
+                    <button type="button" class="btn btn-outline-secondary"
+                            data-copy="<?= htmlspecialchars($inviteUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            onclick="copyFmFromBtn(this)">Copy link</button>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                    <button type="button" class="btn btn-sm btn-outline-primary" id="fmCopyInviteMsg"
-                            data-copy="<?= htmlspecialchars($inviteWaText, ENT_QUOTES, 'UTF-8') ?>">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                            data-copy="<?= htmlspecialchars($inviteWaText, ENT_QUOTES, 'UTF-8') ?>"
+                            onclick="copyFmFromBtn(this)">
                         <i class="fas fa-copy me-1"></i> Copy message + reference
                     </button>
                     <?php if ($inviteWaUrl !== ''): ?>
@@ -185,35 +188,6 @@ $appId = (int) $row['id'];
             </div>
         </div>
         <?php endif; ?>
-        <script>
-        (function () {
-          async function copyText(text, btn) {
-            try {
-              await navigator.clipboard.writeText(text);
-              if (btn) {
-                const old = btn.innerHTML;
-                btn.innerHTML = '<i class="fas fa-check me-1"></i> Copied';
-                setTimeout(() => { btn.innerHTML = old; }, 1600);
-              }
-            } catch (e) {
-              prompt('Copy this:', text);
-            }
-          }
-          document.getElementById('fmCopyVideoLink')?.addEventListener('click', function () {
-            copyText(this.getAttribute('data-copy') || '', this);
-          });
-          document.getElementById('fmCopyPublicUrl')?.addEventListener('click', function () {
-            const input = document.getElementById('fmPublicVideoUrl');
-            copyText(input ? input.value : '', this);
-          });
-          document.getElementById('fmCopyInviteUrl')?.addEventListener('click', function () {
-            copyText(this.getAttribute('data-copy') || '', this);
-          });
-          document.getElementById('fmCopyInviteMsg')?.addEventListener('click', function () {
-            copyText(this.getAttribute('data-copy') || '', this);
-          });
-        })();
-        </script>
     </div>
     <div class="col-lg-4">
         <div class="card">

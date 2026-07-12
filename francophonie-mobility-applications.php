@@ -245,6 +245,46 @@ function fm_status_badge(string $s): string
 const CSRF = <?= json_encode($_SESSION['csrf_token']) ?>;
 const modal = new bootstrap.Modal(document.getElementById('detailModal'));
 
+function copyFmText(text, btn) {
+    const value = String(text || '');
+    const markCopied = () => {
+        if (!btn) return;
+        const old = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check me-1"></i> Copied';
+        setTimeout(() => { btn.innerHTML = old; }, 1600);
+    };
+    const fallback = () => {
+        const ta = document.createElement('textarea');
+        ta.value = value;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            markCopied();
+        } catch (e) {
+            prompt('Copy this:', value);
+        }
+        document.body.removeChild(ta);
+    };
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(value).then(markCopied).catch(fallback);
+    } else {
+        fallback();
+    }
+}
+
+function copyFmFromBtn(btn) {
+    copyFmText(btn.getAttribute('data-copy') || '', btn);
+}
+
+function copyFmInput(inputId, btn) {
+    const input = document.getElementById(inputId);
+    copyFmText(input ? input.value : '', btn);
+}
+
 function viewApp(id) {
     document.getElementById('detailBody').innerHTML = '<div class="text-center py-4"><div class="spinner-border"></div></div>';
     modal.show();
