@@ -162,6 +162,9 @@ function fm_status_badge(string $s): string
                 <div class="meta mb-2">
                     <?= htmlspecialchars($a['email']) ?><br>
                     <?= htmlspecialchars($a['profession']) ?> · <?= date('M j, Y', strtotime($a['created_at'])) ?>
+                    <?php if (!empty($a['video_file']) || !empty($a['video_pcloud_link'])): ?>
+                    <br><span class="badge text-bg-danger mt-1"><i class="fas fa-video me-1"></i>Video</span>
+                    <?php endif; ?>
                 </div>
                 <button class="btn btn-outline-primary btn-sm w-100" onclick="viewApp(<?= (int)$a['id'] ?>)">
                     <i class="fas fa-eye me-1"></i> View &amp; manage
@@ -193,6 +196,9 @@ function fm_status_badge(string $s): string
                         <td>
                             <div class="fw-semibold"><?= htmlspecialchars(trim($a['first_name'].' '.$a['last_name'])) ?></div>
                             <div class="small text-muted"><?= htmlspecialchars($a['email']) ?></div>
+                            <?php if (!empty($a['video_file']) || !empty($a['video_pcloud_link'])): ?>
+                            <span class="badge text-bg-danger mt-1"><i class="fas fa-video me-1"></i>Video</span>
+                            <?php endif; ?>
                         </td>
                         <td class="small"><?= htmlspecialchars($a['profession']) ?></td>
                         <td><span class="badge <?= fm_status_badge($a['status']) ?>"><?= ucwords(str_replace('_',' ',$a['status'])) ?></span></td>

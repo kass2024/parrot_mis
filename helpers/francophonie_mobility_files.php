@@ -222,6 +222,7 @@ function fm_human_field_label(string $key): string
         'french_cert_file' => 'French Certificate',
         'english_cert_file' => 'English Certificate',
         'academic_docs_file' => 'Academic Documents',
+        'video_file' => 'Introduction Video',
     ];
     return $map[$key] ?? ucwords(str_replace('_', ' ', $key));
 }

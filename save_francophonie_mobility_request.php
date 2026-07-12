@@ -201,6 +201,24 @@ $english_cert_file = fm_finalize_stored_path_optional((string) ($_POST['english_
 $academicStored = fm_finalize_upload_list($academicTemps, 'academic');
 $academic_docs_file = fm_encode_stored_files($academicStored);
 
+$video_file = ''; // Videos are pCloud-only (no local disk copy).
+$video_source = strtolower(trim((string) ($_POST['video_source'] ?? '')));
+if (!in_array($video_source, ['upload', 'record'], true)) {
+    $video_source = '';
+}
+$video_pcloud_fileid = preg_replace('/[^0-9]/', '', (string) ($_POST['video_pcloud_fileid'] ?? '')) ?? '';
+$video_pcloud_link = trim((string) ($_POST['video_pcloud_link'] ?? ''));
+if ($video_pcloud_link !== '' && !preg_match('#^https?://#i', $video_pcloud_link)) {
+    $video_pcloud_link = '';
+}
+if ($video_source === '' && $video_pcloud_link !== '') {
+    $video_source = 'upload';
+}
+$video_public_token = '';
+if ($video_pcloud_link !== '' || $video_pcloud_fileid !== '') {
+    $video_public_token = bin2hex(random_bytes(16));
+}
+
 $hasAttachment = $cv_file !== '' || $french_cert_file !== '' || $english_cert_file !== '' || $academic_docs_file !== '';
 if (!$hasAttachment) {
     fm_json(false, 'Please complete the required fields below.', [
@@ -219,8 +237,9 @@ $sql = 'INSERT INTO francophonie_mobility_applications (
     french_level, french_tef, french_tcf, french_professional,
     english_level, english_toefl, english_ielts, english_professional,
     has_wes, cv_file, french_cert_file, english_cert_file, academic_docs_file,
+    video_file, video_source, video_pcloud_fileid, video_pcloud_link, video_public_token,
     status, created_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
@@ -232,9 +251,14 @@ $cv_db = $cv_file !== '' ? $cv_file : '';
 $french_db = $french_cert_file !== '' ? $french_cert_file : '';
 $english_db = $english_cert_file !== '' ? $english_cert_file : '';
 $academic_db = $academic_docs_file !== '' ? $academic_docs_file : '';
+$video_db = $video_file !== '' ? $video_file : '';
+$video_source_db = $video_source !== '' ? $video_source : '';
+$video_fileid_db = $video_pcloud_fileid !== '' ? $video_pcloud_fileid : '';
+$video_link_db = $video_pcloud_link !== '' ? $video_pcloud_link : '';
+$video_token_db = $video_public_token !== '' ? $video_public_token : '';
 
 $stmt->bind_param(
-    'ssssssssssisssssssssssiissiissssss',
+    'ssssssssssisssssssssssiissiisssssssssss',
     $user_id, $reference_id, $first_name, $last_name, $email,
     $phone_area_code, $phone_number, $date_of_birth, $passport_number, $address,
     $age, $nationality, $country_of_residence,
@@ -242,7 +266,8 @@ $stmt->bind_param(
     $country_of_study, $graduation_year, $other_certifications,
     $french_level, $french_tef, $french_tcf, $french_professional,
     $english_level, $english_toefl, $english_ielts, $english_professional,
-    $has_wes, $cv_db, $french_db, $english_db, $academic_db
+    $has_wes, $cv_db, $french_db, $english_db, $academic_db,
+    $video_db, $video_source_db, $video_fileid_db, $video_link_db, $video_token_db
 );
 
 if (!$stmt->execute()) {
