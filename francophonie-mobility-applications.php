@@ -203,9 +203,19 @@ function fm_status_badge(string $s): string
                         <td class="small"><?= htmlspecialchars($a['profession']) ?></td>
                         <td><span class="badge <?= fm_status_badge($a['status']) ?>"><?= ucwords(str_replace('_',' ',$a['status'])) ?></span></td>
                         <td class="small"><?= date('M j, Y', strtotime($a['created_at'])) ?></td>
-                        <td>
+                        <td class="text-nowrap">
                             <button class="btn btn-sm btn-outline-primary" onclick="viewApp(<?= (int)$a['id'] ?>)">
                                 <i class="fas fa-eye"></i> View
+                            </button>
+                            <?php if (empty($a['video_file']) && empty($a['video_pcloud_link'])): ?>
+                            <button class="btn btn-sm btn-outline-danger" title="Video invite link"
+                                    onclick="createVideoInvite(<?= (int)$a['id'] ?>)">
+                                <i class="fas fa-video"></i>
+                            </button>
+                            <?php endif; ?>
+                            <button class="btn btn-sm btn-outline-secondary" title="Delete application"
+                                    onclick="deleteApplication(<?= (int)$a['id'] ?>, <?= json_encode($a['reference_id']) ?>)">
+                                <i class="fas fa-trash"></i>
                             </button>
                         </td>
                     </tr>
@@ -280,6 +290,48 @@ function resendPackage(id) {
     if (!confirm('Resend approval package (form + all documents) to partner email?')) return;
     postAction('send_francophonie_mobility_email.php', { application_id: id, action: 'approval_package' })
         .then(d => alert(d.message)).catch(e => alert(e.message));
+}
+
+function createVideoInvite(id, regenerate) {
+    const msg = regenerate
+        ? 'Regenerate a new one-time video upload link? The old link will stop working.'
+        : 'Create a one-time video upload/record link for this candidate?';
+    if (!confirm(msg)) return;
+    postAction('francophonie_mobility_admin_action.php', {
+        application_id: id,
+        action: 'create_video_invite'
+    }).then(async d => {
+        try {
+            await navigator.clipboard.writeText(d.invite_url || '');
+        } catch (e) {}
+        const openWa = confirm(
+            (d.message || 'Invite created') + '\n\n'
+            + 'Reference: ' + (d.reference_id || '') + '\n'
+            + 'Link copied to clipboard:\n' + (d.invite_url || '') + '\n\n'
+            + 'Open WhatsApp with this message now?'
+        );
+        if (openWa && d.whatsapp_url) {
+            window.open(d.whatsapp_url, '_blank', 'noopener');
+        }
+        viewApp(id);
+    }).catch(e => alert(e.message));
+}
+
+function deleteApplication(id, referenceId) {
+    const typed = prompt(
+        'Delete FULL application ' + referenceId + '?\n\n'
+        + 'This removes the application, status logs, and linked contracts.\n'
+        + 'Type the reference ID to confirm:'
+    );
+    if (typed === null) return;
+    postAction('francophonie_mobility_admin_action.php', {
+        application_id: id,
+        action: 'delete_application',
+        confirm_reference: typed
+    }).then(d => {
+        alert(d.message || 'Deleted');
+        location.reload();
+    }).catch(e => alert(e.message));
 }
 
 function postAction(url, data) {

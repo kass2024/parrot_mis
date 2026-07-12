@@ -139,4 +139,29 @@ function fm_ensure_schema(mysqli $conn): void
     if ($idx) {
         $idx->free();
     }
+
+    // One-time admin invite link for candidates who applied without a video.
+    $inviteCols = [
+        'video_invite_token'      => "ADD COLUMN `video_invite_token` varchar(64) NULL DEFAULT NULL AFTER `video_public_token`",
+        'video_invite_created_at' => "ADD COLUMN `video_invite_created_at` datetime NULL DEFAULT NULL AFTER `video_invite_token`",
+        'video_invite_opened_at'  => "ADD COLUMN `video_invite_opened_at` datetime NULL DEFAULT NULL AFTER `video_invite_created_at`",
+        'video_invite_used_at'    => "ADD COLUMN `video_invite_used_at` datetime NULL DEFAULT NULL AFTER `video_invite_opened_at`",
+    ];
+    foreach ($inviteCols as $colName => $alterSql) {
+        $chk = $conn->query("SHOW COLUMNS FROM francophonie_mobility_applications LIKE '{$colName}'");
+        if ($chk && $chk->num_rows === 0) {
+            $conn->query("ALTER TABLE francophonie_mobility_applications {$alterSql}");
+        }
+        if ($chk) {
+            $chk->free();
+        }
+    }
+
+    $idxInvite = $conn->query("SHOW INDEX FROM francophonie_mobility_applications WHERE Key_name = 'video_invite_token'");
+    if ($idxInvite && $idxInvite->num_rows === 0) {
+        @$conn->query('ALTER TABLE francophonie_mobility_applications ADD UNIQUE KEY `video_invite_token` (`video_invite_token`)');
+    }
+    if ($idxInvite) {
+        $idxInvite->free();
+    }
 }
