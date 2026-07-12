@@ -10,6 +10,7 @@ require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 fm_ensure_schema($conn);
 require_once __DIR__ . '/helpers/francophonie_mobility_notify.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_files.php';
+require_once __DIR__ . '/helpers/fm_public_share.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 
 if (empty($_SESSION['id'])) {
@@ -57,14 +58,18 @@ $videoLocal = trim((string) ($row['video_file'] ?? ''));
 $hasVideo = $videoLocal !== '' || $videoPcloud !== '';
 $inviteToken = trim((string) ($row['video_invite_token'] ?? ''));
 $inviteUsed = !empty($row['video_invite_used_at']);
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-$basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
-$publicVideoUrl = $videoToken !== ''
-    ? $scheme . '://' . $host . $basePath . '/fm-video-public.php?t=' . rawurlencode($videoToken)
+
+// Ensure dual-token secured share credentials exist for copy / view-details.
+[$shareToken, $shareSecret] = fm_ensure_public_share_tokens($conn, $row);
+$publicDetailsUrl = ($shareToken !== '' && $shareSecret !== '')
+    ? fm_public_details_url($shareToken, $shareSecret)
     : '';
+$secureVideoUrl = ($hasVideo && $shareToken !== '' && $shareSecret !== '')
+    ? fm_public_video_url($shareToken, $shareSecret)
+    : '';
+
 $inviteUrl = ($inviteToken !== '' && !$inviteUsed && !$hasVideo)
-    ? $scheme . '://' . $host . $basePath . '/fm-video-invite.php?t=' . rawurlencode($inviteToken)
+    ? fm_public_base_url() . '/fm-video-invite.php?t=' . rawurlencode($inviteToken)
     : '';
 $ownerPlain = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
 $phoneDigits = preg_replace('/\D+/', '', (string) (($row['phone_area_code'] ?? '') . ($row['phone_number'] ?? ''))) ?: '';
@@ -80,15 +85,8 @@ $inviteWaUrl = $inviteWaText !== ''
         ? 'https://wa.me/' . $phoneDigits . '?text=' . rawurlencode($inviteWaText)
         : 'https://wa.me/?text=' . rawurlencode($inviteWaText))
     : '';
-$copyBundle = $publicVideoUrl !== ''
-    ? "Francophonie Mobility — Candidate Video\n"
-        . "Owner: {$ownerPlain}\n"
-        . "Reference: " . ($row['reference_id'] ?? '') . "\n"
-        . "Email: " . ($row['email'] ?? '') . "\n"
-        . "Phone: +" . trim(($row['phone_area_code'] ?? '') . ' ' . ($row['phone_number'] ?? '')) . "\n"
-        . "Nationality: " . ($row['nationality'] ?? '') . "\n"
-        . "Public page: {$publicVideoUrl}\n"
-        . ($videoPcloud !== '' ? "pCloud download: {$videoPcloud}\n" : '')
+$copyBundle = $publicDetailsUrl !== ''
+    ? fm_public_copy_bundle($row, $publicDetailsUrl)
     : '';
 $appId = (int) $row['id'];
 ?>
@@ -104,47 +102,43 @@ $appId = (int) $row['id'];
         <p class="small text-success"><i class="fas fa-envelope-circle-check"></i> Approval package emailed on <?= htmlspecialchars($row['approval_package_sent_at']) ?></p>
         <?php endif; ?>
 
-        <?php if ($hasVideo || $publicVideoUrl !== ''): ?>
+        <?php if ($publicDetailsUrl !== ''): ?>
         <div class="card mt-3 border-0 shadow-sm">
             <div class="card-body">
-                <h6 class="card-title mb-3"><i class="fas fa-video me-2 text-danger"></i>Introduction Video</h6>
-                <p class="small text-muted mb-2">
-                    Source: <strong><?= htmlspecialchars(ucfirst((string) ($row['video_source'] ?: 'upload')), ENT_QUOTES, 'UTF-8') ?></strong>
-                    · stored on pCloud only (not on server disk)
+                <h6 class="card-title mb-2"><i class="fas fa-lock me-2 text-primary"></i>Secured view details</h6>
+                <p class="small text-muted mb-3">
+                    Full application + attachments<?= $hasVideo ? ' + video' : '' ?>.
+                    Link uses two keys — pCloud download URL is never shared.
                 </p>
-                <?php if ($videoPcloud !== ''): ?>
-                <div class="alert alert-light border mb-3">
-                    <i class="fas fa-cloud me-1 text-primary"></i>
-                    Preview / download is available from pCloud.
-                    <a href="<?= htmlspecialchars($videoPcloud, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Open video</a>
-                </div>
-                <?php endif; ?>
                 <div class="d-flex flex-wrap gap-2 mb-2">
-                    <?php if ($publicVideoUrl !== ''): ?>
-                    <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($publicVideoUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                        <i class="fas fa-external-link-alt me-1"></i> Open public page
+                    <a class="btn btn-sm btn-primary" href="<?= htmlspecialchars($publicDetailsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                        <i class="fas fa-external-link-alt me-1"></i> Open view details
                     </a>
                     <button type="button" class="btn btn-sm btn-outline-primary"
                             data-copy="<?= htmlspecialchars($copyBundle, ENT_QUOTES, 'UTF-8') ?>"
                             onclick="copyFmFromBtn(this)">
-                        <i class="fas fa-copy me-1"></i> Copy public link + owner details
+                        <i class="fas fa-copy me-1"></i> Copy view details + owner
                     </button>
-                    <?php endif; ?>
-                    <?php if ($videoPcloud !== ''): ?>
-                    <a class="btn btn-sm btn-success" href="<?= htmlspecialchars($videoPcloud, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
-                        <i class="fas fa-cloud-download-alt me-1"></i> pCloud download
+                    <?php if ($secureVideoUrl !== ''): ?>
+                    <a class="btn btn-sm btn-outline-danger" href="<?= htmlspecialchars($secureVideoUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                        <i class="fas fa-play me-1"></i> Open video
                     </a>
                     <?php endif; ?>
                 </div>
-                <?php if ($publicVideoUrl !== ''): ?>
                 <div class="input-group input-group-sm">
-                    <input type="text" class="form-control" id="fmPublicVideoUrl" readonly value="<?= htmlspecialchars($publicVideoUrl, ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="text" class="form-control" id="fmPublicVideoUrl" readonly value="<?= htmlspecialchars($publicDetailsUrl, ENT_QUOTES, 'UTF-8') ?>">
                     <button type="button" class="btn btn-outline-secondary" onclick="copyFmInput('fmPublicVideoUrl', this)">Copy URL</button>
                 </div>
+                <?php if ($hasVideo): ?>
+                <p class="small text-muted mt-2 mb-0">
+                    Video source: <strong><?= htmlspecialchars(ucfirst((string) ($row['video_source'] ?: 'upload')), ENT_QUOTES, 'UTF-8') ?></strong>
+                </p>
                 <?php endif; ?>
             </div>
         </div>
-        <?php elseif (!$hasVideo): ?>
+        <?php endif; ?>
+
+        <?php if (!$hasVideo): ?>
         <div class="card mt-3 border-0 shadow-sm">
             <div class="card-body">
                 <h6 class="card-title mb-2"><i class="fas fa-video me-2 text-muted"></i>No introduction video yet</h6>
@@ -248,9 +242,9 @@ $appId = (int) $row['id'];
                 <?php if ($videoLocal !== '' || $videoPcloud !== ''): ?>
                 <hr>
                 <div class="small fw-semibold mb-1">Video</div>
-                <?php if ($publicVideoUrl !== ''): ?>
-                <a href="<?= htmlspecialchars($publicVideoUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger w-100 mb-1">
-                    <i class="fas fa-play me-1"></i> Public video page
+                <?php if ($publicDetailsUrl !== ''): ?>
+                <a href="<?= htmlspecialchars($publicDetailsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger w-100 mb-1">
+                    <i class="fas fa-id-card me-1"></i> View details
                 </a>
                 <?php endif; ?>
                 <?php endif; ?>

@@ -116,11 +116,12 @@ function fm_ensure_schema(mysqli $conn): void
 
     // Candidate intro video (local + pCloud public link).
     $videoCols = [
-        'video_file'          => "ADD COLUMN `video_file` varchar(255) NULL DEFAULT NULL AFTER `academic_docs_file`",
-        'video_source'        => "ADD COLUMN `video_source` varchar(16) NULL DEFAULT NULL AFTER `video_file`",
-        'video_pcloud_fileid' => "ADD COLUMN `video_pcloud_fileid` varchar(64) NULL DEFAULT NULL AFTER `video_source`",
-        'video_pcloud_link'   => "ADD COLUMN `video_pcloud_link` text NULL DEFAULT NULL AFTER `video_pcloud_fileid`",
-        'video_public_token'  => "ADD COLUMN `video_public_token` varchar(64) NULL DEFAULT NULL AFTER `video_pcloud_link`",
+        'video_file'           => "ADD COLUMN `video_file` varchar(255) NULL DEFAULT NULL AFTER `academic_docs_file`",
+        'video_source'         => "ADD COLUMN `video_source` varchar(16) NULL DEFAULT NULL AFTER `video_file`",
+        'video_pcloud_fileid'  => "ADD COLUMN `video_pcloud_fileid` varchar(64) NULL DEFAULT NULL AFTER `video_source`",
+        'video_pcloud_link'    => "ADD COLUMN `video_pcloud_link` text NULL DEFAULT NULL AFTER `video_pcloud_fileid`",
+        'video_public_token'   => "ADD COLUMN `video_public_token` varchar(64) NULL DEFAULT NULL AFTER `video_pcloud_link`",
+        'video_public_secret'  => "ADD COLUMN `video_public_secret` varchar(64) NULL DEFAULT NULL AFTER `video_public_token`",
     ];
     foreach ($videoCols as $colName => $alterSql) {
         $chk = $conn->query("SHOW COLUMNS FROM francophonie_mobility_applications LIKE '{$colName}'");
@@ -142,7 +143,7 @@ function fm_ensure_schema(mysqli $conn): void
 
     // One-time admin invite link for candidates who applied without a video.
     $inviteCols = [
-        'video_invite_token'      => "ADD COLUMN `video_invite_token` varchar(64) NULL DEFAULT NULL AFTER `video_public_token`",
+        'video_invite_token'      => "ADD COLUMN `video_invite_token` varchar(64) NULL DEFAULT NULL AFTER `video_public_secret`",
         'video_invite_created_at' => "ADD COLUMN `video_invite_created_at` datetime NULL DEFAULT NULL AFTER `video_invite_token`",
         'video_invite_opened_at'  => "ADD COLUMN `video_invite_opened_at` datetime NULL DEFAULT NULL AFTER `video_invite_created_at`",
         'video_invite_used_at'    => "ADD COLUMN `video_invite_used_at` datetime NULL DEFAULT NULL AFTER `video_invite_opened_at`",

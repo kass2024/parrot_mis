@@ -8,6 +8,7 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
+require_once __DIR__ . '/helpers/fm_public_share.php';
 
 fm_ensure_schema($conn);
 
@@ -62,7 +63,9 @@ try {
     }
 
     $id = (int) $row['id'];
-    $publicToken = bin2hex(random_bytes(16));
+    $share = fm_new_public_share_tokens();
+    $publicToken = $share['token'];
+    $publicSecret = $share['secret'];
     $emptyLocal = '';
 
     $upd = $conn->prepare(
@@ -72,17 +75,19 @@ try {
             video_pcloud_fileid = ?,
             video_pcloud_link = ?,
             video_public_token = ?,
+            video_public_secret = ?,
             video_invite_used_at = NOW()
          WHERE id = ? AND video_invite_token = ? AND video_invite_used_at IS NULL
          LIMIT 1'
     );
     $upd->bind_param(
-        'sssssis',
+        'ssssssis',
         $emptyLocal,
         $source,
         $pcloudFileId,
         $pcloudLink,
         $publicToken,
+        $publicSecret,
         $id,
         $token
     );

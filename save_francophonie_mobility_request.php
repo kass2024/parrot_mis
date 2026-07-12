@@ -211,8 +211,12 @@ if ($video_source === '' && $video_pcloud_link !== '') {
     $video_source = 'upload';
 }
 $video_public_token = '';
+$video_public_secret = '';
 if ($video_pcloud_link !== '' || $video_pcloud_fileid !== '') {
-    $video_public_token = bin2hex(random_bytes(16));
+    require_once __DIR__ . '/helpers/fm_public_share.php';
+    $share = fm_new_public_share_tokens();
+    $video_public_token = $share['token'];
+    $video_public_secret = $share['secret'];
 }
 
 $hasAttachment = $cv_file !== '' || $french_cert_file !== '' || $english_cert_file !== '' || $academic_docs_file !== '';
@@ -233,9 +237,9 @@ $sql = 'INSERT INTO francophonie_mobility_applications (
     french_level, french_tef, french_tcf, french_professional,
     english_level, english_toefl, english_ielts, english_professional,
     has_wes, cv_file, french_cert_file, english_cert_file, academic_docs_file,
-    video_file, video_source, video_pcloud_fileid, video_pcloud_link, video_public_token,
+    video_file, video_source, video_pcloud_fileid, video_pcloud_link, video_public_token, video_public_secret,
     status, created_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
@@ -252,9 +256,10 @@ $video_source_db = $video_source !== '' ? $video_source : '';
 $video_fileid_db = $video_pcloud_fileid !== '' ? $video_pcloud_fileid : '';
 $video_link_db = $video_pcloud_link !== '' ? $video_pcloud_link : '';
 $video_token_db = $video_public_token !== '' ? $video_public_token : '';
+$video_secret_db = $video_public_secret !== '' ? $video_public_secret : '';
 
 $stmt->bind_param(
-    'ssssssssssisssssssssssiissiisssssssssss',
+    'ssssssssssisssssssssssiissiissssssssssss',
     $user_id, $reference_id, $first_name, $last_name, $email,
     $phone_area_code, $phone_number, $date_of_birth, $passport_number, $address,
     $age, $nationality, $country_of_residence,
@@ -263,7 +268,7 @@ $stmt->bind_param(
     $french_level, $french_tef, $french_tcf, $french_professional,
     $english_level, $english_toefl, $english_ielts, $english_professional,
     $has_wes, $cv_db, $french_db, $english_db, $academic_db,
-    $video_db, $video_source_db, $video_fileid_db, $video_link_db, $video_token_db
+    $video_db, $video_source_db, $video_fileid_db, $video_link_db, $video_token_db, $video_secret_db
 );
 
 if (!$stmt->execute()) {
