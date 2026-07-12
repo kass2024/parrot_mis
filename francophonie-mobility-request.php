@@ -153,7 +153,7 @@ if ($st) {
                     </div>
                     <div class="col-12 col-md-4">
                         <label class="form-label fm-label" for="age">Age</label>
-                        <input type="number" class="form-control" id="age" name="age" min="18" max="99" placeholder="Optional">
+                        <input type="number" class="form-control" id="age" name="age" min="0" max="150" placeholder="Optional">
                     </div>
                     <div class="col-12 col-md-6">
                         <label class="form-label fm-label required" for="nationality">Nationality</label>

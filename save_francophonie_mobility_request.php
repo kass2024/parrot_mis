@@ -87,10 +87,6 @@ if ($date_of_birth_raw === '') {
         $missing[] = 'Valid Date of Birth';
     } else {
         $date_of_birth = date('Y-m-d', $dobTs);
-        $ageFromDob = (int) date('Y') - (int) date('Y', $dobTs);
-        if ($ageFromDob < 18 || $ageFromDob > 99) {
-            $missing[] = 'You must be between 18 and 99 years old';
-        }
     }
 }
 
