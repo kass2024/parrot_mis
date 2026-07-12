@@ -209,7 +209,6 @@ function fm_public_copy_bundle(array $row, string $detailsUrl): string
         'Nationality: ' . ($row['nationality'] ?? ''),
         'Profession: ' . ($row['profession'] ?? ''),
         'View details: ' . $detailsUrl,
-        '(Secured link — do not forward publicly)',
     ];
     return implode("\n", $lines) . "\n";
 }
