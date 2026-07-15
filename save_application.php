@@ -675,26 +675,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $identityFirst = trim((string)($_POST['first_name'] ?? ''));
         $identityLast = trim((string)($_POST['last_name'] ?? ''));
 
+        // Smart AI final submit: names are required; email/phone may be incomplete and
+        // can be completed later from retrieval or the student portal.
         if ($identityAppId > 0 && looks_like_human_name($identityFirst) && looks_like_human_name($identityLast)) {
-            $stmt = $conn->prepare("
-                SELECT valid_passport, cv_resume
-                FROM student_applications
-                WHERE id = ?
-                LIMIT 1
-            ");
-
-            if ($stmt) {
-                $stmt->bind_param("i", $identityAppId);
-                $stmt->execute();
-                $stmt->bind_result($storedPassport, $storedCv);
-                if ($stmt->fetch()) {
-                    $identityOnlySubmitAllowed = (
-                        trim((string)$storedPassport) !== ''
-                        || trim((string)$storedCv) !== ''
-                    );
-                }
-                $stmt->close();
-            }
+            $identityOnlySubmitAllowed = true;
         }
     }
 
@@ -726,10 +710,16 @@ if ($isFinal === 1) {
     // Validate email if present (required on final submit unless identity-only smart submit is allowed)
     $email = isset($_POST['email']) ? trim((string)$_POST['email']) : '';
     $emailRequired = ($isFinal === 1 && !$identityOnlySubmitAllowed);
-    if ($emailRequired || $email !== '') {
-        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    if ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        if ($identityOnlySubmitAllowed) {
+            // Incomplete AI extraction: drop invalid email so finalize can continue.
+            $_POST['email'] = '';
+            $email = '';
+        } else {
             $fieldErrors['email'] = 'Please enter a valid email address.';
         }
+    } elseif ($emailRequired && $email === '') {
+        $fieldErrors['email'] = 'Please enter a valid email address.';
     }
 
     // Validate names if present (required on final submit)
@@ -752,7 +742,15 @@ if ($isFinal === 1) {
     $phoneRequired = ($isFinal === 1 && !$identityOnlySubmitAllowed);
     if ($phoneRequired || $phoneTouched) {
         if (!is_valid_phone_pair($areaCode, $phoneDig)) {
-            $fieldErrors['phone_number'] = 'Please enter a valid phone number.';
+            if ($identityOnlySubmitAllowed && !$phoneRequired) {
+                // Dial-code-only / partial AI phone should not block Smart AI final submit.
+                $_POST['area_code'] = '';
+                $_POST['phone_number'] = '';
+                $areaCode = '';
+                $phoneDig = '';
+            } else {
+                $fieldErrors['phone_number'] = 'Please enter a valid phone number.';
+            }
         } else {
             $_POST['area_code'] = $areaCode;
             $_POST['phone_number'] = $phoneDig;
@@ -765,7 +763,12 @@ if ($isFinal === 1) {
     $eTouched = (trim((string)($_POST['emergency_area_code'] ?? '')) !== '' || trim((string)($_POST['emergency_phone_number'] ?? '')) !== '');
     if ($isFinal === 1 || $eTouched) {
         if ($eTouched && !is_valid_phone_pair($eArea, $eDig)) {
-            $fieldErrors['emergency_phone_number'] = 'Please enter a valid emergency phone number.';
+            if ($identityOnlySubmitAllowed) {
+                $_POST['emergency_area_code'] = '';
+                $_POST['emergency_phone_number'] = '';
+            } else {
+                $fieldErrors['emergency_phone_number'] = 'Please enter a valid emergency phone number.';
+            }
         } elseif ($eTouched) {
             $_POST['emergency_area_code'] = $eArea;
             $_POST['emergency_phone_number'] = $eDig;

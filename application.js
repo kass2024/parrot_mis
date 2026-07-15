@@ -596,6 +596,8 @@ function mergePrescreenIntoAutofillFields(aiFields, prescreenFields) {
 function syncApplicantPhoneHiddenFields() {
   const phoneInput = document.getElementById("intl_phone");
   if (!phoneInput) return;
+  // Don't clear AI-filled hidden phone fields when the visible widget is still empty.
+  if (String(phoneInput.value || "").trim() === "") return;
   phoneInput.dispatchEvent(new Event("blur", { bubbles: true }));
   phoneInput.dispatchEvent(new Event("change", { bubbles: true }));
 }
@@ -1700,6 +1702,7 @@ return true;
 ===================================================== */
 async function submitForm(options = {}) {
   submitForm.duplicateEmailConflict = false;
+  submitForm.lastErrorMessage = "";
   try {
     if (options.autoAssignDefaultAgent) {
       await ensureDefaultSubmissionAgent();
@@ -1710,6 +1713,10 @@ async function submitForm(options = {}) {
       if (emailCheck.reason === "duplicate") {
         submitForm.duplicateEmailConflict = true;
       }
+      submitForm.lastErrorMessage =
+        emailCheck.reason === "duplicate"
+          ? "This email is already registered with an existing application."
+          : "Unable to verify the email address right now. Please try again.";
       return false;
     }
 
@@ -1724,7 +1731,8 @@ async function submitForm(options = {}) {
     try {
       data = JSON.parse(rawText);
     } catch {
-      showApplicationSaveError("Submission error. Please try again.");
+      submitForm.lastErrorMessage = "Submission error. Please try again.";
+      showApplicationSaveError(submitForm.lastErrorMessage);
       return false;
     }
     if (data.status === "success") {
@@ -1753,6 +1761,7 @@ async function submitForm(options = {}) {
       if (dup) {
         submitForm.duplicateEmailConflict = true;
       }
+      submitForm.lastErrorMessage = failMsg || "Submission failed";
       showApplicationSaveError(getErrorMessage({ message: failMsg }, "Submission failed"), {
         title: dup ? "Email Already Exists" : undefined,
         reloadOnClose: dup
@@ -1760,7 +1769,8 @@ async function submitForm(options = {}) {
       return false;
     }
   } catch (err) {
-    showApplicationSaveError(getErrorMessage(err, "Submission error. Please try again."));
+    submitForm.lastErrorMessage = getErrorMessage(err, "Submission error. Please try again.");
+    showApplicationSaveError(submitForm.lastErrorMessage);
     return false;
   }
 }

@@ -4546,19 +4546,10 @@ function startValidationSimulation(progress) {
 
   function hasCoreApplicantInfo(fields) {
     const values = fields || {};
-    const hasPhone =
-      (String(values.area_code || values.phone_area_code || "").trim() !== "" &&
-        String(values.phone_number || "").trim() !== "") ||
-      String(values.phone_e164 || "").trim() !== "";
-
-    return [
-      values.first_name,
-      values.last_name,
-      values.email,
-      values.passport_number,
-      values.student_national_id,
-      hasPhone ? "1" : ""
-    ].some(value => String(value || "").trim() !== "");
+    const first = String(values.first_name || "").trim();
+    const last = String(values.last_name || "").trim();
+    // Final Smart AI submit requires both names (matches server looks_like_human_name gate).
+    return first.length >= 2 && last.length >= 2;
   }
 
   function applyMergedAutofillFields(aiFields) {
@@ -5280,7 +5271,16 @@ function startValidationSimulation(progress) {
         if (typeof submitForm.duplicateEmailConflict !== "undefined" && submitForm.duplicateEmailConflict) {
           return;
         }
-        setStage("submit", "Final submission failed. The extracted application remains saved as a draft.", "warning", "The saved draft and attached documents are still available for later editing.");
+        const detail =
+          (typeof submitForm.lastErrorMessage === "string" && submitForm.lastErrorMessage.trim())
+            ? submitForm.lastErrorMessage.trim()
+            : "The saved draft and attached documents are still available for later editing.";
+        setStage(
+          "submit",
+          "Final submission failed. The extracted application remains saved as a draft.",
+          "warning",
+          detail
+        );
         return;
       }
 
@@ -5915,10 +5915,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const phoneNumInput  = document.getElementById("phone_number");
 
   function syncPhoneFields() {
+    if (phoneInput.value.trim() === "") {
+      areaCodeInput.value = "";
+      phoneNumInput.value = "";
+      phoneInput.classList.remove("is-invalid", "is-valid");
+      return true;
+    }
+
     if (!iti.isValidNumber()) {
       areaCodeInput.value = "";
       phoneNumInput.value = "";
       phoneInput.classList.add("is-invalid");
+      phoneInput.classList.remove("is-valid");
       return false;
     }
 
@@ -5936,10 +5944,11 @@ document.addEventListener("DOMContentLoaded", () => {
   phoneInput.addEventListener("change", syncPhoneFields);
   phoneInput.addEventListener("keyup", syncPhoneFields);
 
-  /* Prevent form submit if invalid */
+  /* Prevent form submit if invalid (skip when empty — Smart AI can finalize later) */
   const form = phoneInput.closest("form");
   if (form) {
     form.addEventListener("submit", e => {
+      if (phoneInput.value.trim() === "") return;
       if (!syncPhoneFields()) {
         e.preventDefault();
         alert("Please enter a valid phone number.");
