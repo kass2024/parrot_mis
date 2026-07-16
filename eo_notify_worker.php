@@ -58,13 +58,7 @@ $log = static function (string $msg) use ($logFile, $referenceId): void {
 
 $log('Worker started');
 
-try {
-    $ok = eo_notify_office_new_application($row);
-    $log('Office notify: ' . ($ok ? 'OK' : 'FAILED'));
-} catch (Throwable $e) {
-    $log('Office notify exception: ' . $e->getMessage());
-}
-
+// Submission: notify applicant only. Office package is sent on approval.
 try {
     $ok = eo_notify_applicant_received($row);
     $log('Applicant notify: ' . ($ok ? 'OK' : 'FAILED'));

@@ -92,7 +92,7 @@ function eo_collect_attachments(array $row): array
     return ['attachments' => $attachments, 'labels' => $labels];
 }
 
-/** Email full application + documents to EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL. */
+/** Email full application + documents to EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL (on approval). */
 function eo_notify_office_new_application(array $row): bool
 {
     $to = eo_notify_recipient_email();
@@ -102,15 +102,15 @@ function eo_notify_office_new_application(array $row): bool
     }
 
     $pack = eo_collect_attachments($row);
-    $body = '<p>A new <strong>Employment Opportunities</strong> application was submitted.</p>'
+    $body = '<p>An <strong>Employment Opportunities</strong> application has been <strong>approved</strong>. Full details and documents are attached.</p>'
         . eo_build_summary_html($row);
 
     if ($pack['labels'] !== []) {
         $body .= '<p><strong>Attachments:</strong> ' . htmlspecialchars(implode(', ', $pack['labels']), ENT_QUOTES, 'UTF-8') . '</p>';
     }
 
-    $subject = 'New Employment Opportunities Application — ' . ($row['reference_id'] ?? '');
-    return sendSMTPMail($to, $subject, eo_email_wrap('New Application', $body), $pack['attachments']);
+    $subject = 'Approved Employment Opportunities Application — ' . ($row['reference_id'] ?? '');
+    return sendSMTPMail($to, $subject, eo_email_wrap('Approved Application Package', $body), $pack['attachments']);
 }
 
 function eo_notify_applicant_received(array $row): bool

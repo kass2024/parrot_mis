@@ -16,7 +16,19 @@ require_once __DIR__ . '/helpers/env_load.php';
 eo_ensure_schema($conn);
 xander_load_env_file();
 
-if (empty($_SESSION['id']) || !in_array($_SESSION['role'] ?? '', ['superadmin', 'staff'], true)) {
+$adminId = $_SESSION['id'] ?? $_SESSION['admin_id'] ?? null;
+$roleRaw = trim((string) ($_SESSION['role'] ?? ''));
+$roleKey = strtolower(preg_replace('/\s+/', ' ', $roleRaw) ?? $roleRaw);
+$roleOk = in_array($roleKey, ['superadmin', 'staff'], true)
+    || in_array($roleRaw, ['superadmin', 'staff'], true);
+
+if (empty($adminId) || !$roleOk) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        header('Content-Type: application/json; charset=utf-8');
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'Access denied. Please refresh and log in again.']);
+        exit;
+    }
     header('Location: admin-login.php');
     exit;
 }
@@ -25,28 +37,89 @@ if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
+/**
+ * Detached CLI worker for status / approval emails (does not block admin UI).
+ */
+function eo_spawn_status_notify_worker(int $appId, string $status, string $note = ''): bool
+{
+    $candidates = [];
+    if (defined('PHP_BINARY') && PHP_BINARY !== '') {
+        $dir = dirname(PHP_BINARY);
+        $cli = $dir . DIRECTORY_SEPARATOR . 'php.exe';
+        if (is_file($cli)) {
+            $candidates[] = $cli;
+        }
+        $candidates[] = PHP_BINARY;
+    }
+    $candidates[] = 'C:\\xampp\\php\\php.exe';
+    $candidates[] = 'php';
+
+    $php = null;
+    foreach ($candidates as $c) {
+        if ($c === 'php' || is_file($c)) {
+            $php = $c;
+            break;
+        }
+    }
+    if ($php === null) {
+        return false;
+    }
+
+    $script = __DIR__ . DIRECTORY_SEPARATOR . 'eo_status_notify_worker.php';
+    if (!is_file($script)) {
+        return false;
+    }
+
+    $noteArg = $note !== '' ? escapeshellarg(base64_encode($note)) : escapeshellarg('');
+    $cmdParts = [
+        escapeshellarg($php),
+        escapeshellarg($script),
+        (string) (int) $appId,
+        escapeshellarg($status),
+        $noteArg,
+    ];
+
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        $cmd = 'cmd /c start /B "" ' . implode(' ', $cmdParts);
+        $h = @popen($cmd, 'r');
+        if ($h === false) {
+            return false;
+        }
+        @pclose($h);
+        return true;
+    }
+
+    @exec(implode(' ', $cmdParts) . ' > /dev/null 2>&1 &');
+    return true;
+}
+
 /* ---------------------------------------------------------------------------
  * AJAX actions (status update / delete) — return JSON.
  * ------------------------------------------------------------------------- */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     header('Content-Type: application/json; charset=utf-8');
 
-    $respond = static function (bool $ok, array $extra = []): void {
-        echo json_encode(array_merge(['success' => $ok], $extra));
+    $respond = static function (bool $ok, array $extra = [], int $code = 200): void {
+        http_response_code($code);
+        echo json_encode(array_merge(['success' => $ok], $extra), JSON_UNESCAPED_UNICODE);
         exit;
     };
 
-    if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], (string) $_POST['csrf_token'])) {
-        $respond(false, ['message' => 'Invalid CSRF token']);
+    if (empty($_POST['csrf_token']) || empty($_SESSION['csrf_token'])
+        || !hash_equals((string) $_SESSION['csrf_token'], (string) $_POST['csrf_token'])) {
+        $respond(false, ['message' => 'Invalid CSRF token. Refresh the page and try again.'], 403);
     }
 
-    $action = $_POST['action'];
+    $action = (string) ($_POST['action'] ?? '');
     $appId  = isset($_POST['application_id']) ? (int) $_POST['application_id'] : 0;
     if ($appId <= 0) {
         $respond(false, ['message' => 'Invalid application ID']);
     }
 
     $stmt = $conn->prepare('SELECT * FROM employment_opportunities_applications WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        $respond(false, ['message' => 'Database error'], 500);
+    }
     $stmt->bind_param('i', $appId);
     $stmt->execute();
     $app = $stmt->get_result()->fetch_assoc();
@@ -56,44 +129,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     if ($action === 'set_status') {
-        $status = $_POST['status'] ?? '';
+        $status = (string) ($_POST['status'] ?? '');
         if (!in_array($status, ['pending', 'under_review', 'approved', 'rejected'], true)) {
             $respond(false, ['message' => 'Invalid status']);
         }
         $note = trim((string) ($_POST['note'] ?? ''));
 
         $upd = $conn->prepare('UPDATE employment_opportunities_applications SET status = ?, admin_notes = ? WHERE id = ?');
+        if (!$upd) {
+            $respond(false, ['message' => 'Could not prepare status update'], 500);
+        }
         $upd->bind_param('ssi', $status, $note, $appId);
-        $upd->execute();
+        if (!$upd->execute()) {
+            $upd->close();
+            $respond(false, ['message' => 'Could not update status: ' . $conn->error], 500);
+        }
         $upd->close();
 
-        $app['status'] = $status;
-
-        // Notify applicant of new status.
-        $emailSent = false;
-        $to = trim((string) ($app['email'] ?? ''));
-        if ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) {
-            $name  = htmlspecialchars((string) ($app['full_name'] ?? ''), ENT_QUOTES, 'UTF-8');
-            $ref   = htmlspecialchars((string) ($app['reference_id'] ?? ''), ENT_QUOTES, 'UTF-8');
-            $label = ucwords(str_replace('_', ' ', $status));
-            $noteHtml = $note !== '' ? '<p style="background:#f1f5f9;padding:12px;border-radius:8px">' . nl2br(htmlspecialchars($note, ENT_QUOTES, 'UTF-8')) . '</p>' : '';
-            $body = "<p>Dear {$name},</p>
-                <p>The status of your Employment Opportunities application <strong>{$ref}</strong> is now: <strong>{$label}</strong>.</p>
-                {$noteHtml}
-                <p>Our team will contact you on WhatsApp or Telegram with any next steps.</p>";
-            $emailSent = sendSMTPMail($to, 'Employment Opportunities — Application Update — ' . ($app['reference_id'] ?? ''), eo_email_wrap('Application Update', $body));
-        }
-
-        // On approval, forward full package (form + documents) to the office inbox.
-        $packageSent = null;
-        if ($status === 'approved') {
-            $packageSent = eo_notify_office_new_application($app);
-        }
+        // Queue emails in background — do not block the admin UI (approval packages can be large).
+        $queued = eo_spawn_status_notify_worker($appId, $status, $note);
 
         $respond(true, [
-            'message'      => 'Status updated.',
-            'email_sent'   => $emailSent,
-            'package_sent' => $packageSent,
+            'message'      => 'Status updated successfully.',
+            'email_queued' => $queued,
+            'email_sent'   => $queued,
+            'package_sent' => $status === 'approved' ? $queued : null,
             'notify_email' => eo_notify_recipient_email(),
         ]);
     }
@@ -104,7 +164,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $respond(false, ['message' => 'Reference ID does not match. Deletion cancelled.']);
         }
 
-        // Remove uploaded files (passport + academic docs) from disk.
         $paths = [];
         $passport = eo_abs_upload_path((string) ($app['passport_file'] ?? ''));
         if ($passport !== null) {
@@ -120,26 +179,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             @unlink($p);
         }
 
-        // Remove any linked e-sign contracts.
-        if (function_exists('eo_contract_ensure_schema') || is_file(__DIR__ . '/helpers/eo_contract_schema.php')) {
+        if (is_file(__DIR__ . '/helpers/eo_contract_schema.php')) {
             require_once __DIR__ . '/helpers/eo_contract_schema.php';
             eo_contract_ensure_schema($conn);
             $c = $conn->prepare('SELECT id FROM eo_employment_contracts WHERE application_id = ?');
-            $c->bind_param('i', $appId);
-            $c->execute();
-            $cr = $c->get_result();
-            while ($crow = $cr->fetch_assoc()) {
-                $cid = (int) $crow['id'];
-                $conn->query('DELETE FROM eo_employment_signatures WHERE contract_id = ' . $cid);
+            if ($c) {
+                $c->bind_param('i', $appId);
+                $c->execute();
+                $cr = $c->get_result();
+                while ($crow = $cr->fetch_assoc()) {
+                    $cid = (int) $crow['id'];
+                    $conn->query('DELETE FROM eo_employment_signatures WHERE contract_id = ' . $cid);
+                }
+                $c->close();
             }
-            $c->close();
-            $del = $conn->prepare('DELETE FROM eo_employment_contracts WHERE application_id = ?');
-            $del->bind_param('i', $appId);
-            $del->execute();
-            $del->close();
+            $delC = $conn->prepare('DELETE FROM eo_employment_contracts WHERE application_id = ?');
+            if ($delC) {
+                $delC->bind_param('i', $appId);
+                $delC->execute();
+                $delC->close();
+            }
         }
 
         $del = $conn->prepare('DELETE FROM employment_opportunities_applications WHERE id = ? LIMIT 1');
+        if (!$del) {
+            $respond(false, ['message' => 'Could not delete application'], 500);
+        }
         $del->bind_param('i', $appId);
         $del->execute();
         $del->close();
@@ -471,22 +536,28 @@ function statusBtn(id, status, label, color) {
 function setStatus(id, status) {
     let note = '';
     if (status === 'rejected') {
-        note = prompt('Reason / message for applicant (sent by email):') || '';
-        if (note === null) return;
+        const typed = prompt('Reason / message for applicant (sent by email):');
+        if (typed === null) return;
+        note = typed;
     } else if (status === 'under_review') {
-        note = prompt('Optional message for applicant (email):', '') || '';
+        const typed = prompt('Optional message for applicant (email):', '');
+        if (typed === null) return;
+        note = typed;
     }
     const label = status.replace(/_/g, ' ');
-    if (!confirm('Set status to "' + label + '"? Applicant will be notified by email.')) return;
+    if (!confirm('Set status to "' + label + '"?\n\nThe applicant will be notified by email in the background.')) return;
 
     postAction({ action: 'set_status', application_id: id, status: status, note: note }).then(d => {
-        let msg = 'Status updated.\nApplicant email: ' + (d.email_sent ? 'sent' : 'not sent (no/invalid email or SMTP issue)');
-        if (d.package_sent !== null && d.package_sent !== undefined) {
-            msg += '\nApproval package: ' + (d.package_sent ? ('sent to ' + (d.notify_email || 'office')) : 'FAILED — set EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL in .env');
+        let msg = d.message || 'Status updated successfully.';
+        if (d.email_queued) {
+            msg += '\nEmails are being sent in the background.';
+        }
+        if (status === 'approved' && d.notify_email) {
+            msg += '\nApproval package queued for: ' + d.notify_email;
         }
         alert(msg);
         location.reload();
-    }).catch(e => alert(e.message));
+    }).catch(e => alert(e.message || 'Action failed'));
 }
 
 function deleteApplication(id, referenceId) {
@@ -495,16 +566,34 @@ function deleteApplication(id, referenceId) {
     postAction({ action: 'delete_application', application_id: id, confirm_reference: typed }).then(d => {
         alert(d.message || 'Deleted');
         location.reload();
-    }).catch(e => alert(e.message));
+    }).catch(e => alert(e.message || 'Delete failed'));
 }
 
 function postAction(data) {
     const fd = new FormData();
     fd.append('csrf_token', CSRF);
     Object.keys(data).forEach(k => fd.append(k, data[k]));
-    return fetch('employment-opportunities-applications.php', { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => { if (!d.success) throw new Error(d.message || 'Request failed'); return d; });
+    return fetch('employment-opportunities-applications.php', {
+        method: 'POST',
+        body: fd,
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' }
+    })
+        .then(async r => {
+            const text = await r.text();
+            let d;
+            try {
+                d = JSON.parse(text);
+            } catch (e) {
+                throw new Error(
+                    r.status === 403 || /login/i.test(text)
+                        ? 'Session expired. Refresh the dashboard and log in again.'
+                        : 'Server returned an invalid response. Please refresh and try again.'
+                );
+            }
+            if (!d.success) throw new Error(d.message || 'Request failed');
+            return d;
+        });
 }
 </script>
 </body>

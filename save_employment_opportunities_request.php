@@ -294,12 +294,6 @@ try {
 }
 
 try {
-    eo_notify_office_new_application($row);
-} catch (Throwable $e) {
-    error_log('EO office notify failed [' . $reference_id . ']: ' . $e->getMessage());
-}
-
-try {
     eo_notify_applicant_received($row);
 } catch (Throwable $e) {
     error_log('EO applicant notify failed [' . $reference_id . ']: ' . $e->getMessage());
