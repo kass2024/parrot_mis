@@ -11,6 +11,12 @@ require_once __DIR__ . '/db.php';
 $action = isset($_GET['action']) ? trim((string)$_GET['action']) : (isset($_POST['action']) ? trim((string)$_POST['action']) : '');
 $card   = isset($_POST['card']) ? trim((string)$_POST['card']) : (isset($_GET['card']) ? trim((string)$_GET['card']) : '');
 
+// Auto-create Employment Opportunities tables when that card is used (idempotent).
+if ($card === 'employment') {
+    require_once __DIR__ . '/helpers/employment_opportunities_schema.php';
+    eo_ensure_schema($conn);
+}
+
 $allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie', 'employment'];
 if (!in_array($card, $allowedCards, true)) {
     echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);

@@ -19,7 +19,10 @@ $user_id = $_SESSION['user_id'];
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/employment_opportunities_schema.php';
+require_once __DIR__ . '/helpers/eo_contract_schema.php';
+// Auto-migrate on every form visit (idempotent — safe on production).
 eo_ensure_schema($conn);
+eo_contract_ensure_schema($conn);
 
 $already = false;
 $existing_ref = '';

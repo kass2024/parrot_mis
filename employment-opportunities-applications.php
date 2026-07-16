@@ -8,12 +8,15 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/employment_opportunities_schema.php';
+require_once __DIR__ . '/helpers/eo_contract_schema.php';
 require_once __DIR__ . '/helpers/employment_opportunities_files.php';
 require_once __DIR__ . '/helpers/employment_opportunities_notify.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 require_once __DIR__ . '/helpers/env_load.php';
 
+// Auto-migrate on every admin visit (idempotent CREATE TABLE IF NOT EXISTS).
 eo_ensure_schema($conn);
+eo_contract_ensure_schema($conn);
 xander_load_env_file();
 
 $adminId = $_SESSION['id'] ?? $_SESSION['admin_id'] ?? null;

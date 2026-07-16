@@ -99,23 +99,26 @@ function eo_json_flush_continue(bool $ok, string $message, array $extra = [], in
 
     http_response_code($code);
     header('Content-Type: application/json; charset=utf-8');
-    header('Connection: close');
-    header('Content-Length: ' . (string) strlen($payload));
     header('Cache-Control: no-store');
 
-    echo $payload;
-
+    // FastCGI / LiteSpeed: close the connection cleanly, then keep running.
     if (function_exists('fastcgi_finish_request')) {
+        header('Content-Length: ' . (string) strlen($payload));
+        echo $payload;
         @fastcgi_finish_request();
         return;
     }
 
     if (function_exists('litespeed_finish_request')) {
+        header('Content-Length: ' . (string) strlen($payload));
+        echo $payload;
         @litespeed_finish_request();
         return;
     }
 
-    echo str_pad('', 256);
+    // Apache mod_php fallback: emit the exact JSON and flush. Do NOT pad the body
+    // (padding + Content-Length mismatch can corrupt the JSON the browser parses).
+    echo $payload;
     @ob_flush();
     @flush();
 }
@@ -144,6 +147,7 @@ require_once __DIR__ . '/helpers/employment_opportunities_schema.php';
 require_once __DIR__ . '/helpers/employment_opportunities_files.php';
 require_once __DIR__ . '/helpers/employment_opportunities_notify.php';
 
+// Auto-migrate before insert (idempotent — runs on production on every submit).
 eo_ensure_schema($conn);
 
 $full_name = trim((string) ($_POST['full_name'] ?? ''));
@@ -265,22 +269,14 @@ $row = [
     'academic_docs_file' => $academic_docs_file,
 ];
 
-$successMsg = 'Application submitted successfully. A confirmation email will arrive shortly.';
+$successMsg = 'Application submitted successfully. A confirmation email has been sent.';
 
 // Free this browser for another application (new form session id).
 $_SESSION['user_id'] = 'eo_' . bin2hex(random_bytes(6)) . '_' . time();
 
-// Prefer a detached CLI worker so the browser gets an instant response.
-$spawned = eo_spawn_notify_worker($reference_id);
-if ($spawned) {
-    eo_json(true, $successMsg, [
-        'reference_id' => $reference_id,
-        'user_id' => $user_id,
-        'email_queued' => true,
-    ]);
-}
-
-// Fallback: flush response, then send mail in this process.
+// Return success to the browser immediately, then send the (small) applicant
+// confirmation email in the same request. Works on FastCGI (fastcgi_finish_request)
+// and Apache mod_php (flush fallback) — no fragile CLI spawning required.
 eo_json_flush_continue(true, $successMsg, [
     'reference_id' => $reference_id,
     'user_id' => $user_id,
@@ -294,7 +290,8 @@ try {
 }
 
 try {
-    eo_notify_applicant_received($row);
+    $ok = eo_notify_applicant_received($row);
+    error_log('EO applicant notify [' . $reference_id . ']: ' . ($ok ? 'OK' : 'FAILED'));
 } catch (Throwable $e) {
     error_log('EO applicant notify failed [' . $reference_id . ']: ' . $e->getMessage());
 }
