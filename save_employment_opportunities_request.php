@@ -251,6 +251,7 @@ if (!$stmt->execute()) {
     $stmt->close();
     eo_json(false, 'Could not save application', [], 500);
 }
+$application_id = (int) $conn->insert_id;
 $stmt->close();
 
 $row = [
@@ -274,9 +275,9 @@ $successMsg = 'Application submitted successfully. A confirmation email will arr
 // Free this browser for another application (new form session id).
 $_SESSION['user_id'] = 'eo_' . bin2hex(random_bytes(6)) . '_' . time();
 
-// Queue email via fire-and-forget HTTP so this request returns JSON immediately
-// (Apache mod_php cannot truly finish the connection before SMTP otherwise).
-$queued = eo_fire_async_applicant_notify($reference_id);
+// Queue applicant confirmation using the same CLI background worker pattern
+// used by Francophonie Mobility on cPanel.
+$queued = eo_fire_async_applicant_notify($application_id);
 if (!$queued) {
     // Absolute last resort: send inline (may delay response a few seconds).
     try {

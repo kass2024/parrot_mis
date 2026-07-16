@@ -140,128 +140,76 @@ function eo_notify_applicant_received(array $row): bool
     return sendSMTPMail($to, $subject, eo_email_wrap('Application Received', $body));
 }
 
-/** HMAC token for the async notify HTTP endpoint. */
-function eo_notify_async_token(string $referenceId): string
-{
-    xander_load_env_file();
-    $secret = xander_env_get('SMTP_PASSWORD');
-    if ($secret === '') {
-        $secret = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
-    }
-    if ($secret === '') {
-        $secret = 'eo-notify-fallback-secret';
-    }
-    return hash_hmac('sha256', 'eo_applicant|' . $referenceId, $secret);
-}
-
-/** HMAC token for approval package async endpoint. */
-function eo_approval_async_token(int $appId): string
-{
-    xander_load_env_file();
-    $secret = xander_env_get('SMTP_PASSWORD');
-    if ($secret === '') {
-        $secret = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
-    }
-    if ($secret === '') {
-        $secret = 'eo-notify-fallback-secret';
-    }
-    return hash_hmac('sha256', 'eo_approval|' . $appId, $secret);
-}
-
 /**
- * Generic fire-and-forget HTTP GET (shared hosting safe; no CLI needed).
+ * Dispatch background mail exactly like Francophonie Mobility: same PHP binary,
+ * detached CLI process, and inline fallback in the caller if dispatch fails.
  */
-function eo_http_fire_and_forget(string $relScriptWithQuery): bool
+function eo_spawn_cli_worker(string $scriptBasename, int $applicationId): bool
 {
-    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-        || ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443')
-        || (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https');
-    $host = (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'mis.visaconsultantcanada.com');
-    $scheme = $https ? 'https' : 'http';
-
-    $base = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/'))), '/');
-    if ($base === '/' || $base === '\\') {
-        $base = '';
-    }
-    $relPath = $base . '/' . ltrim($relScriptWithQuery, '/');
-
-    $candidates = [];
-    $candidates[] = ($https ? 'https' : 'http') . '://127.0.0.1' . $relPath;
-    $candidates[] = $scheme . '://' . $host . $relPath;
-
-    foreach ($candidates as $url) {
-        if (function_exists('curl_init')) {
-            $ch = curl_init($url);
-            if ($ch === false) {
-                continue;
-            }
-            $headers = ['Connection: Close'];
-            if (strpos($url, '127.0.0.1') !== false) {
-                $headers[] = 'Host: ' . $host;
-            }
-            curl_setopt_array($ch, [
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_CONNECTTIMEOUT => 2,
-                CURLOPT_TIMEOUT => 1,
-                CURLOPT_NOSIGNAL => 1,
-                CURLOPT_FOLLOWLOCATION => false,
-                CURLOPT_SSL_VERIFYPEER => false,
-                CURLOPT_SSL_VERIFYHOST => 0,
-                CURLOPT_HTTPHEADER => $headers,
-            ]);
-            @curl_exec($ch);
-            $errno = curl_errno($ch);
-            @curl_close($ch);
-            if ($errno === 0 || $errno === 28) {
-                return true;
-            }
-        }
-    }
-
-    $url = $scheme . '://' . $host . $relPath;
-    $parts = parse_url($url);
-    if ($parts === false || empty($parts['host'])) {
-        error_log('EO async fire: bad URL ' . $url);
+    $root = dirname(__DIR__);
+    $script = $root . DIRECTORY_SEPARATOR . $scriptBasename;
+    $php = defined('PHP_BINARY') ? PHP_BINARY : 'php';
+    if (!is_file($script) || $applicationId <= 0) {
         return false;
     }
-    $hostOnly = $parts['host'];
-    $port = isset($parts['port']) ? (int) $parts['port'] : (($parts['scheme'] ?? 'http') === 'https' ? 443 : 80);
-    $reqPath = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
-    $transport = (($parts['scheme'] ?? '') === 'https') ? 'ssl://' : '';
-    $errno = 0;
-    $errstr = '';
-    $fp = @stream_socket_client($transport . $hostOnly . ':' . $port, $errno, $errstr, 2, STREAM_CLIENT_CONNECT);
-    if ($fp === false) {
-        error_log('EO async fire socket failed: ' . $errstr);
-        return false;
+
+    $id = (int) $applicationId;
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        $cmd = 'start /B "" ' . escapeshellarg($php) . ' ' . escapeshellarg($script) . ' ' . $id;
+        @pclose(@popen($cmd, 'r'));
+    } else {
+        $cmd = escapeshellarg($php) . ' ' . escapeshellarg($script) . ' ' . $id . ' > /dev/null 2>&1 &';
+        @exec($cmd);
     }
-    stream_set_timeout($fp, 1);
-    $out = "GET {$reqPath} HTTP/1.1\r\nHost: {$hostOnly}\r\nConnection: Close\r\n\r\n";
-    @fwrite($fp, $out);
-    @fclose($fp);
+
     return true;
 }
 
-/**
- * Kick off applicant confirmation email without waiting.
- */
-function eo_fire_async_applicant_notify(string $referenceId): bool
+function eo_fire_async_applicant_notify(int $applicationId): bool
 {
-    $token = eo_notify_async_token($referenceId);
-    $query = 'eo_notify_async.php?ref=' . rawurlencode($referenceId) . '&t=' . rawurlencode($token);
-    return eo_http_fire_and_forget($query);
+    return eo_spawn_cli_worker('eo_background_email.php', $applicationId);
 }
 
-/**
- * Kick off office approval package email (details + docs). Does NOT notify applicant.
- */
-function eo_fire_async_approval_package(int $appId): bool
+function eo_fire_async_approval_package(int $applicationId): bool
 {
-    if ($appId <= 0) {
+    return eo_spawn_cli_worker('eo_background_approval.php', $applicationId);
+}
+
+function eo_send_new_application_email_job(mysqli $conn, int $applicationId): bool
+{
+    $st = $conn->prepare('SELECT * FROM employment_opportunities_applications WHERE id = ? LIMIT 1');
+    if (!$st) {
         return false;
     }
-    $token = eo_approval_async_token($appId);
-    $query = 'eo_approval_async.php?id=' . $appId . '&t=' . rawurlencode($token);
-    return eo_http_fire_and_forget($query);
+    $st->bind_param('i', $applicationId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+
+    if (!$row) {
+        return false;
+    }
+
+    xander_load_env_file();
+    return eo_notify_applicant_received($row);
+}
+
+function eo_send_approval_package_job(mysqli $conn, int $applicationId): bool
+{
+    $st = $conn->prepare('SELECT * FROM employment_opportunities_applications WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('i', $applicationId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+
+    if (!$row) {
+        return false;
+    }
+
+    xander_load_env_file();
+    return eo_notify_office_new_application($row);
 }
 
