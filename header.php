@@ -753,7 +753,7 @@ nav a:hover::after {
 }
 </style>
 </head>
-<body class="site-body">
+<body class="site-body<?= !empty($card_only_mode) ? ' card-only-mode' : '' ?>">
 <header>
   <div class="header-left">
     <a href="index.php" class="header-logo-link" aria-label="<?php echo htmlspecialchars(ht('nav_home'), ENT_QUOTES, 'UTF-8'); ?>">

@@ -776,8 +776,13 @@ $destinations = [
     ['country' => 'Netherlands', 'flag' => '🇳🇱', 'students' => '500+', 'description' => 'English-taught programs & innovation center']
 ];
 
-// Get card parameter from URL for direct access
-$direct_card = isset($_GET['card']) ? $_GET['card'] : null;
+// Get card parameter from URL for direct access (shared link shows ONLY that card).
+$allowed_card_ids = array_column($cards, 'id');
+$direct_card = isset($_GET['card']) ? preg_replace('/[^a-z0-9_-]/i', '', (string) $_GET['card']) : null;
+if ($direct_card === '' || !in_array($direct_card, $allowed_card_ids, true)) {
+    $direct_card = null;
+}
+$card_only_mode = $direct_card !== null;
 
 $pageTitle = it('page_title');
 $pageDescription = it('page_description');
@@ -1537,6 +1542,56 @@ include 'header.php';
   padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; font-family: inherit;
 }
 
+/* Shared ?card= links: show ONLY the selected service card (no other index content). */
+body.card-only-mode > header,
+body.card-only-mode .footer-main,
+body.card-only-mode .footer-chat-system,
+body.card-only-mode .pcvc-pdf-float,
+body.card-only-mode [class*="pdf-float"],
+body.card-only-mode .floating-action,
+body.card-only-mode .wa-float {
+  display: none !important;
+}
+body.card-only-mode .landing-root > *:not(#directCardHeader):not(#services):not(#resumeApplicationModal) {
+  display: none !important;
+}
+body.card-only-mode #directCardHeader {
+  display: block !important;
+  margin: 0;
+  border-radius: 0;
+}
+body.card-only-mode #services {
+  display: block !important;
+  padding: 1.25rem 1rem 2.5rem !important;
+  min-height: calc(100vh - 120px);
+  background: #f4f6f3;
+}
+body.card-only-mode #services > .section-header {
+  display: none !important;
+}
+body.card-only-mode #services .services-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 480px);
+  justify-content: center;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0;
+  gap: 0;
+}
+body.card-only-mode #services .service-card {
+  display: none !important;
+}
+body.card-only-mode #services .service-card.show-card {
+  display: block !important;
+  width: 100%;
+  margin: 0;
+}
+body.card-only-mode {
+  background: #f4f6f3;
+  margin: 0;
+  padding: 0;
+}
+
 .universities-grid {
   max-width: 1200px; margin: 0 auto;
   display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;
@@ -1834,7 +1889,7 @@ include 'header.php';
 </section>
 
 <!-- Direct Card Access Header -->
-<div class="direct-card-header" id="directCardHeader">
+<div class="direct-card-header<?= $card_only_mode ? ' show-header' : '' ?>" id="directCardHeader">
   <h2>Direct Service Access</h2>
   <p>You are viewing a specific service. Click below to see all available services.</p>
   <button type="button" class="back-to-all" id="backToAll">
@@ -2137,70 +2192,46 @@ include 'header.php';
   const urlParams = new URLSearchParams(window.location.search);
   const directCardId = urlParams.get('card');
 
-  // Direct Card Access Logic
+  // Direct Card Access Logic — shared links show ONLY that card.
   if (directCardId) {
-    // Show direct card header
-    document.getElementById('directCardHeader').classList.add('show-header');
-    
-    // Show only the specific card
-    const allCards = document.querySelectorAll('.service-card');
-    allCards.forEach(card => {
+    document.body.classList.add('card-only-mode');
+    const headerEl = document.getElementById('directCardHeader');
+    if (headerEl) headerEl.classList.add('show-header');
+
+    document.querySelectorAll('.service-card').forEach(card => {
       if (card.dataset.card === directCardId) {
         card.classList.add('show-card', 'highlight-card');
       } else {
-        card.classList.remove('show-card');
+        card.classList.remove('show-card', 'highlight-card');
       }
     });
-    
-    // Scroll to the specific card
-    setTimeout(() => {
-      const cardElement = document.getElementById(directCardId);
-      if (cardElement) {
-        cardElement.scrollIntoView({ 
-          behavior: 'smooth',
-          block: 'center'
-        });
-      }
-    }, 300);
   }
 
-  // Back to All Services button
-  document.getElementById('backToAll').addEventListener('click', function() {
-    // Remove card parameter from URL without reloading page
-    const newUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, newUrl);
-    
-    // Hide direct card header
-    document.getElementById('directCardHeader').classList.remove('show-header');
-    
-    // Show all cards
-    const allCards = document.querySelectorAll('.service-card');
-    allCards.forEach(card => {
-      card.classList.add('show-card');
-      card.classList.remove('highlight-card');
-    });
-    
-    // Scroll to services section
-    document.getElementById('services').scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
-    });
+  // Back to All Services — leave card-only mode and restore full index.
+  document.getElementById('backToAll')?.addEventListener('click', function() {
+    window.location.href = window.location.pathname;
   });
 
   // Scroll to Services
-  document.getElementById('scrollToServices').addEventListener('click', function() {
-    document.getElementById('services').scrollIntoView({ 
-      behavior: 'smooth',
-      block: 'start'
+  const scrollToServicesBtn = document.getElementById('scrollToServices');
+  if (scrollToServicesBtn) {
+    scrollToServicesBtn.addEventListener('click', function() {
+      document.getElementById('services')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
     });
-  });
+  }
 
-  document.getElementById('scrollToFeatures').addEventListener('click', function() {
-    document.getElementById('pillars').scrollIntoView({
-      behavior: 'smooth',
-      block: 'start'
+  const scrollToFeaturesBtn = document.getElementById('scrollToFeatures');
+  if (scrollToFeaturesBtn) {
+    scrollToFeaturesBtn.addEventListener('click', function() {
+      document.getElementById('pillars')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
     });
-  });
+  }
 
   // Animation on scroll
   function animateOnScroll() {
