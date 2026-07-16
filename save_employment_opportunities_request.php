@@ -269,31 +269,25 @@ $row = [
     'academic_docs_file' => $academic_docs_file,
 ];
 
-$successMsg = 'Application submitted successfully. A confirmation email has been sent.';
+$successMsg = 'Application submitted successfully. A confirmation email will arrive shortly.';
 
 // Free this browser for another application (new form session id).
 $_SESSION['user_id'] = 'eo_' . bin2hex(random_bytes(6)) . '_' . time();
 
-// Return success to the browser immediately, then send the (small) applicant
-// confirmation email in the same request. Works on FastCGI (fastcgi_finish_request)
-// and Apache mod_php (flush fallback) — no fragile CLI spawning required.
-eo_json_flush_continue(true, $successMsg, [
+// Queue email via fire-and-forget HTTP so this request returns JSON immediately
+// (Apache mod_php cannot truly finish the connection before SMTP otherwise).
+$queued = eo_fire_async_applicant_notify($reference_id);
+if (!$queued) {
+    // Absolute last resort: send inline (may delay response a few seconds).
+    try {
+        eo_notify_applicant_received($row);
+    } catch (Throwable $e) {
+        error_log('EO inline notify fallback failed [' . $reference_id . ']: ' . $e->getMessage());
+    }
+}
+
+eo_json(true, $successMsg, [
     'reference_id' => $reference_id,
     'user_id' => $user_id,
-    'email_queued' => true,
+    'email_queued' => $queued,
 ]);
-
-try {
-    session_write_close();
-} catch (Throwable $e) {
-    // ignore
-}
-
-try {
-    $ok = eo_notify_applicant_received($row);
-    error_log('EO applicant notify [' . $reference_id . ']: ' . ($ok ? 'OK' : 'FAILED'));
-} catch (Throwable $e) {
-    error_log('EO applicant notify failed [' . $reference_id . ']: ' . $e->getMessage());
-}
-
-exit;

@@ -3,22 +3,28 @@ declare(strict_types=1);
 
 /**
  * Employment Opportunities — live file upload (passport or academic docs).
- * Auto-runs EO schema migration on first use.
+ * Fast path: skip full schema migration; only ensure upload directory exists.
  */
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store');
 
 try {
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
         throw new RuntimeException('Invalid request');
     }
 
-    require_once __DIR__ . '/db.php';
-    require_once __DIR__ . '/helpers/employment_opportunities_schema.php';
-    eo_ensure_schema($conn);
-
     if (empty($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
         $code = $_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE;
-        throw new RuntimeException('Upload failed (code ' . $code . ')');
+        $map = [
+            UPLOAD_ERR_INI_SIZE => 'File exceeds server upload limit',
+            UPLOAD_ERR_FORM_SIZE => 'File too large',
+            UPLOAD_ERR_PARTIAL => 'Upload was interrupted — please try again',
+            UPLOAD_ERR_NO_FILE => 'No file received',
+            UPLOAD_ERR_NO_TMP_DIR => 'Server temp folder missing',
+            UPLOAD_ERR_CANT_WRITE => 'Server could not write file',
+            UPLOAD_ERR_EXTENSION => 'Upload blocked by server extension',
+        ];
+        throw new RuntimeException($map[$code] ?? ('Upload failed (code ' . $code . ')'));
     }
 
     $field = preg_replace('/[^a-z0-9_]/', '', strtolower((string) ($_POST['field'] ?? 'file')));
@@ -56,7 +62,7 @@ try {
         'message' => 'File uploaded',
         'file_path' => 'uploads/employment_opportunities/' . $filename,
         'original_name' => $file['name'],
-        'size' => $file['size'],
+        'size' => (int) $file['size'],
     ], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     http_response_code(400);

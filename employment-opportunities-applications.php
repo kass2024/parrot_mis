@@ -41,59 +41,48 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 /**
- * Detached CLI worker for status / approval emails (does not block admin UI).
+ * On approval only: queue office package email (details + docs).
+ * Never emails the applicant on status changes.
  */
-function eo_spawn_status_notify_worker(int $appId, string $status, string $note = ''): bool
+function eo_queue_approval_package_if_needed(int $appId, string $status, array $appRow): array
 {
-    $candidates = [];
-    if (defined('PHP_BINARY') && PHP_BINARY !== '') {
-        $dir = dirname(PHP_BINARY);
-        $cli = $dir . DIRECTORY_SEPARATOR . 'php.exe';
-        if (is_file($cli)) {
-            $candidates[] = $cli;
+    if ($status !== 'approved') {
+        return [
+            'queued' => false,
+            'package_sent' => null,
+            'notify_email' => eo_notify_recipient_email(),
+            'message' => 'Status updated successfully.',
+        ];
+    }
+
+    $to = eo_notify_recipient_email();
+    if ($to === '') {
+        return [
+            'queued' => false,
+            'package_sent' => false,
+            'notify_email' => '',
+            'message' => 'Status updated, but approval email is not configured. Set EMPLOYMENT_OPPORTUNITIES_APPROVAL_EMAIL in .env',
+        ];
+    }
+
+    $queued = eo_fire_async_approval_package($appId);
+    if (!$queued) {
+        try {
+            $queued = eo_notify_office_new_application($appRow);
+        } catch (Throwable $e) {
+            error_log('EO approval inline fallback failed: ' . $e->getMessage());
+            $queued = false;
         }
-        $candidates[] = PHP_BINARY;
-    }
-    $candidates[] = 'C:\\xampp\\php\\php.exe';
-    $candidates[] = 'php';
-
-    $php = null;
-    foreach ($candidates as $c) {
-        if ($c === 'php' || is_file($c)) {
-            $php = $c;
-            break;
-        }
-    }
-    if ($php === null) {
-        return false;
     }
 
-    $script = __DIR__ . DIRECTORY_SEPARATOR . 'eo_status_notify_worker.php';
-    if (!is_file($script)) {
-        return false;
-    }
-
-    $noteArg = $note !== '' ? escapeshellarg(base64_encode($note)) : escapeshellarg('');
-    $cmdParts = [
-        escapeshellarg($php),
-        escapeshellarg($script),
-        (string) (int) $appId,
-        escapeshellarg($status),
-        $noteArg,
+    return [
+        'queued' => $queued,
+        'package_sent' => $queued,
+        'notify_email' => $to,
+        'message' => $queued
+            ? 'Status updated. Approval package is being sent to ' . $to
+            : 'Status updated, but approval package email failed to queue.',
     ];
-
-    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
-        $cmd = 'cmd /c start /B "" ' . implode(' ', $cmdParts);
-        $h = @popen($cmd, 'r');
-        if ($h === false) {
-            return false;
-        }
-        @pclose($h);
-        return true;
-    }
-
-    @exec(implode(' ', $cmdParts) . ' > /dev/null 2>&1 &');
-    return true;
 }
 
 /* ---------------------------------------------------------------------------
@@ -149,15 +138,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
         $upd->close();
 
-        // Queue emails in background — do not block the admin UI (approval packages can be large).
-        $queued = eo_spawn_status_notify_worker($appId, $status, $note);
+        // Approval only: send office package (details + docs). Never notify applicant.
+        $app['status'] = $status;
+        $app['admin_notes'] = $note;
+        $mail = eo_queue_approval_package_if_needed($appId, $status, $app);
 
         $respond(true, [
-            'message'      => 'Status updated successfully.',
-            'email_queued' => $queued,
-            'email_sent'   => $queued,
-            'package_sent' => $status === 'approved' ? $queued : null,
-            'notify_email' => eo_notify_recipient_email(),
+            'message'      => $mail['message'],
+            'email_queued' => $mail['queued'],
+            'email_sent'   => $mail['queued'],
+            'package_sent' => $mail['package_sent'],
+            'notify_email' => $mail['notify_email'],
         ]);
     }
 
@@ -354,7 +345,7 @@ foreach ($apps as $a) {
     <?php if (!$notifyEmailOk): ?>
     <div class="alert alert-warning py-2 small">
         <i class="fas fa-exclamation-triangle me-1"></i>
-        Set <code>EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL</code> in <code>.env</code> to receive approved packages with documents.
+        Set <code>EMPLOYMENT_OPPORTUNITIES_APPROVAL_EMAIL</code> in <code>.env</code> to receive approved packages with documents (applicant is not emailed on approval).
     </div>
     <?php endif; ?>
 
@@ -538,25 +529,28 @@ function statusBtn(id, status, label, color) {
 
 function setStatus(id, status) {
     let note = '';
-    if (status === 'rejected') {
-        const typed = prompt('Reason / message for applicant (sent by email):');
-        if (typed === null) return;
-        note = typed;
-    } else if (status === 'under_review') {
-        const typed = prompt('Optional message for applicant (email):', '');
+    if (status === 'rejected' || status === 'under_review') {
+        const typed = prompt('Optional internal note (saved on the application; applicant is NOT emailed):', '');
         if (typed === null) return;
         note = typed;
     }
     const label = status.replace(/_/g, ' ');
-    if (!confirm('Set status to "' + label + '"?\n\nThe applicant will be notified by email in the background.')) return;
+    let confirmMsg = 'Set status to "' + label + '"?';
+    if (status === 'approved') {
+        confirmMsg += '\n\nThe office will receive the approval package (application details + documents).\nThe applicant will NOT be emailed.';
+    } else {
+        confirmMsg += '\n\nThe applicant will NOT be emailed.';
+    }
+    if (!confirm(confirmMsg)) return;
 
     postAction({ action: 'set_status', application_id: id, status: status, note: note }).then(d => {
         let msg = d.message || 'Status updated successfully.';
-        if (d.email_queued) {
-            msg += '\nEmails are being sent in the background.';
-        }
-        if (status === 'approved' && d.notify_email) {
-            msg += '\nApproval package queued for: ' + d.notify_email;
+        if (status === 'approved') {
+            if (d.package_sent && d.notify_email) {
+                msg += '\nApproval package queued for: ' + d.notify_email;
+            } else if (d.notify_email === '') {
+                msg += '\nWarning: set EMPLOYMENT_OPPORTUNITIES_APPROVAL_EMAIL in .env';
+            }
         }
         alert(msg);
         location.reload();

@@ -1,7 +1,8 @@
 <?php
 /**
- * Background status/approval emails for Employment Opportunities admin actions.
- * Usage: php eo_status_notify_worker.php <application_id> <status> [base64_note]
+ * Background status worker (legacy CLI).
+ * Approval packages are now sent via eo_approval_async.php (HTTP).
+ * This CLI path only sends the office package on approve — never emails the applicant.
  */
 declare(strict_types=1);
 
@@ -12,11 +13,6 @@ if (PHP_SAPI !== 'cli') {
 
 $appId = isset($argv[1]) ? (int) $argv[1] : 0;
 $status = trim((string) ($argv[2] ?? ''));
-$noteB64 = (string) ($argv[3] ?? '');
-$note = $noteB64 !== '' ? (string) base64_decode($noteB64, true) : '';
-if ($note === false) {
-    $note = '';
-}
 
 $allowed = ['pending', 'under_review', 'approved', 'rejected'];
 if ($appId <= 0 || !in_array($status, $allowed, true)) {
@@ -24,7 +20,7 @@ if ($appId <= 0 || !in_array($status, $allowed, true)) {
     exit(1);
 }
 
-@set_time_limit(180);
+@set_time_limit(300);
 ini_set('display_errors', '0');
 
 require_once __DIR__ . '/db.php';
@@ -54,42 +50,18 @@ if (!$app) {
     exit(1);
 }
 
-$app['status'] = $status;
-$log('Worker started status=' . $status);
+$log('Worker started status=' . $status . ' (applicant notify DISABLED)');
 
-try {
-    $to = trim((string) ($app['email'] ?? ''));
-    if ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        $name  = htmlspecialchars((string) ($app['full_name'] ?? ''), ENT_QUOTES, 'UTF-8');
-        $ref   = htmlspecialchars((string) ($app['reference_id'] ?? ''), ENT_QUOTES, 'UTF-8');
-        $label = ucwords(str_replace('_', ' ', $status));
-        $noteHtml = $note !== ''
-            ? '<p style="background:#f1f5f9;padding:12px;border-radius:8px">' . nl2br(htmlspecialchars($note, ENT_QUOTES, 'UTF-8')) . '</p>'
-            : '';
-        $body = "<p>Dear {$name},</p>
-            <p>The status of your Employment Opportunities application <strong>{$ref}</strong> is now: <strong>{$label}</strong>.</p>
-            {$noteHtml}
-            <p>Our team will contact you on WhatsApp or Telegram with any next steps.</p>";
-        $ok = sendSMTPMail(
-            $to,
-            'Employment Opportunities — Application Update — ' . ($app['reference_id'] ?? ''),
-            eo_email_wrap('Application Update', $body)
-        );
-        $log('Applicant email: ' . ($ok ? 'OK' : 'FAILED'));
-    } else {
-        $log('Applicant email skipped (missing/invalid)');
-    }
-} catch (Throwable $e) {
-    $log('Applicant email exception: ' . $e->getMessage());
-}
-
+// On approval only: office package. Do not email the applicant.
 if ($status === 'approved') {
     try {
         $ok = eo_notify_office_new_application($app);
-        $log('Approval package: ' . ($ok ? 'OK' : 'FAILED'));
+        $log('Approval package: ' . ($ok ? 'OK' : 'FAILED') . ' to ' . eo_notify_recipient_email());
     } catch (Throwable $e) {
         $log('Approval package exception: ' . $e->getMessage());
     }
+} else {
+    $log('No office email for status=' . $status);
 }
 
 $log('Worker finished');

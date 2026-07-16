@@ -27,11 +27,17 @@ function eo_email_wrap(string $title, string $innerHtml): string
 function eo_notify_recipient_email(): string
 {
     xander_load_env_file();
-    $to = trim(xander_env_get('EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL'));
-    if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
-        $to = trim(xander_env_get_from_dotenv_file('EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL'));
+    // Prefer APPROVAL_EMAIL (matches Francophonie naming), fall back to NOTIFY_EMAIL.
+    foreach (['EMPLOYMENT_OPPORTUNITIES_APPROVAL_EMAIL', 'EMPLOYMENT_OPPORTUNITIES_NOTIFY_EMAIL'] as $key) {
+        $to = trim(xander_env_get($key));
+        if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            $to = trim(xander_env_get_from_dotenv_file($key));
+        }
+        if ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) {
+            return $to;
+        }
     }
-    return ($to !== '' && filter_var($to, FILTER_VALIDATE_EMAIL)) ? $to : '';
+    return '';
 }
 
 function eo_build_summary_html(array $row): string
@@ -133,3 +139,129 @@ function eo_notify_applicant_received(array $row): bool
     $subject = 'Employment Opportunities — Application Received — ' . ($row['reference_id'] ?? '');
     return sendSMTPMail($to, $subject, eo_email_wrap('Application Received', $body));
 }
+
+/** HMAC token for the async notify HTTP endpoint. */
+function eo_notify_async_token(string $referenceId): string
+{
+    xander_load_env_file();
+    $secret = xander_env_get('SMTP_PASSWORD');
+    if ($secret === '') {
+        $secret = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
+    }
+    if ($secret === '') {
+        $secret = 'eo-notify-fallback-secret';
+    }
+    return hash_hmac('sha256', 'eo_applicant|' . $referenceId, $secret);
+}
+
+/** HMAC token for approval package async endpoint. */
+function eo_approval_async_token(int $appId): string
+{
+    xander_load_env_file();
+    $secret = xander_env_get('SMTP_PASSWORD');
+    if ($secret === '') {
+        $secret = xander_env_get_from_dotenv_file('SMTP_PASSWORD');
+    }
+    if ($secret === '') {
+        $secret = 'eo-notify-fallback-secret';
+    }
+    return hash_hmac('sha256', 'eo_approval|' . $appId, $secret);
+}
+
+/**
+ * Generic fire-and-forget HTTP GET (shared hosting safe; no CLI needed).
+ */
+function eo_http_fire_and_forget(string $relScriptWithQuery): bool
+{
+    $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || ((string) ($_SERVER['SERVER_PORT'] ?? '') === '443')
+        || (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https');
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'mis.visaconsultantcanada.com');
+    $scheme = $https ? 'https' : 'http';
+
+    $base = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/'))), '/');
+    if ($base === '/' || $base === '\\') {
+        $base = '';
+    }
+    $relPath = $base . '/' . ltrim($relScriptWithQuery, '/');
+
+    $candidates = [];
+    $candidates[] = ($https ? 'https' : 'http') . '://127.0.0.1' . $relPath;
+    $candidates[] = $scheme . '://' . $host . $relPath;
+
+    foreach ($candidates as $url) {
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            if ($ch === false) {
+                continue;
+            }
+            $headers = ['Connection: Close'];
+            if (strpos($url, '127.0.0.1') !== false) {
+                $headers[] = 'Host: ' . $host;
+            }
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 2,
+                CURLOPT_TIMEOUT => 1,
+                CURLOPT_NOSIGNAL => 1,
+                CURLOPT_FOLLOWLOCATION => false,
+                CURLOPT_SSL_VERIFYPEER => false,
+                CURLOPT_SSL_VERIFYHOST => 0,
+                CURLOPT_HTTPHEADER => $headers,
+            ]);
+            @curl_exec($ch);
+            $errno = curl_errno($ch);
+            @curl_close($ch);
+            if ($errno === 0 || $errno === 28) {
+                return true;
+            }
+        }
+    }
+
+    $url = $scheme . '://' . $host . $relPath;
+    $parts = parse_url($url);
+    if ($parts === false || empty($parts['host'])) {
+        error_log('EO async fire: bad URL ' . $url);
+        return false;
+    }
+    $hostOnly = $parts['host'];
+    $port = isset($parts['port']) ? (int) $parts['port'] : (($parts['scheme'] ?? 'http') === 'https' ? 443 : 80);
+    $reqPath = ($parts['path'] ?? '/') . (isset($parts['query']) ? '?' . $parts['query'] : '');
+    $transport = (($parts['scheme'] ?? '') === 'https') ? 'ssl://' : '';
+    $errno = 0;
+    $errstr = '';
+    $fp = @stream_socket_client($transport . $hostOnly . ':' . $port, $errno, $errstr, 2, STREAM_CLIENT_CONNECT);
+    if ($fp === false) {
+        error_log('EO async fire socket failed: ' . $errstr);
+        return false;
+    }
+    stream_set_timeout($fp, 1);
+    $out = "GET {$reqPath} HTTP/1.1\r\nHost: {$hostOnly}\r\nConnection: Close\r\n\r\n";
+    @fwrite($fp, $out);
+    @fclose($fp);
+    return true;
+}
+
+/**
+ * Kick off applicant confirmation email without waiting.
+ */
+function eo_fire_async_applicant_notify(string $referenceId): bool
+{
+    $token = eo_notify_async_token($referenceId);
+    $query = 'eo_notify_async.php?ref=' . rawurlencode($referenceId) . '&t=' . rawurlencode($token);
+    return eo_http_fire_and_forget($query);
+}
+
+/**
+ * Kick off office approval package email (details + docs). Does NOT notify applicant.
+ */
+function eo_fire_async_approval_package(int $appId): bool
+{
+    if ($appId <= 0) {
+        return false;
+    }
+    $token = eo_approval_async_token($appId);
+    $query = 'eo_approval_async.php?id=' . $appId . '&t=' . rawurlencode($token);
+    return eo_http_fire_and_forget($query);
+}
+

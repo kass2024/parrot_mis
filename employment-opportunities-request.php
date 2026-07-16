@@ -355,9 +355,10 @@ $fields = eo_training_fields();
                 <i class="fas fa-paper-plane me-1"></i> Submit application
             </button>
             <div id="formError" class="text-danger mt-3 small" style="display:none"></div>
-            <div id="formSuccess" class="done-box mt-3" style="display:none"></div>
         </div>
     </form>
+    <!-- Outside the form so it stays visible after form is hidden -->
+    <div id="formSuccess" class="done-box mt-3" style="display:none"></div>
     <?php endif; ?>
 </div>
 
@@ -415,20 +416,29 @@ $fields = eo_training_fields();
         return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
 
-    function uploadFile(file, field) {
+    function uploadFile(file, field, onProgress) {
         return new Promise((resolve, reject) => {
             const fd = new FormData();
             fd.append('file', file);
             fd.append('field', field);
             const xhr = new XMLHttpRequest();
             xhr.open('POST', 'eo_upload.php');
+            xhr.timeout = 120000; // 2 minutes for large PDFs on slow mobile
+            if (xhr.upload && typeof onProgress === 'function') {
+                xhr.upload.onprogress = (ev) => {
+                    if (ev.lengthComputable && ev.total > 0) {
+                        onProgress(Math.round((ev.loaded / ev.total) * 100));
+                    }
+                };
+            }
             xhr.onload = () => {
                 let data;
                 try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { reject(new Error('Upload failed')); return; }
                 if (!data.success) { reject(new Error(data.message || 'Upload failed')); return; }
                 resolve(data);
             };
-            xhr.onerror = () => reject(new Error('Network error'));
+            xhr.ontimeout = () => reject(new Error('Upload timed out. Try a smaller file or better connection.'));
+            xhr.onerror = () => reject(new Error('Network error during upload'));
             xhr.send(fd);
         });
     }
@@ -457,16 +467,23 @@ $fields = eo_training_fields();
     wireZone('passportZone', 'passportInput', async (files) => {
         const file = files[0];
         if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+            alert('File too large (max 15MB)');
+            return;
+        }
         const inner = document.getElementById('passportZoneInner');
         const defaultHtml = inner.innerHTML;
-        inner.innerHTML = '<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading…</span>';
+        const label = escapeHtml(file.name);
+        inner.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ${label}… 0%</span>`;
         try {
-            const res = await uploadFile(file, 'passport');
+            const res = await uploadFile(file, 'passport', (pct) => {
+                inner.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ${label}… ${pct}%</span>`;
+            });
             inner.innerHTML = defaultHtml;
             setPassport(res.file_path, res.original_name || file.name);
         } catch (err) {
             inner.innerHTML = `<span class="text-danger">${escapeHtml(err.message)}</span>`;
-            setTimeout(() => { inner.innerHTML = defaultHtml; }, 2500);
+            setTimeout(() => { inner.innerHTML = defaultHtml; }, 3500);
         }
     });
 
@@ -475,9 +492,16 @@ $fields = eo_training_fields();
         const inner = document.getElementById('academicZoneInner');
         const defaultHtml = inner.innerHTML;
         for (const file of list) {
-            inner.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ${escapeHtml(file.name)}…</span>`;
+            if (file.size > 15 * 1024 * 1024) {
+                alert(file.name + ' is too large (max 15MB)');
+                continue;
+            }
+            const label = escapeHtml(file.name);
+            inner.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ${label}… 0%</span>`;
             try {
-                const res = await uploadFile(file, 'academic');
+                const res = await uploadFile(file, 'academic', (pct) => {
+                    inner.innerHTML = `<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ${label}… ${pct}%</span>`;
+                });
                 academicFiles.push({ path: res.file_path, name: res.original_name || file.name });
                 renderAcademic();
             } catch (err) {
@@ -552,6 +576,7 @@ $fields = eo_training_fields();
                 return;
             }
             form.style.display = 'none';
+            document.querySelectorAll('.eo-section').forEach(el => { el.style.display = 'none'; });
             okEl.style.display = 'block';
             const ref = escapeHtml(data.reference_id || '');
             const serverMsg = escapeHtml(data.message || 'Application submitted successfully.');
