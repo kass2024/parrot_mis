@@ -307,6 +307,15 @@ $cards = [
       'admin-fm-contracts.php' => 'Signed Contracts',
     ]
   ],
+  'employment_opportunities' => [
+    'title' => 'Employment Opportunities',
+    'icon' => 'bi-briefcase',
+    'links' => [
+      'employment-opportunities-applications.php' => 'View Applications',
+      'admin-generate-eo-contract.php' => 'Issue E-Sign Contract',
+      'admin-eo-contracts.php' => 'Signed Contracts',
+    ]
+  ],
   'meeting_invitation' => [
     'title' => 'Meeting Invitation',
     'icon' => 'bi-camera-video',
@@ -372,7 +381,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -380,7 +389,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'meeting_invitation', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -2209,6 +2218,44 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           Issue E-Sign Contract
         </a>
         <a href="#" onclick="loadInFrame('admin-fm-contracts.php', 'Signed Mobility Contracts')">
+          <i class="bi bi-file-earmark-check"></i>
+          Signed Contracts
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('employment_opportunities', $allowedSidebarItems)): ?>
+      <a href="#employment_opportunities" class="sidebar-link" onclick="toggleSidebarMenu('employment_opportunities')">
+        <i class="bi bi-briefcase"></i>
+        <span>Employment Opportunities</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_employment_opportunities">
+        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php', 'Employment Opportunities')">
+          <i class="bi bi-list-ul"></i>
+          View Applications
+        </a>
+        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=pending', 'Pending')">
+          <i class="bi bi-clock"></i>
+          Pending
+        </a>
+        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=under_review', 'Under Review')">
+          <i class="bi bi-eye"></i>
+          Under Review
+        </a>
+        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=approved', 'Approved')">
+          <i class="bi bi-check-circle"></i>
+          Approved
+        </a>
+        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=rejected', 'Rejected')">
+          <i class="bi bi-x-circle"></i>
+          Rejected
+        </a>
+        <a href="#" onclick="loadInFrame('admin-generate-eo-contract.php', 'Issue E-Sign Contract')">
+          <i class="bi bi-file-earmark-text"></i>
+          Issue E-Sign Contract
+        </a>
+        <a href="#" onclick="loadInFrame('admin-eo-contracts.php', 'Signed Employment Contracts')">
           <i class="bi bi-file-earmark-check"></i>
           Signed Contracts
         </a>

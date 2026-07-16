@@ -272,6 +272,18 @@ $index_translations = [
         'card8_point1' => 'French & English profile review',
         'card8_point2' => 'Complete candidate form',
         'card8_point3' => 'Email updates & document review',
+
+        // Card 9: Employment Opportunities (Russia training + work)
+        'card9_title' => 'Employment Opportunities',
+        'card9_subtitle' => 'Work training with Russian language',
+        'card9_description' => 'Participants receive professional training while studying the Russian language and may be placed in one of the following fields. All positions combine practical work experience with Russian language training.',
+        'card9_point1' => 'Road Transport Shop (Driver)',
+        'card9_point2' => 'Service & Hospitality',
+        'card9_point3' => 'Production Operator',
+        'card9_point4' => 'Catering Industry (Food Service)',
+        'card9_point5' => 'Logistics',
+        'card9_point6' => 'Installation Works',
+        'card9_point7' => 'Tiling Works',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -532,6 +544,18 @@ $index_translations = [
         'card8_point1' => 'Évaluation profil français & anglais',
         'card8_point2' => 'Formulaire candidat complet',
         'card8_point3' => 'Suivi par email & revue documents',
+
+        // Card 9: Employment Opportunities
+        'card9_title' => 'Opportunités d\'Emploi',
+        'card9_subtitle' => 'Formation professionnelle avec le russe',
+        'card9_description' => 'Les participants reçoivent une formation professionnelle tout en étudiant le russe et peuvent être placés dans l\'un des domaines suivants. Tous les postes combinent expérience pratique et apprentissage du russe.',
+        'card9_point1' => 'Transport routier (Chauffeur)',
+        'card9_point2' => 'Service & Hôtellerie',
+        'card9_point3' => 'Opérateur de production',
+        'card9_point4' => 'Restauration',
+        'card9_point5' => 'Logistique',
+        'card9_point6' => 'Travaux d\'installation',
+        'card9_point7' => 'Travaux de carrelage',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -599,6 +623,12 @@ $cardRetrievalMeta = [
         'table_label' => 'francophonie_mobility_applications',
         'placeholder' => 'fm_…',
         'example'     => 'fm_a1b2c3d4e5f6_1719150000',
+    ],
+    'employment' => [
+        'service'     => $current_lang === 'fr' ? 'Opportunités d\'Emploi' : 'Employment Opportunities',
+        'table_label' => 'employment_opportunities_applications',
+        'placeholder' => 'eo_…',
+        'example'     => 'eo_a1b2c3d4e5f6_1719150000',
     ],
 ];
 
@@ -683,6 +713,24 @@ $cards = [
         'points_keys' => ['card8_point1', 'card8_point2', 'card8_point3'],
         'form' => 'francophonie-mobility-request.php',
         'color' => '#3661B9'
+    ],
+    [
+        'id' => 'employment',
+        'icon' => '🇷🇺',
+        'title_key' => 'card9_title',
+        'subtitle_key' => 'card9_subtitle',
+        'description_key' => 'card9_description',
+        'points_keys' => [
+            'card9_point1',
+            'card9_point2',
+            'card9_point3',
+            'card9_point4',
+            'card9_point5',
+            'card9_point6',
+            'card9_point7',
+        ],
+        'form' => 'employment-opportunities-request.php',
+        'color' => '#1e4d2b'
     ]
 ];
 
@@ -2245,6 +2293,7 @@ include 'header.php';
           break;
         case 'medical':
         case 'francophonie':
+        case 'employment':
           targetUrl = form;
           break;
         default:

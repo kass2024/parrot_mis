@@ -11,7 +11,7 @@ require_once __DIR__ . '/db.php';
 $action = isset($_GET['action']) ? trim((string)$_GET['action']) : (isset($_POST['action']) ? trim((string)$_POST['action']) : '');
 $card   = isset($_POST['card']) ? trim((string)$_POST['card']) : (isset($_GET['card']) ? trim((string)$_GET['card']) : '');
 
-$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie'];
+$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie', 'employment'];
 if (!in_array($card, $allowedCards, true)) {
     echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);
     exit;
@@ -27,6 +27,7 @@ $cardSearchConfig = [
     'jobs'         => ['table' => 'job_applications',             'order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
     'medical'      => ['table' => 'canada_medical_exams_requests','order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
     'francophonie' => ['table' => 'francophonie_mobility_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'employment'   => ['table' => 'employment_opportunities_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
 ];
 
 if ($action === 'search') {
@@ -282,6 +283,21 @@ switch ($card) {
             exit;
         }
         $redirect = 'francophonie-mobility-request.php';
+        $summary  = $name !== '' ? $name : $userId;
+        break;
+
+    case 'employment':
+        [$ok, $name] = row_found(
+            $conn,
+            'SELECT first_name, last_name, email FROM employment_opportunities_applications WHERE user_id = ? LIMIT 1',
+            's',
+            $userId
+        );
+        if (!$ok) {
+            echo json_encode(['status' => 'error', 'message' => 'No Employment Opportunities application found for this user ID.']);
+            exit;
+        }
+        $redirect = 'employment-opportunities-request.php';
         $summary  = $name !== '' ? $name : $userId;
         break;
 }
