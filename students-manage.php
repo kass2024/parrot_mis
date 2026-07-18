@@ -1434,6 +1434,67 @@ if ($uq) {
   </div>
 </template>
 
+<!-- I-20 Modal (university + PDF, same pattern as Admit) -->
+<div class="modal fade" id="i20Modal" tabindex="-1" aria-labelledby="i20ModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <form id="i20Form" enctype="multipart/form-data" autocomplete="off" novalidate>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="i20ModalLabel">Send Form I-20</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="student_id" id="i20_student_id">
+          <input type="hidden" name="table" id="i20_table">
+
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" id="i20_email" class="form-control" readonly>
+          </div>
+
+          <p class="small text-muted mb-2">Add one row per university. All I-20 PDFs are sent in a single email.</p>
+
+          <div id="i20Rows" class="mb-2"></div>
+
+          <button type="button" class="btn btn-outline-primary btn-sm mb-3" id="btnAddI20Row">+ Add another university</button>
+
+          <div id="i20SendingProgress" style="display:none;" class="text-info fw-bold mt-2">
+            ⏳ Sending I-20 email... Please wait.
+          </div>
+          <div id="i20SendResult" class="mt-2 fw-semibold"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">📧 Send I-20</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<template id="i20RowTpl">
+  <div class="i20-row border rounded p-2 mb-2 bg-light">
+    <div class="row g-2 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label small mb-0">University</label>
+        <select name="university_id[]" class="form-select form-select-sm i20-uni-select">
+          <option value="">Select university…</option>
+          <?php foreach ($universities_for_admission as $uu): ?>
+            <option value="<?= (int) $uu['id'] ?>"><?= htmlspecialchars((string) $uu['name'], ENT_QUOTES, 'UTF-8') ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="col-md-5">
+        <label class="form-label small mb-0">I-20 document (PDF)</label>
+        <input type="file" name="letters[]" class="form-control form-control-sm i20-letter-file" accept=".pdf,application/pdf">
+      </div>
+      <div class="col-md-1 text-end pb-1">
+        <button type="button" class="btn btn-outline-danger btn-sm btn-remove-i20-row d-none" title="Remove row">×</button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <!-- CAQ Letter Modal (Canada only — PDF only, no university) -->
 <div class="modal fade" id="caqModal" tabindex="-1" aria-labelledby="caqModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
@@ -1817,6 +1878,34 @@ $(function() {
     addAdmissionRow();
   }
 
+  function updateI20RemoveButtons() {
+    const rows = document.querySelectorAll('#i20Rows .i20-row');
+    rows.forEach(function (row) {
+      const b = row.querySelector('.btn-remove-i20-row');
+      if (!b) return;
+      if (rows.length > 1) {
+        b.classList.remove('d-none');
+      } else {
+        b.classList.add('d-none');
+      }
+    });
+  }
+
+  function addI20Row() {
+    const tpl = document.getElementById('i20RowTpl');
+    const container = document.getElementById('i20Rows');
+    if (!tpl || !container || !tpl.content) return;
+    container.appendChild(document.importNode(tpl.content, true));
+    updateI20RemoveButtons();
+  }
+
+  function resetI20Rows() {
+    const container = document.getElementById('i20Rows');
+    if (!container) return;
+    container.innerHTML = '';
+    addI20Row();
+  }
+
   $('#admissionModal').on('show.bs.modal', function () {
     $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
     $('#sendingProgress').hide();
@@ -1832,6 +1921,23 @@ $(function() {
     if (rows.length <= 1) return;
     $(this).closest('.admission-row').remove();
     updateAdmissionRemoveButtons();
+  });
+
+  $('#i20Modal').on('show.bs.modal', function () {
+    $('#i20SendResult').text('').removeClass('text-success text-danger fw-bold');
+    $('#i20SendingProgress').hide();
+    resetI20Rows();
+  });
+
+  $('#btnAddI20Row').on('click', function () {
+    addI20Row();
+  });
+
+  $(document).on('click', '.btn-remove-i20-row', function () {
+    const rows = document.querySelectorAll('#i20Rows .i20-row');
+    if (rows.length <= 1) return;
+    $(this).closest('.i20-row').remove();
+    updateI20RemoveButtons();
   });
 
   // Smart search: token AND-match over data-search (full row index) + fallback text
@@ -2010,6 +2116,22 @@ $(function() {
       hideLoading();
       new bootstrap.Modal(
         document.getElementById('admissionModal'),
+        { backdrop: 'static', keyboard: false }
+      ).show();
+      return;
+    }
+
+    // Special handling for I-20 Sent (university + PDF, like Admit)
+    if (flag === 'i20_sent') {
+      showLoading();
+      const row = dropdown.closest('tr');
+      const email = row.find('td[data-field="email"]').text().trim();
+      $('#i20_student_id').val(id);
+      $('#i20_table').val(table);
+      $('#i20_email').val(email);
+      hideLoading();
+      new bootstrap.Modal(
+        document.getElementById('i20Modal'),
         { backdrop: 'static', keyboard: false }
       ).show();
       return;
@@ -2417,6 +2539,89 @@ $(function() {
     $('#admissionForm')[0].reset();
     $('#sendResult').text('');
     resetAdmissionRows();
+  });
+
+  // SEND I-20 DOCUMENT(S)
+  $('#i20Form').on('submit', function(e){
+    e.preventDefault();
+    $('#i20SendResult').text('').removeClass('text-success text-danger fw-bold');
+
+    const email = ($('#i20_email').val() || '').trim();
+    if (!email) {
+      $('#i20SendResult').text('❌ Applicant email is missing. Edit the email cell in the table, then try again.').addClass('text-danger fw-bold');
+      return;
+    }
+
+    let completeRows = 0;
+    let brokenRow = false;
+    $('#i20Rows .i20-row').each(function () {
+      const uni = ($(this).find('.i20-uni-select').val() || '').trim();
+      const f = $(this).find('.i20-letter-file')[0];
+      const hasFile = f && f.files && f.files.length > 0;
+      if (!uni && !hasFile) {
+        return;
+      }
+      if (uni && hasFile) {
+        completeRows++;
+        return;
+      }
+      brokenRow = true;
+      return false;
+    });
+
+    if (brokenRow) {
+      $('#i20SendResult').text('❌ Each row needs both a university and a PDF (or leave the row empty).').addClass('text-danger fw-bold');
+      return;
+    }
+    if (completeRows < 1) {
+      $('#i20SendResult').text('❌ Add at least one university and attach its I-20 PDF.').addClass('text-danger fw-bold');
+      return;
+    }
+
+    const formData = new FormData(this);
+
+    showLoading();
+    $('#i20SendingProgress').show();
+
+    $.ajax({
+      url: 'send_i20.php',
+      method: 'POST',
+      data: formData,
+      contentType: false,
+      processData: false,
+      success: function(resp) {
+        hideLoading();
+        $('#i20SendingProgress').hide();
+        if ((resp || '').trim() === 'ok') {
+          $('#i20SendResult').text('✅ I-20 email sent successfully!').addClass('text-success fw-bold');
+          showSuccessToast('I-20 document(s) sent successfully');
+
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('i20Modal'));
+            if (modal) modal.hide();
+            $('#i20Form')[0].reset();
+            $('#i20SendResult').text('');
+            resetI20Rows();
+            location.reload();
+          }, 1500);
+        } else {
+          $('#i20SendResult').text('❌ Failed to send: ' + resp).addClass('text-danger fw-bold');
+        }
+      },
+      error: function(xhr, status, error) {
+        hideLoading();
+        $('#i20SendingProgress').hide();
+        $('#i20SendResult').text('❌ Network error: ' + error).addClass('text-danger fw-bold');
+        console.error('Send I-20 error:', status, error);
+      }
+    });
+  });
+
+  $('#i20Modal').on('hidden.bs.modal', function () {
+    $('#i20Form')[0].reset();
+    $('#i20SendResult').text('');
+    $('#i20SendingProgress').hide();
+    resetI20Rows();
   });
 
   // SEND CAQ LETTER (Canada — no university)
