@@ -196,10 +196,23 @@ try {
 
     // Mark applicant as admitted only after the email is sent successfully.
     $allFlags = [
-        'incomplete_app', 'submitted', 'admit', 'i20_sent', 'sevis_paid',
+        'incomplete_app', 'submitted', 'sent_to_platform', 'app_paid', 'admit', 'caq', 'i20_sent', 'sevis_paid',
         'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start',
     ];
-    $resetFlags = implode(', ', array_map(static fn ($f) => "`$f` = 0", $allFlags));
+    $existing = [];
+    foreach ($allFlags as $f) {
+        $chk = $conn->query("SHOW COLUMNS FROM `$table` LIKE '" . $conn->real_escape_string($f) . "'");
+        if ($chk && $chk->num_rows > 0) {
+            $existing[] = $f;
+        }
+    }
+    if ($existing === []) {
+        foreach ($admissions as $a) {
+            @unlink($a['path']);
+        }
+        exit('Email sent, but status columns are missing.');
+    }
+    $resetFlags = implode(', ', array_map(static fn ($f) => "`$f` = 0", $existing));
     $updateSQL = "UPDATE `$table` SET $resetFlags, `admit` = 1 WHERE id = ?";
     $stmtUp = $conn->prepare($updateSQL);
     if (!$stmtUp) {

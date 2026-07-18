@@ -30,6 +30,8 @@ if ($displayName === '') {
 
 require_once __DIR__ . '/includes/staff_dashboard_stats.php';
 require_once __DIR__ . '/helpers/application_filters.php';
+require_once __DIR__ . '/helpers/caq_status.php';
+pcvc_ensure_caq_column($conn);
 $isSuperExecutive = pcvc_current_user_is_superadmin($conn);
 $isCatholicPortal = (strtolower(trim((string) $role)) === 'catholic university of america');
 $showStaffPersonalDashboard = !$isSuperExecutive && !$isCatholicPortal;
@@ -45,6 +47,7 @@ $flagMap = [
   'incomplete_app' => 'Incomplete App',
   'submitted' => 'Submitted',
   'admit' => 'Admit',
+  'caq' => 'CAQ',
   'i20_sent' => 'I-20 Sent',
   'sevis_paid' => 'Sevis Paid',
   'visa_scheduled' => 'Attended Visa Interview',
@@ -85,6 +88,7 @@ $flagQuery = "
         COUNT(CASE WHEN incomplete_app = 1 THEN 1 END) AS incomplete_app,
         COUNT(CASE WHEN submitted = 1 THEN 1 END) AS submitted,
         COUNT(CASE WHEN admit = 1 THEN 1 END) AS admit,
+        COUNT(CASE WHEN caq = 1 THEN 1 END) AS caq,
         COUNT(CASE WHEN i20_sent = 1 THEN 1 END) AS i20_sent,
         COUNT(CASE WHEN sevis_paid = 1 THEN 1 END) AS sevis_paid,
         COUNT(CASE WHEN visa_scheduled = 1 THEN 1 END) AS visa_scheduled,
@@ -114,6 +118,7 @@ $flagQuery = "
     SUM(incomplete_app) AS incomplete_app,
     SUM(submitted) AS submitted,
     SUM(admit) AS admit,
+    SUM(caq) AS caq,
     SUM(i20_sent) AS i20_sent,
     SUM(sevis_paid) AS sevis_paid,
     SUM(visa_scheduled) AS visa_scheduled,
@@ -123,19 +128,19 @@ $flagQuery = "
     SUM(deny) AS deny,
     SUM(app_start) AS app_start
   FROM (
-    SELECT incomplete_app, submitted, admit, i20_sent, sevis_paid,
+    SELECT incomplete_app, submitted, admit, IFNULL(caq,0) AS caq, i20_sent, sevis_paid,
            visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
     FROM student_applications
 
     UNION ALL
 
-    SELECT incomplete_app, submitted, admit, i20_sent, sevis_paid,
+    SELECT incomplete_app, submitted, admit, 0 AS caq, i20_sent, sevis_paid,
            visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
     FROM malta_applications
 
     UNION ALL
 
-    SELECT incomplete_app, submitted, admit, i20_sent, sevis_paid,
+    SELECT incomplete_app, submitted, admit, 0 AS caq, i20_sent, sevis_paid,
            visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
     FROM turkey_applications
   ) AS all_flags
@@ -147,7 +152,7 @@ if ($countRes) {
 } else {
     error_log("Flag count query failed: " . mysqli_error($conn));
     $flagCounts = array_fill_keys([
-        'incomplete_app', 'submitted', 'admit', 'i20_sent', 'sevis_paid',
+        'incomplete_app', 'submitted', 'admit', 'caq', 'i20_sent', 'sevis_paid',
         'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start'
     ], 0);
 }

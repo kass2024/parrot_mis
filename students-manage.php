@@ -5,6 +5,7 @@ error_reporting(E_ALL);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/application_filters.php';
+require_once __DIR__ . '/helpers/caq_status.php';
 session_start();
 require_once __DIR__ . '/helpers/role.php';
 
@@ -49,6 +50,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new'])) {
 
 // Fetch data from ALL sources properly with country names
 $all_applicants = [];
+pcvc_ensure_caq_column($conn);
+$studentCaqSelect = pcvc_table_has_column($conn, 'student_applications', 'caq')
+    ? 'sa.caq'
+    : '0 AS caq';
 $studentSentToPlatformSelect = pcvc_table_has_column($conn, 'student_applications', 'sent_to_platform')
     ? 'sa.sent_to_platform'
     : '0 AS sent_to_platform';
@@ -100,6 +105,7 @@ $query1 = $conn->query("
         {$studentSentToPlatformSelect},
         sa.app_paid,
         sa.admit,
+        {$studentCaqSelect},
         sa.i20_sent,
         sa.sevis_paid,
         sa.visa_scheduled,
@@ -169,6 +175,7 @@ try {
                 {$maltaSentToPlatformSelect},
                 ma.app_paid,
                 ma.admit,
+                0 AS caq,
                 ma.i20_sent,
                 ma.sevis_paid,
                 ma.visa_scheduled,
@@ -225,6 +232,7 @@ try {
                 {$turkeySentToPlatformSelect},
                 ta.app_paid,
                 ta.admit,
+                0 AS caq,
                 ta.i20_sent,
                 ta.sevis_paid,
                 ta.visa_scheduled,
@@ -789,6 +797,7 @@ if ($uq) {
     .status-sent_to_platform { color: #7c3aed; }
     .status-app_paid { color: var(--success); }
     .status-admit { color: var(--deep-navy); }
+    .status-caq { color: #0f766e; }
     .status-i20_sent { color: var(--info); }
     .status-sevis_paid { color: #6c757d; }
     .status-visa_scheduled { color: var(--warning); }
@@ -1096,6 +1105,7 @@ if ($uq) {
             'sent_to_platform' => 'Sent to Platform',
             'app_paid' => 'App Paid',
             'admit' => 'Admit',
+            'caq' => 'CAQ',
             'i20_sent' => 'I-20 Sent',
             'sevis_paid' => 'Sevis Paid',
             'visa_scheduled' => 'Visa Sch.',
@@ -1112,6 +1122,7 @@ if ($uq) {
             'visa_scheduled',
             'sevis_paid',
             'i20_sent',
+            'caq',
             'admit',
             'app_paid',
             'sent_to_platform',
@@ -1122,6 +1133,7 @@ if ($uq) {
           ];
           
           foreach ($all_applicants as $s): 
+            $isCanadaDestination = pcvc_destination_is_canada((string) ($s['destination'] ?? ''));
             // Find current status
             $currentStatus = null;
             $currentStatusText = 'Select Status';
@@ -1296,6 +1308,7 @@ if ($uq) {
                 </button>
                 <div class="status-dropdown-menu">
                   <?php foreach ($statusOptions as $key => $label): ?>
+                  <?php if ($key === 'caq' && (!$isCanadaDestination || ($s['source'] ?? '') !== 'student_applications')) continue; ?>
                   <div class="status-dropdown-item status-<?= $key ?>" data-flag="<?= $key ?>">
                     <span><?= htmlspecialchars($label) ?></span>
                     <span class="status-check <?= (!empty($s[$key]) && (int)$s[$key] === 1) ? 'active' : '' ?>">✓</span>
@@ -1420,6 +1433,47 @@ if ($uq) {
     </div>
   </div>
 </template>
+
+<!-- CAQ Letter Modal (Canada only — PDF only, no university) -->
+<div class="modal fade" id="caqModal" tabindex="-1" aria-labelledby="caqModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <form id="caqForm" enctype="multipart/form-data" autocomplete="off" novalidate>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="caqModalLabel">Send CAQ Letter</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="student_id" id="caq_student_id">
+          <input type="hidden" name="table" id="caq_table">
+
+          <div class="alert alert-info py-2 small mb-3">
+            CAQ (Certificat d’acceptation du Québec) is available for <strong>Canada</strong> applicants only. No university selection is required — attach the CAQ PDF and send.
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" id="caq_email" class="form-control" readonly>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">CAQ letter (PDF) <span class="text-danger">*</span></label>
+            <input type="file" name="letter" id="caq_letter" class="form-control" accept=".pdf,application/pdf" required>
+          </div>
+
+          <div id="caqSendingProgress" style="display:none;" class="text-info fw-bold mt-2">
+            ⏳ Sending CAQ email... Please wait.
+          </div>
+          <div id="caqSendResult" class="mt-2 fw-semibold"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">📧 Send CAQ letter</button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
 <!-- Payment Modal -->
 <div class="modal fade" id="paymentModal" tabindex="-1" aria-hidden="true">
@@ -1961,6 +2015,30 @@ $(function() {
       return;
     }
 
+    // Special handling for CAQ (Canada only — PDF letter, no university)
+    if (flag === 'caq') {
+      showLoading();
+      const row = dropdown.closest('tr');
+      const email = row.find('td[data-field="email"]').text().trim();
+      const dest = (row.find('td[data-field="destination"]').text() || '').trim().toLowerCase();
+      if (table !== 'student_applications' || dest.indexOf('canada') === -1) {
+        hideLoading();
+        alert('CAQ is only available for Canada destination applicants.');
+        return;
+      }
+      $('#caq_student_id').val(id);
+      $('#caq_table').val(table);
+      $('#caq_email').val(email);
+      $('#caq_letter').val('');
+      $('#caqSendResult').text('').removeClass('text-success text-danger fw-bold');
+      hideLoading();
+      new bootstrap.Modal(
+        document.getElementById('caqModal'),
+        { backdrop: 'static', keyboard: false }
+      ).show();
+      return;
+    }
+
     // Special handling for App Paid (payment modal)
     if (flag === 'app_paid') {
       showLoading();
@@ -2337,8 +2415,65 @@ $(function() {
 
   $('#admissionModal').on('hidden.bs.modal', function () {
     $('#admissionForm')[0].reset();
-    $('#sendResult').text('').removeClass('text-success text-danger fw-bold');
+    $('#sendResult').text('');
     resetAdmissionRows();
+  });
+
+  // SEND CAQ LETTER (Canada — no university)
+  $('#caqForm').on('submit', function(e){
+    e.preventDefault();
+    $('#caqSendResult').text('').removeClass('text-success text-danger fw-bold');
+
+    const email = ($('#caq_email').val() || '').trim();
+    if (!email) {
+      $('#caqSendResult').text('❌ Applicant email is missing.').addClass('text-danger fw-bold');
+      return;
+    }
+    const f = document.getElementById('caq_letter');
+    if (!f || !f.files || !f.files.length) {
+      $('#caqSendResult').text('❌ Please attach the CAQ PDF letter.').addClass('text-danger fw-bold');
+      return;
+    }
+
+    const formData = new FormData(this);
+    showLoading();
+    $('#caqSendingProgress').show();
+
+    $.ajax({
+      url: 'send_caq.php',
+      method: 'POST',
+      data: formData,
+      contentType: false,
+      processData: false,
+      success: function(resp) {
+        hideLoading();
+        $('#caqSendingProgress').hide();
+        if ((resp || '').trim() === 'ok') {
+          $('#caqSendResult').text('✅ CAQ email sent successfully!').addClass('text-success fw-bold');
+          showSuccessToast('CAQ letter sent successfully');
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('caqModal'));
+            if (modal) modal.hide();
+            $('#caqForm')[0].reset();
+            $('#caqSendResult').text('');
+            location.reload();
+          }, 1500);
+        } else {
+          $('#caqSendResult').text('❌ Failed to send: ' + resp).addClass('text-danger fw-bold');
+        }
+      },
+      error: function(xhr, status, error) {
+        hideLoading();
+        $('#caqSendingProgress').hide();
+        $('#caqSendResult').text('❌ Network error: ' + error).addClass('text-danger fw-bold');
+      }
+    });
+  });
+
+  $('#caqModal').on('hidden.bs.modal', function () {
+    $('#caqForm')[0].reset();
+    $('#caqSendResult').text('');
+    $('#caqSendingProgress').hide();
   });
 });
 

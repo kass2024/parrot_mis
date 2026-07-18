@@ -7,6 +7,7 @@ ini_set('display_errors', '0');
 ini_set('log_errors', '1');
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/rejection_reason_column.php';
+require_once __DIR__ . '/helpers/caq_status.php';
 
 /* =====================================================
    INPUT & VALIDATION
@@ -34,6 +35,7 @@ $allowed_flags = [
     'sent_to_platform',
     'app_paid',
     'admit',
+    'caq',
     'i20_sent',
     'sevis_paid',
     'visa_scheduled',
@@ -76,6 +78,23 @@ if (
     !in_array($flag, $allowed_flags, true)
 ) {
     xander_update_flag_respond($wantJson, false, 'invalid');
+}
+
+if ($flag === 'caq') {
+    if ($table !== 'student_applications') {
+        xander_update_flag_respond($wantJson, false, 'caq_canada_only');
+    }
+    pcvc_ensure_caq_column($conn);
+    $dst = $conn->prepare('SELECT destination FROM student_applications WHERE id = ? LIMIT 1');
+    if ($dst) {
+        $dst->bind_param('i', $id);
+        $dst->execute();
+        $drow = $dst->get_result()->fetch_assoc();
+        $dst->close();
+        if (!$drow || !pcvc_destination_is_canada((string) ($drow['destination'] ?? ''))) {
+            xander_update_flag_respond($wantJson, false, 'caq_canada_only');
+        }
+    }
 }
 
 $flagColumnCheck = $conn->query("SHOW COLUMNS FROM `$table` LIKE '" . $conn->real_escape_string($flag) . "'");

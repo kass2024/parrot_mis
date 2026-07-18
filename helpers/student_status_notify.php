@@ -54,6 +54,7 @@ function xander_student_status_flag_labels(): array
         'sent_to_platform' => 'Sent to Platform',
         'app_paid' => 'App Paid',
         'admit' => 'Admit',
+        'caq' => 'CAQ',
         'i20_sent' => 'I-20 Sent',
         'sevis_paid' => 'Sevis Paid',
         'visa_scheduled' => 'Visa Scheduled',
