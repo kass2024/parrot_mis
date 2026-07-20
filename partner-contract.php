@@ -739,8 +739,12 @@ border-radius:12px;
 border:1px solid #e5e7eb;
 ">
 
-<p style="font-weight:700;margin-bottom:20px;font-size:16px;">
+<p style="font-weight:700;margin-bottom:8px;font-size:16px;">
 Partner Company
+</p>
+<p style="font-size:13px;color:#6b7280;margin-bottom:16px;line-height:1.5;">
+Details below are copied automatically from section <strong>1.1 Company Information</strong> above.
+Review them, then sign only.
 </p>
 
 <?php
@@ -1101,13 +1105,14 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
     const emailValue = inputEmail ? inputEmail.value.trim() : '';
     const phoneValue = inputPhone ? inputPhone.value.trim() : '';
     const addressValue = inputAddress ? inputAddress.value.trim() : '';
+    const emptyHint = '—';
 
-    if (displayCompany) displayCompany.textContent = companyValue;
-    if (displayName) displayName.textContent = nameValue;
-    if (displayTitle) displayTitle.textContent = titleValue;
-    if (displayEmail) displayEmail.textContent = emailValue;
-    if (displayPhone) displayPhone.textContent = phoneValue;
-    if (displayAddress) displayAddress.textContent = addressValue;
+    if (displayCompany) displayCompany.textContent = companyValue || emptyHint;
+    if (displayName) displayName.textContent = nameValue || emptyHint;
+    if (displayTitle) displayTitle.textContent = titleValue || emptyHint;
+    if (displayEmail) displayEmail.textContent = emailValue || emptyHint;
+    if (displayPhone) displayPhone.textContent = phoneValue || emptyHint;
+    if (displayAddress) displayAddress.textContent = addressValue || emptyHint;
 
     const inlineNames = [
       document.getElementById('display_company_name'),
@@ -1117,6 +1122,23 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
     inlineNames.forEach((el) => {
       if (el) el.textContent = companyValue || '______________________________';
     });
+  }
+
+  function scrollToFirstMissingField() {
+    const required = [
+      { el: inputCompany, msg: 'Please enter your company name at the top of the contract.' },
+      { el: inputName, msg: 'Please enter your representative name at the top of the contract.' },
+      { el: inputTitle, msg: 'Please enter your title at the top of the contract.' },
+      { el: inputEmail, msg: 'Please enter your company email at the top of the contract.' }
+    ];
+    for (const item of required) {
+      if (!item.el || item.el.value.trim()) continue;
+      item.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      item.el.focus();
+      alert(item.msg);
+      return true;
+    }
+    return false;
   }
 
   function setDefaultDate() {
@@ -1129,7 +1151,9 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
 
   [inputCompany, inputName, inputTitle, inputEmail, inputPhone, inputAddress].forEach((el) => {
     if (!el) return;
-    el.addEventListener('input', syncSignatureDisplay);
+    ['input', 'change', 'keyup', 'paste'].forEach((evt) => {
+      el.addEventListener(evt, syncSignatureDisplay);
+    });
   });
 
   setDefaultDate();
@@ -1137,6 +1161,12 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
 
   // FIXED: Enhanced submission with proper signature capture
   btnSubmit.addEventListener('click', () => {
+    syncSignatureDisplay();
+
+    if (scrollToFirstMissingField()) {
+      return;
+    }
+
     const finalCompany = inputCompany ? inputCompany.value.trim() : '';
     const finalEmail = inputEmail ? inputEmail.value.trim() : '';
     const finalPhone = inputPhone ? inputPhone.value.trim() : '';
@@ -1145,22 +1175,6 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
     const finalTitle = inputTitle ? inputTitle.value.trim() : '';
     const signedDate = inputDate ? inputDate.value : '';
     
-    if (!finalCompany) {
-      alert('Please enter your company name at the top of the contract.');
-      return;
-    }
-    if (!finalEmail) {
-      alert('Please enter your company email at the top of the contract.');
-      return;
-    }
-    if (!finalName) {
-      alert('Please enter your representative name at the top of the contract.');
-      return;
-    }
-    if (!finalTitle) {
-      alert('Please enter your title at the top of the contract.');
-      return;
-    }
     if (!signedDate) {
       alert('Signing date is missing.');
       return;

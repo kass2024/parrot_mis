@@ -607,6 +607,40 @@ th {
                         </div>
 
                         <div
+                            id="relatedStudySuggestionsPanel"
+                            class="mt-6 hidden border-t border-amber-200 pt-6"
+                        >
+                            <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-5 shadow-sm">
+                                <div class="mb-3 flex flex-wrap items-start justify-between gap-2">
+                                    <div>
+                                        <h4 class="text-sm font-semibold text-amber-950">
+                                            Related programs pending approval
+                                        </h4>
+                                        <p class="mt-1 text-sm text-amber-900/80 leading-snug">
+                                            Similar programs at other universities (assigned or unassigned). Approve to add them to study choices, or reject to dismiss.
+                                        </p>
+                                    </div>
+                                    <span id="relatedStudySuggestionsCount" class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900"></span>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm border border-amber-200 bg-white">
+                                        <thead class="bg-amber-100/80">
+                                            <tr>
+                                                <th class="p-2 border text-left">Suggested university</th>
+                                                <th class="p-2 border text-left">Program</th>
+                                                <th class="p-2 border text-left">Matched from</th>
+                                                <th class="p-2 border text-left">Admin(s)</th>
+                                                <th class="p-2 border text-left">Match</th>
+                                                <th class="p-2 border text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="relatedStudySuggestionsTable"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div
                             id="studyChoiceAddPanel"
                             class="mt-6 hidden border-t border-slate-200 pt-6"
                             aria-labelledby="studyChoiceAddHeading"

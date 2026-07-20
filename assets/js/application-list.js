@@ -963,6 +963,7 @@ function renderApplication(data, applicationNumericId) {
         emergency = {},
         education = {},
         study_choices = [],
+        study_choice_suggestions = [],
         documents = {},
         document_items = [],
         agent = {},
@@ -1030,6 +1031,7 @@ function renderApplication(data, applicationNumericId) {
     };
 
     renderStudyChoices(study_choices);
+    renderRelatedStudySuggestions(study_choice_suggestions);
     currentDocumentItems = normalizeDocumentItems(document_items, documents);
     renderDocuments(currentDocumentItems);
     updateMissingDocsNotifyButton();
@@ -1377,6 +1379,126 @@ function renderStudyChoices(choices) {
             </tr>
         `);
     });
+}
+
+/**
+ * Related program suggestions (approval queue)
+ */
+function renderRelatedStudySuggestions(suggestions) {
+    const panel = document.getElementById("relatedStudySuggestionsPanel");
+    const tbody = document.getElementById("relatedStudySuggestionsTable");
+    const countEl = document.getElementById("relatedStudySuggestionsCount");
+    if (!panel || !tbody) return;
+
+    const rows = Array.isArray(suggestions) ? suggestions : [];
+    tbody.innerHTML = "";
+
+    if (!rows.length) {
+        panel.classList.add("hidden");
+        if (countEl) countEl.textContent = "";
+        return;
+    }
+
+    panel.classList.remove("hidden");
+    if (countEl) countEl.textContent = `${rows.length} pending`;
+
+    rows.forEach((s) => {
+        const id = Number(s.id || 0);
+        const lvl = s.program_level_abbr || s.program_level || "";
+        tbody.insertAdjacentHTML(
+            "beforeend",
+            `<tr data-suggestion-id="${id}">
+                <td class="p-2 border">
+                    <div class="font-medium text-slate-900">${escapeHTML(s.university || "")}</div>
+                    <div class="text-xs text-slate-500">${escapeHTML(s.region || "")}${s.university_country ? " · " + escapeHTML(s.university_country) : ""}</div>
+                </td>
+                <td class="p-2 border">
+                    <div>${escapeHTML(s.program || "")}</div>
+                    <div class="text-xs text-slate-500">${escapeHTML(lvl)}</div>
+                </td>
+                <td class="p-2 border text-xs text-slate-600">
+                    ${escapeHTML(s.source_university || "")}<br>${escapeHTML(s.source_program || "")}
+                </td>
+                <td class="p-2 border text-xs">${escapeHTML(s.admins_in_charge || "Unassigned")}</td>
+                <td class="p-2 border text-xs">
+                    <span class="font-semibold text-amber-800">${escapeHTML(String(s.match_score || ""))}</span>
+                    <div class="text-slate-500">${escapeHTML(s.match_reason || "")}</div>
+                </td>
+                <td class="p-2 border text-right whitespace-nowrap">
+                    <button type="button" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 mr-1"
+                        data-approve-suggestion="${id}">Approve</button>
+                    <button type="button" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-slate-200 text-slate-700 hover:bg-slate-300"
+                        data-reject-suggestion="${id}">Reject</button>
+                </td>
+            </tr>`
+        );
+    });
+
+    tbody.querySelectorAll("[data-approve-suggestion]").forEach((btn) => {
+        btn.addEventListener("click", () => decideRelatedSuggestion(Number(btn.getAttribute("data-approve-suggestion")), "approve"));
+    });
+    tbody.querySelectorAll("[data-reject-suggestion]").forEach((btn) => {
+        btn.addEventListener("click", () => decideRelatedSuggestion(Number(btn.getAttribute("data-reject-suggestion")), "reject"));
+    });
+}
+
+async function decideRelatedSuggestion(suggestionId, decision) {
+    if (!suggestionId) return;
+    const action =
+        decision === "approve"
+            ? "approve_study_choice_suggestion"
+            : "reject_study_choice_suggestion";
+
+    if (decision === "approve") {
+        const ok = confirm("Approve this suggestion and add it to the student’s study choices? The student will be emailed.");
+        if (!ok) return;
+    } else {
+        const ok = confirm("Reject this related-program suggestion?");
+        if (!ok) return;
+    }
+
+    try {
+        const fd = new FormData();
+        fd.append("suggestion_id", String(suggestionId));
+        if (decision === "approve") fd.append("notify_student", "1");
+
+        const res = await fetch(projectApiPath(`api/applications.php?action=${action}`), {
+            method: "POST",
+            body: fd,
+            credentials: "same-origin",
+        });
+        const json = await res.json();
+        if (!json?.success) {
+            throw new Error(json?.message || "Request failed");
+        }
+        const d = json.data || {};
+
+        if (decision === "approve" && Array.isArray(d.study_choices)) {
+            renderStudyChoices(d.study_choices);
+        }
+        if (Array.isArray(d.suggestions)) {
+            renderRelatedStudySuggestions(d.suggestions);
+        } else if (currentViewApplicationId) {
+            const viewRes = await fetch(
+                projectApiPath(`api/applications.php?action=view&id=${currentViewApplicationId}`),
+                { credentials: "same-origin" }
+            );
+            const viewJson = await viewRes.json();
+            const payload = viewJson.data || {};
+            if (Array.isArray(payload.study_choice_suggestions)) {
+                renderRelatedStudySuggestions(payload.study_choice_suggestions);
+            }
+            if (decision === "approve" && Array.isArray(payload.study_choices)) {
+                renderStudyChoices(payload.study_choices);
+            }
+        }
+
+        if (typeof showToast === "function") {
+            showToast(d.message || d.msg || "Updated", null, "Related programs");
+        }
+    } catch (e) {
+        alert(e.message || "Could not update suggestion");
+    }
 }
 
 /**
@@ -2454,6 +2576,9 @@ async function submitAddStudyChoice() {
 
         const d = json.data || {};
         renderStudyChoices(Array.isArray(d.study_choices) ? d.study_choices : []);
+        if (Array.isArray(d.study_choice_suggestions)) {
+            renderRelatedStudySuggestions(d.study_choice_suggestions);
+        }
         loadStudents();
 
         if (d.duplicate) {

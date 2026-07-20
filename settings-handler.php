@@ -19,7 +19,9 @@ ini_set('log_errors', '1');
 error_reporting(E_ALL);
 ob_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/university_admins_schema.php';
 header('Content-Type: application/json');
+pcvc_ensure_university_admins_schema($conn);
 
 /* =====================================================
    FATAL ERROR CAPTURE
@@ -84,8 +86,9 @@ if ($action === 'save_university') {
     $region_id  = (int) post('region_id', 0);
     $country_id = (int) post('country_id', 0);
 
-    // 🔹 Platforms (multiple)
+    // 🔹 Platforms + admins in charge (multiple)
     $platform_ids = $_POST['platform_ids'] ?? [];
+    $admin_ids = $_POST['admin_ids'] ?? [];
 
     if ($name === '' || !$region_id || !$country_id) {
         respond(false, 'University name, region and country required');
@@ -166,6 +169,32 @@ if ($action === 'save_university') {
             if ($pid <= 0) continue;
 
             $stmt->bind_param("ii", $id, $pid);
+            $stmt->execute();
+        }
+        $stmt->close();
+    }
+
+    /* ===============================
+       ADMINS IN CHARGE (MANY-TO-MANY)
+    =============================== */
+    $conn->query(
+        "DELETE FROM university_admins
+         WHERE university_id = {$id}"
+    );
+
+    if (is_array($admin_ids) && !empty($admin_ids)) {
+        $stmt = $conn->prepare(
+            "INSERT INTO university_admins (university_id, admin_id)
+             VALUES (?, ?)"
+        );
+
+        foreach ($admin_ids as $aid) {
+            $aid = (int) $aid;
+            if ($aid <= 0) {
+                continue;
+            }
+
+            $stmt->bind_param("ii", $id, $aid);
             $stmt->execute();
         }
         $stmt->close();

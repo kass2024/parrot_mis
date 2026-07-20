@@ -37,6 +37,7 @@ window.openUniversityModal = function (data = null) {
   const regionSel = document.getElementById('uni_region');
   const countrySel= document.getElementById('uni_country');
   const platformSel = document.getElementById('uni_platforms');
+  const adminSel = document.getElementById('uni_admins');
 
   /* ===============================
      HARD GUARD (DOM MUST EXIST)
@@ -58,6 +59,18 @@ window.openUniversityModal = function (data = null) {
       opt.selected = false;
     });
   }
+  if (adminSel) {
+    Array.from(adminSel.options).forEach(opt => {
+      opt.selected = false;
+    });
+  }
+  document.querySelectorAll('#universityModal .ss-ms-search').forEach((el) => {
+    el.value = '';
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  if (typeof window.pcvcSsSyncUniPickers === 'function') {
+    window.pcvcSsSyncUniPickers();
+  }
 
   /* ===============================
      EDIT MODE (IF DATA PROVIDED)
@@ -71,7 +84,7 @@ window.openUniversityModal = function (data = null) {
     regionSel.value = data.region_id ?? '';
     countrySel.value= data.country_id ?? '';
 
-    if (data.id && platformSel) {
+    if (data.id) {
       loadUniversityPlatforms(data.id);
     }
   }
@@ -166,17 +179,28 @@ async function loadUniversityPlatforms(universityId) {
     if (!response.ok) return;
 
     const json = await response.json();
-    if (!json.ok || !Array.isArray(json.platform_ids)) return;
+    if (!json.ok) return;
 
-    const select = document.getElementById('uni_platforms');
-    if (!select) return;
-
-    Array.from(select.options).forEach(opt => {
+    const platformSelect = document.getElementById('uni_platforms');
+    if (platformSelect && Array.isArray(json.platform_ids)) {
+      Array.from(platformSelect.options).forEach(opt => {
       opt.selected = json.platform_ids.includes(Number(opt.value));
     });
+    }
+
+    const adminSelect = document.getElementById('uni_admins');
+    if (adminSelect && Array.isArray(json.admin_ids)) {
+      Array.from(adminSelect.options).forEach(opt => {
+        opt.selected = json.admin_ids.includes(Number(opt.value));
+      });
+    }
+
+    if (typeof window.pcvcSsSyncUniPickers === 'function') {
+      window.pcvcSsSyncUniPickers();
+    }
 
   } catch (err) {
-    console.error('[settings.js] Failed to load platforms:', err);
+    console.error('[settings.js] Failed to load platforms/admins:', err);
   }
 }
 

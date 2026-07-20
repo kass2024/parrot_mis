@@ -775,8 +775,12 @@ border-radius:12px;
 border:1px solid #e5e7eb;
 ">
 
-<p style="font-weight:700;margin-bottom:20px;font-size:16px;">
+<p style="font-weight:700;margin-bottom:8px;font-size:16px;">
 Entreprise Partenaire
+</p>
+<p style="font-size:13px;color:#6b7280;margin-bottom:16px;line-height:1.5;">
+Les informations ci-dessous sont copiées automatiquement depuis la section <strong>1.1 Informations de l'Entreprise</strong> en haut.
+Vérifiez-les, puis signez seulement.
 </p>
 
 <?php
@@ -1116,16 +1120,34 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
     const emailValue = inputEmail ? inputEmail.value.trim() : '';
     const phoneValue = inputPhone ? inputPhone.value.trim() : '';
     const addressValue = inputAddress ? inputAddress.value.trim() : '';
+    const emptyHint = '—';
 
-    if (displayCompany) displayCompany.textContent = companyValue;
-    if (displayName) displayName.textContent = nameValue;
-    if (displayTitle) displayTitle.textContent = titleValue;
-    if (displayEmail) displayEmail.textContent = emailValue;
-    if (displayPhone) displayPhone.textContent = phoneValue;
-    if (displayAddress) displayAddress.textContent = addressValue;
+    if (displayCompany) displayCompany.textContent = companyValue || emptyHint;
+    if (displayName) displayName.textContent = nameValue || emptyHint;
+    if (displayTitle) displayTitle.textContent = titleValue || emptyHint;
+    if (displayEmail) displayEmail.textContent = emailValue || emptyHint;
+    if (displayPhone) displayPhone.textContent = phoneValue || emptyHint;
+    if (displayAddress) displayAddress.textContent = addressValue || emptyHint;
 
     const inlineName = document.getElementById('display_company_name');
     if (inlineName) inlineName.textContent = companyValue || '______________________________';
+  }
+
+  function scrollToFirstMissingField() {
+    const required = [
+      { el: inputCompany, msg: 'Veuillez entrer le nom de l\'entreprise en haut du contrat.' },
+      { el: inputName, msg: 'Veuillez entrer le nom du représentant en haut du contrat.' },
+      { el: inputTitle, msg: 'Veuillez entrer la fonction en haut du contrat.' },
+      { el: inputEmail, msg: 'Veuillez entrer l\'email de l\'entreprise en haut du contrat.' }
+    ];
+    for (const item of required) {
+      if (!item.el || item.el.value.trim()) continue;
+      item.el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      item.el.focus();
+      alert(item.msg);
+      return true;
+    }
+    return false;
   }
 
   function setDefaultDate() {

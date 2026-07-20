@@ -1255,6 +1255,7 @@ if ($isFinal === 1) {
 
     require_once __DIR__ . '/helpers/staff_assignment_notify.php';
     require_once __DIR__ . '/helpers/study_choice_admin_actions.php';
+    require_once __DIR__ . '/helpers/related_program_suggestions.php';
     try {
         pcvc_notify_assigned_staff_application_submitted($conn, $appId);
         debug_log('STAFF ASSIGNMENT NOTIFY SENT', ['application_id' => $appId]);
@@ -1268,6 +1269,12 @@ if ($isFinal === 1) {
         } catch (Throwable $e) {
             debug_log('ASSIGNMENT JOBS ERROR', $e->getMessage());
         }
+    }
+    try {
+        $related = pcvc_process_related_university_suggestions($conn, $appId);
+        debug_log('RELATED PROGRAM SUGGESTIONS', $related);
+    } catch (Throwable $e) {
+        debug_log('RELATED PROGRAM SUGGESTIONS ERROR', $e->getMessage());
     }
 }
 

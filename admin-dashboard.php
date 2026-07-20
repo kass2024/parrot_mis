@@ -4,8 +4,10 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/secure_file.php';
+require_once __DIR__ . '/helpers/university_admins_schema.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
+pcvc_ensure_university_admins_schema($conn);
 
 $admin_id = $_SESSION['id'] ?? null;
 if (!$admin_id || !isset($_SESSION['role'])) {
@@ -582,6 +584,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   
   <!-- DataTables CSS -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="assets/css/system-settings.css">
   
   <style>
     * {
@@ -2910,26 +2913,26 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   <div class="modal fade" id="adminSettingsModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
       <div class="modal-content border-0 shadow-lg">
-        <div class="modal-header bg-light">
+        <div class="modal-header ss-header">
           <h5 class="modal-title fw-bold">
-            <i class="bi bi-gear-fill text-primary me-2"></i> System Settings
+            <i class="bi bi-gear-fill me-2"></i> System Settings
           </h5>
           <button class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <ul class="nav nav-pills mb-4 gap-2">
-            <li class="nav-item">
-              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-universities">
+          <ul class="nav nav-pills ss-tabs mb-3" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-universities" type="button">
                 <i class="bi bi-bank me-1"></i> Universities
               </button>
             </li>
-            <li class="nav-item">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-levels">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-levels" type="button">
                 <i class="bi bi-layers me-1"></i> Program Levels
               </button>
             </li>
-            <li class="nav-item">
-              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-programs">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-programs" type="button">
                 <i class="bi bi-journal-text me-1"></i> Programs
               </button>
             </li>
@@ -2937,93 +2940,179 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <div class="tab-content">
             <!-- UNIVERSITIES TAB -->
             <div class="tab-pane fade show active" id="tab-universities">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <h6 class="fw-bold mb-0">Universities</h6>
-                  <small class="text-muted">Manage partner universities</small>
+              <?php
+              $uniRows = [];
+              $uniRegions = [];
+              $q = "
+                SELECT 
+                  u.id,
+                  u.name,
+                  u.region_id,
+                  u.country_id,
+                  r.name AS region,
+                  c.name AS country,
+                  GROUP_CONCAT(
+                    DISTINCT p.platform_name
+                    ORDER BY p.platform_name
+                    SEPARATOR ', '
+                  ) AS platforms,
+                  GROUP_CONCAT(
+                    DISTINCT a.full_name
+                    ORDER BY a.full_name
+                    SEPARATOR ', '
+                  ) AS admins_in_charge
+                FROM universities u
+                LEFT JOIN regions r ON r.id = u.region_id
+                LEFT JOIN countries c ON c.id = u.country_id
+                LEFT JOIN university_platforms up ON up.university_id = u.id
+                LEFT JOIN platforms p ON p.id = up.platform_id AND p.status = 'Active'
+                LEFT JOIN university_admins ua ON ua.university_id = u.id
+                LEFT JOIN admins a ON a.id = ua.admin_id
+                GROUP BY u.id, u.name, u.region_id, u.country_id, r.name, c.name
+                ORDER BY u.name
+              ";
+              $res = mysqli_query($conn, $q);
+              while ($row = mysqli_fetch_assoc($res)) {
+                $uniRows[] = $row;
+                $reg = trim((string) ($row['region'] ?? ''));
+                if ($reg !== '') {
+                  $uniRegions[$reg] = true;
+                }
+              }
+              ksort($uniRegions);
+              ?>
+              <div class="ss-toolbar">
+                <div class="ss-toolbar-title">
+                  <h6>Universities</h6>
+                  <small class="text-muted">Manage partner universities &amp; admins in charge</small>
                 </div>
-                <button class="btn btn-sm btn-primary" onclick="openUniversityModal()">
-                  <i class="bi bi-plus-circle me-1"></i> Add University
-                </button>
+                <div class="d-flex flex-wrap gap-2 align-items-center flex-grow-1 justify-content-end">
+                  <div class="ss-search-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="search" id="uniSmartSearch" class="ss-search" placeholder="Search university, region, country, platform, admin…" autocomplete="off">
+                    <button type="button" class="ss-search-clear" title="Clear">&times;</button>
+                  </div>
+                  <button class="btn btn-sm btn-success ss-btn-add" onclick="openUniversityModal()">
+                    <i class="bi bi-plus-circle me-1"></i> Add University
+                  </button>
+                </div>
               </div>
-              <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle">
-                  <thead class="table-light">
+              <div class="ss-filters">
+                <button type="button" class="ss-chip active" data-filter="all">All</button>
+                <button type="button" class="ss-chip" data-filter="has-admin">Has admin</button>
+                <button type="button" class="ss-chip" data-filter="no-admin">No admin</button>
+                <button type="button" class="ss-chip" data-filter="no-platform">No platform</button>
+                <?php foreach (array_keys($uniRegions) as $regName): ?>
+                  <button type="button" class="ss-chip" data-filter="region:<?= htmlspecialchars($regName) ?>"><?= htmlspecialchars($regName) ?></button>
+                <?php endforeach; ?>
+              </div>
+              <div class="ss-meta" id="uniSmartMeta"></div>
+              <div class="ss-table-wrap">
+                <table class="table table-hover align-middle ss-table mb-0">
+                  <thead>
                     <tr>
-                      <th style="width:40px">#</th>
+                      <th style="width:44px">#</th>
                       <th>University</th>
-                      <th>Region</th>
-                      <th>Country</th>
-                      <th>preferred Platform(s)</th>
+                      <th>Region / Country</th>
+                      <th>Platform(s)</th>
+                      <th>Admin(s) in charge</th>
                       <th class="text-end">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     <?php
-                    $q = "
-                      SELECT 
-                        u.id,
-                        u.name,
-                        u.region_id,
-                        u.country_id,
-                        r.name AS region,
-                        c.name AS country,
-                        GROUP_CONCAT(
-                          DISTINCT p.platform_name
-                          ORDER BY p.platform_name
-                          SEPARATOR ', '
-                        ) AS platforms
-                      FROM universities u
-                      LEFT JOIN regions r ON r.id = u.region_id
-                      LEFT JOIN countries c ON c.id = u.country_id
-                      LEFT JOIN university_platforms up ON up.university_id = u.id
-                      LEFT JOIN platforms p ON p.id = up.platform_id AND p.status = 'Active'
-                      GROUP BY u.id, u.name, u.region_id, u.country_id, r.name, c.name
-                      ORDER BY u.name
-                    ";
-                    $res = mysqli_query($conn, $q);
                     $i = 1;
-                    while ($row = mysqli_fetch_assoc($res)):
+                    foreach ($uniRows as $row):
+                      $platforms = trim((string) ($row['platforms'] ?? ''));
+                      $admins = trim((string) ($row['admins_in_charge'] ?? ''));
+                      $searchBlob = strtolower(implode(' ', [
+                        $row['name'] ?? '',
+                        $row['region'] ?? '',
+                        $row['country'] ?? '',
+                        $platforms,
+                        $admins,
+                      ]));
+                      $hasAdmin = $admins !== '' ? '1' : '0';
+                      $hasPlatform = $platforms !== '' ? '1' : '0';
                     ?>
-                    <tr>
-                      <td><?= $i++ ?></td>
-                      <td class="fw-semibold"><?= htmlspecialchars($row['name']) ?></td>
-                      <td><?= htmlspecialchars($row['region'] ?? '—') ?></td>
-                      <td><?= htmlspecialchars($row['country'] ?? '—') ?></td>
-                      <td><?= htmlspecialchars($row['platforms'] ?? '—') ?></td>
+                    <tr
+                      data-uni-row
+                      data-search="<?= htmlspecialchars($searchBlob) ?>"
+                      data-region="<?= htmlspecialchars($row['region'] ?? '') ?>"
+                      data-has-admin="<?= $hasAdmin ?>"
+                      data-has-platform="<?= $hasPlatform ?>"
+                    >
+                      <td data-row-num><?= $i++ ?></td>
+                      <td><div class="ss-uni-name"><?= htmlspecialchars($row['name']) ?></div></td>
+                      <td>
+                        <?php if (!empty($row['region'])): ?>
+                          <span class="ss-badge ss-badge-region"><?= htmlspecialchars($row['region']) ?></span>
+                        <?php endif; ?>
+                        <div class="small text-muted mt-1"><?= htmlspecialchars($row['country'] ?? '—') ?></div>
+                      </td>
+                      <td>
+                        <?php if ($platforms !== ''): ?>
+                          <?php foreach (array_filter(array_map('trim', explode(',', $platforms))) as $plat): ?>
+                            <span class="ss-badge ss-badge-platform"><?= htmlspecialchars($plat) ?></span>
+                          <?php endforeach; ?>
+                        <?php else: ?>
+                          <span class="ss-badge ss-badge-muted">—</span>
+                        <?php endif; ?>
+                      </td>
+                      <td>
+                        <?php if ($admins !== ''): ?>
+                          <?php foreach (array_filter(array_map('trim', explode(',', $admins))) as $adm): ?>
+                            <span class="ss-badge ss-badge-admin"><i class="bi bi-person-badge"></i> <?= htmlspecialchars($adm) ?></span>
+                          <?php endforeach; ?>
+                        <?php else: ?>
+                          <span class="ss-badge ss-badge-muted">Unassigned</span>
+                        <?php endif; ?>
+                      </td>
                       <td class="text-end">
-                        <button class="btn btn-sm btn-outline-secondary" onclick='openUniversityModal({
+                        <button class="btn btn-sm btn-outline-primary ss-edit-btn" onclick='openUniversityModal({
                           id: <?= (int)$row["id"] ?>,
                           name: <?= json_encode($row["name"]) ?>,
                           region_id: <?= (int)$row["region_id"] ?>,
                           country_id: <?= (int)$row["country_id"] ?>
-                        })'>
+                        })' title="Edit">
                           <i class="bi bi-pencil"></i>
                         </button>
                       </td>
                     </tr>
-                    <?php endwhile; ?>
+                    <?php endforeach; ?>
                   </tbody>
                 </table>
+                <div class="ss-empty" id="uniSmartEmpty">
+                  <i class="bi bi-search fs-3 d-block mb-2"></i>
+                  No universities match your search
+                </div>
               </div>
             </div>
             
             <!-- PROGRAM LEVELS TAB -->
             <div class="tab-pane fade" id="tab-levels">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <h6 class="fw-bold mb-0">Program Levels</h6>
+              <div class="ss-toolbar">
+                <div class="ss-toolbar-title">
+                  <h6>Program Levels</h6>
                   <small class="text-muted">International study levels (e.g. BSc, MSc, PhD)</small>
                 </div>
-                <button class="btn btn-sm btn-primary" onclick="openLevelModal()">
-                  <i class="bi bi-plus-circle me-1"></i> Add Level
-                </button>
+                <div class="d-flex flex-wrap gap-2 align-items-center flex-grow-1 justify-content-end">
+                  <div class="ss-search-wrap">
+                    <i class="bi bi-search"></i>
+                    <input type="search" id="levelSmartSearch" class="ss-search" placeholder="Search level code or name…" autocomplete="off">
+                    <button type="button" class="ss-search-clear" title="Clear">&times;</button>
+                  </div>
+                  <button class="btn btn-sm btn-success ss-btn-add" onclick="openLevelModal()">
+                    <i class="bi bi-plus-circle me-1"></i> Add Level
+                  </button>
+                </div>
               </div>
-              <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle">
-                  <thead class="table-light">
+              <div class="ss-meta" id="levelSmartMeta"></div>
+              <div class="ss-table-wrap">
+                <table class="table table-hover align-middle ss-table mb-0">
+                  <thead>
                     <tr>
-                      <th>#</th>
+                      <th style="width:44px">#</th>
                       <th>Code</th>
                       <th>Level Name</th>
                       <th class="text-end">Action</th>
@@ -3034,13 +3123,14 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                     $res = mysqli_query($conn, "SELECT * FROM program_levels ORDER BY id");
                     $i = 1;
                     while ($l = mysqli_fetch_assoc($res)):
+                      $searchBlob = strtolower(($l['abbreviation'] ?? '') . ' ' . ($l['name'] ?? ''));
                     ?>
-                    <tr>
-                      <td><?= $i++ ?></td>
-                      <td><?= htmlspecialchars($l['abbreviation']) ?></td>
-                      <td><?= htmlspecialchars($l['name']) ?></td>
+                    <tr data-level-row data-search="<?= htmlspecialchars($searchBlob) ?>">
+                      <td data-row-num><?= $i++ ?></td>
+                      <td><span class="ss-badge ss-badge-region"><?= htmlspecialchars($l['abbreviation']) ?></span></td>
+                      <td class="fw-semibold"><?= htmlspecialchars($l['name']) ?></td>
                       <td class="text-end">
-                        <button class="btn btn-sm btn-outline-secondary" onclick='openLevelModal(<?= json_encode($l) ?>)'>
+                        <button class="btn btn-sm btn-outline-primary ss-edit-btn" onclick='openLevelModal(<?= json_encode($l) ?>)'>
                           <i class="bi bi-pencil"></i>
                         </button>
                       </td>
@@ -3048,28 +3138,32 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                     <?php endwhile; ?>
                   </tbody>
                 </table>
+                <div class="ss-empty" id="levelSmartEmpty">
+                  <i class="bi bi-search fs-3 d-block mb-2"></i>
+                  No levels match your search
+                </div>
               </div>
             </div>
             
             <!-- PROGRAMS TAB -->
             <div class="tab-pane fade" id="tab-programs">
-              <div class="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <h6 class="fw-bold mb-0">Programs</h6>
+              <div class="ss-toolbar">
+                <div class="ss-toolbar-title">
+                  <h6>Programs</h6>
                   <small class="text-muted">Programs linked to a University and Study Level</small>
                 </div>
-                <button class="btn btn-sm btn-primary" onclick="openProgramModal()">
-                  <i class="bi bi-plus-circle me-1"></i> Add Program
-                </button>
-              </div>
-              <div class="mb-3">
-                <div class="input-group">
-                  <span class="input-group-text bg-light">
+                <div class="d-flex flex-wrap gap-2 align-items-center flex-grow-1 justify-content-end">
+                  <div class="ss-search-wrap">
                     <i class="bi bi-search"></i>
-                  </span>
-                  <input type="text" id="programSearch" class="form-control" placeholder="Search by university, program, or level…" autocomplete="off">
+                    <input type="search" id="programSearch" class="ss-search" placeholder="Search university, program, or level…" autocomplete="off">
+                    <button type="button" class="ss-search-clear" title="Clear">&times;</button>
+                  </div>
+                  <button class="btn btn-sm btn-success ss-btn-add" onclick="openProgramModal()">
+                    <i class="bi bi-plus-circle me-1"></i> Add Program
+                  </button>
                 </div>
               </div>
+              <div class="ss-meta" id="programSmartMeta"></div>
               <?php
               $q = "
                 SELECT
@@ -3102,8 +3196,8 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
               <div class="container-fluid px-0">
                 <?php if (!empty($tree)): ?>
                   <?php foreach ($tree as $university => $levels): ?>
-                    <div class="card shadow-sm mb-4 border-0">
-                      <div class="card-header bg-primary bg-opacity-10 fw-bold">
+                    <div class="card ss-prog-card mb-3" data-uni-card>
+                      <div class="card-header">
                         <i class="bi bi-bank me-2"></i>
                         <?= htmlspecialchars($university) ?>
                       </div>
@@ -3143,6 +3237,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                       </div>
                     </div>
                   <?php endforeach; ?>
+                  <div class="ss-empty" id="programSmartEmpty">
+                    <i class="bi bi-search fs-3 d-block mb-2"></i>
+                    No programs match your search
+                  </div>
                 <?php else: ?>
                   <div class="text-center text-muted py-5">
                     <i class="bi bi-inbox fs-1 d-block mb-2"></i>
@@ -3214,6 +3312,30 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                 }
                 ?>
               </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Admin(s) in charge <small class="text-muted">(search &amp; multi-select)</small></label>
+              <select class="form-select" name="admin_ids[]" id="uni_admins" multiple>
+                <?php
+                $adminsQ = mysqli_query(
+                  $conn,
+                  "SELECT id, full_name, email, role
+                   FROM admins
+                   WHERE LOWER(TRIM(COALESCE(role,''))) IN ('staff','superadmin','admin')
+                   ORDER BY full_name"
+                );
+                while ($row = mysqli_fetch_assoc($adminsQ)) {
+                  $label = trim((string) ($row['full_name'] ?? ''));
+                  if ($label === '') {
+                    $label = (string) ($row['email'] ?? 'Admin #' . $row['id']);
+                  }
+                  echo '<option value="'.(int)$row['id'].'">'
+                    . htmlspecialchars($label . ' (' . ($row['email'] ?? '') . ')')
+                    . '</option>';
+                }
+                ?>
+              </select>
+              <div class="form-text">Type to search staff, then tick names to assign.</div>
             </div>
           </div>
           <div class="modal-footer">
@@ -3372,6 +3494,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   
   <!-- Settings JS -->
   <script src="settings.js"></script>
+  <script src="assets/js/system-settings-search.js"></script>
   
   <script>
     // Main JavaScript functionality
@@ -4148,93 +4271,9 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       }
     });
     
-    // Program search functionality
-    document.addEventListener('DOMContentLoaded', () => {
-      const input = document.getElementById('programSearch');
-      if (!input) return;
-
-      input.addEventListener('input', () => {
-        const q = input.value.toLowerCase().trim();
-        const items = document.querySelectorAll('[data-program]');
-        const cards = document.querySelectorAll('#tab-programs .card');
-
-        items.forEach(item => {
-          const text =
-            item.dataset.name + ' ' +
-            item.dataset.university + ' ' +
-            item.dataset.level;
-
-          item.style.display = text.includes(q) ? '' : 'none';
-        });
-
-        // Hide empty university cards
-        cards.forEach(card => {
-          const visible = card.querySelectorAll('[data-program]:not([style*="display: none"])');
-          card.style.display = visible.length ? '' : 'none';
-        });
-      });
-    });
+    // Program search handled by assets/js/system-settings-search.js
     
-    // Modal functions from settings.js
-    window.openUniversityModal = function(data = {}) {
-      const modal = new bootstrap.Modal(document.getElementById('universityModal'));
-      const title = document.getElementById('uniModalTitle');
-      const form = document.getElementById('universityForm');
-      
-      if (data.id) {
-        title.textContent = 'Edit University';
-        document.getElementById('uni_id').value = data.id;
-        document.getElementById('uni_name').value = data.name || '';
-        document.getElementById('uni_region').value = data.region_id || '';
-        document.getElementById('uni_country').value = data.country_id || '';
-      } else {
-        title.textContent = 'Add University';
-        form.reset();
-        document.getElementById('uni_id').value = '';
-      }
-      
-      modal.show();
-    };
-    
-    window.openLevelModal = function(data = {}) {
-      const modal = new bootstrap.Modal(document.getElementById('levelModal'));
-      const title = document.getElementById('levelModalTitle');
-      const form = document.getElementById('levelForm');
-      
-      if (data.id) {
-        title.textContent = 'Edit Level';
-        document.getElementById('level_id').value = data.id;
-        document.getElementById('level_abbreviation').value = data.abbreviation || '';
-        document.getElementById('level_name').value = data.name || '';
-      } else {
-        title.textContent = 'Add Level';
-        form.reset();
-        document.getElementById('level_id').value = '';
-      }
-      
-      modal.show();
-    };
-    
-    window.openProgramModal = function(data = {}) {
-      const modal = new bootstrap.Modal(document.getElementById('programModal'));
-      const title = document.getElementById('programModalTitle');
-      
-      if (data.id) {
-        title.textContent = 'Edit Program';
-        document.getElementById('program_university').value = data.university_id || '';
-        document.getElementById('program_level').value = data.program_level_id || '';
-        document.getElementById('program_input').value = data.program_name || '';
-      } else {
-        title.textContent = 'Add Program(s)';
-        document.getElementById('program_university').selectedIndex = 0;
-        document.getElementById('program_level').selectedIndex = 0;
-        document.getElementById('program_input').value = '';
-        document.getElementById('program_list').innerHTML = '';
-        document.getElementById('ai_program_text').value = '';
-      }
-      
-      modal.show();
-    };
+    // Modal functions from settings.js (openUniversityModal / openLevelModal / openProgramModal)
     
     // Delete program function
     async function deleteProgram(id) {

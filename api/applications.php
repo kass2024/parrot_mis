@@ -7,6 +7,7 @@ require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 require_once __DIR__ . '/../helpers/application_filters.php';
 require_once __DIR__ . '/../helpers/study_choice_admin_actions.php';
+require_once __DIR__ . '/../helpers/related_program_suggestions.php';
 require_once __DIR__ . '/../helpers/application_documents_admin.php';
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -161,14 +162,96 @@ if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $studyChoices = pcvc_fetch_study_choices_for_admin_view($conn, $applicationId);
 
+    // Also scan for related universities when staff manually adds a choice
+    $related = ['suggestions' => 0, 'emails' => 0, 'triggered' => false];
+    if ($ins['inserted']) {
+        try {
+            $related = pcvc_process_related_university_suggestions($conn, $applicationId);
+        } catch (Throwable $e) {
+            $related = ['suggestions' => 0, 'emails' => 0, 'triggered' => false, 'error' => $e->getMessage()];
+        }
+    }
+
     jsonResponse([
         'study_choices' => $studyChoices,
+        'study_choice_suggestions' => pcvc_fetch_study_choice_suggestions($conn, $applicationId, 'pending'),
         'jobs_created' => $jobsCreated,
         'duplicate' => (bool) $ins['duplicate'],
         'student_notified' => $notified,
+        'related_suggestions' => $related,
         'message' => $ins['duplicate']
             ? 'This study choice is already listed for this application.'
             : ($ins['inserted'] ? 'Study choice added.' : ''),
+    ]);
+    exit;
+}
+
+/**
+ * ======================================================
+ * APPROVE / REJECT related program suggestions
+ * ======================================================
+ */
+if ($action === 'approve_study_choice_suggestion' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $suggestionId = (int) ($_POST['suggestion_id'] ?? 0);
+    if ($suggestionId <= 0) {
+        jsonResponse('Invalid suggestion id', false, 400);
+    }
+
+    $notifyStudent = !isset($_POST['notify_student']) || (string) $_POST['notify_student'] !== '0';
+    $out = pcvc_approve_study_choice_suggestion($conn, $suggestionId, $adminId, $notifyStudent);
+    if (!$out['ok']) {
+        jsonResponse($out['msg'], false, 422);
+    }
+    jsonResponse($out);
+    exit;
+}
+
+if ($action === 'reject_study_choice_suggestion' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $adminId = 0;
+    if (!empty($_SESSION['id'])) {
+        $adminId = (int) $_SESSION['id'];
+    } elseif (!empty($_SESSION['admin_id'])) {
+        $adminId = (int) $_SESSION['admin_id'];
+    }
+    if ($adminId <= 0) {
+        jsonResponse('Unauthorized', false, 401);
+    }
+
+    $suggestionId = (int) ($_POST['suggestion_id'] ?? 0);
+    if ($suggestionId <= 0) {
+        jsonResponse('Invalid suggestion id', false, 400);
+    }
+
+    $out = pcvc_reject_study_choice_suggestion($conn, $suggestionId, $adminId);
+    if (!$out['ok']) {
+        jsonResponse($out['msg'], false, 422);
+    }
+
+    $applicationId = 0;
+    $st = $conn->prepare('SELECT application_id FROM application_study_choice_suggestions WHERE id = ? LIMIT 1');
+    if ($st) {
+        $st->bind_param('i', $suggestionId);
+        $st->execute();
+        $r = $st->get_result()->fetch_assoc();
+        $st->close();
+        $applicationId = (int) ($r['application_id'] ?? 0);
+    }
+
+    jsonResponse([
+        'message' => $out['msg'],
+        'suggestions' => $applicationId > 0
+            ? pcvc_fetch_study_choice_suggestions($conn, $applicationId, 'pending')
+            : [],
     ]);
     exit;
 }
@@ -1082,6 +1165,13 @@ if ($action === 'view' && !empty($_GET['id'])) {
     $stmt->execute();
     $studyChoices = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
+    $studyChoiceSuggestions = [];
+    try {
+        $studyChoiceSuggestions = pcvc_fetch_study_choice_suggestions($conn, $id, 'pending');
+    } catch (Throwable $e) {
+        $studyChoiceSuggestions = [];
+    }
+
     /**
      * ==================================================
      * DOCUMENTS
@@ -1204,6 +1294,7 @@ if ($action === 'view' && !empty($_GET['id'])) {
         ],
 
         "study_choices" => $studyChoices,
+        "study_choice_suggestions" => $studyChoiceSuggestions,
         "agent" => [
             "name"  => trim($app['agent_first_name'] . " " . $app['agent_last_name']),
             "email" => $app['agent_email']
