@@ -257,39 +257,16 @@ aside p {
 }
 
 /* =====================================================
-   AI DECISION PANEL (HIGHLIGHT ZONE)
+   AI RELATED PROGRAMS PANEL
    ===================================================== */
 #aiDecisionPanel {
     background: linear-gradient(
         135deg,
-        #eef2ff,
+        #fffbeb,
         #f8fafc
     );
-    border: 1px solid #c7d2fe;
-    box-shadow: 0 16px 40px rgba(79,70,229,.2);
-}
-
-/* AI recommendation cards */
-.ai-platform-card {
-    background-color: #ffffff;
-    border: 1px solid var(--border-soft);
-    border-radius: .9rem;
-    padding: 1rem;
-    transition: transform .2s ease, box-shadow .2s ease;
-}
-
-.ai-platform-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 20px 40px rgba(0,0,0,.15);
-}
-
-.ai-platform-badge {
-    font-size: .65rem;
-    font-weight: 600;
-    padding: .25rem .65rem;
-    border-radius: 999px;
-    background-color: var(--primary-soft);
-    color: #4338ca;
+    border: 1px solid #fde68a;
+    box-shadow: 0 16px 40px rgba(217, 119, 6, 0.12);
 }
 
 /* =====================================================
@@ -447,33 +424,31 @@ th {
                     </div>
                 </div>
 
-                <!-- ================= AI DECISION PANEL ================= -->
+                <!-- ================= AI RELATED PROGRAMS PANEL ================= -->
                 <div
                     id="aiDecisionPanel"
-                    class="hidden card bg-gradient-to-br from-blue-50 to-indigo-50
-                           border-blue-200 p-6 space-y-5"
+                    class="hidden card border-amber-200 p-6 space-y-3"
                 >
-                    <div class="flex items-center justify-between">
-                        <h3 class="text-lg font-semibold text-blue-900">
-                            🤖 Platform Recommendations
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-lg font-semibold text-amber-950">
+                            Related programs at other universities
                         </h3>
                         <span
-                            id="aiConfidence"
+                            id="aiRelatedStatus"
                             class="text-xs font-semibold px-3 py-1 rounded-full
-                                   bg-blue-100 text-blue-800"
+                                   bg-amber-100 text-amber-900"
                         >
                             —
                         </span>
                     </div>
 
-                    <p class="text-xs text-blue-700">
-                        Platforms are selected based on the chosen university,
-                        destination country, and admin workload.
+                    <p class="text-xs text-amber-900/80 leading-snug">
+                        AI scans other universities for the same or related programs, then queues matches for approval under Study Choices.
                     </p>
 
                     <div
-                        id="aiPlatforms"
-                        class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm"
+                        id="aiRelatedSummary"
+                        class="text-sm text-slate-700"
                     ></div>
                 </div>
 
@@ -617,7 +592,7 @@ th {
                                             Related programs pending approval
                                         </h4>
                                         <p class="mt-1 text-sm text-amber-900/80 leading-snug">
-                                            Similar programs at other universities (assigned or unassigned). Approve to add them to study choices, or reject to dismiss.
+                                            AI-matched similar programs at other universities (assigned or unassigned). Approve to add them to study choices, or reject to dismiss.
                                         </p>
                                     </div>
                                     <span id="relatedStudySuggestionsCount" class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900"></span>

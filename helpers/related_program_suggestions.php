@@ -2,13 +2,15 @@
 /**
  * Related university / program suggestions for applications.
  * When a student applies to a university that has admins in charge,
- * find similar programs at other assigned universities, queue them for
- * approval, and email those admins.
+ * the same AI that processes the application finds same/related programs
+ * at other universities (assigned or unassigned), queues them for approval,
+ * and emails the person in charge (or the application assignee as fallback).
  */
 declare(strict_types=1);
 
 require_once __DIR__ . '/university_admins_schema.php';
 require_once __DIR__ . '/mailer.php';
+require_once __DIR__ . '/env_bootstrap.php';
 require_once __DIR__ . '/../includes/company_branding.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -114,6 +116,7 @@ function pcvc_program_similarity(string $a, string $b): float
 
 /**
  * Find related programs at other universities (assigned and unassigned).
+ * Prefers the same AI stack used for application processing; falls back to name similarity.
  *
  * @param list<int> $excludeUniversityIds
  * @return list<array<string,mixed>>
@@ -128,6 +131,50 @@ function pcvc_find_related_programs_for_choice(
     float $minScore = 68.0,
     int $limit = 40
 ): array {
+    $candidates = pcvc_related_program_candidate_pool(
+        $conn,
+        $sourceUniversityId,
+        $sourceLevelId,
+        $sourceProgramName,
+        $excludeUniversityIds,
+        45.0,
+        80
+    );
+    if ($candidates === []) {
+        return [];
+    }
+
+    $aiMatches = pcvc_ai_select_related_programs(
+        $sourceUniversityId,
+        $sourceProgramId,
+        $sourceLevelId,
+        $sourceProgramName,
+        $candidates,
+        $limit
+    );
+    if ($aiMatches !== null) {
+        return $aiMatches;
+    }
+
+    // Fallback: lexical similarity when AI is unavailable
+    return pcvc_related_programs_from_similarity($candidates, $sourceUniversityId, $sourceProgramId, $minScore, $limit);
+}
+
+/**
+ * Load candidate programs at other universities (soft prefilter for AI).
+ *
+ * @param list<int> $excludeUniversityIds
+ * @return list<array<string,mixed>>
+ */
+function pcvc_related_program_candidate_pool(
+    mysqli $conn,
+    int $sourceUniversityId,
+    int $sourceLevelId,
+    string $sourceProgramName,
+    array $excludeUniversityIds,
+    float $prefilterMin = 45.0,
+    int $maxCandidates = 80
+): array {
     pcvc_ensure_university_admins_schema($conn);
 
     $exclude = array_values(array_unique(array_filter(array_map('intval', $excludeUniversityIds))));
@@ -141,7 +188,6 @@ function pcvc_find_related_programs_for_choice(
         $excludeSql = 'AND p.university_id NOT IN (' . implode(',', $exclude) . ')';
     }
 
-    // All remaining universities (with or without an admin in charge)
     $sql = "
         SELECT
             p.id AS program_id,
@@ -169,47 +215,188 @@ function pcvc_find_related_programs_for_choice(
         return [];
     }
 
-    $matches = [];
+    $pool = [];
     while ($row = $res->fetch_assoc()) {
         $score = pcvc_program_similarity($sourceProgramName, (string) $row['program_name']);
         $sameLevel = ((int) $row['program_level_id'] === $sourceLevelId);
         if ($sameLevel) {
             $score = min(100.0, $score + 8.0);
         }
-        if ($score < $minScore) {
+        if ($score < $prefilterMin) {
             continue;
         }
+        $pool[] = [
+            'program_id' => (int) $row['program_id'],
+            'program_name' => (string) $row['program_name'],
+            'university_id' => (int) $row['university_id'],
+            'program_level_id' => (int) $row['program_level_id'],
+            'university_name' => (string) $row['university_name'],
+            'region_id' => (int) $row['region_id'],
+            'level_name' => (string) $row['level_name'],
+            'level_abbr' => (string) ($row['level_abbr'] ?? ''),
+            'has_admin' => (int) ($row['admin_count'] ?? 0) > 0,
+            'pre_score' => round($score, 2),
+        ];
+    }
 
-        $hasAdmin = (int) ($row['admin_count'] ?? 0) > 0;
-        $reason = $score >= 99.0
-            ? 'Exact / near-exact program match'
-            : ($score >= 90.0 ? 'Very similar program name' : 'Related program keywords');
-        if ($sameLevel) {
-            $reason .= ' (same level)';
+    usort($pool, static fn ($a, $b) => $b['pre_score'] <=> $a['pre_score']);
+    return array_slice($pool, 0, $maxCandidates);
+}
+
+/**
+ * Ask OpenAI (same stack as application AI processing) which candidates are related.
+ *
+ * @param list<array<string,mixed>> $candidates
+ * @return list<array<string,mixed>>|null  null = AI unavailable / failed
+ */
+function pcvc_ai_select_related_programs(
+    int $sourceUniversityId,
+    int $sourceProgramId,
+    int $sourceLevelId,
+    string $sourceProgramName,
+    array $candidates,
+    int $limit = 40
+): ?array {
+    if ($candidates === [] || !function_exists('curl_init')) {
+        return null;
+    }
+    if (!function_exists('pcvc_env')) {
+        require_once __DIR__ . '/env_bootstrap.php';
+    }
+    $apiKey = trim(pcvc_env('OPENAI_API_KEY'));
+    if ($apiKey === '') {
+        return null;
+    }
+
+    $model = trim(pcvc_env('OPENAI_MODEL'));
+    if ($model === '') {
+        $model = 'gpt-4o-mini';
+    }
+    $base = rtrim(trim(pcvc_env('OPENAI_BASE_URL')) ?: 'https://api.openai.com', '/');
+
+    $compact = [];
+    $byId = [];
+    foreach ($candidates as $c) {
+        $pid = (int) ($c['program_id'] ?? 0);
+        if ($pid <= 0) {
+            continue;
         }
-        if (!$hasAdmin) {
+        $byId[$pid] = $c;
+        $compact[] = [
+            'id' => $pid,
+            'university' => (string) ($c['university_name'] ?? ''),
+            'program' => (string) ($c['program_name'] ?? ''),
+            'level' => (string) (($c['level_abbr'] ?? '') ?: ($c['level_name'] ?? '')),
+            'assigned' => !empty($c['has_admin']),
+        ];
+    }
+    if ($compact === []) {
+        return null;
+    }
+
+    $system = <<<SYS
+You are the admissions AI that processes student applications for an education consultancy.
+Task: given the student's chosen program, pick SAME or RELATED programs at OTHER universities from the candidate list only.
+Include: same major, closely related fields (e.g. Business Management ↔ E-commerce, Computer Science ↔ Software Engineering, Nursing ↔ Healthcare).
+Exclude: unrelated fields even if words partially overlap.
+Do not invent ids. Return strict JSON only:
+{"matches":[{"program_id":123,"score":0-100,"reason":"short reason"}]}
+Prefer score >= 70. Max 25 matches. One best program per university when possible.
+SYS;
+
+    $userPayload = [
+        'source_program' => $sourceProgramName,
+        'source_level_id' => $sourceLevelId,
+        'candidates' => $compact,
+    ];
+
+    $payload = json_encode([
+        'model' => $model,
+        'temperature' => 0.1,
+        'response_format' => ['type' => 'json_object'],
+        'messages' => [
+            ['role' => 'system', 'content' => $system],
+            ['role' => 'user', 'content' => json_encode($userPayload, JSON_UNESCAPED_UNICODE)],
+        ],
+    ], JSON_UNESCAPED_UNICODE);
+
+    if ($payload === false) {
+        return null;
+    }
+
+    $ch = curl_init($base . '/v1/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST => true,
+        CURLOPT_TIMEOUT => 35,
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $apiKey,
+            'Content-Type: application/json',
+        ],
+        CURLOPT_POSTFIELDS => $payload,
+    ]);
+    $raw = curl_exec($ch);
+    $err = curl_error($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($raw === false || $err !== '' || $code < 200 || $code >= 300) {
+        return null;
+    }
+
+    $decoded = json_decode($raw, true);
+    $content = (string) ($decoded['choices'][0]['message']['content'] ?? '');
+    if ($content === '') {
+        return null;
+    }
+    $json = json_decode($content, true);
+    if (!is_array($json) || !isset($json['matches']) || !is_array($json['matches'])) {
+        return null;
+    }
+
+    $matches = [];
+    foreach ($json['matches'] as $m) {
+        if (!is_array($m)) {
+            continue;
+        }
+        $pid = (int) ($m['program_id'] ?? 0);
+        if ($pid <= 0 || !isset($byId[$pid])) {
+            continue;
+        }
+        $score = (float) ($m['score'] ?? 0);
+        if ($score < 60) {
+            continue;
+        }
+        $c = $byId[$pid];
+        $reason = trim((string) ($m['reason'] ?? 'AI related program match'));
+        if ($reason === '') {
+            $reason = 'AI related program match';
+        }
+        if (stripos($reason, 'AI') !== 0) {
+            $reason = 'AI: ' . $reason;
+        }
+        if (empty($c['has_admin'])) {
             $reason .= ' — unassigned university';
         }
-
         $matches[] = [
             'source_university_id' => $sourceUniversityId,
             'source_program_id' => $sourceProgramId,
-            'suggested_region_id' => (int) $row['region_id'],
-            'suggested_university_id' => (int) $row['university_id'],
-            'suggested_level_id' => (int) $row['program_level_id'],
-            'suggested_program_id' => (int) $row['program_id'],
-            'suggested_university_name' => (string) $row['university_name'],
-            'suggested_program_name' => (string) $row['program_name'],
-            'suggested_level_name' => (string) ($row['level_abbr'] ?: $row['level_name']),
-            'match_score' => round($score, 2),
-            'match_reason' => $reason,
-            'has_university_admin' => $hasAdmin,
+            'suggested_region_id' => (int) $c['region_id'],
+            'suggested_university_id' => (int) $c['university_id'],
+            'suggested_level_id' => (int) $c['program_level_id'],
+            'suggested_program_id' => $pid,
+            'suggested_university_name' => (string) $c['university_name'],
+            'suggested_program_name' => (string) $c['program_name'],
+            'suggested_level_name' => (string) (($c['level_abbr'] ?: $c['level_name'])),
+            'match_score' => round(min(100.0, max(0.0, $score)), 2),
+            'match_reason' => substr($reason, 0, 255),
+            'has_university_admin' => !empty($c['has_admin']),
+            'matched_by' => 'ai',
         ];
     }
 
     usort($matches, static fn ($a, $b) => $b['match_score'] <=> $a['match_score']);
 
-    // Keep best program per suggested university
     $byUni = [];
     foreach ($matches as $m) {
         $uid = (int) $m['suggested_university_id'];
@@ -218,6 +405,58 @@ function pcvc_find_related_programs_for_choice(
         }
     }
 
+    return array_slice(array_values($byUni), 0, $limit);
+}
+
+/**
+ * @param list<array<string,mixed>> $candidates
+ * @return list<array<string,mixed>>
+ */
+function pcvc_related_programs_from_similarity(
+    array $candidates,
+    int $sourceUniversityId,
+    int $sourceProgramId,
+    float $minScore,
+    int $limit
+): array {
+    $matches = [];
+    foreach ($candidates as $c) {
+        $score = (float) ($c['pre_score'] ?? 0);
+        if ($score < $minScore) {
+            continue;
+        }
+        $hasAdmin = !empty($c['has_admin']);
+        $reason = $score >= 99.0
+            ? 'Exact / near-exact program match'
+            : ($score >= 90.0 ? 'Very similar program name' : 'Related program keywords');
+        if (!$hasAdmin) {
+            $reason .= ' — unassigned university';
+        }
+        $matches[] = [
+            'source_university_id' => $sourceUniversityId,
+            'source_program_id' => $sourceProgramId,
+            'suggested_region_id' => (int) $c['region_id'],
+            'suggested_university_id' => (int) $c['university_id'],
+            'suggested_level_id' => (int) $c['program_level_id'],
+            'suggested_program_id' => (int) $c['program_id'],
+            'suggested_university_name' => (string) $c['university_name'],
+            'suggested_program_name' => (string) $c['program_name'],
+            'suggested_level_name' => (string) (($c['level_abbr'] ?: $c['level_name'])),
+            'match_score' => round($score, 2),
+            'match_reason' => $reason,
+            'has_university_admin' => $hasAdmin,
+            'matched_by' => 'similarity',
+        ];
+    }
+
+    usort($matches, static fn ($a, $b) => $b['match_score'] <=> $a['match_score']);
+    $byUni = [];
+    foreach ($matches as $m) {
+        $uid = (int) $m['suggested_university_id'];
+        if (!isset($byUni[$uid])) {
+            $byUni[$uid] = $m;
+        }
+    }
     return array_slice(array_values($byUni), 0, $limit);
 }
 

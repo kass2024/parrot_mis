@@ -371,45 +371,29 @@ async function safeFetchJSON(url, options = {}) {
 }
 /**
  * =====================================================
- * LOAD AI DECISION (FAST – BEFORE FULL VIEW)
+ * AI RELATED PROGRAM SCAN (NO PLATFORM PROPOSALS)
  * =====================================================
  */
 async function showAiDecision(appId) {
     if (!appId) return;
 
-    /* =========================================
-       CANCEL PREVIOUS REQUEST (RACE SAFE)
-    ========================================= */
     if (aiAbortController) {
         aiAbortController.abort();
     }
     aiAbortController = new AbortController();
 
-    /* =========================================
-       UI: INITIAL STATE
-    ========================================= */
     emptyStateEl?.classList.add("hidden");
     aiPanelEl?.classList.remove("hidden");
 
-    const platformsEl  = document.getElementById("aiPlatforms");
-    const confidenceEl = document.getElementById("aiConfidence");
+    const statusEl = document.getElementById("aiRelatedStatus");
+    const summaryEl = document.getElementById("aiRelatedSummary");
 
-    if (platformsEl) {
-        platformsEl.innerHTML = `
-            <div class="col-span-full text-sm text-gray-500">
-                Analyzing suitable platforms…
-            </div>
-        `;
-    }
-
-    if (confidenceEl) {
-        confidenceEl.textContent = "—";
+    if (statusEl) statusEl.textContent = "Scanning…";
+    if (summaryEl) {
+        summaryEl.innerHTML = `<span class="text-slate-500">AI is checking related programs at other universities…</span>`;
     }
 
     try {
-        /* =========================================
-           FETCH (SAFE, NON-THROWING)
-        ========================================= */
         const res = await safeFetchJSON(
             projectApiPath(
                 `api/ai-decision.php?application_id=${encodeURIComponent(appId)}`
@@ -417,152 +401,47 @@ async function showAiDecision(appId) {
             { signal: aiAbortController.signal }
         );
 
-        // Hard failure only (network / invalid response)
         if (!res || !res.data) {
             throw new Error("AI service unavailable");
         }
 
-        console.log("AI RESPONSE:", res);
-
-        const platforms  = Array.isArray(res.data.platforms)
-            ? res.data.platforms
+        const suggestions = Array.isArray(res.data.study_choice_suggestions)
+            ? res.data.study_choice_suggestions
             : [];
+        const scan = res.data.related_program_scan || {};
+        const pending = Number(res.data.pending_count ?? suggestions.length) || 0;
 
-        const confidence = Number.isFinite(Number(res.data.confidence))
-            ? Math.round(Number(res.data.confidence))
-            : 0;
+        renderRelatedStudySuggestions(suggestions);
 
-        /* =========================================
-           EMPTY / NO MATCH RESULT
-        ========================================= */
-        if (platforms.length === 0) {
-            if (platformsEl) {
-                platformsEl.innerHTML = `
-                    <div class="col-span-full text-sm text-gray-500">
-                        No suitable platforms could be identified for this application.
-                    </div>
-                `;
-            }
-            if (confidenceEl) {
-                confidenceEl.textContent = "Confidence 0%";
-            }
-            return;
+        if (statusEl) {
+            statusEl.textContent = pending > 0 ? `${pending} pending approval` : "No matches";
         }
-
-        /* =========================================
-           RENDER ALL PLATFORMS (SAFE)
-        ========================================= */
-        if (typeof renderAIDecision === "function") {
-            renderAIDecision({
-                platforms,
-                confidence
-            });
-        } else {
-            console.error("renderAIDecision() is not defined");
-
-            // Minimal fallback if renderer missing
-            if (platformsEl) {
-                platformsEl.innerHTML = `
-                    <div class="col-span-full text-sm text-gray-500">
-                        Platform recommendations loaded, but renderer is unavailable.
-                    </div>
+        if (summaryEl) {
+            if (pending > 0) {
+                summaryEl.innerHTML = `
+                    <span class="text-amber-950 font-medium">${pending} related program${pending === 1 ? "" : "s"}</span>
+                    queued for approval under Study Choices.
+                    ${scan.emails ? ` <span class="text-slate-500">(${Number(scan.emails)} admin email${Number(scan.emails) === 1 ? "" : "s"} sent.)</span>` : ""}
                 `;
-            }
-            if (confidenceEl) {
-                confidenceEl.textContent = `Confidence ${confidence}%`;
+            } else if (scan.triggered) {
+                summaryEl.innerHTML = `<span class="text-slate-600">No additional related programs found at other universities.</span>`;
+            } else {
+                summaryEl.innerHTML = `<span class="text-slate-600">Related-program scan did not run (no assigned university on this application).</span>`;
             }
         }
-
     } catch (err) {
-        /* =========================================
-           ABORT IS NOT AN ERROR
-        ========================================= */
         if (err?.name === "AbortError") {
             console.debug("AI request aborted");
             return;
         }
 
-        console.warn("AI decision unavailable:", err.message);
+        console.warn("AI related-program scan unavailable:", err.message);
 
-        /* =========================================
-           HARD FALLBACK UI (USER-FRIENDLY)
-        ========================================= */
-        if (platformsEl) {
-            platformsEl.innerHTML = `
-                <div class="col-span-full text-sm text-red-500">
-                    AI recommendations are currently unavailable.
-                    Please try again later.
-                </div>
-            `;
-        }
-
-        if (confidenceEl) {
-            confidenceEl.textContent = "—";
+        if (statusEl) statusEl.textContent = "Unavailable";
+        if (summaryEl) {
+            summaryEl.innerHTML = `<span class="text-red-600">AI related-program matching is currently unavailable. Please try again later.</span>`;
         }
     }
-}
-/**
- * =====================================================
- * RENDER AI DECISION (ALL PLATFORMS)
- * =====================================================
- */
-function renderAIDecision({ platforms, confidence }) {
-    const panel = document.getElementById("aiDecisionPanel");
-    const list  = document.getElementById("aiPlatforms");
-    const confidenceEl = document.getElementById("aiConfidence");
-
-    if (!panel || !list || !confidenceEl) {
-        console.error("AI panel elements missing");
-        return;
-    }
-
-    panel.classList.remove("hidden");
-    list.innerHTML = "";
-    confidenceEl.textContent = `Confidence ${confidence}%`;
-
-    // Defensive guard
-    if (!Array.isArray(platforms) || platforms.length === 0) {
-        list.innerHTML = `
-            <div class="col-span-full text-sm text-gray-500">
-                No platform recommendations available.
-            </div>
-        `;
-        return;
-    }
-
-    platforms.forEach((p, index) => {
-        // ✅ ADMIN NAME COMES FROM admins TABLE (JOINED)
-        const adminName =
-            p.person_in_charge &&
-            typeof p.person_in_charge.full_name === "string" &&
-            p.person_in_charge.full_name.trim() !== ""
-                ? p.person_in_charge.full_name
-                : "—";
-
-        const card = document.createElement("div");
-        card.className = "ai-platform-card";
-
-        card.innerHTML = `
-            <span class="ai-platform-badge">
-                Recommendation ${index + 1}
-            </span>
-
-            <div class="ai-platform-title">
-                ${escapeHTML(p.platform_name || "Unknown Platform")}
-            </div>
-
-           <div class="ai-platform-admin">
-    Person in charge: ${escapeHTML(adminName)}
-</div>
-
-
-            <div class="ai-platform-reason">
-                ${escapeHTML(p.reason || "")}
-            </div>
-        `;
-
-        list.appendChild(card);
-    });
 }
 
 /**
