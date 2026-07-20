@@ -749,7 +749,7 @@ abstract class ProfessionalPDFGenerator {
         $managerSignature = $this->getManagerSignature();
         $companyStamp = $this->getCompanyStamp();
         
-        $signaturesTitle = $this->t('16. SIGNATURES', '16. SIGNATURES');
+        $signaturesTitle = $this->t('15. SIGNATURES', '15. SIGNATURES');
         $executedBy = $this->t(
             'This Strategic Partnership Agreement is executed by authorized representatives of both parties on the date indicated below:',
             'Cet Accord de Partenariat Stratégique est exécuté par les représentants autorisés des deux parties à la date indiquée ci-dessous :'

@@ -217,29 +217,8 @@ class EnglishPDFGenerator extends PDFGeneratorBase {
         
         <p>This agreement represents a strategic global partnership aimed at providing comprehensive international education services, from document evaluation to airport pickup and settlement abroad.</p>
         
-        <h2>15. CONTACT INFORMATION</h2>
-        
-        <div class="page-break">
-        <h4>Company Name: ' . $this->esc($this->contract['company_name']) . '</h4>
-        <p><strong>Representative:</strong> ' . $this->esc($this->contract['representative_name']) . '</p>
-        <p><strong>Position:</strong> ' . $this->esc($this->contract['representative_title']) . '</p>
-        <p><strong>Email:</strong> ' . $this->esc($this->contract['representative_email']) . '</p>
-        <p><strong>Phone:</strong> ' . $this->esc($this->contract['company_phone']) . '</p>
-        <p><strong>Full Address:</strong> ' . $this->esc($this->contract['company_address']) . '</p>
-        </div>
-        
-        <div class="page-break">
-        <h4>Parrot Canada Visa Consultant Co. Ltd</h4>
-        <p>Dr Jean Pierre Twajamahoro<br>
-        Owner & Managing Director<br>
-        Email: infos@visaconsultantcanada.ca<br>
-        Phone: +1 (438) 290-6688<br>
-        294 Rue Vezina App 202<br>
-        Lasalle, Quebec H8R 3M9</p>
-        </div>
-        
         <div class="signature-section">
-            <h2>16. SIGNATURES</h2>
+            <h2>15. SIGNATURES</h2>
             <p>This Strategic Partnership Agreement is executed by the authorized representatives of both parties on the date indicated below:</p>
             
             <table style="width:100%;border-collapse:collapse;margin-top:12pt;">

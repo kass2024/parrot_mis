@@ -883,40 +883,23 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
   const btnClear = document.getElementById('clearSignature');
   const btnSubmit = document.getElementById('signContract');
 
-  // Form inputs
-  const inputName = document.getElementById('sig_representative_name');
-  const inputTitle = document.getElementById('sig_representative_title');
-  const inputDate = document.getElementById('sig_signed_date');
-  const inputContractDate = document.getElementById('contract_start_date');
-  const inputSigCompany = document.getElementById('sig_company_name');
-  const inputSigEmail = document.getElementById('sig_email');
-  const inputSigPhone = document.getElementById('sig_phone');
-  const inputSigAddress = document.getElementById('sig_address');
   const inputCompany = document.getElementById('company_name');
+  const inputName = document.getElementById('representative_name');
+  const inputTitle = document.getElementById('representative_title');
   const inputEmail = document.getElementById('company_email');
   const inputPhone = document.getElementById('company_phone');
   const inputAddress = document.getElementById('company_address');
-  const inputRepresentative = document.getElementById('representative_name');
-  const inputRepresentativeTitle = document.getElementById('representative_title');
+  const inputDate = document.getElementById('sig_signed_date');
+  const inputContractDate = document.getElementById('contract_start_date');
 
-  // Contact form inputs
-  const contactCompany = document.getElementById('contact_company_name');
-  const contactRepresentative = document.getElementById('contact_representative');
-  const contactTitle = document.getElementById('contact_title');
-  const contactEmail = document.getElementById('contact_email');
-  const contactPhone = document.getElementById('contact_phone');
-
-  // Initialize display elements
-  function initializeDisplayElements() {
-    const elements = {
-      displayName: document.getElementById('display_company_name'),
-      displaySigCompany: document.getElementById('sig_company_name_display'),
-      parrotDate: document.getElementById('parrot_date')
-    };
-    return elements;
-  }
-
-  const displayElements = initializeDisplayElements();
+  const displayCompany = document.getElementById('sig_display_company_name');
+  const displayName = document.getElementById('sig_display_representative_name');
+  const displayTitle = document.getElementById('sig_display_representative_title');
+  const displayEmail = document.getElementById('sig_display_email');
+  const displayPhone = document.getElementById('sig_display_phone');
+  const displayAddress = document.getElementById('sig_display_address');
+  const displayDate = document.getElementById('sig_display_date');
+  const parrotDate = document.getElementById('parrot_date');
 
   let drawing = false;
   let lastX = 0;
@@ -1126,90 +1109,40 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
   // Monitor signature status
   setInterval(updateSignatureStatus, 500);
 
-  // Smart field updates
-  function updateAllDisplayFields() {
-    const companyValue = (inputSigCompany && inputSigCompany.value.trim())
-      || (inputCompany && inputCompany.value.trim())
-      || '';
-    if (displayElements.displayName) displayElements.displayName.textContent = companyValue || '______________________________';
-    if (displayElements.displaySigCompany) displayElements.displaySigCompany.textContent = companyValue || '______________________________';
+  function syncSignatureDisplay() {
+    const companyValue = inputCompany ? inputCompany.value.trim() : '';
+    const nameValue = inputName ? inputName.value.trim() : '';
+    const titleValue = inputTitle ? inputTitle.value.trim() : '';
+    const emailValue = inputEmail ? inputEmail.value.trim() : '';
+    const phoneValue = inputPhone ? inputPhone.value.trim() : '';
+    const addressValue = inputAddress ? inputAddress.value.trim() : '';
+
+    if (displayCompany) displayCompany.textContent = companyValue;
+    if (displayName) displayName.textContent = nameValue;
+    if (displayTitle) displayTitle.textContent = titleValue;
+    if (displayEmail) displayEmail.textContent = emailValue;
+    if (displayPhone) displayPhone.textContent = phoneValue;
+    if (displayAddress) displayAddress.textContent = addressValue;
+
+    const inlineName = document.getElementById('display_company_name');
+    if (inlineName) inlineName.textContent = companyValue || '______________________________';
   }
 
-  function syncForms() {
-    const companyVal = (inputSigCompany && inputSigCompany.value.trim())
-      || (inputCompany && inputCompany.value.trim())
-      || (contactCompany && contactCompany.value.trim())
-      || '';
-    const nameVal = (inputName && inputName.value.trim())
-      || (contactRepresentative && contactRepresentative.value.trim())
-      || '';
-    const titleVal = (inputTitle && inputTitle.value.trim())
-      || (contactTitle && contactTitle.value.trim())
-      || '';
-    const emailVal = (inputSigEmail && inputSigEmail.value.trim())
-      || (inputEmail && inputEmail.value.trim())
-      || (contactEmail && contactEmail.value.trim())
-      || '';
-    const phoneVal = (inputSigPhone && inputSigPhone.value.trim())
-      || (inputPhone && inputPhone.value.trim())
-      || (contactPhone && contactPhone.value.trim())
-      || '';
-    const addressVal = (inputSigAddress && inputSigAddress.value.trim())
-      || (inputAddress && inputAddress.value.trim())
-      || '';
-
-    if (inputSigCompany && !inputSigCompany.value.trim() && companyVal) inputSigCompany.value = companyVal;
-    if (inputCompany && companyVal) inputCompany.value = companyVal;
-    if (contactCompany && companyVal) contactCompany.value = companyVal;
-    if (inputName && !inputName.value.trim() && nameVal) inputName.value = nameVal;
-    if (contactRepresentative && nameVal) contactRepresentative.value = nameVal;
-    if (inputRepresentative && nameVal) inputRepresentative.value = nameVal;
-    if (inputTitle && !inputTitle.value.trim() && titleVal) inputTitle.value = titleVal;
-    if (contactTitle && titleVal) contactTitle.value = titleVal;
-    if (inputRepresentativeTitle && titleVal) inputRepresentativeTitle.value = titleVal;
-    if (inputSigEmail && !inputSigEmail.value.trim() && emailVal) inputSigEmail.value = emailVal;
-    if (inputEmail && emailVal) inputEmail.value = emailVal;
-    if (contactEmail && emailVal) contactEmail.value = emailVal;
-    if (inputSigPhone && !inputSigPhone.value.trim() && phoneVal) inputSigPhone.value = phoneVal;
-    if (inputPhone && phoneVal) inputPhone.value = phoneVal;
-    if (contactPhone && phoneVal) contactPhone.value = phoneVal;
-    if (inputSigAddress && !inputSigAddress.value.trim() && addressVal) inputSigAddress.value = addressVal;
-    if (inputAddress && addressVal) inputAddress.value = addressVal;
+  function setDefaultDate() {
+    const today = new Date().toISOString().split('T')[0];
+    if (inputDate) inputDate.value = today;
+    if (inputContractDate) inputContractDate.value = today;
+    if (displayDate) displayDate.textContent = today.replace(/-/g, '/');
+    if (parrotDate) parrotDate.textContent = today.replace(/-/g, '/');
   }
 
-  function bindSync(el) {
+  [inputCompany, inputName, inputTitle, inputEmail, inputPhone, inputAddress].forEach((el) => {
     if (!el) return;
-    el.addEventListener('input', () => {
-      if (inputSigCompany && inputCompany) inputCompany.value = inputSigCompany.value;
-      if (inputSigCompany && contactCompany) contactCompany.value = inputSigCompany.value;
-      if (inputName && contactRepresentative) contactRepresentative.value = inputName.value;
-      if (inputName && inputRepresentative) inputRepresentative.value = inputName.value;
-      if (inputTitle && contactTitle) contactTitle.value = inputTitle.value;
-      if (inputTitle && inputRepresentativeTitle) inputRepresentativeTitle.value = inputTitle.value;
-      if (inputSigEmail && inputEmail) inputEmail.value = inputSigEmail.value;
-      if (inputSigEmail && contactEmail) contactEmail.value = inputSigEmail.value;
-      if (inputSigPhone && inputPhone) inputPhone.value = inputSigPhone.value;
-      if (inputSigPhone && contactPhone) contactPhone.value = inputSigPhone.value;
-      if (inputSigAddress && inputAddress) inputAddress.value = inputSigAddress.value;
-      updateAllDisplayFields();
-    });
-  }
+    el.addEventListener('input', syncSignatureDisplay);
+  });
 
-  [
-    inputSigCompany, inputName, inputTitle, inputSigEmail, inputSigPhone, inputSigAddress,
-    inputCompany, inputEmail, inputPhone, inputAddress, inputRepresentative, inputRepresentativeTitle,
-    contactCompany, contactRepresentative, contactTitle, contactEmail, contactPhone
-  ].forEach(bindSync);
-
-  if (inputDate) {
-    inputDate.addEventListener('change', (e) => {
-      const selectedDate = e.target.value;
-      if (selectedDate && displayElements.parrotDate) {
-        displayElements.parrotDate.textContent = selectedDate.replace(/-/g, '/');
-      }
-      if (selectedDate && inputContractDate) inputContractDate.value = selectedDate;
-    });
-  }
+  setDefaultDate();
+  syncSignatureDisplay();
 
   // Form submission
   btnSubmit.addEventListener('click', async () => {
@@ -1218,30 +1151,16 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
       return;
     }
 
-    const finalCompany = (inputSigCompany && inputSigCompany.value.trim())
-      || (inputCompany && inputCompany.value.trim())
-      || (contactCompany && contactCompany.value.trim())
-      || '';
-    const finalName = (inputName && inputName.value.trim())
-      || (contactRepresentative && contactRepresentative.value.trim())
-      || '';
-    const finalTitle = (inputTitle && inputTitle.value.trim())
-      || (contactTitle && contactTitle.value.trim())
-      || '';
-    const finalEmail = (inputSigEmail && inputSigEmail.value.trim())
-      || (inputEmail && inputEmail.value.trim())
-      || (contactEmail && contactEmail.value.trim())
-      || '';
-    const finalPhone = (inputSigPhone && inputSigPhone.value.trim())
-      || (inputPhone && inputPhone.value.trim())
-      || (contactPhone && contactPhone.value.trim())
-      || '';
-    const finalAddress = (inputSigAddress && inputSigAddress.value.trim())
-      || (inputAddress && inputAddress.value.trim())
-      || '';
+    const finalCompany = inputCompany ? inputCompany.value.trim() : '';
+    const finalName = inputName ? inputName.value.trim() : '';
+    const finalTitle = inputTitle ? inputTitle.value.trim() : '';
+    const finalEmail = inputEmail ? inputEmail.value.trim() : '';
+    const finalPhone = inputPhone ? inputPhone.value.trim() : '';
+    const finalAddress = inputAddress ? inputAddress.value.trim() : '';
+    const signedDate = inputDate ? inputDate.value : '';
 
     if (!finalCompany || !finalName || !finalTitle || !finalEmail) {
-      alert('Veuillez remplir tous les champs obligatoires.');
+      alert('Veuillez remplir tous les champs obligatoires en haut du contrat.');
       return;
     }
 
@@ -1265,7 +1184,7 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
         company_email: finalEmail,
         company_phone: finalPhone,
         company_address: finalAddress,
-        signed_date: inputDate ? inputDate.value : '',
+        signed_date: signedDate,
         signature: signatureDataUrl
       };
 
@@ -1304,10 +1223,6 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(email);
   }
-
-  // Initialize display fields
-  updateAllDisplayFields();
-  syncForms();
 })();
 </script>
 <?php endif; ?>

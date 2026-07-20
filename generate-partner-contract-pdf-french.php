@@ -217,29 +217,8 @@ class FrenchPDFGenerator extends PDFGeneratorBase {
         
         <p>Cet accord représente un partenariat stratégique global, visant à fournir des services complets d\'éducation internationale, de l\'évaluation des documents jusqu\'à l\'accueil et l\'installation à l\'étranger.</p>
         
-        <h2>15. COORDONNÉES</h2>
-        
-        <div class="page-break">
-        <h4>Nom de l\'Entreprise : ' . $this->esc($this->contract['company_name']) . '</h4>
-        <p><strong>Représentant :</strong> ' . $this->esc($this->contract['representative_name']) . '</p>
-        <p><strong>Fonction :</strong> ' . $this->esc($this->contract['representative_title']) . '</p>
-        <p><strong>Email :</strong> ' . $this->esc($this->contract['representative_email']) . '</p>
-        <p><strong>Téléphone :</strong> ' . $this->esc($this->contract['company_phone']) . '</p>
-        <p><strong>Adresse complète :</strong> ' . $this->esc($this->contract['company_address']) . '</p>
-        </div>
-        
-        <div class="page-break">
-        <h4>Parrot Canada Visa Consultant Co. Ltd</h4>
-        <p>Dr Jean Pierre Twajamahoro<br>
-        Propriétaire & Directeur Général<br>
-        Adresse courriel: infos@visaconsultantcanada.ca<br>
-        Téléphone: +1 (438) 290-6688<br>
-        294 Rue Vezina App 202<br>
-        Lasalle, Quebec H8R 3M9</p>
-        </div>
-        
         <div class="signature-section">
-            <h2>16. SIGNATURES</h2>
+            <h2>15. SIGNATURES</h2>
             <p>Cet Accord de Partenariat Stratégique est exécuté par les représentants autorisés des deux parties à la date indiquée ci-dessous :</p>
             
             <table style="width:100%;border-collapse:collapse;margin-top:12pt;">

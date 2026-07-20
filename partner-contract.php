@@ -1146,15 +1146,15 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
     const signedDate = inputDate ? inputDate.value : '';
     
     if (!finalCompany) {
-      alert('Please enter your company name.');
+      alert('Please enter your company name at the top of the contract.');
       return;
     }
     if (!finalEmail) {
-      alert('Please enter your company email.');
+      alert('Please enter your company email at the top of the contract.');
       return;
     }
     if (!finalName) {
-      alert('Please enter your name.');
+      alert('Please enter your representative name at the top of the contract.');
       return;
     }
     if (!finalTitle) {
