@@ -1256,6 +1256,22 @@ if ($isFinal === 1) {
     require_once __DIR__ . '/helpers/staff_assignment_notify.php';
     require_once __DIR__ . '/helpers/study_choice_admin_actions.php';
     require_once __DIR__ . '/helpers/related_program_suggestions.php';
+
+    // If staff was not selected on the form, assign from university persons-in-charge
+    // so related-program proposals can be emailed immediately at submission.
+    try {
+        $ensuredAssignee = pcvc_ensure_application_assignee_from_university_admins($conn, $appId);
+        if ($ensuredAssignee > 0 && ($assignedToAdminId === null || $assignedToAdminId <= 0)) {
+            $assignedToAdminId = $ensuredAssignee;
+        }
+        debug_log('ASSIGNEE ENSURED FOR RELATED PROPOSALS', [
+            'application_id' => $appId,
+            'assignee_id' => $ensuredAssignee,
+        ]);
+    } catch (Throwable $e) {
+        debug_log('ASSIGNEE ENSURE ERROR', $e->getMessage());
+    }
+
     try {
         pcvc_notify_assigned_staff_application_submitted($conn, $appId);
         debug_log('STAFF ASSIGNMENT NOTIFY SENT', ['application_id' => $appId]);
@@ -1271,7 +1287,8 @@ if ($isFinal === 1) {
         }
     }
     try {
-        $related = pcvc_process_related_university_suggestions($conn, $appId);
+        // forceRenotify=true so proposals are emailed at this final submit even if a prior draft scan marked notified
+        $related = pcvc_process_related_university_suggestions($conn, $appId, true);
         debug_log('RELATED PROGRAM SUGGESTIONS', $related);
     } catch (Throwable $e) {
         debug_log('RELATED PROGRAM SUGGESTIONS ERROR', $e->getMessage());

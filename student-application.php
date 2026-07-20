@@ -5264,7 +5264,7 @@ function startValidationSimulation(progress) {
         identityOnlySubmit: true,
         successTitle: "Application Submitted",
         successMessage:
-          "Application submitted successfully. If a student email was available, the email and portal access were sent. You can edit any missing details later from retrieval or the student portal."
+          "Application submitted successfully. If a student email was available, the email and portal access were sent. Related program proposals at other universities were queued and emailed to the assigned person / university admins in charge. You can edit any missing details later from retrieval or the student portal."
       });
 
       if (!submitted) {

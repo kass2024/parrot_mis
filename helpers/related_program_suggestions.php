@@ -39,6 +39,7 @@ function pcvc_ensure_study_choice_suggestions_schema(mysqli $conn): void
             `match_reason` VARCHAR(255) NOT NULL DEFAULT '',
             `status` ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
             `notified_at` DATETIME DEFAULT NULL,
+            `assignee_digest_sent_at` DATETIME DEFAULT NULL,
             `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
             `decided_at` DATETIME DEFAULT NULL,
             `decided_by_admin_id` INT(11) DEFAULT NULL,
@@ -48,6 +49,15 @@ function pcvc_ensure_study_choice_suggestions_schema(mysqli $conn): void
             KEY `idx_sugg_university` (`suggested_university_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     ");
+
+    // Older installs created the table before assignee_digest_sent_at existed
+    $col = $conn->query("SHOW COLUMNS FROM application_study_choice_suggestions LIKE 'assignee_digest_sent_at'");
+    if ($col && $col->num_rows === 0) {
+        $conn->query(
+            "ALTER TABLE application_study_choice_suggestions
+             ADD COLUMN `assignee_digest_sent_at` DATETIME DEFAULT NULL AFTER `notified_at`"
+        );
+    }
 }
 
 /**
@@ -540,25 +550,97 @@ function pcvc_application_assignee_admin(mysqli $conn, int $applicationId): ?arr
 }
 
 /**
- * Prefer university admins; fall back to application assignee for unassigned universities.
+ * Prefer suggested-university admins; always include application assignee;
+ * fall back to source-university admins when suggested uni is unassigned.
  *
  * @return list<array{id:int,full_name:string,email:string,is_fallback?:bool}>
  */
 function pcvc_related_suggestion_notify_recipients(
     mysqli $conn,
     int $applicationId,
-    int $suggestedUniversityId
+    int $suggestedUniversityId,
+    int $sourceUniversityId = 0
 ): array {
-    $admins = pcvc_university_admins_list($conn, $suggestedUniversityId);
-    if ($admins !== []) {
-        return $admins;
+    $byEmail = [];
+
+    foreach (pcvc_university_admins_list($conn, $suggestedUniversityId) as $admin) {
+        $byEmail[strtolower($admin['email'])] = $admin;
     }
+
     $assignee = pcvc_application_assignee_admin($conn, $applicationId);
-    if ($assignee === null) {
-        return [];
+    if ($assignee !== null) {
+        $key = strtolower($assignee['email']);
+        if (!isset($byEmail[$key])) {
+            $assignee['is_fallback'] = empty($byEmail);
+            $byEmail[$key] = $assignee;
+        }
     }
-    $assignee['is_fallback'] = true;
-    return [$assignee];
+
+    if ($byEmail === [] && $sourceUniversityId > 0) {
+        foreach (pcvc_university_admins_list($conn, $sourceUniversityId) as $admin) {
+            $admin['is_fallback'] = true;
+            $byEmail[strtolower($admin['email'])] = $admin;
+        }
+    }
+
+    return array_values($byEmail);
+}
+
+/**
+ * If the application has no assignee, assign the first admin in charge
+ * of any study-choice university that has university_admins.
+ */
+function pcvc_ensure_application_assignee_from_university_admins(mysqli $conn, int $applicationId): int
+{
+    if ($applicationId <= 0) {
+        return 0;
+    }
+    pcvc_ensure_university_admins_schema($conn);
+
+    $st = $conn->prepare('SELECT assigned_to_admin_id FROM student_applications WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('i', $applicationId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    $current = (int) ($row['assigned_to_admin_id'] ?? 0);
+    if ($current > 0) {
+        return $current;
+    }
+
+    $sql = "
+        SELECT ua.admin_id
+        FROM application_study_choices ascx
+        INNER JOIN university_admins ua ON ua.university_id = ascx.university_id
+        INNER JOIN admins a ON a.id = ua.admin_id
+        WHERE ascx.application_id = ?
+          AND a.email IS NOT NULL
+          AND TRIM(a.email) <> ''
+        ORDER BY ua.admin_id ASC
+        LIMIT 1
+    ";
+    $st = $conn->prepare($sql);
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('i', $applicationId);
+    $st->execute();
+    $pick = $st->get_result()->fetch_assoc();
+    $st->close();
+    $adminId = (int) ($pick['admin_id'] ?? 0);
+    if ($adminId <= 0) {
+        return 0;
+    }
+
+    $upd = $conn->prepare('UPDATE student_applications SET assigned_to_admin_id = ? WHERE id = ? AND (assigned_to_admin_id IS NULL OR assigned_to_admin_id = 0)');
+    if ($upd) {
+        $upd->bind_param('ii', $adminId, $applicationId);
+        $upd->execute();
+        $upd->close();
+    }
+    return $adminId;
 }
 
 /**
@@ -648,7 +730,7 @@ function pcvc_notify_admin_related_program_suggestion(
 
     $isFallback = !empty($admin['is_fallback']);
     $intro = $isFallback
-        ? 'A student applied to an assigned partner university. A related program was found at an <strong>unassigned</strong> university (no admin in charge yet). It was added to the <strong>approval queue</strong> for your review.'
+        ? 'A student applied to a partner university. Related programs were found at other universities (including unassigned ones). They were added to the <strong>approval queue</strong> for your review.'
         : 'A student applied to an assigned partner university. A related program was found at a university you are in charge of, and it was added to the <strong>approval queue</strong> (not yet a study choice).';
     $suggestLabel = $isFallback ? 'Suggested university' : 'Suggested for you';
 
@@ -683,19 +765,99 @@ function pcvc_notify_admin_related_program_suggestion(
 }
 
 /**
+ * One email listing all pending related-program proposals (for assignee / persons in charge).
+ *
+ * @param list<array<string,mixed>> $pendingRows
+ */
+function pcvc_notify_related_programs_digest(
+    mysqli $conn,
+    int $applicationId,
+    array $admin,
+    array $student,
+    array $pendingRows
+): bool {
+    $email = trim((string) ($admin['email'] ?? ''));
+    if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || $pendingRows === []) {
+        return false;
+    }
+
+    $adminName = htmlspecialchars((string) ($admin['full_name'] ?? 'Colleague'), ENT_QUOTES, 'UTF-8');
+    $studentName = htmlspecialchars((string) ($student['name'] ?? 'Applicant'), ENT_QUOTES, 'UTF-8');
+    $studentEmail = htmlspecialchars((string) ($student['email'] ?? ''), ENT_QUOTES, 'UTF-8');
+
+    $rowsHtml = '';
+    foreach ($pendingRows as $row) {
+        $sugUni = htmlspecialchars((string) ($row['suggested_university_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $sugProg = htmlspecialchars((string) ($row['suggested_program_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $sugLvl = htmlspecialchars((string) (($row['suggested_level_abbr'] ?? '') ?: ($row['suggested_level_name'] ?? '')), ENT_QUOTES, 'UTF-8');
+        $srcUni = htmlspecialchars((string) ($row['source_university_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $srcProg = htmlspecialchars((string) ($row['source_program_name'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $score = htmlspecialchars((string) ($row['match_score'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $reason = htmlspecialchars((string) ($row['match_reason'] ?? ''), ENT_QUOTES, 'UTF-8');
+        $rowsHtml .= '<tr>'
+            . '<td style="padding:8px;border:1px solid #e5e7eb"><strong>' . $sugUni . '</strong><br>' . $sugLvl . ' — ' . $sugProg . '</td>'
+            . '<td style="padding:8px;border:1px solid #e5e7eb">' . $srcUni . '<br>' . $srcProg . '</td>'
+            . '<td style="padding:8px;border:1px solid #e5e7eb">' . $score . '<br><span style="color:#6b7280">' . $reason . '</span></td>'
+            . '</tr>';
+    }
+
+    try {
+        /** @var PHPMailer $mail */
+        $mail = app_mailer();
+        $mail->clearAddresses();
+        $mail->clearAttachments();
+        $mail->setFrom(PCVC_COMPANY_SUPPORT_EMAIL, PCVC_COMPANY_DISPLAY_NAME);
+        $mail->clearReplyTos();
+        $mail->addReplyTo(PCVC_COMPANY_SUPPORT_EMAIL, PCVC_COMPANY_DISPLAY_NAME);
+        $mail->addAddress($email, (string) ($admin['full_name'] ?? ''));
+        $mail->Subject = PCVC_COMPANY_DISPLAY_NAME . ' — ' . count($pendingRows) . ' related program proposal(s) — application #' . $applicationId;
+        $mail->Body = '
+<div style="font-family:Arial,sans-serif;line-height:1.55;color:#111;max-width:720px">
+  <p>Hello <strong>' . $adminName . '</strong>,</p>
+  <p>A student application was submitted. AI matched <strong>' . count($pendingRows) . '</strong> related program(s) at other universities. They are waiting in the <strong>approval queue</strong> (not yet study choices).</p>
+  <table style="border-collapse:collapse;width:100%;margin:14px 0;font-size:14px">
+    <tr><th style="text-align:left;padding:8px;border:1px solid #e5e7eb;background:#f9fafb;width:160px">Student</th><td style="padding:8px;border:1px solid #e5e7eb">' . $studentName . '<br><span style="color:#6b7280">' . $studentEmail . '</span></td></tr>
+  </table>
+  <table style="border-collapse:collapse;width:100%;margin:14px 0;font-size:13px">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;background:#fffbeb">Suggested program</th>
+        <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;background:#fffbeb">Matched from</th>
+        <th style="text-align:left;padding:8px;border:1px solid #e5e7eb;background:#fffbeb">Match</th>
+      </tr>
+    </thead>
+    <tbody>' . $rowsHtml . '</tbody>
+  </table>
+  <p>Open the Student Application Report → Study Choices → <em>Related programs pending approval</em> to Approve or Reject.</p>
+  <p style="color:#6b7280;font-size:13px">Application #' . (int) $applicationId . '</p>
+</div>';
+        $mail->send();
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
  * Main entry: scan study choices of an application, queue related suggestions, email admins.
  *
- * @return array{suggestions:int,emails:int,triggered:bool}
+ * @return array{suggestions:int,emails:int,triggered:bool,assignee_id?:int}
  */
-function pcvc_process_related_university_suggestions(mysqli $conn, int $applicationId): array
-{
-    $result = ['suggestions' => 0, 'emails' => 0, 'triggered' => false];
+function pcvc_process_related_university_suggestions(
+    mysqli $conn,
+    int $applicationId,
+    bool $forceRenotify = false
+): array {
+    $result = ['suggestions' => 0, 'emails' => 0, 'triggered' => false, 'assignee_id' => 0];
     if ($applicationId <= 0) {
         return $result;
     }
 
     pcvc_ensure_study_choice_suggestions_schema($conn);
     pcvc_ensure_university_admins_schema($conn);
+
+    // Ensure someone owns the file so proposals can be emailed at submission
+    $result['assignee_id'] = pcvc_ensure_application_assignee_from_university_admins($conn, $applicationId);
 
     $stmt = $conn->prepare(
         "SELECT first_name, last_name, email FROM student_applications WHERE id = ? LIMIT 1"
@@ -765,7 +927,6 @@ function pcvc_process_related_university_suggestions(mysqli $conn, int $applicat
 
     foreach ($choices as $c) {
         if ((int) ($c['admin_count'] ?? 0) <= 0) {
-            // Only expand from universities that are part of the assigned network
             continue;
         }
         $found = pcvc_find_related_programs_for_choice(
@@ -789,15 +950,40 @@ function pcvc_process_related_university_suggestions(mysqli $conn, int $applicat
         }
     }
 
-    if ($allMatches === []) {
-        return $result;
+    if ($allMatches !== []) {
+        $result['suggestions'] = pcvc_store_study_choice_suggestions($conn, $applicationId, array_values($allMatches));
     }
 
-    $result['suggestions'] = pcvc_store_study_choice_suggestions($conn, $applicationId, array_values($allMatches));
+    if ($forceRenotify) {
+        $conn->query(
+            'UPDATE application_study_choice_suggestions
+             SET notified_at = NULL,
+                 assignee_digest_sent_at = NULL
+             WHERE application_id = ' . (int) $applicationId . "
+               AND status = 'pending'"
+        );
+    }
 
-    // Email admins for newly pending suggestions (not yet notified)
-    $stmt = $conn->prepare(
-        "SELECT s.*,
+    $result['emails'] = pcvc_send_related_suggestion_notifications($conn, $applicationId, $student, false);
+
+    return $result;
+}
+
+/**
+ * Email assignee + university persons in charge about pending related proposals.
+ * Uses one digest per recipient. Only marks notified_at when at least one email succeeds.
+ * Also re-sends assignee digest for pending rows that never got assignee_digest_sent_at.
+ */
+function pcvc_send_related_suggestion_notifications(
+    mysqli $conn,
+    int $applicationId,
+    array $student,
+    bool $includeAlreadyNotified = false
+): int {
+    pcvc_ensure_study_choice_suggestions_schema($conn);
+
+    $sql = "
+        SELECT s.*,
                 su.name AS suggested_university_name,
                 sp.program_name AS suggested_program_name,
                 pl.abbreviation AS suggested_level_abbr,
@@ -812,60 +998,77 @@ function pcvc_process_related_university_suggestions(mysqli $conn, int $applicat
          JOIN programs op ON op.id = s.source_program_id
          WHERE s.application_id = ?
            AND s.status = 'pending'
-           AND s.notified_at IS NULL"
-    );
+    ";
+    if (!$includeAlreadyNotified) {
+        // New rows, or pending rows that never got the assignee digest (stuck after earlier bug)
+        $sql .= ' AND (s.notified_at IS NULL OR s.assignee_digest_sent_at IS NULL)';
+    }
+
+    $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return $result;
+        return 0;
     }
     $stmt->bind_param('i', $applicationId);
     $stmt->execute();
     $pendingNotify = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
 
-    $mark = $conn->prepare(
-        "UPDATE application_study_choice_suggestions SET notified_at = NOW() WHERE id = ?"
-    );
+    if (!$pendingNotify) {
+        return 0;
+    }
 
-    foreach ($pendingNotify ?: [] as $row) {
-        $recipients = pcvc_related_suggestion_notify_recipients(
-            $conn,
-            $applicationId,
-            (int) $row['suggested_university_id']
-        );
-        $suggestion = [
-            'suggested_university_name' => (string) $row['suggested_university_name'],
-            'suggested_program_name' => (string) $row['suggested_program_name'],
-            'suggested_level_name' => (string) ($row['suggested_level_abbr'] ?: $row['suggested_level_name']),
-            'match_reason' => (string) $row['match_reason'],
-            'match_score' => (string) $row['match_score'],
-        ];
-        $sourceChoice = [
-            'university' => (string) $row['source_university_name'],
-            'program' => (string) $row['source_program_name'],
-        ];
-        foreach ($recipients as $admin) {
-            if (pcvc_notify_admin_related_program_suggestion(
-                $conn,
-                $applicationId,
-                $admin,
-                $student,
-                $sourceChoice,
-                $suggestion
-            )) {
-                $result['emails']++;
-            }
+    $digestRecipients = [];
+    $assignee = pcvc_application_assignee_admin($conn, $applicationId);
+    if ($assignee !== null) {
+        $assignee['is_fallback'] = true;
+        $digestRecipients[strtolower($assignee['email'])] = $assignee;
+    }
+
+    foreach ($pendingNotify as $row) {
+        $suggestedId = (int) $row['suggested_university_id'];
+        $sourceId = (int) $row['source_university_id'];
+        foreach (pcvc_related_suggestion_notify_recipients($conn, $applicationId, $suggestedId, $sourceId) as $admin) {
+            $digestRecipients[strtolower($admin['email'])] = $admin;
         }
-        // Mark notified after attempt so unassigned rows are not retried forever;
-        // still mark when nobody could be emailed (queued for approval only).
-        if ($mark) {
-            $sid = (int) $row['id'];
-            $mark->bind_param('i', $sid);
-            $mark->execute();
+        foreach (pcvc_university_admins_list($conn, $sourceId) as $admin) {
+            $digestRecipients[strtolower($admin['email'])] = $admin;
         }
     }
-    $mark?->close();
 
-    return $result;
+    $emails = 0;
+    $assigneeEmailed = false;
+    foreach ($digestRecipients as $admin) {
+        if (pcvc_notify_related_programs_digest($conn, $applicationId, $admin, $student, $pendingNotify)) {
+            $emails++;
+            if ($assignee && strcasecmp($admin['email'], $assignee['email']) === 0) {
+                $assigneeEmailed = true;
+            }
+        }
+    }
+
+    if ($emails > 0) {
+        // Mark assignee digest done when assignee got it, or when there is no assignee to notify
+        $markAssigneeDigest = ($assigneeEmailed || $assignee === null) ? 1 : 0;
+        $ids = implode(',', array_map(static fn ($r) => (int) $r['id'], $pendingNotify));
+        $mark = $conn->prepare(
+            "UPDATE application_study_choice_suggestions
+             SET notified_at = COALESCE(notified_at, NOW()),
+                 assignee_digest_sent_at = CASE
+                     WHEN ? = 1 THEN NOW()
+                     ELSE assignee_digest_sent_at
+                 END
+             WHERE application_id = ?
+               AND status = 'pending'
+               AND id IN ({$ids})"
+        );
+        if ($mark) {
+            $mark->bind_param('ii', $markAssigneeDigest, $applicationId);
+            $mark->execute();
+            $mark->close();
+        }
+    }
+
+    return $emails;
 }
 
 /**
@@ -897,7 +1100,17 @@ function pcvc_fetch_study_choice_suggestions(mysqli $conn, int $applicationId, s
             p.program_name AS program,
             ou.name AS source_university,
             op.program_name AS source_program,
-            GROUP_CONCAT(DISTINCT a.full_name ORDER BY a.full_name SEPARATOR ', ') AS admins_in_charge
+            GROUP_CONCAT(DISTINCT a.full_name ORDER BY a.full_name SEPARATOR ', ') AS uni_admins,
+            (
+                SELECT COALESCE(
+                    NULLIF(TRIM(aa.full_name), ''),
+                    TRIM(CONCAT(COALESCE(aa.first_name, ''), ' ', COALESCE(aa.last_name, '')))
+                )
+                FROM student_applications sa
+                LEFT JOIN admins aa ON aa.id = sa.assigned_to_admin_id
+                WHERE sa.id = s.application_id
+                LIMIT 1
+            ) AS application_assignee
         FROM application_study_choice_suggestions s
         JOIN regions r ON r.id = s.suggested_region_id
         JOIN universities u ON u.id = s.suggested_university_id
@@ -927,6 +1140,21 @@ function pcvc_fetch_study_choice_suggestions(mysqli $conn, int $applicationId, s
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
+
+    foreach ($rows ?: [] as &$row) {
+        $uniAdmins = trim((string) ($row['uni_admins'] ?? ''));
+        $assignee = trim((string) ($row['application_assignee'] ?? ''));
+        if ($uniAdmins !== '') {
+            $row['admins_in_charge'] = $uniAdmins;
+        } elseif ($assignee !== '') {
+            $row['admins_in_charge'] = 'App assignee: ' . $assignee;
+        } else {
+            $row['admins_in_charge'] = 'Unassigned';
+        }
+        unset($row['uni_admins'], $row['application_assignee']);
+    }
+    unset($row);
+
     return $rows ?: [];
 }
 
