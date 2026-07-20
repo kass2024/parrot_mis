@@ -12,7 +12,10 @@ class FrenchPDFGenerator extends PDFGeneratorBase {
     
     protected function getContractContent(): string {
         $partnerSignatureHtml = $this->processSignatureImage($this->contract['signature_image']);
-        $employerSignatureHtml = $this->getEmployerSignature();
+        $managerSignatureHtml = $this->getManagerSignature();
+        $companyStampHtml = $this->getCompanyStamp();
+        $signedDate = $this->formatSignedDate($this->contract['signed_date'] ?? '');
+        $partnerEmail = $this->esc($this->contract['representative_email'] ?: $this->contract['company_email']);
         
         return '
         <!DOCTYPE html>
@@ -239,29 +242,32 @@ class FrenchPDFGenerator extends PDFGeneratorBase {
             <h2>16. SIGNATURES</h2>
             <p>Cet Accord de Partenariat Stratégique est exécuté par les représentants autorisés des deux parties à la date indiquée ci-dessous :</p>
             
-            <div class="signature-grid">
-                <div class="signature-box">
-                    <div class="company-name-header">Parrot Canada Visa Consultant Co. Ltd</div>
-                    <p><strong>Nom du Représentant :</strong> Dr Jean Pierre Twajamahoro</p>
-                    <p><strong>Fonction :</strong> Propriétaire & Directeur Général</p>
-                    <p class="signature-label">SIGNATURE AUTORISÉE</p>
-                    <div class="signature-line">
-                        ' . $employerSignatureHtml . '
-                    </div>
-                    <p class="date-line">Signé le : ' . $this->esc($this->contract['signed_date']) . '</p>
-                </div>
-
-                <div class="signature-box">
-                    <div class="company-name-header">' . $this->esc($this->contract['company_name']) . '</div>
-                    <p><strong>Nom du Représentant :</strong> ' . $this->esc($this->contract['representative_name']) . '</p>
-                    <p><strong>Fonction :</strong> ' . $this->esc($this->contract['representative_title']) . '</p>
-            <p class="signature-label">SIGNATURE AUTORISÉE</p>
-                    <div class="signature-line">
-                        ' . $partnerSignatureHtml . '
-                    </div>
-                    <p class="date-line">Signé le : ' . $this->esc($this->contract['signed_date']) . '</p>
-                </div>
-            </div>
+            <table style="width:100%;border-collapse:collapse;margin-top:12pt;">
+                <tr>
+                    <td style="width:50%;vertical-align:top;padding:10px 12px 10px 0;">
+                        <p style="font-weight:700;color:#0d47a1;margin:0 0 10px 0;">Pour Parrot Canada Visa Consultant Co. Ltd</p>
+                        <p><strong>Nom :</strong> Dr Jean Pierre Twajamahoro</p>
+                        <p><strong>Fonction :</strong> Propriétaire & Directeur Général</p>
+                        <p><strong>Signature :</strong></p>
+                        ' . $managerSignatureHtml . '
+                        <p><strong>Cachet de l\'entreprise :</strong></p>
+                        ' . $companyStampHtml . '
+                        <p><strong>Date :</strong> ' . $signedDate . '</p>
+                    </td>
+                    <td style="width:50%;vertical-align:top;padding:10px 0 10px 12px;border-left:1px solid #e5e7eb;">
+                        <p style="font-weight:700;color:#0d47a1;margin:0 0 10px 0;">Entreprise Partenaire</p>
+                        <p><strong>Nom de l\'entreprise :</strong> ' . $this->esc($this->contract['company_name']) . '</p>
+                        <p><strong>Nom du représentant :</strong> ' . $this->esc($this->contract['representative_name']) . '</p>
+                        <p><strong>Fonction :</strong> ' . $this->esc($this->contract['representative_title']) . '</p>
+                        <p><strong>Courriel :</strong> ' . $partnerEmail . '</p>
+                        <p><strong>Téléphone :</strong> ' . $this->esc($this->contract['company_phone']) . '</p>
+                        <p><strong>Adresse :</strong> ' . $this->esc($this->contract['company_address']) . '</p>
+                        <p><strong>Signature :</strong></p>
+                        <div style="border:1px dashed #9ca3af;padding:6px;min-height:72px;">' . $partnerSignatureHtml . '</div>
+                        <p><strong>Date :</strong> ' . $signedDate . '</p>
+                    </td>
+                </tr>
+            </table>
             
             <div class="footer">
                 <p>Cet accord constitue l\'entente complète entre les parties et remplace toutes les discussions, négociations et accords antérieurs.</p>

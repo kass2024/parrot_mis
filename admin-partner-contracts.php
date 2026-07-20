@@ -15,6 +15,7 @@ if (empty($_SESSION['csrf_token'])) {
 
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 $showSuccess = isset($_GET['sent']) && $_GET['sent'] == '1';
+$showDeleted = isset($_GET['deleted']) && $_GET['deleted'] == '1';
 $showError = isset($_GET['error']) && !empty($_GET['error']);
 
 $sql = "
@@ -280,14 +281,21 @@ tr:last-child td { border-bottom: none; }
 
 <?php if ($showSuccess): ?>
 <div class="alert alert-success" id="successAlert">
-    <span> Email sent successfully!</span>
+    <span>Email sent successfully!</span>
+    <button type="button" class="close-btn" onclick="this.parentElement.remove()" aria-label="Close"></button>
+</div>
+<?php endif; ?>
+
+<?php if ($showDeleted): ?>
+<div class="alert alert-success" id="deletedAlert">
+    <span>Partner contract deleted successfully.</span>
     <button type="button" class="close-btn" onclick="this.parentElement.remove()" aria-label="Close"></button>
 </div>
 <?php endif; ?>
 
 <?php if ($showError): ?>
 <div class="alert alert-error" id="errorAlert">
-    <span> <?= htmlspecialchars(urldecode($_GET['error'])) ?></span>
+    <span><?= htmlspecialchars(urldecode((string) $_GET['error']), ENT_QUOTES, 'UTF-8') ?></span>
     <button type="button" class="close-btn" onclick="this.parentElement.remove()" aria-label="Close"></button>
 </div>
 <?php endif; ?>
@@ -333,6 +341,14 @@ tr:last-child td { border-bottom: none; }
            title="Download PDF">
             PDF
         </a>
+        <form method="post"
+              action="<?= $basePath ?>/admin-delete-partner-contract.php"
+              style="display:inline;"
+              onsubmit="return confirm('Delete this partner contract permanently? This cannot be undone.');">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="contract_id" value="<?= (int) $row['contract_id'] ?>">
+            <button class="btn btn-del" type="submit" title="Delete contract">Delete</button>
+        </form>
     </td>
 </tr>
 <?php endwhile; ?>

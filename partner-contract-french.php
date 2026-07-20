@@ -721,43 +721,7 @@ Arbitrage si nécessaire</p>
 <h3>14. Conclusion</h3>
 <p>Cet accord représente un partenariat stratégique global, visant à fournir des services complets d'éducation internationale, de l'évaluation des documents jusqu'à l'accueil et l'installation à l'étranger.</p>
 
-<h3>15. Coordonnées</h3>
-<div style="margin-bottom:30px;">
-  <div class="form-section">
-    <h4>Coordonnées de l'Entreprise</h4>
-    <div class="input-group">
-      <label for="contact_company_name">Nom de l'Entreprise *</label>
-      <input type="text" id="contact_company_name" required placeholder="Entrez le nom de votre entreprise" value="<?= htmlspecialchars($contract['company_name'] ?? '') ?>">
-    </div>
-    <div class="input-group">
-      <label for="contact_representative">Représentant *</label>
-      <input type="text" id="contact_representative" required placeholder="Entrez le nom du représentant" value="<?= htmlspecialchars($contract['representative_name'] ?? '') ?>">
-    </div>
-    <div class="input-group">
-      <label for="contact_title">Fonction *</label>
-      <input type="text" id="contact_title" required placeholder="Entrez la fonction" value="<?= htmlspecialchars($contract['representative_title'] ?? '') ?>">
-    </div>
-    <div class="input-group">
-      <label for="contact_email">Email *</label>
-      <input type="email" id="contact_email" required placeholder="Entrez l'email" value="<?= htmlspecialchars($contract['representative_email'] ?? $contract['company_email'] ?? '') ?>">
-    </div>
-    <div class="input-group">
-      <label for="contact_phone">Téléphone</label>
-      <input type="tel" id="contact_phone" placeholder="Entrez le téléphone" value="<?= htmlspecialchars($contract['company_phone'] ?? '') ?>">
-    </div>
-  </div>
-</div>
-
-<p><strong>Parrot Canada Visa Consultant Co. Ltd</strong><br>
-Dr Jean Pierre Twajamahoro<br>
-Propriétaire & Directeur Général<br>
-Adresse courriel: infos@visaconsultantcanada.ca<br>
-Téléphone: +1 (438) 290-6688<br>
-294 Rue Vezina App 202; Lasalle, Quebec H8R 3M9</p>
-
-<h3>16. Signatures</h3>
-
-<h3 style="font-size:20px;font-weight:700;margin-bottom:32px;">16. SIGNATURES</h3>
+<h3 style="font-size:20px;font-weight:700;margin-bottom:32px;">15. SIGNATURES</h3>
 
 <div class="signature-grid">
 
@@ -816,60 +780,48 @@ Entreprise Partenaire
 </p>
 
 <?php
-$partnerInputStyle = 'width:100%;border:2px solid #e5e7eb;border-radius:6px;padding:12px 16px;font-size:16px;box-sizing:border-box;';
-$partnerReadonly = $isSigned ? 'readonly' : '';
+$sigLineStyle = 'border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;';
+$sigCompany = htmlspecialchars($contract['company_name'] ?? '');
+$sigRep = htmlspecialchars($contract['representative_name'] ?? '');
+$sigTitle = htmlspecialchars($contract['representative_title'] ?? '');
+$sigEmail = htmlspecialchars($contract['representative_email'] ?? $contract['company_email'] ?? '');
+$sigPhone = htmlspecialchars($contract['company_phone'] ?? '');
+$sigAddress = htmlspecialchars($contract['company_address'] ?? '');
+$sigDateDisplay = !empty($contract['signed_date']) ? htmlspecialchars($contract['signed_date']) : date('Y/m/d');
 ?>
 
-<div style="margin-bottom:16px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Nom de l'entreprise :</label>
-<input type="text" id="sig_company_name" <?= $partnerReadonly ?>
-style="<?= $partnerInputStyle ?>"
-placeholder="Entrez le nom de l'entreprise partenaire"
-value="<?= htmlspecialchars($contract['company_name'] ?? '') ?>">
-<span id="sig_company_name_display" style="display:none;"><?= htmlspecialchars($contract['company_name'] ?? '') ?></span>
+<div style="margin-bottom:18px;">
+<strong>Nom de l'entreprise :</strong>
+<div id="sig_display_company_name" style="<?= $sigLineStyle ?>"><?= $sigCompany ?></div>
 </div>
 
-<div style="margin-bottom:16px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Nom du représentant :</label>
-<input type="text" id="sig_representative_name" <?= $partnerReadonly ?>
-style="<?= $partnerInputStyle ?>"
-placeholder="Entrez le nom complet du représentant"
-value="<?= htmlspecialchars($contract['representative_name'] ?? '') ?>">
+<div style="margin-bottom:18px;">
+<strong>Nom du représentant :</strong>
+<div id="sig_display_representative_name" style="<?= $sigLineStyle ?>"><?= $sigRep ?></div>
 </div>
 
-<div style="margin-bottom:16px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Fonction / Titre :</label>
-<input type="text" id="sig_representative_title" <?= $partnerReadonly ?>
-style="<?= $partnerInputStyle ?>"
-placeholder="ex. Directeur, Gérant"
-value="<?= htmlspecialchars($contract['representative_title'] ?? '') ?>">
+<div style="margin-bottom:18px;">
+<strong>Fonction :</strong>
+<div id="sig_display_representative_title" style="<?= $sigLineStyle ?>"><?= $sigTitle ?></div>
 </div>
 
-<div style="margin-bottom:16px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Courriel :</label>
-<input type="email" id="sig_email" <?= $partnerReadonly ?>
-style="<?= $partnerInputStyle ?>"
-placeholder="Entrez le courriel"
-value="<?= htmlspecialchars($contract['representative_email'] ?? $contract['company_email'] ?? '') ?>">
+<div style="margin-bottom:18px;">
+<strong>Courriel :</strong>
+<div id="sig_display_email" style="<?= $sigLineStyle ?>"><?= $sigEmail ?></div>
 </div>
 
-<div style="margin-bottom:16px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Téléphone :</label>
-<input type="tel" id="sig_phone" <?= $partnerReadonly ?>
-style="<?= $partnerInputStyle ?>"
-placeholder="Entrez le numéro de téléphone"
-value="<?= htmlspecialchars($contract['company_phone'] ?? '') ?>">
+<div style="margin-bottom:18px;">
+<strong>Téléphone :</strong>
+<div id="sig_display_phone" style="<?= $sigLineStyle ?>"><?= $sigPhone ?></div>
 </div>
 
-<div style="margin-bottom:16px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Adresse de l'entreprise :</label>
-<input type="text" id="sig_address" <?= $partnerReadonly ?>
-style="<?= $partnerInputStyle ?>"
-placeholder="Entrez l'adresse complète"
-value="<?= htmlspecialchars($contract['company_address'] ?? '') ?>">
+<div style="margin-bottom:18px;">
+<strong>Adresse de l'entreprise :</strong>
+<div id="sig_display_address" style="<?= $sigLineStyle ?>"><?= $sigAddress ?></div>
 </div>
 
 <input type="hidden" id="contract_start_date" value="<?= date('Y-m-d') ?>">
+<input type="hidden" id="sig_signed_date" value="<?= htmlspecialchars(!empty($contract['signed_date']) ? $contract['signed_date'] : date('Y-m-d')) ?>">
 
 <div style="margin-bottom:16px;">
 <label style="display:block;margin-bottom:12px;font-weight:600;color:#374151;">Signature :</label>
@@ -898,10 +850,8 @@ Dessinez votre signature ci-dessus
 </div>
 
 <div style="margin-bottom:20px;">
-<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Date :</label>
-<input type="date" id="sig_signed_date" <?= $partnerReadonly ?> required
-style="<?= $partnerInputStyle ?>"
-value="<?= htmlspecialchars(!empty($contract['signed_date']) ? $contract['signed_date'] : date('Y-m-d')) ?>">
+<strong>Date :</strong>
+<div id="sig_display_date" style="<?= $sigLineStyle ?>"><?= $sigDateDisplay ?></div>
 </div>
 
 <?php if (!$isSigned): ?>

@@ -19,7 +19,20 @@ abstract class PDFGeneratorBase {
     
     protected function fetchContract(int $contractId): ?array {
         $stmt = $this->conn->prepare("
-            SELECT pc.*, ps.representative_name, ps.representative_email, ps.signed_date, ps.signature_image
+            SELECT
+                pc.id,
+                pc.contract_token,
+                pc.language,
+                pc.status,
+                pc.company_name,
+                pc.company_email,
+                pc.company_phone,
+                pc.company_address,
+                pc.representative_name,
+                pc.representative_title,
+                pc.representative_email,
+                pc.signed_date,
+                COALESCE(NULLIF(pc.signature_image, ''), ps.signature_image) AS signature_image
             FROM partner_contracts pc
             LEFT JOIN partner_signatures ps ON pc.id = ps.contract_id
             WHERE pc.id = ? AND pc.status = 'signed'
@@ -53,13 +66,37 @@ abstract class PDFGeneratorBase {
         return '<div class="signature-placeholder">_________________________</div>';
     }
     
-    protected function getEmployerSignature(): string {
-        $employerSignaturePath = __DIR__ . '/admin/employer-signature.png';
-        if (file_exists($employerSignaturePath)) {
-            $base64 = base64_encode(file_get_contents($employerSignaturePath));
-            return '<img src="data:image/png;base64,' . $this->esc($base64) . '" alt="Employer Signature" class="signature-img">';
+    protected function getImageAsset(string $relativePath, string $alt, string $cssClass = 'signature-img'): string {
+        $path = __DIR__ . '/' . ltrim($relativePath, '/');
+        if (!file_exists($path)) {
+            return '<div class="signature-placeholder">_________________________</div>';
         }
-        return '<div class="signature-placeholder">_________________________</div>';
+        $base64 = base64_encode(file_get_contents($path));
+        return '<img src="data:image/png;base64,' . $this->esc($base64) . '" alt="' . $this->esc($alt) . '" class="' . $this->esc($cssClass) . '">';
+    }
+
+    protected function getManagerSignature(): string {
+        return $this->getImageAsset('admin/signature-manager.png', 'Managing Director Signature', 'sig-manager-img');
+    }
+
+    protected function getCompanyStamp(): string {
+        return $this->getImageAsset('admin/employer-signature.png', 'Company Stamp', 'sig-stamp-img');
+    }
+
+    protected function formatSignedDate(?string $date): string {
+        $date = trim((string) $date);
+        if ($date === '') {
+            return '';
+        }
+        $ts = strtotime($date);
+        if ($ts === false) {
+            return $this->esc($date);
+        }
+        return date('Y/m/d', $ts);
+    }
+    
+    protected function getEmployerSignature(): string {
+        return $this->getCompanyStamp();
     }
     
     protected function esc(?string $v): string {

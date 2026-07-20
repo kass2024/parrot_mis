@@ -32,10 +32,10 @@ if (!$row) {
 }
 
 $pdfPath = $row['pdf_path'];
+$language = $row['language'] ?? 'english';
 
-if (!$pdfPath && !empty($row['signature_image'])) {
-    $language = $row['language'] ?? 'english';
-    
+// Always regenerate so PDF matches the latest signed data and layout.
+if (!empty($row['signature_image'])) {
     if ($language === 'french') {
         require_once __DIR__ . '/generate-partner-contract-pdf-french-professional.php';
         if (function_exists('generatePartnerContractPDFFrench')) {
@@ -47,7 +47,7 @@ if (!$pdfPath && !empty($row['signature_image'])) {
             $pdfPath = generatePartnerContractPDF($contractId);
         }
     }
-    
+
     if ($pdfPath) {
         $stmt = $conn->prepare("UPDATE partner_contracts SET pdf_path = ? WHERE id = ?");
         $stmt->bind_param("si", $pdfPath, $contractId);

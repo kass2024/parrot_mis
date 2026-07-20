@@ -21,7 +21,20 @@ abstract class ProfessionalPDFGenerator {
     
     protected function fetchContract(int $contractId): ?array {
         $stmt = $this->conn->prepare("
-            SELECT pc.*, ps.representative_name, ps.representative_email, ps.signed_date, ps.signature_image
+            SELECT
+                pc.id,
+                pc.contract_token,
+                pc.language,
+                pc.status,
+                pc.company_name,
+                pc.company_email,
+                pc.company_phone,
+                pc.company_address,
+                pc.representative_name,
+                pc.representative_title,
+                pc.representative_email,
+                pc.signed_date,
+                COALESCE(NULLIF(pc.signature_image, ''), ps.signature_image) AS signature_image
             FROM partner_contracts pc
             LEFT JOIN partner_signatures ps ON pc.id = ps.contract_id
             WHERE pc.id = ? AND pc.status = 'signed'
@@ -43,31 +56,55 @@ abstract class ProfessionalPDFGenerator {
         return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
     }
     
-    protected function processSignatureImage(?string $signatureImage): string {
+    protected function getImageAsset(string $relativePath, string $alt, string $cssClass = 'sig-pdf-img'): string {
+        $path = __DIR__ . '/' . ltrim($relativePath, '/');
+        if (!file_exists($path)) {
+            return '';
+        }
+        $base64 = base64_encode(file_get_contents($path));
+        return '<img src="data:image/png;base64,' . $this->esc($base64) . '" alt="' . $this->esc($alt) . '" class="' . $this->esc($cssClass) . '">';
+    }
+
+    protected function getManagerSignature(): string {
+        return $this->getImageAsset('admin/signature-manager.png', 'Managing Director Signature', 'sig-manager-img');
+    }
+
+    protected function getCompanyStamp(): string {
+        return $this->getImageAsset('admin/employer-signature.png', 'Company Stamp', 'sig-stamp-img');
+    }
+
+    protected function getEmployerSignature(): string {
+        return $this->getCompanyStamp();
+    }
+
+    protected function formatSignedDate(?string $date): string {
+        $date = trim((string) $date);
+        if ($date === '') {
+            return '';
+        }
+        $ts = strtotime($date);
+        if ($ts === false) {
+            return $this->esc($date);
+        }
+        return date('Y/m/d', $ts);
+    }
+    
+    protected function processSignatureImage(?string $signatureImage, string $cssClass = 'signature-img'): string {
         if (empty($signatureImage)) {
             return '<div class="signature-placeholder"></div>';
         }
         
         if (strpos($signatureImage, 'data:image/') === 0) {
-            return '<img src="' . $this->esc($signatureImage) . '" alt="Signature" class="signature-img">';
+            return '<img src="' . $this->esc($signatureImage) . '" alt="Signature" class="' . $this->esc($cssClass) . '">';
         } 
         elseif (preg_match('/^[a-zA-Z0-9\/+\r\n=]+$/', $signatureImage)) {
-            return '<img src="data:image/png;base64,' . $this->esc($signatureImage) . '" alt="Signature" class="signature-img">';
+            return '<img src="data:image/png;base64,' . $this->esc($signatureImage) . '" alt="Signature" class="' . $this->esc($cssClass) . '">';
         }
         elseif (file_exists($signatureImage)) {
             $base64 = base64_encode(file_get_contents($signatureImage));
-            return '<img src="data:image/png;base64,' . $this->esc($base64) . '" alt="Signature" class="signature-img">';
+            return '<img src="data:image/png;base64,' . $this->esc($base64) . '" alt="Signature" class="' . $this->esc($cssClass) . '">';
         }
         
-        return '<div class="signature-placeholder"></div>';
-    }
-    
-    protected function getEmployerSignature(): string {
-        $employerSignaturePath = __DIR__ . '/admin/employer-signature.png';
-        if (file_exists($employerSignaturePath)) {
-            $base64 = base64_encode(file_get_contents($employerSignaturePath));
-            return '<img src="data:image/png;base64,' . $this->esc($base64) . '" alt="Employer Signature" class="signature-img">';
-        }
         return '<div class="signature-placeholder"></div>';
     }
     
@@ -337,11 +374,69 @@ abstract class ProfessionalPDFGenerator {
         
         .date-line {
             margin-top: 6pt;
-            text-align: center;
+            text-align: left;
+            font-size: 11pt;
+            color: #424242;
+        }
+
+        .sig-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12pt;
+            page-break-inside: avoid;
+        }
+
+        .sig-table td {
+            vertical-align: top;
+            width: 50%;
+            padding: 10pt 12pt;
+            font-size: 11pt;
+            line-height: 1.45;
+            color: #424242;
+        }
+
+        .sig-table td + td {
+            border-left: 1px solid #e3f2fd;
+        }
+
+        .sig-party-title {
             font-size: 12pt;
-            font-style: italic;
-            color: #666;
-            font-weight: 500;
+            font-weight: 700;
+            margin: 0 0 10pt 0;
+            color: #0d47a1;
+        }
+
+        .sig-detail-line {
+            margin: 0 0 8pt 0;
+        }
+
+        .sig-manager-img {
+            max-height: 52pt;
+            max-width: 220pt;
+            display: block;
+            margin: 4pt 0 8pt 0;
+        }
+
+        .sig-stamp-img {
+            max-height: 100pt;
+            max-width: 220pt;
+            display: block;
+            margin: 4pt 0 8pt 0;
+        }
+
+        .partner-sig-img {
+            max-height: 72pt;
+            max-width: 100%;
+            display: block;
+            margin: 4pt 0 8pt 0;
+        }
+
+        .partner-sig-box {
+            border: 1px dashed #9ca3af;
+            min-height: 72pt;
+            padding: 6pt;
+            margin: 4pt 0 8pt 0;
+            background: #ffffff;
         }
         
         /* Print optimization - Enhanced for Smart UI */
@@ -645,25 +740,67 @@ abstract class ProfessionalPDFGenerator {
         $partnerName = $this->esc($this->contract['company_name']);
         $repName = $this->esc($this->contract['representative_name']);
         $repTitle = $this->esc($this->contract['representative_title']);
-        $signedDate = $this->esc($this->contract['signed_date']);
+        $partnerEmail = $this->esc($this->contract['representative_email'] ?: $this->contract['company_email']);
+        $partnerPhone = $this->esc($this->contract['company_phone']);
+        $partnerAddress = $this->esc($this->contract['company_address']);
+        $signedDate = $this->formatSignedDate($this->contract['signed_date'] ?? '');
         
-        $partnerSignature = $this->processSignatureImage($this->contract['signature_image']);
-        $employerSignature = $this->getEmployerSignature();
+        $partnerSignature = $this->processSignatureImage($this->contract['signature_image'] ?? null, 'partner-sig-img');
+        $managerSignature = $this->getManagerSignature();
+        $companyStamp = $this->getCompanyStamp();
         
         $signaturesTitle = $this->t('16. SIGNATURES', '16. SIGNATURES');
         $executedBy = $this->t(
-            'This Strategic Partnership Agreement is executed by authorized representatives of both parties on date indicated below:',
+            'This Strategic Partnership Agreement is executed by authorized representatives of both parties on the date indicated below:',
             'Cet Accord de Partenariat Stratégique est exécuté par les représentants autorisés des deux parties à la date indiquée ci-dessous :'
         );
-        $authorizedSignature = $this->t('AUTHORIZED SIGNATURE', 'SIGNATURE AUTORISÉE');
-        $representativeName = $this->t('Representative Name', 'Nom du Représentant');
-        $signedOn = $this->t('Signed on', 'Signé le');
+        $leftTitle = $this->t('For Parrot Canada Visa Consultant Co. Ltd', 'Pour Parrot Canada Visa Consultant Co. Ltd');
+        $rightTitle = $this->t('Partner Company', 'Entreprise Partenaire');
+        $nameLabel = $this->t('Name', 'Nom');
+        $titleLabel = $this->t('Title', 'Fonction');
+        $signatureLabel = $this->t('Signature', 'Signature');
+        $stampLabel = $this->t('Company Stamp', 'Cachet de l\'entreprise');
+        $dateLabel = $this->t('Date', 'Date');
+        $companyNameLabel = $this->t('Company Name', 'Nom de l\'entreprise');
+        $repNameLabel = $this->t('Representative Name', 'Nom du représentant');
+        $emailLabel = $this->t('Email', 'Courriel');
+        $phoneLabel = $this->t('Phone', 'Téléphone');
+        $addressLabel = $this->t('Company Address', 'Adresse de l\'entreprise');
         
-        $parrotRepName = $this->t('Dr Jean Pierre Twajamahoro', 'Dr Jean Pierre Twajamahoro');
+        $parrotRepName = $this->t('Dr. Jean Pierre Twajamahoro', 'Dr Jean Pierre Twajamahoro');
         $parrotRepTitle = $this->t('Owner & Managing Director', 'Propriétaire & Directeur Général');
         
-        // Left: Parrot / Dr. Twajamahoro — Right: Partner Company + e-sign
-        return "<div class='signature-section'><h2>$signaturesTitle</h2><p>$executedBy</p><div class='signature-container'><div class='signature-block'><div class='signature-box'><div class='company-title'>Parrot Canada Visa Consultant Co. Ltd</div><div class='representative-info'><p><strong>$representativeName:</strong> $parrotRepName</p><p><strong>" . $this->t('Position', 'Fonction') . ":</strong> $parrotRepTitle</p></div><div class='signature-label'>$authorizedSignature</div><div class='signature-area'>$employerSignature</div><div class='date-line'>$signedOn: $signedDate</div></div></div><div class='signature-block'><div class='signature-box'><div class='company-title'>$partnerName</div><div class='representative-info'><p><strong>$representativeName:</strong> $repName</p><p><strong>" . $this->t('Position', 'Fonction') . ":</strong> $repTitle</p></div><div class='signature-label'>$authorizedSignature</div><div class='signature-area'>$partnerSignature</div><div class='date-line'>$signedOn: $signedDate</div></div></div></div></div>";
+        return "
+        <div class='signature-section'>
+            <h2>$signaturesTitle</h2>
+            <p>$executedBy</p>
+            <table class='sig-table'>
+                <tr>
+                    <td>
+                        <p class='sig-party-title'>$leftTitle</p>
+                        <p class='sig-detail-line'><strong>$nameLabel:</strong> $parrotRepName</p>
+                        <p class='sig-detail-line'><strong>$titleLabel:</strong> $parrotRepTitle</p>
+                        <p class='sig-detail-line'><strong>$signatureLabel:</strong></p>
+                        $managerSignature
+                        <p class='sig-detail-line'><strong>$stampLabel:</strong></p>
+                        $companyStamp
+                        <p class='sig-detail-line'><strong>$dateLabel:</strong> $signedDate</p>
+                    </td>
+                    <td>
+                        <p class='sig-party-title'>$rightTitle</p>
+                        <p class='sig-detail-line'><strong>$companyNameLabel:</strong> $partnerName</p>
+                        <p class='sig-detail-line'><strong>$repNameLabel:</strong> $repName</p>
+                        <p class='sig-detail-line'><strong>$titleLabel:</strong> $repTitle</p>
+                        <p class='sig-detail-line'><strong>$emailLabel:</strong> $partnerEmail</p>
+                        <p class='sig-detail-line'><strong>$phoneLabel:</strong> $partnerPhone</p>
+                        <p class='sig-detail-line'><strong>$addressLabel:</strong> $partnerAddress</p>
+                        <p class='sig-detail-line'><strong>$signatureLabel:</strong></p>
+                        <div class='partner-sig-box'>$partnerSignature</div>
+                        <p class='sig-detail-line'><strong>$dateLabel:</strong> $signedDate</p>
+                    </td>
+                </tr>
+            </table>
+        </div>";
     }
     
     protected function getFooterSection(): string {
