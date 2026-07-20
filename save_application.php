@@ -1217,20 +1217,15 @@ $stmt->bind_param(
 $conn->commit();
 
 /* ===============================
-   SEND RESPONSE FIRST
+   SEND RESPONSE FIRST (close connection so UI is not blocked)
 =============================== */
-echo json_encode([
+$successBody = json_encode([
     'status' => 'success',
     'application_id' => $appId
-]);
+], JSON_UNESCAPED_UNICODE);
 
-// Flush response to browser immediately
-if (function_exists('fastcgi_finish_request')) {
-    fastcgi_finish_request();
-} else {
-    @ob_end_flush();
-    flush();
-}
+require_once __DIR__ . '/helpers/async_http.php';
+pcvc_finish_http_response($successBody, 200);
 
 /* ===============================
    ASYNC EMAIL (FINAL ONLY)
@@ -1241,9 +1236,10 @@ debug_log('FINAL SUBMIT CONFIRMED – EMAIL SHOULD SEND', [
 ]);
 
 if ($isFinal === 1) {
+    // Student confirmation email (already fire-and-forget HTTP)
     trigger_async_email($appId);
 
-    // Also send student portal access email with credentials (non-blocking)
+    // Portal credentials — after response is closed (should not block UI)
     try {
         $studentEmail = isset($_POST['email']) ? (string)$_POST['email'] : '';
         $studentName = trim((string)($_POST['first_name'] ?? '') . ' ' . (string)($_POST['last_name'] ?? ''));
@@ -1253,43 +1249,20 @@ if ($isFinal === 1) {
         debug_log('PORTAL ACCESS EMAIL FAILED', $e->getMessage());
     }
 
-    require_once __DIR__ . '/helpers/staff_assignment_notify.php';
-    require_once __DIR__ . '/helpers/study_choice_admin_actions.php';
     require_once __DIR__ . '/helpers/related_program_suggestions.php';
 
-    // If staff was not selected on the form, assign from university persons-in-charge
-    // so related-program proposals can be emailed immediately at submission.
+    // Heavy work (assignee, staff notify, AI related proposals) in background worker
     try {
-        $ensuredAssignee = pcvc_ensure_application_assignee_from_university_admins($conn, $appId);
-        if ($ensuredAssignee > 0 && ($assignedToAdminId === null || $assignedToAdminId <= 0)) {
-            $assignedToAdminId = $ensuredAssignee;
-        }
-        debug_log('ASSIGNEE ENSURED FOR RELATED PROPOSALS', [
+        $fired = pcvc_trigger_related_suggestions_async($appId, true, true);
+        debug_log('RELATED SUGGESTIONS ASYNC TRIGGER', [
             'application_id' => $appId,
-            'assignee_id' => $ensuredAssignee,
+            'fired' => $fired,
         ]);
-    } catch (Throwable $e) {
-        debug_log('ASSIGNEE ENSURE ERROR', $e->getMessage());
-    }
-
-    try {
-        pcvc_notify_assigned_staff_application_submitted($conn, $appId);
-        debug_log('STAFF ASSIGNMENT NOTIFY SENT', ['application_id' => $appId]);
-    } catch (Throwable $e) {
-        debug_log('STAFF ASSIGNMENT NOTIFY ERROR', $e->getMessage());
-    }
-    if ($assignedToAdminId !== null && $assignedToAdminId > 0) {
-        try {
-            $jobCount = pcvc_ensure_assignment_jobs_for_application($conn, $appId, $assignedToAdminId);
-            debug_log('ASSIGNMENT JOBS ENSURED', ['application_id' => $appId, 'jobs' => $jobCount]);
-        } catch (Throwable $e) {
-            debug_log('ASSIGNMENT JOBS ERROR', $e->getMessage());
+        if (!$fired) {
+            // Fallback: fast similarity-only (no OpenAI)
+            $related = pcvc_process_related_university_suggestions($conn, $appId, true, false);
+            debug_log('RELATED PROGRAM SUGGESTIONS FALLBACK', $related);
         }
-    }
-    try {
-        // forceRenotify=true so proposals are emailed at this final submit even if a prior draft scan marked notified
-        $related = pcvc_process_related_university_suggestions($conn, $appId, true);
-        debug_log('RELATED PROGRAM SUGGESTIONS', $related);
     } catch (Throwable $e) {
         debug_log('RELATED PROGRAM SUGGESTIONS ERROR', $e->getMessage());
     }

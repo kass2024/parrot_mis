@@ -139,7 +139,8 @@ function pcvc_find_related_programs_for_choice(
     string $sourceProgramName,
     array $excludeUniversityIds,
     float $minScore = 68.0,
-    int $limit = 40
+    int $limit = 40,
+    bool $useAi = true
 ): array {
     $candidates = pcvc_related_program_candidate_pool(
         $conn,
@@ -148,25 +149,27 @@ function pcvc_find_related_programs_for_choice(
         $sourceProgramName,
         $excludeUniversityIds,
         45.0,
-        80
+        $useAi ? 80 : 50
     );
     if ($candidates === []) {
         return [];
     }
 
-    $aiMatches = pcvc_ai_select_related_programs(
-        $sourceUniversityId,
-        $sourceProgramId,
-        $sourceLevelId,
-        $sourceProgramName,
-        $candidates,
-        $limit
-    );
-    if ($aiMatches !== null) {
-        return $aiMatches;
+    if ($useAi) {
+        $aiMatches = pcvc_ai_select_related_programs(
+            $sourceUniversityId,
+            $sourceProgramId,
+            $sourceLevelId,
+            $sourceProgramName,
+            $candidates,
+            $limit
+        );
+        if ($aiMatches !== null) {
+            return $aiMatches;
+        }
     }
 
-    // Fallback: lexical similarity when AI is unavailable
+    // Fast path / AI fallback: lexical similarity
     return pcvc_related_programs_from_similarity($candidates, $sourceUniversityId, $sourceProgramId, $minScore, $limit);
 }
 
@@ -338,7 +341,7 @@ SYS;
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_POST => true,
-        CURLOPT_TIMEOUT => 35,
+        CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => [
             'Authorization: Bearer ' . $apiKey,
             'Content-Type: application/json',
@@ -846,9 +849,10 @@ function pcvc_notify_related_programs_digest(
 function pcvc_process_related_university_suggestions(
     mysqli $conn,
     int $applicationId,
-    bool $forceRenotify = false
+    bool $forceRenotify = false,
+    bool $useAi = true
 ): array {
-    $result = ['suggestions' => 0, 'emails' => 0, 'triggered' => false, 'assignee_id' => 0];
+    $result = ['suggestions' => 0, 'emails' => 0, 'triggered' => false, 'assignee_id' => 0, 'use_ai' => $useAi];
     if ($applicationId <= 0) {
         return $result;
     }
@@ -935,7 +939,10 @@ function pcvc_process_related_university_suggestions(
             (int) $c['program_id'],
             (int) $c['program_level_id'],
             (string) $c['program'],
-            $chosenUniIds
+            $chosenUniIds,
+            68.0,
+            40,
+            $useAi
         );
         foreach ($found as $m) {
             $m['_source_choice'] = [
@@ -1283,4 +1290,71 @@ function pcvc_reject_study_choice_suggestion(mysqli $conn, int $suggestionId, in
         'ok' => $ok,
         'msg' => $ok ? 'Suggestion rejected.' : 'Suggestion not found or already decided.',
     ];
+}
+
+/**
+ * Fire-and-forget related-program scan + emails so final submit stays fast.
+ * The worker continues after this returns (short curl timeout).
+ */
+function pcvc_trigger_related_suggestions_async(int $applicationId, bool $forceRenotify = true, bool $useAi = true): bool
+{
+    if ($applicationId <= 0 || !function_exists('curl_init')) {
+        return false;
+    }
+
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $dir = rtrim(str_replace('\\', '/', dirname((string) ($_SERVER['SCRIPT_NAME'] ?? '/save_application.php'))), '/');
+    $url = $scheme . '://' . $host . $dir . '/related_suggestions_async.php';
+
+    $payload = http_build_query([
+        'application_id' => $applicationId,
+        'force_renotify' => $forceRenotify ? '1' : '0',
+        'use_ai' => $useAi ? '1' : '0',
+        'token' => pcvc_related_suggestions_async_token($applicationId),
+    ]);
+
+    $ch = curl_init($url);
+    if ($ch === false) {
+        return false;
+    }
+
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER => false,
+        // Return quickly; worker keeps running with ignore_user_abort
+        CURLOPT_TIMEOUT_MS => 800,
+        CURLOPT_CONNECTTIMEOUT_MS => 500,
+        CURLOPT_NOSIGNAL => true,
+        CURLOPT_FRESH_CONNECT => true,
+        CURLOPT_FORBID_REUSE => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => 0,
+        CURLOPT_HTTPHEADER => ['Connection: Close'],
+    ]);
+
+    curl_exec($ch);
+    // Timeout is expected (worker still running) — treat as success if connected or timed out after send
+    $errno = curl_errno($ch);
+    curl_close($ch);
+
+    // CURLE_OPERATION_TIMEDOUT = 28 — OK for fire-and-forget
+    return $errno === 0 || $errno === 28;
+}
+
+function pcvc_related_suggestions_async_token(int $applicationId): string
+{
+    $secret = '';
+    if (function_exists('pcvc_env')) {
+        $secret = trim(pcvc_env('PCVC_ASYNC_JOB_SECRET'));
+        if ($secret === '') {
+            $secret = trim(pcvc_env('OPENAI_API_KEY'));
+        }
+    }
+    if ($secret === '') {
+        $secret = 'parrot-related-suggestions';
+    }
+    return hash_hmac('sha256', 'related-suggestions:' . $applicationId, $secret);
 }
