@@ -757,57 +757,163 @@ Téléphone: +1 (438) 290-6688<br>
 
 <h3>16. Signatures</h3>
 
+<h3 style="font-size:20px;font-weight:700;margin-bottom:32px;">16. SIGNATURES</h3>
+
 <div class="signature-grid">
-<div>
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">Pour Nom de l'Entreprise : <span id="sig_company_name_display"><?= htmlspecialchars($contract['company_name'] ?: '____________________________') ?></span></p>
-<div style="margin-bottom:16px;">
-Nom : <input type="text" id="sig_representative_name" style="width:70%; border:none; border-bottom:1px solid #000; margin-left:6px; padding:2px 4px;" value="<?= htmlspecialchars($contract['representative_name'] ?? '') ?>">
+
+<!-- LEFT: Parrot Canada / Dr. Twajamahoro -->
+<div class="signature-block">
+<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
+Pour Parrot Canada Visa Consultant Co. Ltd
+</p>
+
+<div style="margin-bottom:18px;">
+<strong>Nom :</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
+Dr Jean Pierre Twajamahoro
 </div>
-<div style="margin-bottom:16px;">
-Fonction : <input type="text" id="sig_representative_title" style="width:70%; border:none; border-bottom:1px solid #000; margin-left:6px; padding:2px 4px;" value="<?= htmlspecialchars($contract['representative_title'] ?? '') ?>">
 </div>
-<div style="margin-bottom:16px;">
-Date : <input type="date" id="contract_start_date" style="width:60%; border:none; border-bottom:1px solid #000; margin-left:6px; padding:2px 4px;" value="<?= date('Y-m-d') ?>" required>
+
+<div style="margin-bottom:18px;">
+<strong>Fonction :</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
+Propriétaire &amp; Directeur Général
 </div>
-<p style="margin-top:16px;">Signature :</p>
-<div class="signature-section">
-<div style="border:1px dashed #9ca3af; height:130px; padding:10px; margin-bottom:14px; background:#fafafa; display:flex; align-items:center; justify-content:center;">
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Signature :</strong>
+<div style="margin-top:6px;width:85%;">
+<img src="admin/signature-manager.png" alt="Signature du Directeur" style="max-height:70px;max-width:280px;display:block;">
+</div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Cachet de l'entreprise :</strong>
+<div style="margin-top:6px;width:85%;">
+<img src="admin/employer-signature.png" alt="Cachet" style="max-height:140px;max-width:320px;display:block;">
+</div>
+</div>
+
+<div style="margin-bottom:18px;">
+<strong>Date :</strong>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;" id="parrot_date">
+<?= date('Y/m/d') ?>
+</div>
+</div>
+</div>
+
+<!-- RIGHT: Partner Company — all details + e-sign -->
+<div class="signature-block" style="
+padding:20px;
+background:#f9fafb;
+border-radius:12px;
+border:1px solid #e5e7eb;
+">
+
+<p style="font-weight:700;margin-bottom:20px;font-size:16px;">
+Entreprise Partenaire
+</p>
+
+<?php
+$partnerInputStyle = 'width:100%;border:2px solid #e5e7eb;border-radius:6px;padding:12px 16px;font-size:16px;box-sizing:border-box;';
+$partnerReadonly = $isSigned ? 'readonly' : '';
+?>
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Nom de l'entreprise :</label>
+<input type="text" id="sig_company_name" <?= $partnerReadonly ?>
+style="<?= $partnerInputStyle ?>"
+placeholder="Entrez le nom de l'entreprise partenaire"
+value="<?= htmlspecialchars($contract['company_name'] ?? '') ?>">
+<span id="sig_company_name_display" style="display:none;"><?= htmlspecialchars($contract['company_name'] ?? '') ?></span>
+</div>
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Nom du représentant :</label>
+<input type="text" id="sig_representative_name" <?= $partnerReadonly ?>
+style="<?= $partnerInputStyle ?>"
+placeholder="Entrez le nom complet du représentant"
+value="<?= htmlspecialchars($contract['representative_name'] ?? '') ?>">
+</div>
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Fonction / Titre :</label>
+<input type="text" id="sig_representative_title" <?= $partnerReadonly ?>
+style="<?= $partnerInputStyle ?>"
+placeholder="ex. Directeur, Gérant"
+value="<?= htmlspecialchars($contract['representative_title'] ?? '') ?>">
+</div>
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Courriel :</label>
+<input type="email" id="sig_email" <?= $partnerReadonly ?>
+style="<?= $partnerInputStyle ?>"
+placeholder="Entrez le courriel"
+value="<?= htmlspecialchars($contract['representative_email'] ?? $contract['company_email'] ?? '') ?>">
+</div>
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Téléphone :</label>
+<input type="tel" id="sig_phone" <?= $partnerReadonly ?>
+style="<?= $partnerInputStyle ?>"
+placeholder="Entrez le numéro de téléphone"
+value="<?= htmlspecialchars($contract['company_phone'] ?? '') ?>">
+</div>
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Adresse de l'entreprise :</label>
+<input type="text" id="sig_address" <?= $partnerReadonly ?>
+style="<?= $partnerInputStyle ?>"
+placeholder="Entrez l'adresse complète"
+value="<?= htmlspecialchars($contract['company_address'] ?? '') ?>">
+</div>
+
+<input type="hidden" id="contract_start_date" value="<?= date('Y-m-d') ?>">
+
+<div style="margin-bottom:16px;">
+<label style="display:block;margin-bottom:12px;font-weight:600;color:#374151;">Signature :</label>
+<div style="
+border:2px dashed #9ca3af;
+height:150px;
+padding:8px;
+margin-bottom:10px;
+background:#ffffff;
+border-radius:8px;
+display:flex;
+align-items:center;
+justify-content:center;
+position:relative;
+">
 <?php if ($isSigned && !empty($contract['signature_image'])): ?>
-<img src="<?= $contract['signature_image'] ?>" style="max-height:110px; border: 1px solid #e5e7eb; padding: 5px; border-radius: 4px;">
+<img src="<?= $contract['signature_image'] ?>" style="max-height:130px;border:1px solid #e5e7eb;padding:5px;border-radius:4px;" alt="Signature du partenaire">
 <?php else: ?>
 <canvas class="signature-canvas"></canvas>
-<?php endif; ?>
+<div style="position:absolute;top:8px;right:8px;font-size:12px;color:#9ca3af;">
+Dessinez votre signature ci-dessus
 </div>
-<div style="margin-top:10px;">
-Date : <input type="date" id="sig_signed_date" style="width:60%; border:none; border-bottom:1px solid #000; margin-left:6px; padding:2px 4px;" value="<?= date('Y-m-d') ?>" required>
+<?php endif; ?>
 </div>
 <div class="signature-status" id="signatureStatus">Signature capturée avec succès</div>
 </div>
-</div>
 
-<div>
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">Pour Parrot Canada Visa Consultant Co. Ltd</p>
-<div style="margin-bottom:18px;">
-Nom : Dr Jean Pierre Twajamahoro
-</div>
-<div style="margin-bottom:18px;">
-Fonction : Propriétaire & Directeur Général
-</div>
-<div style="margin-bottom:18px;">
-Signature : <img src="admin/employer-signature.png" alt="Signature de l'Employeur" style="max-height:60px; border-bottom:1px solid #000; padding-bottom:5px;">
-</div>
-<div>
-Date : <span id="parrot_date">_________________________</span>
-</div>
-</div>
+<div style="margin-bottom:20px;">
+<label style="display:block;margin-bottom:8px;font-weight:600;color:#374151;">Date :</label>
+<input type="date" id="sig_signed_date" <?= $partnerReadonly ?> required
+style="<?= $partnerInputStyle ?>"
+value="<?= htmlspecialchars(!empty($contract['signed_date']) ? $contract['signed_date'] : date('Y-m-d')) ?>">
 </div>
 
 <?php if (!$isSigned): ?>
-<div style="margin-top:18px;">
-<button id="clearSignature" class="btn btn-clear" type="button">Effacer la Signature</button>
-<button id="signContract" class="btn btn-submit" type="button">Signer & Soumettre</button>
+<div style="display:flex;gap:12px;flex-wrap:wrap;">
+<button id="clearSignature" type="button" style="flex:1;background:#f3f4f6;color:#374151;border:none;padding:12px 16px;border-radius:6px;font-weight:600;cursor:pointer;">Effacer la Signature</button>
+<button id="signContract" type="button" style="flex:2;background:#3b82f6;color:#ffffff;border:none;padding:12px 16px;border-radius:6px;font-weight:600;cursor:pointer;">Signer &amp; Soumettre</button>
 </div>
 <?php endif; ?>
+
+</div>
+
+</div>
 
 </div>
 
@@ -832,6 +938,10 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
   const inputTitle = document.getElementById('sig_representative_title');
   const inputDate = document.getElementById('sig_signed_date');
   const inputContractDate = document.getElementById('contract_start_date');
+  const inputSigCompany = document.getElementById('sig_company_name');
+  const inputSigEmail = document.getElementById('sig_email');
+  const inputSigPhone = document.getElementById('sig_phone');
+  const inputSigAddress = document.getElementById('sig_address');
   const inputCompany = document.getElementById('company_name');
   const inputEmail = document.getElementById('company_email');
   const inputPhone = document.getElementById('company_phone');
@@ -1068,97 +1178,88 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
 
   // Smart field updates
   function updateAllDisplayFields() {
-    const companyValue = inputCompany.value.trim();
-    const nameValue = inputName.value.trim();
-    const titleValue = inputTitle.value.trim();
-
+    const companyValue = (inputSigCompany && inputSigCompany.value.trim())
+      || (inputCompany && inputCompany.value.trim())
+      || '';
     if (displayElements.displayName) displayElements.displayName.textContent = companyValue || '______________________________';
     if (displayElements.displaySigCompany) displayElements.displaySigCompany.textContent = companyValue || '______________________________';
   }
 
-  // Sync fields between forms
   function syncForms() {
-    if (inputCompany.value && !contactCompany.value) {
-      contactCompany.value = inputCompany.value;
-    } else if (contactCompany.value && !inputCompany.value) {
-      inputCompany.value = contactCompany.value;
-    }
-    
-    if (inputRepresentative.value && !contactRepresentative.value) {
-      contactRepresentative.value = inputRepresentative.value;
-    } else if (contactRepresentative.value && !inputRepresentative.value) {
-      inputRepresentative.value = contactRepresentative.value;
-    }
-    
-    if (inputRepresentativeTitle.value && !contactTitle.value) {
-      contactTitle.value = inputRepresentativeTitle.value;
-    } else if (contactTitle.value && !inputRepresentativeTitle.value) {
-      inputRepresentativeTitle.value = contactTitle.value;
-    }
-    
-    if (inputEmail.value && !contactEmail.value) {
-      contactEmail.value = inputEmail.value;
-    } else if (contactEmail.value && !inputEmail.value) {
-      inputEmail.value = contactEmail.value;
-    }
-    
-    if (inputPhone.value && !contactPhone.value) {
-      contactPhone.value = inputPhone.value;
-    } else if (contactPhone.value && !inputPhone.value) {
-      inputPhone.value = contactPhone.value;
-    }
+    const companyVal = (inputSigCompany && inputSigCompany.value.trim())
+      || (inputCompany && inputCompany.value.trim())
+      || (contactCompany && contactCompany.value.trim())
+      || '';
+    const nameVal = (inputName && inputName.value.trim())
+      || (contactRepresentative && contactRepresentative.value.trim())
+      || '';
+    const titleVal = (inputTitle && inputTitle.value.trim())
+      || (contactTitle && contactTitle.value.trim())
+      || '';
+    const emailVal = (inputSigEmail && inputSigEmail.value.trim())
+      || (inputEmail && inputEmail.value.trim())
+      || (contactEmail && contactEmail.value.trim())
+      || '';
+    const phoneVal = (inputSigPhone && inputSigPhone.value.trim())
+      || (inputPhone && inputPhone.value.trim())
+      || (contactPhone && contactPhone.value.trim())
+      || '';
+    const addressVal = (inputSigAddress && inputSigAddress.value.trim())
+      || (inputAddress && inputAddress.value.trim())
+      || '';
+
+    if (inputSigCompany && !inputSigCompany.value.trim() && companyVal) inputSigCompany.value = companyVal;
+    if (inputCompany && companyVal) inputCompany.value = companyVal;
+    if (contactCompany && companyVal) contactCompany.value = companyVal;
+    if (inputName && !inputName.value.trim() && nameVal) inputName.value = nameVal;
+    if (contactRepresentative && nameVal) contactRepresentative.value = nameVal;
+    if (inputRepresentative && nameVal) inputRepresentative.value = nameVal;
+    if (inputTitle && !inputTitle.value.trim() && titleVal) inputTitle.value = titleVal;
+    if (contactTitle && titleVal) contactTitle.value = titleVal;
+    if (inputRepresentativeTitle && titleVal) inputRepresentativeTitle.value = titleVal;
+    if (inputSigEmail && !inputSigEmail.value.trim() && emailVal) inputSigEmail.value = emailVal;
+    if (inputEmail && emailVal) inputEmail.value = emailVal;
+    if (contactEmail && emailVal) contactEmail.value = emailVal;
+    if (inputSigPhone && !inputSigPhone.value.trim() && phoneVal) inputSigPhone.value = phoneVal;
+    if (inputPhone && phoneVal) inputPhone.value = phoneVal;
+    if (contactPhone && phoneVal) contactPhone.value = phoneVal;
+    if (inputSigAddress && !inputSigAddress.value.trim() && addressVal) inputSigAddress.value = addressVal;
+    if (inputAddress && addressVal) inputAddress.value = addressVal;
   }
 
-  // Add event listeners for smart updates
-  inputCompany.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  inputEmail.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  inputPhone.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  inputName.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  inputTitle.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  inputRepresentative.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  inputRepresentativeTitle.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
+  function bindSync(el) {
+    if (!el) return;
+    el.addEventListener('input', () => {
+      if (inputSigCompany && inputCompany) inputCompany.value = inputSigCompany.value;
+      if (inputSigCompany && contactCompany) contactCompany.value = inputSigCompany.value;
+      if (inputName && contactRepresentative) contactRepresentative.value = inputName.value;
+      if (inputName && inputRepresentative) inputRepresentative.value = inputName.value;
+      if (inputTitle && contactTitle) contactTitle.value = inputTitle.value;
+      if (inputTitle && inputRepresentativeTitle) inputRepresentativeTitle.value = inputTitle.value;
+      if (inputSigEmail && inputEmail) inputEmail.value = inputSigEmail.value;
+      if (inputSigEmail && contactEmail) contactEmail.value = inputSigEmail.value;
+      if (inputSigPhone && inputPhone) inputPhone.value = inputSigPhone.value;
+      if (inputSigPhone && contactPhone) contactPhone.value = inputSigPhone.value;
+      if (inputSigAddress && inputAddress) inputAddress.value = inputSigAddress.value;
+      updateAllDisplayFields();
+    });
+  }
 
-  contactCompany.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  contactRepresentative.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  contactTitle.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  contactEmail.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
-  contactPhone.addEventListener('input', () => {
-    updateAllDisplayFields();
-    syncForms();
-  });
+  [
+    inputSigCompany, inputName, inputTitle, inputSigEmail, inputSigPhone, inputSigAddress,
+    inputCompany, inputEmail, inputPhone, inputAddress, inputRepresentative, inputRepresentativeTitle,
+    contactCompany, contactRepresentative, contactTitle, contactEmail, contactPhone
+  ].forEach(bindSync);
+
+  if (inputDate) {
+    inputDate.addEventListener('change', (e) => {
+      const selectedDate = e.target.value;
+      if (selectedDate && displayElements.parrotDate) {
+        displayElements.parrotDate.textContent = selectedDate.replace(/-/g, '/');
+      }
+      if (selectedDate && inputContractDate) inputContractDate.value = selectedDate;
+    });
+  }
 
   // Form submission
   btnSubmit.addEventListener('click', async () => {
@@ -1167,12 +1268,34 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
       return;
     }
 
-    if (!inputCompany.value.trim() || !inputName.value.trim() || !inputTitle.value.trim() || !inputEmail.value.trim()) {
+    const finalCompany = (inputSigCompany && inputSigCompany.value.trim())
+      || (inputCompany && inputCompany.value.trim())
+      || (contactCompany && contactCompany.value.trim())
+      || '';
+    const finalName = (inputName && inputName.value.trim())
+      || (contactRepresentative && contactRepresentative.value.trim())
+      || '';
+    const finalTitle = (inputTitle && inputTitle.value.trim())
+      || (contactTitle && contactTitle.value.trim())
+      || '';
+    const finalEmail = (inputSigEmail && inputSigEmail.value.trim())
+      || (inputEmail && inputEmail.value.trim())
+      || (contactEmail && contactEmail.value.trim())
+      || '';
+    const finalPhone = (inputSigPhone && inputSigPhone.value.trim())
+      || (inputPhone && inputPhone.value.trim())
+      || (contactPhone && contactPhone.value.trim())
+      || '';
+    const finalAddress = (inputSigAddress && inputSigAddress.value.trim())
+      || (inputAddress && inputAddress.value.trim())
+      || '';
+
+    if (!finalCompany || !finalName || !finalTitle || !finalEmail) {
       alert('Veuillez remplir tous les champs obligatoires.');
       return;
     }
 
-    if (!validateEmail(inputEmail.value.trim())) {
+    if (!validateEmail(finalEmail)) {
       alert('Veuillez entrer une adresse email valide.');
       return;
     }
@@ -1185,14 +1308,14 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
       
       const payload = {
         token: '<?= $token ?>',
-        company_name: inputCompany.value.trim(),
-        representative_name: inputName.value.trim(),
-        representative_title: inputTitle.value.trim(),
-        representative_email: inputEmail.value.trim(),
-        company_email: inputEmail.value.trim(),
-        company_phone: inputPhone.value.trim(),
-        company_address: inputAddress.value.trim(),
-        signed_date: inputDate.value,
+        company_name: finalCompany,
+        representative_name: finalName,
+        representative_title: finalTitle,
+        representative_email: finalEmail,
+        company_email: finalEmail,
+        company_phone: finalPhone,
+        company_address: finalAddress,
+        signed_date: inputDate ? inputDate.value : '',
         signature: signatureDataUrl
       };
 

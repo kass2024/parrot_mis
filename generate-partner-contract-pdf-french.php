@@ -241,23 +241,23 @@ class FrenchPDFGenerator extends PDFGeneratorBase {
             
             <div class="signature-grid">
                 <div class="signature-box">
-                    <div class="company-name-header">' . $this->esc($this->contract['company_name']) . '</div>
-                    <p><strong>Nom du Représentant :</strong> ' . $this->esc($this->contract['representative_name']) . '</p>
-                    <p><strong>Fonction :</strong> ' . $this->esc($this->contract['representative_title']) . '</p>
-            <p class="signature-label">SIGNATURE AUTORISÉE</p>
-                    <div class="signature-line">
-                        ' . $partnerSignatureHtml . '
-                    </div>
-                    <p class="date-line">Signé le : ' . $this->esc($this->contract['signed_date']) . '</p>
-                </div>
-                
-                <div class="signature-box">
                     <div class="company-name-header">Parrot Canada Visa Consultant Co. Ltd</div>
                     <p><strong>Nom du Représentant :</strong> Dr Jean Pierre Twajamahoro</p>
                     <p><strong>Fonction :</strong> Propriétaire & Directeur Général</p>
                     <p class="signature-label">SIGNATURE AUTORISÉE</p>
                     <div class="signature-line">
                         ' . $employerSignatureHtml . '
+                    </div>
+                    <p class="date-line">Signé le : ' . $this->esc($this->contract['signed_date']) . '</p>
+                </div>
+
+                <div class="signature-box">
+                    <div class="company-name-header">' . $this->esc($this->contract['company_name']) . '</div>
+                    <p><strong>Nom du Représentant :</strong> ' . $this->esc($this->contract['representative_name']) . '</p>
+                    <p><strong>Fonction :</strong> ' . $this->esc($this->contract['representative_title']) . '</p>
+            <p class="signature-label">SIGNATURE AUTORISÉE</p>
+                    <div class="signature-line">
+                        ' . $partnerSignatureHtml . '
                     </div>
                     <p class="date-line">Signé le : ' . $this->esc($this->contract['signed_date']) . '</p>
                 </div>

@@ -1488,6 +1488,7 @@ button {
 </div>
 <!-- ============================
      15. SIGNATURES
+     Left: Dr. Twajamahoro | Right: Student e-sign
 ============================ -->
 <div class="contract-section" style="margin-top:40px;">
 
@@ -1495,156 +1496,102 @@ button {
     15. SIGNATURES
   </h3>
 
-  <!-- MANAGING DIRECTOR (TOP ONLY) -->
-  <div class="managing-director-block" style="
-    margin-bottom:28px;
-    padding:18px;
-    border:1px solid #e5e7eb;
-    border-radius:12px;
-    background:#fafafa;
-  ">
-    <p style="font-weight:700;margin-bottom:10px;">
-      Company Managing Director
-    </p>
-
-    <p>Name:</p>
-    <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
-      Dr. TWAJAMAHORO JEAN PIEERE
-    </div>
-
-    <p>Position:</p>
-    <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
-      Managing Director
-    </div>
-
-    <p style="margin-top:16px;">Signature:</p>
-    <div style="margin-bottom:12px;">
-      <img src="admin/signature-manager.png" alt="Managing Director Signature" style="max-height:70px;max-width:280px;display:block;">
-    </div>
-
-    <p>Company Stamp:</p>
-    <div style="margin-bottom:12px;">
-      <img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
-    </div>
-
-    <p>Date: ______________________________</p>
-  </div>
-
-  <!-- TWO-COLUMN WORD-LIKE LAYOUT -->
   <div class="signatures-layout">
 
-    <!-- LEFT COLUMN: KIGALI + STUDENT -->
+    <!-- LEFT: Parrot / Dr. Twajamahoro -->
     <div>
-
-      <!-- KIGALI OFFICE -->
       <p style="font-weight:700;margin-bottom:10px;">
-        Company representative Kigali office
+        For Parrot Canada Visa Consultant Co. Ltd
       </p>
 
       <p>Name:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
+        Dr. Jean Pierre Twajamahoro
+      </div>
 
-      <p>Position:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+      <p>Title:</p>
+      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;padding-top:2px;">
+        Owner &amp; Managing Director
+      </div>
 
       <p style="margin-top:16px;">Signature:</p>
-      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
+      <div style="margin-bottom:12px;">
+        <img src="admin/signature-manager.png" alt="Managing Director Signature" style="max-height:70px;max-width:280px;display:block;">
+      </div>
 
-      <p>Date: ______________________________</p>
+      <p>Company Stamp:</p>
+      <div style="margin-bottom:12px;">
+        <img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
+      </div>
 
-      <div style="height:28px;"></div>
-
-      <!-- STUDENT -->
-  <p style="font-weight:700;margin-bottom:10px;">
-    For the Student
-  </p>
-
-  <p>
-    Name:
-    <input type="text" id="sig_student_name" class="sig-inline-input"
-           value="<?= htmlspecialchars($signedStudentName, ENT_QUOTES, 'UTF-8') ?>"
-           <?= $isSigned ? 'readonly' : '' ?>
-           style="border:none;border-bottom:1px solid #000;">
-  </p>
-
-  <p style="margin-top:12px;">Signature:</p>
-
-  <!-- SIGNATURE BOX (NO CROWDING) -->
-  <div class="signature-pad" style="
-    border:1px dashed #9ca3af;
-    padding:8px;
-    margin-bottom:14px;
-    box-sizing:border-box;
-    background:#ffffff;
-  ">
-    <?php if ($isSigned): ?>
-      <?php if (!empty($studentSignatureSrc)): ?>
-      <img src="<?= htmlspecialchars($studentSignatureSrc, ENT_QUOTES, 'UTF-8') ?>"
-           alt="Student signature"
-           class="signed-signature-img">
-      <?php else: ?>
-      <p class="signature-missing">Signature not stored for this contract. Please contact support to re-sign.</p>
-      <?php endif; ?>
-    <?php else: ?>
-      <canvas class="signature-canvas" aria-label="Draw your signature here"></canvas>
-    <?php endif; ?>
-  </div>
-
-  <!-- DATE CLEARLY BELOW CANVAS -->
-  <p style="margin-top:4px;">
-    Date:
-    <input type="date" id="sig_signed_date" class="sig-inline-input"
-           value="<?= htmlspecialchars($signedStudentDate, ENT_QUOTES, 'UTF-8') ?>"
-           <?= $isSigned ? 'readonly' : '' ?>
-           style="border:none;border-bottom:1px solid #000;">
-  </p>
-
-  <?php if (!$isSigned): ?>
-  <!-- ACTIONS -->
-  <div class="signature-actions">
-    <button id="clearSignature" type="button">Clear</button>
-    <button id="signContract" type="button">Sign &amp; Submit</button>
-    <input type="hidden" id="signatureData">
-  </div>
-
-  <!-- PROGRESS -->
-  <div id="signatureProgress" style="display:none;margin-top:10px;">
-    <div style="height:8px;background:#e5e7eb;border-radius:999px;">
-      <div id="signatureProgressBar"
-           style="height:100%;width:0%;background:#2563eb;"></div>
+      <p>Date: <?= date('Y/m/d') ?></p>
     </div>
-    <div id="signatureProgressText"
-         style="font-size:12px;text-align:center;margin-top:4px;">
-      Submitting signature…
-    </div>
-  </div>
-  <?php endif; ?>
-
-</div>
-
 
     <!-- VERTICAL DIVIDER -->
     <div class="signatures-divider" aria-hidden="true"></div>
 
-    <!-- RIGHT COLUMN: MUSANZE -->
+    <!-- RIGHT: Student + e-sign -->
     <div>
-
-      <!-- MUSANZE OFFICE -->
-      <p style="font-weight:700;margin-bottom:8px;">
-        Company representative Musanze Office
+      <p style="font-weight:700;margin-bottom:10px;">
+        For the Student
       </p>
 
-      <p>Name:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+      <p>
+        Name:
+        <input type="text" id="sig_student_name" class="sig-inline-input"
+               value="<?= htmlspecialchars($signedStudentName, ENT_QUOTES, 'UTF-8') ?>"
+               <?= $isSigned ? 'readonly' : '' ?>
+               style="border:none;border-bottom:1px solid #000;">
+      </p>
 
-      <p>Position:</p>
-      <div style="border-bottom:1px solid #000;height:16px;margin-bottom:12px;"></div>
+      <p style="margin-top:12px;">Signature:</p>
 
-      <p style="margin-top:16px;">Signature:</p>
-      <div style="border-bottom:1px solid #000;height:60px;margin-bottom:10px;"></div>
+      <div class="signature-pad" style="
+        border:1px dashed #9ca3af;
+        padding:8px;
+        margin-bottom:14px;
+        box-sizing:border-box;
+        background:#ffffff;
+      ">
+        <?php if ($isSigned): ?>
+          <?php if (!empty($studentSignatureSrc)): ?>
+          <img src="<?= htmlspecialchars($studentSignatureSrc, ENT_QUOTES, 'UTF-8') ?>"
+               alt="Student signature"
+               class="signed-signature-img">
+          <?php else: ?>
+          <p class="signature-missing">Signature not stored for this contract. Please contact support to re-sign.</p>
+          <?php endif; ?>
+        <?php else: ?>
+          <canvas class="signature-canvas" aria-label="Draw your signature here"></canvas>
+        <?php endif; ?>
+      </div>
 
-      <p>Date: ____________________________</p>
+      <p style="margin-top:4px;">
+        Date:
+        <input type="date" id="sig_signed_date" class="sig-inline-input"
+               value="<?= htmlspecialchars($signedStudentDate, ENT_QUOTES, 'UTF-8') ?>"
+               <?= $isSigned ? 'readonly' : '' ?>
+               style="border:none;border-bottom:1px solid #000;">
+      </p>
 
+      <?php if (!$isSigned): ?>
+      <div class="signature-actions">
+        <button id="clearSignature" type="button">Clear</button>
+        <button id="signContract" type="button">Sign &amp; Submit</button>
+        <input type="hidden" id="signatureData">
+      </div>
+
+      <div id="signatureProgress" style="display:none;margin-top:10px;">
+        <div style="height:8px;background:#e5e7eb;border-radius:999px;">
+          <div id="signatureProgressBar"
+               style="height:100%;width:0%;background:#2563eb;"></div>
+        </div>
+        <div id="signatureProgressText"
+             style="font-size:12px;text-align:center;margin-top:4px;">
+          Submitting signature…
+        </div>
+      </div>
+      <?php endif; ?>
     </div>
 
   </div>

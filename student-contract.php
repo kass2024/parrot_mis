@@ -1508,7 +1508,8 @@ button {
 
 </div>
 <!-- ============================
-     15. SIGNATURES - RESPONSIVE LAYOUT
+     15. SIGNATURES - TWO COLUMNS
+     Left: Dr. Twajamahoro | Right: Student e-sign
 ============================ -->
 <div class="contract-section signature-section" style="margin-top:40px;">
 
@@ -1516,31 +1517,25 @@ button {
 15. SIGNATURES
 </h3>
 
-<!-- ============================
-     MANAGING DIRECTOR (TOP ONLY)
-============================ -->
-<div class="managing-director-block" style="
-margin-bottom:32px;
-padding:20px;
-border:1px solid #e5e7eb;
-border-radius:12px;
-background:#fafafa;
-">
+<div class="signature-grid">
+
+<!-- LEFT: Parrot Canada / Dr. Twajamahoro -->
+<div class="signature-block">
 <p style="font-weight:700;margin-bottom:18px;font-size:16px;">
-Company Managing Director
+For Parrot Canada Visa Consultant Co. Ltd
 </p>
 
 <div style="margin-bottom:18px;">
 <strong>Name:</strong>
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
-Dr. TWAJAMAHORO JEAN PIEERE
+Dr. Jean Pierre Twajamahoro
 </div>
 </div>
 
 <div style="margin-bottom:18px;">
-<strong>Position:</strong>
+<strong>Title:</strong>
 <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
-Managing Director
+Owner &amp; Managing Director
 </div>
 </div>
 
@@ -1560,88 +1555,21 @@ Managing Director
 
 <div style="margin-bottom:18px;">
 <strong>Date:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
+<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;" id="parrot_date">
+<?= date('Y/m/d') ?>
 </div>
 </div>
-
-<!-- ============================
-     SIGNATURE GRID - KIGALI | MUSANZE
-============================ -->
-<div class="signature-grid">
-
-<!-- COMPANY REPRESENTATIVE – KIGALI OFFICE -->
-<div class="signature-block">
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
-Company representative Kigali office
-</p>
-
-<div style="margin-bottom:18px;">
-<strong>Name:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
 </div>
 
-<div style="margin-bottom:18px;">
-<strong>Position:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Signature:</strong>
-<div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Date:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-</div>
-
-
-<!-- COMPANY REPRESENTATIVE – MUSANZE OFFICE -->
-<div class="signature-block">
-<p style="font-weight:700;margin-bottom:18px;font-size:16px;">
-Company representative Musanze Office
-</p>
-
-<div style="margin-bottom:18px;">
-<strong>Name:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Position:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Signature:</strong>
-<div style="border-bottom:1px solid #000;height:60px;width:85%;margin-top:6px;"></div>
-</div>
-
-<div style="margin-bottom:18px;">
-<strong>Date:</strong>
-<div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;"></div>
-</div>
-
-</div>
-
-</div> <!-- End signature grid -->
-
-
-<!-- ============================
-     STUDENT SIGNATURE - CENTERED
-============================ -->
-<div style="
-max-width:500px;
-margin:40px auto 0;
+<!-- RIGHT: Student details + e-sign -->
+<div class="signature-block" style="
 padding:20px;
 background:#f9fafb;
 border-radius:12px;
 border:1px solid #e5e7eb;
 ">
 
-<p style="font-weight:700;margin-bottom:20px;font-size:18px;text-align:center;">
+<p style="font-weight:700;margin-bottom:20px;font-size:16px;">
 For the Student
 </p>
 
@@ -1709,6 +1637,8 @@ transition:border-color 0.2s ease;
 </div>
 
 </div>
+
+</div> <!-- End signature grid -->
 
 </div>
   <!-- FOOTER REF -->

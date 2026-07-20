@@ -697,10 +697,11 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 
 <table border="1">
 <tr>
-<td colspan="2">
-<strong>Company Managing Director</strong><br><br>
-Name: Dr. TWAJAMAHORO JEAN PIEERE<br><br>
-Position: Managing Director<br><br>
+<!-- LEFT: Parrot / Dr. Twajamahoro -->
+<td style="width:50%; vertical-align:top;">
+<strong>For Parrot Canada Visa Consultant Co. Ltd</strong><br><br>
+Name: Dr. Jean Pierre Twajamahoro<br><br>
+Title: Owner &amp; Managing Director<br><br>
 Signature:<br>
 <div class="signature-box">
     <img src="<?= $managerSignature ?>" alt="Managing Director Signature" style="max-height:52pt;max-width:240pt;">
@@ -709,33 +710,11 @@ Company Stamp:<br>
 <div class="signature-box" style="min-height:112pt;">
     <img src="<?= $companyStamp ?>" alt="Company Stamp" style="max-height:110pt;max-width:280pt;">
 </div><br>
-Date: ___________________________
-</td>
-</tr>
-<tr>
-<td>
-<strong>Company representative Kigali office</strong><br><br>
-Name: ___________________________<br><br>
-Position: ___________________________<br><br>
-
-<div class="signature-box"></div>
-
-Date: ___________________________
+Date: <?= esc($data['signed_date']) ?>
 </td>
 
-<td>
-<strong>Company representative Musanze Office</strong><br><br>
-Name: ___________________________<br><br>
-Position: ___________________________<br><br>
-
-<div class="signature-box"></div>
-
-Date: ___________________________
-</td>
-</tr>
-
-<tr>
-<td colspan="2">
+<!-- RIGHT: Student e-sign -->
+<td style="width:50%; vertical-align:top;">
 <strong>For the Student</strong><br>
 Name: <?= esc($data['full_name']) ?>
 

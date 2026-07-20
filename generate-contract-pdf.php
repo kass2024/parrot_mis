@@ -902,78 +902,36 @@ all prior discussions. Any amendment must be in writing and signed by both parti
 
 <table style="width:100%; border-collapse:collapse;">
 
-<!-- ================= ROW 0 – MANAGING DIRECTOR (TOP ONLY) ================= -->
 <tr>
-<td colspan="2" style="padding:10px 12px; vertical-align:top;" class="managing-director-block">
+<!-- LEFT: Parrot / Dr. Twajamahoro -->
+<td style="padding:10px 12px; vertical-align:top; width:50%;">
 
-<strong>Company Managing Director</strong><br><br>
+<strong>For Parrot Canada Visa Consultant Co. Ltd</strong><br><br>
 
-Name: Dr. TWAJAMAHORO JEAN PIEERE<br><br>
+Name: Dr. Jean Pierre Twajamahoro<br><br>
 
-Position: Managing Director<br><br>
+Title: Owner &amp; Managing Director<br><br>
 
 Signature:<br>
-<div class="manager-signature" style="border-bottom:1px solid #000; min-height:54pt; width:72%; padding-top:2pt;">
+<div class="manager-signature" style="border-bottom:1px solid #000; min-height:54pt; width:90%; padding-top:2pt;">
 <img src="<?= $managerSignature ?>" alt="Managing Director Signature">
 </div><br>
 
 Company Stamp:<br>
-<div class="company-stamp" style="min-height:112pt; width:72%; padding-top:4pt;">
+<div class="company-stamp" style="min-height:112pt; width:90%; padding-top:4pt;">
 <img src="<?= $companyStamp ?>" alt="Company Stamp">
 </div><br>
 
-Date: ___________________________
+Date: <?= esc($data['signed_date']) ?>
 
 </td>
-</tr>
 
-<!-- ================= ROW 1: KIGALI | MUSANZE ================= -->
-<tr>
-
-<!-- KIGALI OFFICE -->
+<!-- RIGHT: Student e-sign -->
 <td style="padding:10px 12px; vertical-align:top; width:50%;">
-
-<strong>Company representative Kigali office</strong><br><br>
-
-Name: ___________________________<br><br>
-
-Position: ___________________________<br><br>
-
-Signature:<br>
-<div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
-
-Date: ___________________________
-
-</td>
-
-<!-- MUSANZE OFFICE -->
-<td style="padding:10px 12px; vertical-align:top; width:50%;">
-
-<strong>Company representative Musanze Office</strong><br><br>
-
-Name: ___________________________<br><br>
-
-Position: ___________________________<br><br>
-
-Signature:<br>
-<div style="border-bottom:1px solid #000; height:50px; width:70%;"></div>
-
-Date: ___________________________
-
-</td>
-
-</tr>
-
-
-<!-- ================= ROW 2: STUDENT ================= -->
-<tr>
-
-<!-- STUDENT -->
-<td colspan="2" style="padding:12px; text-align:left;">
 
 <strong>For the Student</strong><br><br>
 
-Name: <?= esc($data['full_name']) ?><br>
+Name: <?= esc($data['full_name']) ?><br><br>
 
 Signature:<br>
 
@@ -988,7 +946,6 @@ Signature:<br>
 Date: <?= esc($data['signed_date']) ?>
 
 </td>
-
 </tr>
 
 </table>
