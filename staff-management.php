@@ -212,6 +212,185 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff']) && $i
 }
 
 /* ============================================================
+   ADD STAFF (SUPERADMIN ONLY) — all fields optional
+============================================================ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSuperAdmin) {
+    $fullName   = trim((string) ($_POST['full_name'] ?? ''));
+    $emailIn    = trim((string) ($_POST['email'] ?? ''));
+    $phoneIn    = trim((string) ($_POST['phone_number'] ?? ''));
+    $usernameIn = trim((string) ($_POST['username'] ?? ''));
+    $passwordIn = (string) ($_POST['password'] ?? '');
+    $role       = trim((string) ($_POST['role'] ?? 'staff'));
+    if (!in_array($role, ['superadmin', 'admin', 'staff', 'agent'], true)) {
+        $role = 'staff';
+    }
+
+    $position    = trim((string) ($_POST['position'] ?? ''));
+    $empType     = trim((string) ($_POST['employment_type'] ?? ''));
+    $startDate   = trim((string) ($_POST['employment_start_date'] ?? '')) ?: null;
+    $nid         = trim((string) ($_POST['national_id'] ?? ''));
+    $address     = trim((string) ($_POST['address'] ?? ''));
+    $dob         = trim((string) ($_POST['date_of_birth'] ?? '')) ?: null;
+    $marital     = trim((string) ($_POST['marital_status'] ?? '')) ?: null;
+    $nationality = trim((string) ($_POST['nationality'] ?? ''));
+    $birthPlace  = trim((string) ($_POST['place_of_birth'] ?? ''));
+
+    $salary   = ($_POST['salary_per_minute'] !== '' ? floatval($_POST['salary_per_minute']) : 0.0);
+    $monthly  = ($_POST['monthly_salary'] !== '' ? floatval($_POST['monthly_salary']) : null);
+    $currency = trim((string) ($_POST['salary_currency'] ?? 'USD'));
+    if (!in_array($currency, ['KES', 'RWF', 'USD'], true)) {
+        $currency = 'USD';
+    }
+    $break    = ($_POST['allowed_break_minutes'] !== '' ? intval($_POST['allowed_break_minutes']) : 60);
+    $days     = ($_POST['work_days_per_week'] !== '' ? intval($_POST['work_days_per_week']) : 5);
+    $sheet    = trim((string) ($_POST['sheet_id'] ?? ''));
+    $link     = trim((string) ($_POST['sheet_link'] ?? ''));
+    $officeId = (isset($_POST['office_id']) && $_POST['office_id'] !== '' ? intval($_POST['office_id']) : null);
+
+    if ($empType !== '' && !in_array($empType, ['Full-time', 'Part-time', 'Contract'], true)) {
+        $empType = '';
+    }
+    if ($marital !== null && !in_array($marital, ['Single', 'Married', 'Divorced', 'Widowed'], true)) {
+        $marital = null;
+    }
+
+    if ($emailIn !== '' && !filter_var($emailIn, FILTER_VALIDATE_EMAIL)) {
+        $_SESSION['error'] = 'Please enter a valid email address, or leave email blank.';
+        header('Location: staff-management.php');
+        exit;
+    }
+
+    // DB requires username + password_hash — auto-fill only when left blank
+    if ($usernameIn === '') {
+        $usernameIn = 'staff_' . strtolower(bin2hex(random_bytes(4)));
+    }
+    if ($passwordIn === '') {
+        $passwordIn = 'Parrot@ChangeMe2026';
+    }
+    $passwordHash = password_hash($passwordIn, PASSWORD_DEFAULT);
+
+    if ($fullName === '') {
+        $fullName = $usernameIn;
+    }
+    $nameParts = preg_split('/\s+/u', $fullName, 2, PREG_SPLIT_NO_EMPTY);
+    $firstName = $nameParts[0] ?? '';
+    $lastName  = isset($nameParts[1]) ? trim((string) $nameParts[1]) : '';
+
+    $chkUser = $conn->prepare('SELECT id FROM admins WHERE username = ? LIMIT 1');
+    if ($chkUser) {
+        $chkUser->bind_param('s', $usernameIn);
+        $chkUser->execute();
+        $dupUser = $chkUser->get_result()->fetch_assoc();
+        $chkUser->close();
+        if ($dupUser) {
+            $_SESSION['error'] = 'That username is already taken. Choose another or leave blank to auto-generate.';
+            header('Location: staff-management.php');
+            exit;
+        }
+    }
+
+    if ($emailIn !== '') {
+        $chkMail = $conn->prepare('SELECT id FROM admins WHERE email = ? LIMIT 1');
+        if ($chkMail) {
+            $chkMail->bind_param('s', $emailIn);
+            $chkMail->execute();
+            $dupMail = $chkMail->get_result()->fetch_assoc();
+            $chkMail->close();
+            if ($dupMail) {
+                $_SESSION['error'] = 'That email is already used by another account.';
+                header('Location: staff-management.php');
+                exit;
+            }
+        }
+    }
+
+    $empTypeDb = $empType !== '' ? $empType : null;
+
+    $stmt = $conn->prepare("
+        INSERT INTO admins (
+            username, first_name, last_name, full_name, email, phone_number, password_hash, role,
+            position, employment_type, employment_start_date, national_id, date_of_birth,
+            marital_status, nationality, place_of_birth, address,
+            salary_per_minute, monthly_salary, salary_currency, allowed_break_minutes, work_days_per_week,
+            sheet_id, sheet_link, office_id
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ");
+
+    if (!$stmt) {
+        $_SESSION['error'] = 'Could not prepare insert: ' . $conn->error;
+        header('Location: staff-management.php');
+        exit;
+    }
+
+    $stmt->bind_param(
+        'sssssssssssssssssddsiissi',
+        $usernameIn,
+        $firstName,
+        $lastName,
+        $fullName,
+        $emailIn,
+        $phoneIn,
+        $passwordHash,
+        $role,
+        $position,
+        $empTypeDb,
+        $startDate,
+        $nid,
+        $dob,
+        $marital,
+        $nationality,
+        $birthPlace,
+        $address,
+        $salary,
+        $monthly,
+        $currency,
+        $break,
+        $days,
+        $sheet,
+        $link,
+        $officeId
+    );
+
+    if ($stmt->execute()) {
+        $newId = (int) $conn->insert_id;
+        $msg = 'Staff member added successfully';
+        if (trim((string) ($_POST['username'] ?? '')) === '') {
+            $msg .= ' (username: ' . $usernameIn . ')';
+        }
+        if (trim((string) ($_POST['password'] ?? '')) === '') {
+            $msg .= '. Temporary password: Parrot@ChangeMe2026 — ask them to change it after login.';
+        }
+        $_SESSION['success'] = $msg;
+
+        if ($newId > 0 && !empty($_FILES['profile_photo']['name']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
+            $uploadDir = __DIR__ . '/uploads/';
+            if (!is_dir($uploadDir)) {
+                mkdir($uploadDir, 0755, true);
+            }
+            $ext = strtolower(pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION));
+            $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+            if (in_array($ext, $allowed, true) && $_FILES['profile_photo']['size'] <= 2 * 1024 * 1024) {
+                $photoName = time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+                if (move_uploaded_file($_FILES['profile_photo']['tmp_name'], $uploadDir . $photoName)) {
+                    $photoUpd = $conn->prepare('UPDATE admins SET profile_photo = ? WHERE id = ?');
+                    if ($photoUpd) {
+                        $photoUpd->bind_param('si', $photoName, $newId);
+                        $photoUpd->execute();
+                        $photoUpd->close();
+                    }
+                }
+            }
+        }
+    } else {
+        $_SESSION['error'] = 'Could not add staff: ' . $stmt->error;
+    }
+    $stmt->close();
+
+    header('Location: staff-management.php');
+    exit;
+}
+
+/* ============================================================
    FETCH ADMINS + OFFICES
 ============================================================ */
 $admins  = $conn->query("SELECT * FROM admins ORDER BY 
@@ -475,6 +654,49 @@ unset($_SESSION['success'], $_SESSION['error']);
         .filter-badge.active {
             background: var(--deep-navy);
             color: var(--white);
+        }
+
+        .btn-add-staff {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--deep-navy) 0%, #2f5a26 100%);
+            color: #fff;
+            font-weight: 600;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(66, 116, 49, 0.25);
+            white-space: nowrap;
+        }
+
+        .btn-add-staff:hover {
+            color: #fff;
+            filter: brightness(1.05);
+        }
+
+        #addStaffModal .modal-header {
+            background: linear-gradient(135deg, var(--deep-navy) 0%, var(--secondary-blue) 100%);
+            color: #fff;
+            border-bottom: 3px solid var(--gold);
+        }
+
+        #addStaffModal .modal-title {
+            font-weight: 700;
+        }
+
+        #addStaffModal .form-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        #addStaffModal .optional-hint {
+            font-size: 12px;
+            color: var(--text-muted);
         }
 
         /* ===== TABLE CARD - FULL HEIGHT ===== */
@@ -869,6 +1091,12 @@ unset($_SESSION['success'], $_SESSION['error']);
         <div class="filter-badge" onclick="filterByRole('agent', this)">
             <i class="bi bi-person-workspace"></i> Agent
         </div>
+
+        <?php if ($isSuperAdmin): ?>
+        <button type="button" class="btn-add-staff" data-bs-toggle="modal" data-bs-target="#addStaffModal">
+            <i class="bi bi-person-plus-fill"></i> Add Staff
+        </button>
+        <?php endif; ?>
     </div>
     
     <!-- Staff Table Card - Full Width -->
@@ -1140,6 +1368,174 @@ unset($_SESSION['success'], $_SESSION['error']);
         </div>
     </div>
 </div>
+
+<?php if ($isSuperAdmin): ?>
+<!-- Add Staff Modal — all fields optional -->
+<div class="modal fade" id="addStaffModal" tabindex="-1" aria-labelledby="addStaffModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <form method="post" enctype="multipart/form-data" id="addStaffForm">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addStaffModalLabel">
+                        <i class="bi bi-person-plus-fill me-2"></i>Add Staff Member
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="optional-hint mb-3">
+                        All fields are optional. If username or password is left blank, a username and temporary password
+                        (<code>Parrot@ChangeMe2026</code> will be created automatically.
+                    </p>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label">Full name</label>
+                            <input type="text" name="full_name" class="form-control" placeholder="Full name" autocomplete="name">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" placeholder="email@…" autocomplete="email">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="phone_number" class="form-control" placeholder="Phone / MoMo" inputmode="tel" autocomplete="tel">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Username</label>
+                            <input type="text" name="username" class="form-control" placeholder="Auto if blank" autocomplete="username">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Password</label>
+                            <input type="text" name="password" class="form-control" placeholder="Temp password if blank" autocomplete="new-password">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Role</label>
+                            <select name="role" class="form-select">
+                                <option value="staff" selected>Staff</option>
+                                <option value="admin">Admin</option>
+                                <option value="agent">Agent</option>
+                                <option value="superadmin">Super</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Profile photo</label>
+                            <input type="file" name="profile_photo" class="form-control" accept="image/jpeg,image/png,image/gif,image/webp">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Position</label>
+                            <input type="text" name="position" class="form-control" placeholder="Position / title">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Employment type</label>
+                            <select name="employment_type" class="form-select">
+                                <option value="">--</option>
+                                <option>Full-time</option>
+                                <option>Part-time</option>
+                                <option>Contract</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Start date</label>
+                            <input type="date" name="employment_start_date" class="form-control">
+                        </div>
+
+                        <div class="col-md-3">
+                            <label class="form-label">Date of birth</label>
+                            <input type="date" name="date_of_birth" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Marital status</label>
+                            <select name="marital_status" class="form-select">
+                                <option value="">--</option>
+                                <option>Single</option>
+                                <option>Married</option>
+                                <option>Divorced</option>
+                                <option>Widowed</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Nationality</label>
+                            <input type="text" name="nationality" class="form-control">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Place of birth</label>
+                            <input type="text" name="place_of_birth" class="form-control">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">National ID</label>
+                            <input type="text" name="national_id" class="form-control">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Address</label>
+                            <input type="text" name="address" class="form-control">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Office</label>
+                            <select name="office_id" class="form-select">
+                                <option value="">--</option>
+                                <?php
+                                if ($offices) {
+                                    $offices->data_seek(0);
+                                    while ($o = $offices->fetch_assoc()):
+                                ?>
+                                <option value="<?= (int) $o['id'] ?>"><?= htmlspecialchars($o['office_name'] ?? '', ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php
+                                    endwhile;
+                                    $offices->data_seek(0);
+                                }
+                                ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Salary / min</label>
+                            <input type="number" step="0.01" name="salary_per_minute" class="form-control" placeholder="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Monthly</label>
+                            <input type="number" step="0.01" name="monthly_salary" class="form-control" placeholder="0">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Currency</label>
+                            <select name="salary_currency" class="form-select">
+                                <option value="USD" selected>USD</option>
+                                <option value="KES">KES</option>
+                                <option value="RWF">RWF</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Break</label>
+                            <input type="number" name="allowed_break_minutes" class="form-control" placeholder="60">
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label">Days</label>
+                            <input type="number" name="work_days_per_week" class="form-control" placeholder="5">
+                        </div>
+
+                        <div class="col-md-4">
+                            <label class="form-label">Sheet ID</label>
+                            <input type="text" name="sheet_id" class="form-control">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Sheet link</label>
+                            <input type="text" name="sheet_link" class="form-control" placeholder="https://…">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="add_staff" value="1" class="btn btn-success">
+                        <i class="bi bi-check-lg me-1"></i> Save staff
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<?php endif; ?>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
