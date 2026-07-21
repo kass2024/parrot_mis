@@ -160,6 +160,50 @@ window.openUniversityModal = function (data = null) {
 })();
 
 /* =====================================================
+   DELETE UNIVERSITY
+===================================================== */
+window.deleteUniversity = async function (universityId, universityName) {
+  const id = Number(universityId || 0);
+  if (!id) return;
+
+  const label = universityName ? String(universityName) : ('#' + id);
+  const ok = confirm(
+    'Delete university "' + label + '"?\n\n' +
+    'This also removes its programs, platforms, and admin assignments.\n' +
+    'Universities already used on student applications cannot be deleted.'
+  );
+  if (!ok) return;
+
+  try {
+    const fd = new FormData();
+    fd.append('action', 'delete_university');
+    fd.append('id', String(id));
+
+    const response = await fetch('settings-handler.php', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+    });
+
+    const json = await response.json();
+    if (!json || !json.ok) {
+      throw new Error((json && json.msg) || 'Delete failed');
+    }
+
+    if (typeof showToast === 'function') {
+      showToast('Deleted', 'University removed', false, 'success');
+    } else {
+      alert('University deleted');
+    }
+
+    setTimeout(() => location.reload(), 400);
+  } catch (err) {
+    console.error('[settings.js] University delete failed:', err);
+    alert(err.message || 'Could not delete university');
+  }
+};
+
+/* =====================================================
    LOAD UNIVERSITY PLATFORMS (EDIT MODE)
 ===================================================== */
 

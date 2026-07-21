@@ -3068,14 +3068,22 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                           <span class="ss-badge ss-badge-muted">Unassigned</span>
                         <?php endif; ?>
                       </td>
-                      <td class="text-end">
-                        <button class="btn btn-sm btn-outline-primary ss-edit-btn" onclick='openUniversityModal({
+                      <td class="text-end text-nowrap">
+                        <button type="button" class="btn btn-sm btn-outline-primary ss-edit-btn" onclick='openUniversityModal({
                           id: <?= (int)$row["id"] ?>,
                           name: <?= json_encode($row["name"]) ?>,
                           region_id: <?= (int)$row["region_id"] ?>,
                           country_id: <?= (int)$row["country_id"] ?>
                         })' title="Edit">
                           <i class="bi bi-pencil"></i>
+                        </button>
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-outline-danger ss-edit-btn ms-1"
+                          title="Delete university"
+                          onclick='deleteUniversity(<?= (int)$row["id"] ?>, <?= json_encode($row["name"]) ?>)'
+                        >
+                          <i class="bi bi-trash"></i>
                         </button>
                       </td>
                     </tr>

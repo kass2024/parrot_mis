@@ -204,6 +204,108 @@ if ($action === 'save_university') {
 }
 
 /* =====================================================
+   DELETE UNIVERSITY (SAFE)
+===================================================== */
+if ($action === 'delete_university') {
+    $id = (int) post('id', 0);
+    if ($id <= 0) {
+        respond(false, 'Invalid university id');
+    }
+
+    $stmt = $conn->prepare('SELECT id, name FROM universities WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        respond(false, 'Database error');
+    }
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $uni = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$uni) {
+        respond(false, 'University not found');
+    }
+
+    // Block delete when already used on student applications
+    $inUse = 0;
+    $chk = $conn->prepare(
+        'SELECT COUNT(*) AS cnt FROM application_study_choices WHERE university_id = ?'
+    );
+    if ($chk) {
+        $chk->bind_param('i', $id);
+        $chk->execute();
+        $row = $chk->get_result()->fetch_assoc();
+        $chk->close();
+        $inUse = (int) ($row['cnt'] ?? 0);
+    }
+    if ($inUse > 0) {
+        respond(
+            false,
+            'Cannot delete: this university is used on ' . $inUse . ' application study choice(s). Remove those first.'
+        );
+    }
+
+    $conn->begin_transaction();
+    try {
+        // Related-program suggestion rows
+        $hasSugg = $conn->query("SHOW TABLES LIKE 'application_study_choice_suggestions'");
+        if ($hasSugg && $hasSugg->num_rows > 0) {
+            $st = $conn->prepare(
+                'DELETE FROM application_study_choice_suggestions
+                 WHERE source_university_id = ? OR suggested_university_id = ?'
+            );
+            if ($st) {
+                $st->bind_param('ii', $id, $id);
+                $st->execute();
+                $st->close();
+            }
+        }
+
+        // Admins mapping
+        $hasUa = $conn->query("SHOW TABLES LIKE 'university_admins'");
+        if ($hasUa && $hasUa->num_rows > 0) {
+            $st = $conn->prepare('DELETE FROM university_admins WHERE university_id = ?');
+            if ($st) {
+                $st->bind_param('i', $id);
+                $st->execute();
+                $st->close();
+            }
+        }
+
+        // Platforms mapping (also cascades via FK when present)
+        $st = $conn->prepare('DELETE FROM university_platforms WHERE university_id = ?');
+        if ($st) {
+            $st->bind_param('i', $id);
+            $st->execute();
+            $st->close();
+        }
+
+        // Programs for this university
+        $st = $conn->prepare('DELETE FROM programs WHERE university_id = ?');
+        if ($st) {
+            $st->bind_param('i', $id);
+            $st->execute();
+            $st->close();
+        }
+
+        $st = $conn->prepare('DELETE FROM universities WHERE id = ? LIMIT 1');
+        if (!$st) {
+            throw new Exception('Prepare delete failed');
+        }
+        $st->bind_param('i', $id);
+        if (!$st->execute() || $st->affected_rows < 1) {
+            $st->close();
+            throw new Exception('University delete failed');
+        }
+        $st->close();
+
+        $conn->commit();
+        respond(true, 'University deleted');
+    } catch (Throwable $e) {
+        $conn->rollback();
+        respond(false, 'Could not delete university');
+    }
+}
+
+/* =====================================================
    PROGRAM LEVELS (UNCHANGED)
 ===================================================== */
 if ($action === 'save_level') {
