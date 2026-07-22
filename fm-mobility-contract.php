@@ -551,7 +551,7 @@ ul.contract-list li { margin-bottom: 6px; }
     <div class="fee-grid">
       <div class="fee-card">
         <div class="label">First Installment</div>
-        <div class="amount">CAD $1,000</div>
+        <div class="amount">CAD $500</div>
         <p style="font-size:12px;margin:0;">Payable before the commencement of the recruitment process.</p>
         <ul>
           <li>File opening</li>
@@ -564,12 +564,13 @@ ul.contract-list li { margin-bottom: 6px; }
       </div>
       <div class="fee-card">
         <div class="label">Second Installment</div>
-        <div class="amount">CAD $3,000</div>
-        <p style="font-size:12px;margin:0;">Payable immediately after receiving a valid employment offer from a Canadian employer.</p>
+        <div class="amount">CAD $3,500</div>
+        <p style="font-size:12px;margin:0;">Payable immediately once the Canadian Embassy requests you to complete a medical examination.</p>
         <ul>
+          <li>Securing a valid Canadian job offer</li>
           <li>Employer communication</li>
           <li>Employment documentation</li>
-          <li>Work permit file preparation</li>
+          <li>Work permit application preparation</li>
           <li>Employer support services</li>
         </ul>
       </div>
@@ -598,8 +599,8 @@ ul.contract-list li { margin-bottom: 6px; }
     <div class="section-title">7. REFUND POLICY</div>
     <p>The Client acknowledges and agrees that:</p>
     <ul class="contract-list">
-      <li>The CAD $1,000 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
-      <li>The CAD $3,000 second installment becomes payable only after the Client has received a valid employment offer from a Canadian employer.</li>
+      <li>The CAD $500 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
+      <li>The CAD $3,500 second installment becomes payable immediately once the Canadian Embassy requests the Client to complete a medical examination.</li>
       <li>The CAD $4,000 final installment becomes payable only after approval of the Client's Canadian work permit.</li>
       <li>Government fees, biometrics fees, medical examination fees, language test fees, courier charges, translation costs, travel expenses, and any other third-party expenses are not included in this Agreement unless expressly stated.</li>
     </ul>

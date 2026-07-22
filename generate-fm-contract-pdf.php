@@ -398,7 +398,7 @@ Represented by: Dr. Jean Pierre Twajamahoro, Managing Director<br>
 </tr>
 <tr>
 <td><strong>First Installment</strong></td>
-<td class="fee-amount">CAD $1,000</td>
+<td class="fee-amount">CAD $500</td>
 <td>
 Payable before the commencement of the recruitment process.<br><br>
 This payment covers:
@@ -414,14 +414,15 @@ This payment covers:
 </tr>
 <tr>
 <td><strong>Second Installment</strong></td>
-<td class="fee-amount">CAD $3,000</td>
+<td class="fee-amount">CAD $3,500</td>
 <td>
-Payable immediately after the Client receives a valid employment offer from a Canadian employer.<br><br>
-This payment covers:
+Payable immediately once the Canadian Embassy requests you to complete a medical examination.<br><br>
+This installment covers:
 <ul>
+<li>Securing a valid Canadian job offer</li>
 <li>Employer communication</li>
 <li>Employment documentation</li>
-<li>Work permit file preparation</li>
+<li>Work permit application preparation</li>
 <li>Employer support services</li>
 </ul>
 </td>
@@ -453,8 +454,8 @@ Payable after the Client receives approval of visa issued by Immigration, Refuge
 <div class="section-title">7. REFUND POLICY</div>
 <p>The Client acknowledges and agrees that:</p>
 <ul class="contract-list">
-<li>The CAD $1,000 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
-<li>The CAD $3,000 second installment becomes payable only after the Client has received a valid employment offer from a Canadian employer.</li>
+<li>The CAD $500 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
+<li>The CAD $3,500 second installment becomes payable immediately once the Canadian Embassy requests the Client to complete a medical examination.</li>
 <li>The CAD $4,000 final installment becomes payable only after approval of the Client's Canadian work permit.</li>
 <li>Government fees, biometrics fees, medical examination fees, language test fees, courier charges, translation costs, travel expenses, and any other third-party expenses are not included in this Agreement unless expressly stated.</li>
 </ul>
