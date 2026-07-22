@@ -569,11 +569,11 @@ ul.contract-list li { margin-bottom: 6px; }
         <div class="label">Second Installment</div>
         <div class="amount">CAD $3,150</div>
         <p style="font-size:12px;margin:0;">Payable immediately once the Canadian Embassy requests you to complete a medical examination.</p>
+        <p style="font-size:12px;margin:8px 0 0;"><strong>Note:</strong> In this case, the visa approval rate is over 98%</p>
         <ul>
-          <li>Securing a valid Canadian job offer</li>
+          <li>Work permit application flow up</li>
           <li>Employer communication</li>
           <li>Employment documentation</li>
-          <li>Work permit application preparation</li>
           <li>Employer support services</li>
         </ul>
       </div>

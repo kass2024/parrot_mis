@@ -420,12 +420,12 @@ This payment covers:
 <td class="fee-amount">CAD $3,150</td>
 <td>
 Payable immediately once the Canadian Embassy requests you to complete a medical examination.<br><br>
+<strong>Note:</strong> In this case, the visa approval rate is over 98%<br><br>
 This installment covers:
 <ul>
-<li>Securing a valid Canadian job offer</li>
+<li>Work permit application flow up</li>
 <li>Employer communication</li>
 <li>Employment documentation</li>
-<li>Work permit application preparation</li>
 <li>Employer support services</li>
 </ul>
 </td>
