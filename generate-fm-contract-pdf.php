@@ -434,7 +434,13 @@ This installment covers:
 <td><strong>Third Installment</strong></td>
 <td class="fee-amount">CAD $4,000</td>
 <td>
-Payable after the Client receives approval of visa issued by Immigration, Refugees and Citizenship Canada (IRCC), and before departure to Canada.
+<ul>
+<li>Payable after visa approval by IRCC.</li>
+<li>Must be paid before departure for Canada.</li>
+<li>Airport pickup upon arrival in Canada.</li>
+<li>Orientation and settlement support to help you become familiar with life in Canada.</li>
+<li>Assistance in finding suitable rental accommodation.</li>
+</ul>
 </td>
 </tr>
 </table>

@@ -580,7 +580,13 @@ ul.contract-list li { margin-bottom: 6px; }
       <div class="fee-card">
         <div class="label">Third Installment</div>
         <div class="amount">CAD $4,000</div>
-        <p style="font-size:12px;margin:0;">Payable after visa approval by IRCC, and before departure to Canada.</p>
+        <ul>
+          <li>Payable after visa approval by IRCC.</li>
+          <li>Must be paid before departure for Canada.</li>
+          <li>Airport pickup upon arrival in Canada.</li>
+          <li>Orientation and settlement support to help you become familiar with life in Canada.</li>
+          <li>Assistance in finding suitable rental accommodation.</li>
+        </ul>
       </div>
     </div>
 
