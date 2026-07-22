@@ -398,7 +398,7 @@ Represented by: Dr. Jean Pierre Twajamahoro, Managing Director<br>
 </tr>
 <tr>
 <td><strong>First Installment</strong></td>
-<td class="fee-amount">CAD $500</td>
+<td class="fee-amount">CAD $850</td>
 <td>
 Payable before the commencement of the recruitment process.<br><br>
 This payment covers:
@@ -408,13 +408,16 @@ This payment covers:
 <li>Professional CV review</li>
 <li>Canadian CV optimization</li>
 <li>Profile registration</li>
+<li>Interview preparation</li>
 <li>Recruitment process initiation</li>
+<li>Securing a valid Canadian job offer</li>
+<li>Work permit application preparation</li>
 </ul>
 </td>
 </tr>
 <tr>
 <td><strong>Second Installment</strong></td>
-<td class="fee-amount">CAD $3,500</td>
+<td class="fee-amount">CAD $3,150</td>
 <td>
 Payable immediately once the Canadian Embassy requests you to complete a medical examination.<br><br>
 This installment covers:
@@ -454,8 +457,8 @@ Payable after the Client receives approval of visa issued by Immigration, Refuge
 <div class="section-title">7. REFUND POLICY</div>
 <p>The Client acknowledges and agrees that:</p>
 <ul class="contract-list">
-<li>The CAD $500 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
-<li>The CAD $3,500 second installment becomes payable immediately once the Canadian Embassy requests the Client to complete a medical examination.</li>
+<li>The CAD $850 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
+<li>The CAD $3,150 second installment becomes payable immediately once the Canadian Embassy requests the Client to complete a medical examination.</li>
 <li>The CAD $4,000 final installment becomes payable only after approval of the Client's Canadian work permit.</li>
 <li>Government fees, biometrics fees, medical examination fees, language test fees, courier charges, translation costs, travel expenses, and any other third-party expenses are not included in this Agreement unless expressly stated.</li>
 </ul>
