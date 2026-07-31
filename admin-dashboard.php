@@ -315,7 +315,7 @@ $cards = [
     ]
   ],
   'employment_opportunities' => [
-    'title' => 'Employment Opportunities',
+    'title' => 'Russian Employment Opportunities',
     'icon' => 'bi-briefcase',
     'links' => [
       'employment-opportunities-applications.php' => 'View Applications',
@@ -2235,11 +2235,11 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       <?php if (in_array('employment_opportunities', $allowedSidebarItems)): ?>
       <a href="#employment_opportunities" class="sidebar-link" onclick="toggleSidebarMenu('employment_opportunities')">
         <i class="bi bi-briefcase"></i>
-        <span>Employment Opportunities</span>
+        <span>Russian Employment Opportunities</span>
         <i class="bi bi-chevron-down arrow"></i>
       </a>
       <div class="sidebar-submenu" id="submenu_employment_opportunities">
-        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php', 'Employment Opportunities')">
+        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php', 'Russian Employment Opportunities')">
           <i class="bi bi-list-ul"></i>
           View Applications
         </a>
