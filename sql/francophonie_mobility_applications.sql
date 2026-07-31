@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `francophonie_mobility_applications` (
   `english_ielts` tinyint(1) NOT NULL DEFAULT 0,
   `english_professional` enum('yes','no') NOT NULL,
   `has_wes` enum('yes','no') NOT NULL,
+  `job_offer` varchar(120) DEFAULT NULL,
   `cv_file` varchar(255) NOT NULL,
   `french_cert_file` varchar(255) NOT NULL,
   `english_cert_file` varchar(255) DEFAULT NULL,

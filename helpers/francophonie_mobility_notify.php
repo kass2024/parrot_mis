@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/mail_smtp.php';
 require_once __DIR__ . '/env_load.php';
+require_once __DIR__ . '/francophonie_mobility_schema.php';
 
 function fm_level_label(string $level): string
 {
@@ -203,7 +204,9 @@ function fm_build_form_summary_html(array $row): string
       <tr><td style="padding:6px;border-bottom:1px solid #e2e8f0">Work professionally in English</td><td style="padding:6px;border-bottom:1px solid #e2e8f0">' . $esc(fm_yes_no_label((string) ($row['english_professional'] ?? ''))) . '</td></tr>
     </table>
     <h3 style="color:#1e4d2b">4. WES</h3>
-    <p><strong>Do you have WES?</strong> ' . $esc(fm_yes_no_label((string) ($row['has_wes'] ?? ''))) . '</p>';
+    <p><strong>Do you have WES?</strong> ' . $esc(fm_yes_no_label((string) ($row['has_wes'] ?? ''))) . '</p>
+    <h3 style="color:#1e4d2b">5. Canada Available Job Opportunities</h3>
+    <p><strong>Preferred Job Offer:</strong> ' . $esc(fm_job_offer_label((string) ($row['job_offer'] ?? ''))) . '</p>';
 }
 
 function fm_resolve_upload_path(string $relativePath): string

@@ -95,22 +95,28 @@ body{background:#f4f6f3;font-family:Segoe UI,system-ui,sans-serif}
   <div class="card mb-3">
     <div class="card-body">
       <h2 class="h5 mb-1"><?= htmlspecialchars($ownerName, ENT_QUOTES, 'UTF-8') ?></h2>
-      <p class="text-muted small mb-3">Reference <code><?= htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') ?></code> · upload or record only (max 3 minutes)</p>
+      <p class="text-muted small mb-3">Reference <code><?= htmlspecialchars($ref, ENT_QUOTES, 'UTF-8') ?></code> · upload or record only (max 1 minute)</p>
 
       <div class="alert alert-light border mb-3 py-3">
-        <div class="fw-semibold mb-2"><i class="fas fa-list-check me-1 text-danger"></i> Self-recording interview — keep it under 3 minutes</div>
-        <p class="small mb-2 text-muted">
-          <strong>Who you are → What you studied → What you have done → Skills → French → Why Canada → Why hire you</strong>
-        </p>
-        <ol class="small mb-0 ps-3">
-          <li><strong>Introduction</strong> (20–30s)</li>
-          <li><strong>Education</strong> (20–30s)</li>
-          <li><strong>Experience</strong> (45–60s)</li>
-          <li><strong>Key skills</strong> (20–30s)</li>
-          <li><strong>French ability</strong> (20–30s)</li>
-          <li><strong>Why Canada &amp; Mobilité Francophone</strong> (20–30s)</li>
-          <li><strong>Closing</strong> (15–20s)</li>
+        <div class="fw-semibold mb-2"><i class="fas fa-list-check me-1 text-danger"></i> Key Points for a 1-Minute Self-Recording Interview Video (English)</div>
+        <p class="small mb-2 text-muted"><strong>Total Length:</strong> 60 seconds</p>
+        <ol class="small mb-2 ps-3">
+          <li><strong>Introduction</strong> (8–10 seconds)</li>
+          <li><strong>Education &amp; Qualifications</strong> (8–10 seconds)</li>
+          <li><strong>Professional Experience</strong> (12–15 seconds)</li>
+          <li><strong>Key Skills</strong> (8–10 seconds)</li>
+          <li><strong>French Language Ability</strong> (5–7 seconds)</li>
+          <li><strong>Why Canada &amp; Mobilité Francophone</strong> (7–8 seconds)</li>
+          <li><strong>Closing</strong> (5–7 seconds)</li>
         </ol>
+        <p class="small mb-2 text-muted">
+          <strong>Simple Formula to Remember:</strong><br>
+          <strong>WHO YOU ARE → WHAT YOU STUDIED → WHAT YOU DO → YOUR SKILLS → FRENCH → WHY CANADA → WHY HIRE YOU</strong>
+        </p>
+        <div class="small text-muted mb-0">
+          <strong>Recommended Time Allocation (1 Minute):</strong>
+          Introduction 15% · Education 15% · Experience 25% · Skills 15% · French Ability 10% · Why Canada 10% · Closing 10%
+        </div>
       </div>
 
       <div id="errorBox" class="alert alert-danger d-none"></div>
@@ -132,14 +138,14 @@ body{background:#f4f6f3;font-family:Segoe UI,system-ui,sans-serif}
           <button type="button" class="btn btn-outline-dark btn-sm d-none" id="videoClearBtn">
             <i class="fas fa-trash me-1"></i> Remove
           </button>
-          <span class="align-self-center small text-muted d-none" id="videoTimerLabel">Recording: <strong id="videoTimer">0:00</strong> / 3:00</span>
+          <span class="align-self-center small text-muted d-none" id="videoTimerLabel">Recording: <strong id="videoTimer">0:00</strong> / 1:00</span>
         </div>
         <input type="file" id="videoFileInput" class="d-none" accept="video/*,.mp4,.webm,.mov,.m4v">
         <video id="videoPreview" class="w-100 rounded border bg-dark mb-2" style="min-height:200px;max-height:360px" playsinline muted></video>
         <div class="progress mb-2 d-none" id="videoProgressWrap" style="height:8px">
           <div class="progress-bar" id="videoProgressBar" style="width:0%"></div>
         </div>
-        <div class="small text-muted mb-3" id="videoStatus">No video yet — upload a file or start a live recording (auto-stops at 3 minutes).</div>
+        <div class="small text-muted mb-3" id="videoStatus">No video yet — upload a file or start a live recording (auto-stops at 1 minute).</div>
         <button type="button" class="btn btn-fm" id="submitVideoBtn" disabled>
           <i class="fas fa-paper-plane me-1"></i> Submit video (one-time)
         </button>
@@ -160,7 +166,7 @@ body{background:#f4f6f3;font-family:Segoe UI,system-ui,sans-serif}
   let recordTimer = null;
   let recordSeconds = 0;
   let videoData = null;
-  const MAX_RECORD_SECONDS = 180;
+  const MAX_RECORD_SECONDS = 60;
 
   function showError(msg) {
     const box = document.getElementById('errorBox');
@@ -190,7 +196,7 @@ body{background:#f4f6f3;font-family:Segoe UI,system-ui,sans-serif}
       recordSeconds += 1;
       timerEl.textContent = formatTimer(recordSeconds);
       if (recordSeconds >= MAX_RECORD_SECONDS) {
-        document.getElementById('videoStatus').textContent = '3-minute limit reached — stopping…';
+        document.getElementById('videoStatus').textContent = '1-minute limit reached — stopping…';
         stopLiveRecord();
       }
     }, 1000);

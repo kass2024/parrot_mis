@@ -105,6 +105,12 @@ if ($nationality_check === '') {
     $missing[] = 'Nationality';
 }
 
+$job_offer_raw = trim((string) ($_POST['job_offer'] ?? ''));
+$jobOfferChoices = fm_job_offer_choices();
+if ($job_offer_raw === '' || !isset($jobOfferChoices[$job_offer_raw])) {
+    $missing[] = 'Preferred Job Offer';
+}
+
 $rawAttachmentPaths = [
     trim((string) ($_POST['cv_file'] ?? '')),
     trim((string) ($_POST['french_cert_file'] ?? '')),
@@ -185,6 +191,8 @@ if (!in_array($has_wes, $yesNoChoices, true)) {
     $has_wes = 'no';
 }
 
+$job_offer = isset($jobOfferChoices[$job_offer_raw]) ? $job_offer_raw : '';
+
 $french_tef = !empty($_POST['french_tef']) ? 1 : 0;
 $french_tcf = !empty($_POST['french_tcf']) ? 1 : 0;
 $english_toefl = !empty($_POST['english_toefl']) ? 1 : 0;
@@ -236,10 +244,10 @@ $sql = 'INSERT INTO francophonie_mobility_applications (
     country_of_study, graduation_year, other_certifications,
     french_level, french_tef, french_tcf, french_professional,
     english_level, english_toefl, english_ielts, english_professional,
-    has_wes, cv_file, french_cert_file, english_cert_file, academic_docs_file,
+    has_wes, job_offer, cv_file, french_cert_file, english_cert_file, academic_docs_file,
     video_file, video_source, video_pcloud_fileid, video_pcloud_link, video_public_token, video_public_secret,
     status, created_at
-) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
+) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, "pending", NOW())';
 
 $stmt = $conn->prepare($sql);
 if (!$stmt) {
@@ -259,7 +267,7 @@ $video_token_db = $video_public_token !== '' ? $video_public_token : '';
 $video_secret_db = $video_public_secret !== '' ? $video_public_secret : '';
 
 $stmt->bind_param(
-    'ssssssssssisssssssssssiissiissssssssssss',
+    'ssssssssssisssssssssssiissiisssssssssssss',
     $user_id, $reference_id, $first_name, $last_name, $email,
     $phone_area_code, $phone_number, $date_of_birth, $passport_number, $address,
     $age, $nationality, $country_of_residence,
@@ -267,7 +275,7 @@ $stmt->bind_param(
     $country_of_study, $graduation_year, $other_certifications,
     $french_level, $french_tef, $french_tcf, $french_professional,
     $english_level, $english_toefl, $english_ielts, $english_professional,
-    $has_wes, $cv_db, $french_db, $english_db, $academic_db,
+    $has_wes, $job_offer, $cv_db, $french_db, $english_db, $academic_db,
     $video_db, $video_source_db, $video_fileid_db, $video_link_db, $video_token_db, $video_secret_db
 );
 

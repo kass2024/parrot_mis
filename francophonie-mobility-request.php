@@ -280,9 +280,24 @@ if ($st) {
                 <div class="form-check form-check-inline"><input class="form-check-input" type="radio" name="has_wes" id="wes_no" value="no"><label class="form-check-label" for="wes_no">No</label></div>
             </section>
 
+            <!-- 5. Job offer -->
+            <section class="fm-section">
+                <h2><span>5.</span> Canada Available Job Opportunities</h2>
+                <p class="small text-muted mb-3">Select the position you are applying for in Canada.</p>
+                <div class="mb-2">
+                    <label class="form-label fm-label required">Preferred Job Offer</label>
+                    <?php $jobNum = 0; foreach (fm_job_offer_choices() as $slug => $label): $jobNum++; ?>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="job_offer" id="job_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" required>
+                        <label class="form-check-label" for="job_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"><?= $jobNum ?>. <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></label>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+
             <!-- Attachments (at least one required) -->
             <section class="fm-section">
-                <h2><span>5.</span> Attachments <span class="text-danger fw-normal small">(at least one required *)</span></h2>
+                <h2><span>6.</span> Attachments <span class="text-danger fw-normal small">(at least one required *)</span></h2>
                 <p class="small text-muted mb-3">Upload at least one document — CV, language certificate, or academic file. Each file is saved as soon as it finishes uploading.</p>
                 <div class="row g-3">
                     <?php
@@ -322,32 +337,33 @@ if ($st) {
                 </div>
             </section>
 
-            <!-- 6. Introduction video -->
+            <!-- 7. Introduction video -->
             <section class="fm-section">
-                <h2><span>6.</span> Introduction Video <span class="text-muted fw-normal small">(recommended · max 3 minutes)</span></h2>
+                <h2><span>7.</span> Introduction Video <span class="text-muted fw-normal small">(recommended · max 1 minute)</span></h2>
                 <p class="small text-muted mb-3">
                     Record or upload a self-interview in <strong>English</strong> (French welcome too).
                     Videos go <strong>directly to pCloud</strong> and are <strong>not kept on this server</strong>.
                 </p>
 
                 <div class="alert alert-light border mb-3 py-3">
-                    <div class="fw-semibold mb-2"><i class="fas fa-list-check me-1 text-danger"></i> Self-recording interview — keep it under 3 minutes</div>
-                    <p class="small mb-2 text-muted">
-                        Simple formula:
-                        <strong>Who you are → What you studied → What you have done → Skills → French → Why Canada → Why hire you</strong>
-                    </p>
+                    <div class="fw-semibold mb-2"><i class="fas fa-list-check me-1 text-danger"></i> Key Points for a 1-Minute Self-Recording Interview Video (English)</div>
+                    <p class="small mb-2 text-muted"><strong>Total Length:</strong> 60 seconds</p>
                     <ol class="small mb-2 ps-3">
-                        <li><strong>Introduction</strong> (20–30s) — name, profession/field, years of experience</li>
-                        <li><strong>Education</strong> (20–30s) — highest degree, relevant certifications/training</li>
-                        <li><strong>Experience</strong> (45–60s) — current/recent role, responsibilities, key achievements</li>
-                        <li><strong>Key skills</strong> (20–30s) — technical, computer, teamwork/communication, problem-solving</li>
-                        <li><strong>French ability</strong> (20–30s) — communicate/work in French, professional French use</li>
-                        <li><strong>Why Canada &amp; Mobilité Francophone</strong> (20–30s) — career growth, help Canadian employers, support Francophone communities outside Quebec</li>
-                        <li><strong>Closing</strong> (15–20s) — why you’re a strong candidate (education, experience, French, work ethic) + thank the employer</li>
+                        <li class="mb-1"><strong>Introduction</strong> (8–10 seconds) — name, profession/field, years of experience</li>
+                        <li class="mb-1"><strong>Education &amp; Qualifications</strong> (8–10 seconds) — highest degree, most relevant certification or training</li>
+                        <li class="mb-1"><strong>Professional Experience</strong> (12–15 seconds) — current/recent position, main responsibilities, one key achievement</li>
+                        <li class="mb-1"><strong>Key Skills</strong> (8–10 seconds) — technical skills, computer skills, teamwork and problem-solving</li>
+                        <li class="mb-1"><strong>French Language Ability</strong> (5–7 seconds) — ability to communicate and work in French</li>
+                        <li class="mb-1"><strong>Why Canada &amp; Mobilité Francophone</strong> (7–8 seconds) — career growth, contribute to Canadian employers and Francophone communities</li>
+                        <li class="mb-1"><strong>Closing</strong> (5–7 seconds) — why you are a strong candidate (education, experience, French, work ethic); thank the employer and express enthusiasm</li>
                     </ol>
+                    <p class="small mb-2 text-muted">
+                        <strong>Simple Formula to Remember:</strong><br>
+                        <strong>WHO YOU ARE → WHAT YOU STUDIED → WHAT YOU DO → YOUR SKILLS → FRENCH → WHY CANADA → WHY HIRE YOU</strong>
+                    </p>
                     <div class="small text-muted mb-0">
-                        Suggested timing for 3 minutes:
-                        Intro 10% · Education 10% · Experience 35% · Skills 15% · French 10% · Why Canada 10% · Closing 10%
+                        <strong>Recommended Time Allocation (1 Minute):</strong>
+                        Introduction 15% · Education 15% · Experience 25% · Skills 15% · French Ability 10% · Why Canada 10% · Closing 10%
                     </div>
                 </div>
 
@@ -364,7 +380,7 @@ if ($st) {
                     <button type="button" class="btn btn-outline-dark btn-sm d-none" id="videoClearBtn">
                         <i class="fas fa-trash me-1"></i> Remove
                     </button>
-                    <span class="align-self-center small text-muted d-none" id="videoTimerLabel">Recording: <strong id="videoTimer">0:00</strong> / 3:00</span>
+                    <span class="align-self-center small text-muted d-none" id="videoTimerLabel">Recording: <strong id="videoTimer">0:00</strong> / 1:00</span>
                 </div>
                 <input type="file" id="videoFileInput" class="d-none" accept="video/*,.mp4,.webm,.mov,.m4v">
                 <div class="row g-3 align-items-start">
@@ -373,11 +389,11 @@ if ($st) {
                         <div class="progress mt-2 d-none" id="videoProgressWrap" style="height:8px">
                             <div class="progress-bar" id="videoProgressBar" style="width:0%"></div>
                         </div>
-                        <div class="small text-muted mt-1" id="videoStatus">No video yet — upload a file or start a live recording (auto-stops at 3 minutes).</div>
+                        <div class="small text-muted mt-1" id="videoStatus">No video yet — upload a file or start a live recording (auto-stops at 1 minute).</div>
                     </div>
                     <div class="col-md-5">
                         <ul class="small text-muted mb-0 ps-3">
-                            <li><strong>Limit: 3 minutes maximum</strong> (live recording auto-stops).</li>
+                            <li><strong>Limit: 1 minute maximum (60 seconds)</strong> (live recording auto-stops).</li>
                             <li>Cover all 7 points above — experience should be the longest part.</li>
                             <li>Speak clearly to the camera; good light and quiet room.</li>
                             <li>Max size ~200&nbsp;MB (MP4 / WebM / MOV).</li>
@@ -440,7 +456,7 @@ if ($st) {
     let videoPreviewUrl = '';
     let recordTimer = null;
     let recordSeconds = 0;
-    const MAX_RECORD_SECONDS = 180; // 3 minutes
+    const MAX_RECORD_SECONDS = 60; // 1 minute
 
     function formatTimer(sec) {
         const m = Math.floor(sec / 60);
@@ -471,7 +487,7 @@ if ($st) {
             recordSeconds += 1;
             if (timerEl) timerEl.textContent = formatTimer(recordSeconds);
             if (recordSeconds >= MAX_RECORD_SECONDS) {
-                document.getElementById('videoStatus').textContent = '3-minute limit reached — stopping recording…';
+                document.getElementById('videoStatus').textContent = '1-minute limit reached — stopping recording…';
                 stopLiveRecord();
             }
         }, 1000);
@@ -848,6 +864,10 @@ if ($st) {
         const addressEl = document.getElementById('address');
         if (!addressEl || !String(addressEl.value || '').trim()) {
             missing.push('Full Address');
+        }
+        const jobOfferEl = form.querySelector('input[name="job_offer"]:checked');
+        if (!jobOfferEl) {
+            missing.push('Preferred Job Offer');
         }
         if (!hasAtLeastOneAttachment()) {
             missing.push('At least one attachment (CV, certificate, or academic document)');

@@ -4,6 +4,24 @@ declare(strict_types=1);
 /**
  * Francophonie Mobility — auto-create tables on first request (idempotent).
  */
+
+/** @return array<string, string> slug => label */
+function fm_job_offer_choices(): array
+{
+    return [
+        'construction_helper'              => 'Construction Helper',
+        'mechanical_helper'              => 'Mechanical Helper',
+        'cook_kitchen_assistant'         => 'Cook / Kitchen Assistant',
+        'restaurant_staff'               => 'Restaurant Staff',
+        'customer_service_representative' => 'Customer Service Representative (Customer Care)',
+    ];
+}
+
+function fm_job_offer_label(string $slug): string
+{
+    return fm_job_offer_choices()[$slug] ?? $slug;
+}
+
 function fm_ensure_schema(mysqli $conn): void
 {
     static $ran = false;
@@ -50,6 +68,7 @@ function fm_ensure_schema(mysqli $conn): void
           `english_ielts` tinyint(1) NOT NULL DEFAULT 0,
           `english_professional` enum('yes','no') NOT NULL,
           `has_wes` enum('yes','no') NOT NULL,
+          `job_offer` varchar(120) DEFAULT NULL,
           `cv_file` varchar(255) NOT NULL,
           `french_cert_file` varchar(255) NOT NULL,
           `english_cert_file` varchar(255) DEFAULT NULL,
@@ -164,5 +183,13 @@ function fm_ensure_schema(mysqli $conn): void
     }
     if ($idxInvite) {
         $idxInvite->free();
+    }
+
+    $jobOfferCol = $conn->query("SHOW COLUMNS FROM francophonie_mobility_applications LIKE 'job_offer'");
+    if ($jobOfferCol && $jobOfferCol->num_rows === 0) {
+        $conn->query("ALTER TABLE francophonie_mobility_applications ADD COLUMN `job_offer` varchar(120) NULL DEFAULT NULL AFTER `has_wes`");
+    }
+    if ($jobOfferCol) {
+        $jobOfferCol->free();
     }
 }
