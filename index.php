@@ -273,8 +273,8 @@ $index_translations = [
         'card8_point2' => 'Complete candidate form',
         'card8_point3' => 'Email updates & document review',
 
-        // Card 9: Employment Opportunities (Russia training + work)
-        'card9_title' => 'Employment Opportunities',
+        // Card 9: Russian Employment Opportunities (Russia training + work)
+        'card9_title' => 'Russian Employment Opportunities',
         'card9_subtitle' => 'Work training with Russian language',
         'card9_description' => 'Participants receive professional training while studying the Russian language and may be placed in one of the following fields. All positions combine practical work experience with Russian language training.',
         'card9_point1' => 'Road Transport Shop (Driver)',
@@ -545,8 +545,8 @@ $index_translations = [
         'card8_point2' => 'Formulaire candidat complet',
         'card8_point3' => 'Suivi par email & revue documents',
 
-        // Card 9: Employment Opportunities
-        'card9_title' => 'Opportunités d\'Emploi',
+        // Card 9: Russian Employment Opportunities
+        'card9_title' => 'Opportunités d\'Emploi en Russie',
         'card9_subtitle' => 'Formation professionnelle avec le russe',
         'card9_description' => 'Les participants reçoivent une formation professionnelle tout en étudiant le russe et peuvent être placés dans l\'un des domaines suivants. Tous les postes combinent expérience pratique et apprentissage du russe.',
         'card9_point1' => 'Transport routier (Chauffeur)',
@@ -625,7 +625,7 @@ $cardRetrievalMeta = [
         'example'     => 'fm_a1b2c3d4e5f6_1719150000',
     ],
     'employment' => [
-        'service'     => $current_lang === 'fr' ? 'Opportunités d\'Emploi' : 'Employment Opportunities',
+        'service'     => $current_lang === 'fr' ? 'Opportunités d\'Emploi en Russie' : 'Russian Employment Opportunities',
         'table_label' => 'employment_opportunities_applications',
         'placeholder' => 'eo_…',
         'example'     => 'eo_a1b2c3d4e5f6_1719150000',
