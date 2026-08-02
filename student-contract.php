@@ -1250,8 +1250,23 @@ button {
 
 <div class="package-item">
   <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p710b')">
+    7.13 🇨🇦 Canada Visit Visa – With Invitation Letter
+  </label>
+  <div id="p710b" class="package-details">
+    ➤ Invitation Letter: Already Provided by Applicant<br>
+    ➤ Document Preparation and Visa Application Screening: CAD 815<br>
+    ➤ Visa Application Fee: CAD 100<br>
+    ➤ Biometrics Fee: CAD 85<br>
+    ➤ Service Fee (After Visa Approval): CAD 2,000<br>
+    <strong>Total Cost: CAD 3,000</strong>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p711')">
-    7.13 🇺🇸 USA Visit Visa
+    7.14 🇺🇸 USA Visit Visa
   </label>
   <div id="p711" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1263,7 +1278,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p712')">
-    7.14 🇪🇺 Europe Visit Visa
+    7.15 🇪🇺 Europe Visit Visa
   </label>
   <div id="p712" class="package-details">
     ➤ Documents & Invitation Letter: €600<br>
@@ -1275,7 +1290,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p713')">
-    7.15 Asia Visit Visa
+    7.16 Asia Visit Visa
   </label>
   <div id="p713" class="package-details">
     ➤ Documents & Invitation Letter: USD 800<br>
@@ -1287,7 +1302,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p714')">
-    7.16 SHORT COURSES-CANADA
+    7.17 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)<br>
@@ -1303,7 +1318,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p715')">
-    7.17 STUDY PhD IN CANADA-USA-EUROPE & ASIA
+    7.18 STUDY PhD IN CANADA-USA-EUROPE & ASIA
   </label>
   <div id="p715" class="package-details">
     ➤ Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)<br>
@@ -1323,7 +1338,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p716')">
-    7.18 WES EVALUATION – INTERNATIONAL EQUIVALENCE
+    7.19 WES EVALUATION – INTERNATIONAL EQUIVALENCE
   </label>
   <div id="p716" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
@@ -1343,7 +1358,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p717')">
-    7.19 GUARANTEED EVALUATION SUPPORT!
+    7.20 GUARANTEED EVALUATION SUPPORT!
   </label>
   <div id="p717" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
