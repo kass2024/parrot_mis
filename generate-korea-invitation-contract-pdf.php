@@ -70,8 +70,6 @@ function generateKoreaInvitationContractPDF(int $contractId): string
             c.external_client_email,
             c.external_client_phone,
             c.external_client_passport,
-            c.event_name,
-            c.event_location_dates,
             sig.client_name,
             sig.client_email,
             sig.client_passport,
@@ -101,8 +99,6 @@ function generateKoreaInvitationContractPDF(int $contractId): string
     $clientEmail          = $data['client_email'] ?: ($data['external_client_email'] ?? '');
     $clientPassport       = $data['client_passport'] ?: ($data['external_client_passport'] ?? '');
     $clientPhone          = $data['external_client_phone'] ?? '';
-    $eventName            = $data['event_name'] ?? '';
-    $eventLocationDates   = $data['event_location_dates'] ?? '';
     $agreementDate        = $data['agreement_date'] ?: ($data['signed_date'] ?? '');
     $signedDate           = $data['signed_date'] ?? '';
 
@@ -319,13 +315,11 @@ ul.contract-list li {
 
 <p>This Agreement is made between Parrot Canada Visa Consultant Co. Ltd. ("the Company") and the Client named below. The purpose is to clearly explain the services, payments, and cooperation required for the Client's proposed attendance at an event in South Korea.</p>
 
-<div class="client-section-title">CLIENT AND EVENT DETAILS</div>
+<div class="client-section-title">CLIENT DETAILS</div>
 
 <?= kicPdfFieldRow('Agreement Date:', kicPdfFormatDate($agreementDate), '_______________________________________________') ?>
 <?= kicPdfFieldRow('Client\'s Full Legal Name:', $clientName, '_______________________________________________') ?>
 <?= kicPdfFieldRow('Passport/ID Number:', $clientPassport, '_______________________________________________') ?>
-<?= kicPdfFieldRow('Event Name:', $eventName, '_______________________________________________') ?>
-<?= kicPdfFieldRow('Event Location and Dates:', $eventLocationDates, '_______________________________________________') ?>
 <?= kicPdfFieldRow('Telephone:', $clientPhone, '_______________________________________________') ?>
 <?= kicPdfFieldRow('Email:', $clientEmail, '_______________________________________________') ?>
 

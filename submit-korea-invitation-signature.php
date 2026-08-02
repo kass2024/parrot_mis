@@ -53,8 +53,6 @@ $signature          = $data['signature'] ?? '';
 $email              = trim($data['client_email'] ?? '');
 $passport           = trim($data['client_passport'] ?? '');
 $phone              = trim($data['client_phone'] ?? '');
-$eventName          = trim($data['event_name'] ?? '');
-$eventLocationDates = trim($data['event_location_dates'] ?? '');
 $agreementDate      = trim($data['agreement_date'] ?? '') ?: $signedDate;
 
 if ($token === '' || $name === '' || $signedDate === '' || $email === '' || $signature === '' || $passport === '') {
@@ -68,8 +66,8 @@ if ($token === '' || $name === '' || $signedDate === '' || $email === '' || $sig
     kicFail('Missing required fields: ' . implode(', ', $missing), 400);
 }
 
-if ($eventName === '' || $eventLocationDates === '' || $phone === '') {
-    kicFail('Please complete event name, event location/dates, and telephone before signing.', 400);
+if ($phone === '') {
+    kicFail('Please complete telephone before signing.', 400);
 }
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -125,20 +123,16 @@ try {
             external_client_name = ?,
             external_client_email = ?,
             external_client_phone = ?,
-            external_client_passport = ?,
-            event_name = ?,
-            event_location_dates = ?
+            external_client_passport = ?
         WHERE id = ?
     ");
     $stmt->bind_param(
-        'sssssssi',
+        'sssssi',
         $agreementDate,
         $name,
         $email,
         $phone,
         $passport,
-        $eventName,
-        $eventLocationDates,
         $contractId
     );
     $stmt->execute();

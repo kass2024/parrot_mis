@@ -29,7 +29,6 @@ $sql = "
         c.sent_at,
         c.external_client_name,
         c.external_client_email,
-        c.event_name,
         s.first_name,
         s.last_name,
         s.email AS student_email
@@ -99,14 +98,13 @@ th { background:#f0f7f0; font-size:12px; font-weight:600; text-transform:upperca
                     <th>ID</th>
                     <th>Client</th>
                     <th>Email</th>
-                    <th>Event</th>
                     <th>Signed At</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
             <?php if ($result->num_rows === 0): ?>
-                <tr><td colspan="6" class="empty">No signed Korea invitation contracts yet.</td></tr>
+                <tr><td colspan="5" class="empty">No signed Korea invitation contracts yet.</td></tr>
             <?php else: ?>
                 <?php while ($row = $result->fetch_assoc()): ?>
                     <?php
@@ -120,7 +118,6 @@ th { background:#f0f7f0; font-size:12px; font-weight:600; text-transform:upperca
                         <td>#<?= (int) $row['contract_id'] ?></td>
                         <td><?= htmlspecialchars($clientName !== '' ? $clientName : '—') ?></td>
                         <td><?= htmlspecialchars($email !== '' ? $email : '—') ?></td>
-                        <td><?= htmlspecialchars((string) ($row['event_name'] ?? '—')) ?></td>
                         <td><?= htmlspecialchars((string) ($row['signed_at'] ?? '—')) ?></td>
                         <td class="actions">
                             <a class="btn-sm btn-view" target="_blank" href="<?= $basePath ?>/korea-invitation-contract.php?token=<?= urlencode((string) $row['contract_token']) ?>">View</a>

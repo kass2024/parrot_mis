@@ -78,8 +78,6 @@ $displayClient = [
     'email'                => $contract['external_client_email'] ?? '',
     'phone'                => $contract['external_client_phone'] ?? '',
     'passport'             => $contract['external_client_passport'] ?? '',
-    'event_name'           => $contract['event_name'] ?? '',
-    'event_location_dates' => $contract['event_location_dates'] ?? '',
 ];
 
 if ($student && !$isSigned) {
@@ -403,7 +401,7 @@ button {
     <p>This Agreement is made between Parrot Canada Visa Consultant Co. Ltd. ("the Company") and the Client named below. The purpose is to clearly explain the services, payments, and cooperation required for the Client's proposed attendance at an event in South Korea.</p>
 
     <div class="client-form">
-      <h3>Client and Event Details</h3>
+      <h3>Client Details</h3>
 
       <div class="form-row">
         <label for="agreement_date">Agreement Date</label>
@@ -423,19 +421,6 @@ button {
         <input type="text" id="client_passport" required autocomplete="off"
                value="<?= htmlspecialchars($displayClient['passport']) ?>"
                placeholder="Passport or ID number" <?= $ro ?>>
-      </div>
-
-      <div class="form-row">
-        <label for="event_name">Event Name</label>
-        <input type="text" id="event_name" required
-               value="<?= htmlspecialchars($displayClient['event_name']) ?>"
-               placeholder="Name of the event in South Korea" <?= $ro ?>>
-      </div>
-
-      <div class="form-row">
-        <label for="event_location_dates">Event Location and Dates</label>
-        <textarea id="event_location_dates" rows="2" required
-                  placeholder="City/venue and event dates" <?= $ro ?>><?= htmlspecialchars($displayClient['event_location_dates']) ?></textarea>
       </div>
 
       <div class="form-row">
@@ -872,14 +857,12 @@ const CONTRACT_TOKEN = "<?= htmlspecialchars($token) ?>";
     const clientEmail = (document.getElementById('client_email')?.value || '').trim();
     const clientPhone = (document.getElementById('client_phone')?.value || '').trim();
     const clientPassport = (document.getElementById('client_passport')?.value || '').trim();
-    const eventName = (document.getElementById('event_name')?.value || '').trim();
-    const eventLocationDates = (document.getElementById('event_location_dates')?.value || '').trim();
     const agreementDate = (document.getElementById('agreement_date')?.value || '').trim();
     const sigName = inputName.value.trim();
     const signedDate = inputDate.value;
 
-    if (!clientName || !clientEmail || !clientPhone || !clientPassport || !eventName || !eventLocationDates || !agreementDate) {
-      alert('Please complete all client and event details before signing.');
+    if (!clientName || !clientEmail || !clientPhone || !clientPassport || !agreementDate) {
+      alert('Please complete all client details before signing.');
       return;
     }
 
@@ -919,8 +902,6 @@ const CONTRACT_TOKEN = "<?= htmlspecialchars($token) ?>";
       client_email: clientEmail,
       client_phone: clientPhone,
       client_passport: clientPassport,
-      event_name: eventName,
-      event_location_dates: eventLocationDates,
       agreement_date: agreementDate,
       signed_date: signedDate,
       signature: signature
