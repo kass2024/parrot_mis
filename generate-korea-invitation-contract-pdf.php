@@ -7,6 +7,7 @@ use Dompdf\Options;
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
+require_once __DIR__ . '/helpers/korea_invitation_contract_schema.php';
 
 function kicPdfEsc(?string $v): string
 {
@@ -58,6 +59,8 @@ function kicPdfClientSignatureSrc(int $contractId, string $clientSignature): str
 function generateKoreaInvitationContractPDF(int $contractId): string
 {
     global $conn;
+
+    kic_contract_ensure_schema($conn);
 
     $stmt = $conn->prepare("
         SELECT

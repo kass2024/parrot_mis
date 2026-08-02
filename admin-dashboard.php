@@ -5,9 +5,11 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 require_once __DIR__ . '/helpers/university_admins_schema.php';
+require_once __DIR__ . '/helpers/korea_invitation_contract_schema.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
 pcvc_ensure_university_admins_schema($conn);
+kic_contract_ensure_schema($conn);
 
 $admin_id = $_SESSION['id'] ?? null;
 if (!$admin_id || !isset($_SESSION['role'])) {

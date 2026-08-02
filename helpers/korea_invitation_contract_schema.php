@@ -3,14 +3,38 @@ declare(strict_types=1);
 
 /**
  * South Korea Event Attendance (Invitation) E-Sign Contract — auto-create tables (idempotent).
+ * Tables are created automatically on first admin/contract request (cPanel-safe).
  */
-function kic_contract_ensure_schema(mysqli $conn): void
+function kic_contract_table_names(): array
+{
+    return ['korea_invitation_contracts', 'korea_invitation_signatures'];
+}
+
+function kic_contract_table_exists(mysqli $conn, string $table): bool
+{
+    $esc = $conn->real_escape_string($table);
+    $res = $conn->query("SHOW TABLES LIKE '{$esc}'");
+
+    return $res && $res->num_rows > 0;
+}
+
+/** @return array<string, bool> */
+function kic_contract_schema_status(mysqli $conn): array
+{
+    $status = [];
+    foreach (kic_contract_table_names() as $table) {
+        $status[$table] = kic_contract_table_exists($conn, $table);
+    }
+
+    return $status;
+}
+
+function kic_contract_ensure_schema(mysqli $conn): bool
 {
     static $ran = false;
     if ($ran) {
-        return;
+        return true;
     }
-    $ran = true;
 
     $uploadDir = dirname(__DIR__) . '/uploads/korea_invitation_contracts';
     if (!is_dir($uploadDir)) {
@@ -56,7 +80,15 @@ function kic_contract_ensure_schema(mysqli $conn): void
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci",
     ];
 
+    $ok = true;
     foreach ($statements as $sql) {
-        $conn->query($sql);
+        if (!$conn->query($sql)) {
+            $ok = false;
+            error_log('kic_contract_ensure_schema failed: ' . $conn->error);
+        }
     }
+
+    $ran = $ok;
+
+    return $ok;
 }
