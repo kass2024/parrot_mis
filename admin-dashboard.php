@@ -373,6 +373,14 @@ $cards = [
       'admin-partner-contracts.php' => 'View partner contracts',
     ]
   ],
+  'korea_invitation_contracts' => [
+    'title' => 'Korea Invitation Contract',
+    'icon' => 'bi-file-earmark-text',
+    'links' => [
+      'admin-generate-korea-invitation-contract.php' => 'Issue Korea invitation contract link',
+      'admin-korea-invitation-contracts.php' => 'View Korea invitation contracts',
+    ]
+  ],
 ];
 
 $allowedCardsByRole = [
@@ -388,7 +396,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -2391,6 +2399,25 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('admin-partner-contracts.php', 'View Partner Contracts')">
           <i class="bi bi-files"></i>
           View partner contracts
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('korea_invitation_contracts', $allowedSidebarItems)): ?>
+      <!-- Korea invitation contract -->
+      <a href="#korea_invitation_contracts" class="sidebar-link" onclick="toggleSidebarMenu('korea_invitation_contracts')">
+        <i class="bi bi-file-earmark-text"></i>
+        <span>Korea Invitation Contract</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_korea_invitation_contracts">
+        <a href="#" onclick="loadInFrame('admin-generate-korea-invitation-contract.php', 'Issue Korea Invitation Contract Link')">
+          <i class="bi bi-link"></i>
+          Issue Korea invitation contract link
+        </a>
+        <a href="#" onclick="loadInFrame('admin-korea-invitation-contracts.php', 'View Korea Invitation Contracts')">
+          <i class="bi bi-files"></i>
+          View Korea invitation contracts
         </a>
       </div>
       <?php endif; ?>
