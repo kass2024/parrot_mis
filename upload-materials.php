@@ -1,8 +1,19 @@
 <?php
-// Upload page locked to TEST folder
+// Upload page locked to allowed materials pCloud folders only
 session_start();
 require_once __DIR__ . '/includes/company_branding.php';
-$TEST_FOLDER_ID = 28913219966;
+require_once __DIR__ . '/helpers/materials_pcloud.php';
+
+$ALLOWED_FOLDER_IDS = pcvc_materials_allowed_folder_ids();
+$MATERIALS_FOLDERS = [];
+foreach ($ALLOWED_FOLDER_IDS as $fid) {
+    $info = pcvc_materials_list_folder((int)$fid, false);
+    $MATERIALS_FOLDERS[] = [
+        'folderid' => (int)$fid,
+        'name' => $info['name'] ?? ('Folder ' . $fid),
+    ];
+}
+$DEFAULT_FOLDER_ID = $ALLOWED_FOLDER_IDS[0];
 
 // Check if user is logged in (optional - uncomment if you want authentication)
 // if (!isset($_SESSION['id'])) {
@@ -891,7 +902,10 @@ $TEST_FOLDER_ID = 28913219966;
             Upload Materials
         </h1>
         
-        
+        <div class="folder-badge">
+            <i class="bi bi-folder-check"></i>
+            Allowed folders only
+        </div>
     </div>
     
     <!-- Upload Card -->
@@ -902,6 +916,21 @@ $TEST_FOLDER_ID = 28913219966;
         </div>
         
         <div class="upload-body">
+            <!-- Destination folder (whitelist only) -->
+            <div class="mb-4">
+                <label for="folderSelect" class="form-label fw-semibold" style="color: var(--deep-navy);">
+                    <i class="bi bi-folder2"></i> Upload destination folder
+                </label>
+                <select id="folderSelect" class="form-select" style="max-width: 480px;">
+                    <?php foreach ($MATERIALS_FOLDERS as $folder): ?>
+                        <option value="<?= (int)$folder['folderid'] ?>">
+                            <?= htmlspecialchars($folder['name'], ENT_QUOTES, 'UTF-8') ?> (<?= (int)$folder['folderid'] ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <div class="form-text">Uploads are restricted to these two pCloud folders only.</div>
+            </div>
+
             <!-- Drop Zone -->
             <div class="drop-zone" id="dropZone">
                 <div class="drop-icon">
@@ -949,7 +978,7 @@ $TEST_FOLDER_ID = 28913219966;
         </div>
     </div>
     
-    <!-- Files in TEST Folder -->
+    <!-- Files in allowed materials folders -->
     <div class="files-section">
         <div class="files-header">
             <h3>
@@ -957,10 +986,20 @@ $TEST_FOLDER_ID = 28913219966;
                 Files List
             </h3>
             
-            <button class="refresh-btn" onclick="loadFiles()">
-                <i class="bi bi-arrow-clockwise"></i>
-                Refresh
-            </button>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                <select id="viewFolderSelect" class="form-select" style="width: auto; min-width: 260px;">
+                    <option value="all">All allowed folders</option>
+                    <?php foreach ($MATERIALS_FOLDERS as $folder): ?>
+                        <option value="<?= (int)$folder['folderid'] ?>">
+                            <?= htmlspecialchars($folder['name'], ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="refresh-btn" onclick="loadFiles()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Refresh
+                </button>
+            </div>
         </div>
         
         <!-- Files Grid -->
@@ -971,8 +1010,10 @@ $TEST_FOLDER_ID = 28913219966;
 </main>
 
 <script>
-const TEST_FOLDER_ID = <?= $TEST_FOLDER_ID ?>;
-const ACCESS_TOKEN = "kqNT7Z8BpwhA0d4MFZVgju0kZbR12PpsX93VWhpTOL5i4jVefcDdX";
+const ALLOWED_FOLDER_IDS = <?= json_encode(array_map('intval', $ALLOWED_FOLDER_IDS), JSON_UNESCAPED_SLASHES) ?>;
+const MATERIALS_FOLDERS = <?= json_encode($MATERIALS_FOLDERS, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+const DEFAULT_FOLDER_ID = <?= (int)$DEFAULT_FOLDER_ID ?>;
+const ACCESS_TOKEN = <?= json_encode(PCVC_MATERIALS_PCLOUD_TOKEN) ?>;
 let uploadQueue = [];
 
 const fileInput = document.getElementById("fileInput");
@@ -983,6 +1024,17 @@ const selectedSection = document.getElementById("selectedSection");
 const selectedCount = document.getElementById("selectedCount");
 const loadingOverlay = document.getElementById("loadingOverlay");
 const toastContainer = document.getElementById("toastContainer");
+const folderSelect = document.getElementById("folderSelect");
+const viewFolderSelect = document.getElementById("viewFolderSelect");
+
+function getSelectedUploadFolderId() {
+    const id = parseInt(folderSelect.value, 10);
+    return ALLOWED_FOLDER_IDS.includes(id) ? id : DEFAULT_FOLDER_ID;
+}
+
+function isAllowedFolderId(folderId) {
+    return ALLOWED_FOLDER_IDS.includes(parseInt(folderId, 10));
+}
 
 // ===== TOAST NOTIFICATION SYSTEM =====
 function showToast(message, type = 'success') {
@@ -1020,7 +1072,7 @@ function getDownloadLink(fileId, filename) {
     return `https://api.pcloud.com/getfilelink?fileid=${fileId}&access_token=${ACCESS_TOKEN}&filename=${encodeURIComponent(filename)}`;
 }
 
-// ===== LOAD FILES FROM TEST FOLDER =====
+// ===== LOAD FILES FROM ALLOWED MATERIALS FOLDERS ONLY =====
 async function loadFiles() {
     const grid = document.getElementById("filesGrid");
     
@@ -1038,26 +1090,40 @@ async function loadFiles() {
     `).join('');
     
     try {
-        // Fetch folder contents directly from pCloud API
-        const response = await fetch(`https://api.pcloud.com/listfolder?folderid=${TEST_FOLDER_ID}&access_token=${ACCESS_TOKEN}`);
-        const data = await response.json();
-        
-        grid.innerHTML = "";
-        
-        if (!data || data.result !== 0) {
-            showToast("Failed to load files", "error");
-            grid.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">📁</div>
-                    <div class="empty-title">No Files Found</div>
-                    <div class="empty-text">Upload your first file to get started</div>
-                </div>
-            `;
-            return;
+        const viewValue = viewFolderSelect.value;
+        const folderIds = viewValue === 'all'
+            ? ALLOWED_FOLDER_IDS.slice()
+            : (isAllowedFolderId(viewValue) ? [parseInt(viewValue, 10)] : ALLOWED_FOLDER_IDS.slice());
+
+        const files = [];
+        const seen = new Set();
+
+        for (const folderId of folderIds) {
+            if (!isAllowedFolderId(folderId)) continue;
+
+            const response = await fetch(`https://api.pcloud.com/listfolder?folderid=${folderId}&recursive=1&access_token=${ACCESS_TOKEN}`);
+            const data = await response.json();
+
+            if (!data || data.result !== 0 || !data.metadata) {
+                continue;
+            }
+
+            const folderName = data.metadata.name || ('Folder ' + folderId);
+            const collect = (items) => {
+                (items || []).forEach(item => {
+                    if (item.isfolder) {
+                        if (item.contents) collect(item.contents);
+                        return;
+                    }
+                    if (seen.has(item.fileid)) return;
+                    seen.add(item.fileid);
+                    files.push({ ...item, source_folderid: folderId, source_foldername: folderName });
+                });
+            };
+            collect(data.metadata.contents || []);
         }
         
-        const contents = data.metadata.contents || [];
-        const files = contents.filter(item => !item.isfolder);
+        grid.innerHTML = "";
         
         if (files.length === 0) {
             grid.innerHTML = `
@@ -1123,6 +1189,9 @@ async function loadFiles() {
                     <div class="file-meta">
                         <span class="file-type">${fileExt}</span>
                         <span class="file-size">${fileSize}</span>
+                    </div>
+                    <div class="file-meta" style="margin-top: -8px; margin-bottom: 12px;">
+                        <span class="file-size">${file.source_foldername || ''}</span>
                     </div>
                     <div class="file-actions">
                         <a href="${downloadUrl}" class="btn-download" target="_blank">
@@ -1240,12 +1309,18 @@ fileInput.onchange = () => {
 // ===== UPLOAD FILES =====
 uploadNowBtn.onclick = async () => {
     if (uploadQueue.length === 0) return;
+
+    const folderId = getSelectedUploadFolderId();
+    if (!isAllowedFolderId(folderId)) {
+        showToast("Upload blocked: invalid folder", "error");
+        return;
+    }
     
     // Show loading
     loadingOverlay.style.display = 'flex';
     
     const formData = new FormData();
-    formData.append("folderid", TEST_FOLDER_ID);
+    formData.append("folderid", folderId);
     uploadQueue.forEach(file => formData.append("files[]", file));
     
     try {
@@ -1257,7 +1332,7 @@ uploadNowBtn.onclick = async () => {
         const result = await response.json();
         
         if (!result.success) {
-            showToast("Upload failed: " + (result.error || "Unknown error"), "error");
+            showToast("Upload failed: " + (result.message || result.error || "Unknown error"), "error");
             loadingOverlay.style.display = 'none';
             return;
         }
@@ -1359,6 +1434,10 @@ document.addEventListener('keydown', (e) => {
 document.addEventListener('DOMContentLoaded', () => {
     loadFiles();
 });
+
+if (viewFolderSelect) {
+    viewFolderSelect.addEventListener('change', () => loadFiles());
+}
 </script>
 
 </body>

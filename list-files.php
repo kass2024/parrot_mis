@@ -1,7 +1,9 @@
 <?php
 header("Content-Type: application/json");
 
-$token = "kqNT7Z8BpwhA0d4MFZVgju0kZbR12PpsX93VWhpTOL5i4jVefcDdX";
+require_once __DIR__ . '/helpers/materials_pcloud.php';
+
+$token = PCVC_MATERIALS_PCLOUD_TOKEN;
 
 if (!isset($_GET['folderid'])) {
     echo json_encode([
@@ -13,6 +15,15 @@ if (!isset($_GET['folderid'])) {
 }
 
 $folder = intval($_GET['folderid']);
+
+if (!pcvc_materials_is_allowed_folder($folder)) {
+    echo json_encode([
+        "success" => false,
+        "files" => [],
+        "message" => "Folder not allowed for materials"
+    ]);
+    exit;
+}
 
 $url = "https://api.pcloud.com/listfolder?folderid=$folder&access_token=$token";
 $res = json_decode(file_get_contents($url), true);

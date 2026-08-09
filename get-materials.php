@@ -1,50 +1,13 @@
 <?php
 require "marketing-openai.php"; // AI helper
+require_once __DIR__ . '/helpers/materials_pcloud.php';
 //-----------------------------------------------------------
 // AJAX ENDPOINT - returns categorized + searchable JSON
+// Only from allowed materials folders (no other pCloud folders).
 //-----------------------------------------------------------
 if (isset($_GET['ajax']) && $_GET['ajax'] == 1) {
     header("Content-Type: application/json");
-
-    $token = "kqNT7Z8BpwhA0d4MFZVgju0kZbR12PpsX93VWhpTOL5i4jVefcDdX";
-    
-    // 👇 CHANGE THIS LINE - use the TEST folder ID
-    $folderId = 28913219966;  // TEST folder ID
-
-    $listUrl = "https://api.pcloud.com/listfolder?folderid=$folderId&recursive=1&access_token=$token";
-    $res = file_get_contents($listUrl);
-    $json = json_decode($res, true);
-
-    if (!$json || !isset($json['metadata'])) {
-        echo json_encode(["error" => true]); exit;
-    }
-
-    function flat($items, &$out) {
-        foreach ($items as $i) {
-            if (!$i['isfolder']) $out[] = $i;
-            if ($i['isfolder'] && isset($i['contents'])) flat($i['contents'], $out);
-        }
-    }
-
-    $all = [];
-    flat($json['metadata']['contents'], $all);
-
-    $images = [];
-    $videos = [];
-    $others = [];
-
-    foreach ($all as $f) {
-        $ext = strtolower(pathinfo($f['name'], PATHINFO_EXTENSION));
-        if (in_array($ext, ['jpg','jpeg','png','gif','webp'])) $images[] = $f;
-        elseif (in_array($ext, ['mp4','mov','avi','webm','mkv'])) $videos[] = $f;
-        else $others[] = $f;
-    }
-
-    echo json_encode([
-        "images" => $images,
-        "videos" => $videos,
-        "others" => $others
-    ]);
+    echo json_encode(pcvc_materials_list_all());
     exit;
 }
 ?>
@@ -390,9 +353,9 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1) {
         <div class="mb-3 mb-md-0">
             <h1 class="h3 fw-bold text-primary mb-1">
                 📁 Marketing Materials 
-                <span class="folder-badge">materiala</span>
+                <span class="folder-badge">2 folders</span>
             </h1>
-            <p class="text-muted mb-0">Access and manage all your marketing assets from the TEST folder</p>
+            <p class="text-muted mb-0">Files from the allowed materials folders only</p>
         </div>
         <div class="w-100 w-md-auto">
             <input id="search" class="form-control search-box" placeholder="Search files...">
@@ -412,21 +375,21 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1) {
     <div id="imagesGrid" class="grid"></div>
     <div id="noImages" class="text-center py-5 d-none">
         <i class="far fa-images fa-3x text-muted mb-3"></i>
-        <p class="text-muted">No images found in TEST folder</p>
+        <p class="text-muted">No images found in materials folders</p>
     </div>
 
     <h4 class="mt-5"><i class="fas fa-video me-2"></i>Videos</h4>
     <div id="videosGrid" class="grid"></div>
     <div id="noVideos" class="text-center py-5 d-none">
         <i class="fas fa-video-slash fa-3x text-muted mb-3"></i>
-        <p class="text-muted">No videos found in TEST folder</p>
+        <p class="text-muted">No videos found in materials folders</p>
     </div>
 
     <h4 class="mt-5"><i class="far fa-file-alt me-2"></i>Other Files</h4>
     <div id="othersGrid" class="grid"></div>
     <div id="noOthers" class="text-center py-5 d-none">
         <i class="far fa-folder-open fa-3x text-muted mb-3"></i>
-        <p class="text-muted">No other files found in TEST folder</p>
+        <p class="text-muted">No other files found in materials folders</p>
     </div>
 </div>
 
@@ -446,8 +409,8 @@ if (isset($_GET['ajax']) && $_GET['ajax'] == 1) {
 <link href="https://vjs.zencdn.net/8.5.2/video-js.css" rel="stylesheet" />
 <script src="https://vjs.zencdn.net/8.5.2/video.min.js"></script>
 <script>
-// TEST folder ID constant (matches PHP)
-const TEST_FOLDER_ID = 30592893924;
+// Allowed materials folder IDs only (matches PHP whitelist)
+const MATERIALS_FOLDER_IDS = [30447221155, 29604175723];
 
 //-----------------------------------------------------------
 // FETCH FILES

@@ -1,14 +1,16 @@
 <?php
 header("Content-Type: application/json");
 
+require_once __DIR__ . '/helpers/materials_pcloud.php';
+
 // -------------------------------------------------
 // CONFIG
 // -------------------------------------------------
-$token = "kqNT7Z8BpwhA0d4MFZVgju0kZbR12PpsX93VWhpTOL5i4jVefcDdX";
+$token = PCVC_MATERIALS_PCLOUD_TOKEN;
 
 
 // -------------------------------------------------
-// VALIDATION
+// VALIDATION — uploads only into allowed materials folders
 // -------------------------------------------------
 if (!isset($_POST['folderid'])) {
     echo json_encode(["success" => false, "message" => "No folder selected"]);
@@ -16,6 +18,15 @@ if (!isset($_POST['folderid'])) {
 }
 
 $folderid = intval($_POST['folderid']);
+
+if (!pcvc_materials_is_allowed_folder($folderid)) {
+    echo json_encode([
+        "success" => false,
+        "message" => "Upload blocked: folder is not an allowed materials folder",
+        "allowed" => pcvc_materials_allowed_folder_ids(),
+    ]);
+    exit;
+}
 
 if (!isset($_FILES['files']) || count($_FILES['files']['tmp_name']) === 0) {
     echo json_encode(["success" => false, "message" => "No files uploaded"]);
