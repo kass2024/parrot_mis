@@ -14,7 +14,7 @@ if (empty($_SESSION['admin_id'])) {
 }
 
 $loggedInAdminId = (int) $_SESSION['admin_id'];
-$loggedInRole    = $_SESSION['role'] ?? 'staff';
+$loggedInRole    = strtolower(trim((string) ($_SESSION['role'] ?? 'staff')));
 
 /* =====================================================
    BOOTSTRAP
@@ -28,8 +28,8 @@ use setasign\Fpdi\Fpdi;
 ===================================================== */
 $staffIds = [];
 
-/* ---- STAFF: only own card ---- */
-if ($loggedInRole === 'staff') {
+/* ---- ANY NON-SUPERADMIN STAFF: only own card ---- */
+if ($loggedInRole !== 'superadmin') {
     $staffIds[] = $loggedInAdminId;
 }
 
@@ -71,7 +71,6 @@ if ($loggedInRole === 'superadmin' && empty($staffIds) && !isset($_GET['all'])) 
     $result = $conn->query("
         SELECT id, full_name, role
         FROM admins
-        WHERE role IN ('staff','superadmin')
         ORDER BY full_name
     ");
     ?>
@@ -134,12 +133,11 @@ if ($loggedInRole === 'superadmin' && empty($staffIds) && !isset($_GET['all'])) 
     exit;
 }
 
-/* ---- SUPERADMIN DEFAULT: ALL STAFF + SUPERADMIN ---- */
+/* ---- SUPERADMIN DEFAULT: ALL STAFF ---- */
 if ($loggedInRole === 'superadmin' && empty($staffIds)) {
     $res = $conn->query("
         SELECT id
         FROM admins
-        WHERE role IN ('staff','superadmin')
     ");
     while ($r = $res->fetch_assoc()) {
         $staffIds[] = (int) $r['id'];
@@ -305,7 +303,7 @@ $templateId = $pdf->importPage(1);
 $stmt = $conn->prepare("
     SELECT full_name, phone_number, position, profile_photo
     FROM admins
-    WHERE id = ? AND role IN ('staff','superadmin')
+    WHERE id = ?
     LIMIT 1
 ");
 
