@@ -18,7 +18,9 @@
           <img src="<?= htmlspecialchars(pcvc_profile_photo_url($admin['profile_photo'] ?? '')) ?>"
                class="rounded-circle mb-2"
                style="width:90px;height:90px;object-fit:cover;">
-          <input type="file" name="profile_photo" class="form-control mt-2">
+          <input type="file" name="profile_photo" class="form-control mt-2"
+                 accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.bmp,.tif,.tiff,.heic,.heif,.avif,.jfif,.svg,.ico">
+          <div class="form-text">Any picture format, up to 15MB.</div>
         </div>
 
         <div class="row g-3">

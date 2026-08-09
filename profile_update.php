@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/profile_photo_upload.php';
 session_start();
 
 /* ============================
@@ -46,32 +47,12 @@ $photo_sql = "";
 $photo_param = null;
 
 if (!empty($_FILES['profile_photo']['name'])) {
-
-    $upload_dir = __DIR__ . "/uploads/";
-    if (!is_dir($upload_dir)) {
-        mkdir($upload_dir, 0755, true);
+    $stored = pcvc_profile_photo_store($_FILES['profile_photo'], __DIR__ . '/uploads/');
+    if (!$stored['ok']) {
+        die('❌ ' . ($stored['error'] ?? 'Failed to upload image.'));
     }
-
-    $ext = strtolower(pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION));
-    $allowed = ['jpg', 'jpeg', 'png', 'gif'];
-
-    if (!in_array($ext, $allowed)) {
-        die("❌ Invalid image type.");
-    }
-
-    if ($_FILES['profile_photo']['size'] > 2 * 1024 * 1024) {
-        die("❌ Image too large (max 2MB).");
-    }
-
-    $photo_name = time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-    $target = $upload_dir . $photo_name;
-
-    if (!move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target)) {
-        die("❌ Failed to upload image.");
-    }
-
     $photo_sql = ", profile_photo = ?";
-    $photo_param = $photo_name;
+    $photo_param = $stored['filename'];
 }
 
 /* ============================

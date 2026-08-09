@@ -4,6 +4,7 @@ header('Content-Type: application/json; charset=UTF-8');
 
 require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/helpers/secure_file.php';
+require_once dirname(__DIR__) . '/helpers/profile_photo_upload.php';
 
 if (!isset($_SESSION['id']) || ($_SESSION['role'] ?? '') !== 'superadmin') {
     http_response_code(403);
@@ -18,29 +19,9 @@ if ($staffId < 1) {
     exit;
 }
 
-if (!isset($_FILES['profile_photo']) || $_FILES['profile_photo']['error'] !== UPLOAD_ERR_OK) {
+if (!isset($_FILES['profile_photo'])) {
     http_response_code(400);
     echo json_encode(['ok' => false, 'error' => 'No valid image uploaded.']);
-    exit;
-}
-
-$uploadDir = dirname(__DIR__) . '/uploads/';
-if (!is_dir($uploadDir)) {
-    mkdir($uploadDir, 0755, true);
-}
-
-$ext = strtolower(pathinfo($_FILES['profile_photo']['name'], PATHINFO_EXTENSION));
-$allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-
-if (!in_array($ext, $allowed, true)) {
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Invalid image type. Use JPG, PNG, GIF, or WebP.']);
-    exit;
-}
-
-if ($_FILES['profile_photo']['size'] > 2 * 1024 * 1024) {
-    http_response_code(400);
-    echo json_encode(['ok' => false, 'error' => 'Image too large (max 2MB).']);
     exit;
 }
 
@@ -61,18 +42,19 @@ if (!$row) {
     exit;
 }
 
-$photoName = time() . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-$target = $uploadDir . $photoName;
-
-if (!move_uploaded_file($_FILES['profile_photo']['tmp_name'], $target)) {
-    http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => 'Failed to save image.']);
+$stored = pcvc_profile_photo_store($_FILES['profile_photo'], dirname(__DIR__) . '/uploads/');
+if (!$stored['ok']) {
+    http_response_code(400);
+    echo json_encode(['ok' => false, 'error' => $stored['error'] ?? 'Failed to save image.']);
     exit;
 }
 
+$photoName = $stored['filename'];
+$uploadDir = dirname(__DIR__) . '/uploads/';
+
 $upd = $conn->prepare('UPDATE admins SET profile_photo = ? WHERE id = ?');
 if (!$upd) {
-    @unlink($target);
+    @unlink($uploadDir . $photoName);
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Database error.']);
     exit;
@@ -80,7 +62,7 @@ if (!$upd) {
 $upd->bind_param('si', $photoName, $staffId);
 
 if (!$upd->execute()) {
-    @unlink($target);
+    @unlink($uploadDir . $photoName);
     http_response_code(500);
     echo json_encode(['ok' => false, 'error' => 'Failed to update profile photo.']);
     exit;
