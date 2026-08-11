@@ -383,6 +383,14 @@ $cards = [
       'admin-korea-invitation-contracts.php' => 'View Korea invitation contracts',
     ]
   ],
+  'agent_contracts' => [
+    'title' => 'Agent Contract',
+    'icon' => 'bi-person-badge',
+    'links' => [
+      'admin-generate-agent-contract.php' => 'Issue agent contract link',
+      'admin-agent-contracts.php' => 'View agent contracts',
+    ]
+  ],
 ];
 
 $allowedCardsByRole = [
@@ -398,7 +406,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts', 'agent_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -2420,6 +2428,25 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('admin-korea-invitation-contracts.php', 'View Korea Invitation Contracts')">
           <i class="bi bi-files"></i>
           View Korea invitation contracts
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('agent_contracts', $allowedSidebarItems)): ?>
+      <!-- Agent referral contract -->
+      <a href="#agent_contracts" class="sidebar-link" onclick="toggleSidebarMenu('agent_contracts')">
+        <i class="bi bi-person-badge"></i>
+        <span>Agent Contract</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_agent_contracts">
+        <a href="#" onclick="loadInFrame('admin-generate-agent-contract.php', 'Issue Agent Contract Link')">
+          <i class="bi bi-link"></i>
+          Issue agent contract link
+        </a>
+        <a href="#" onclick="loadInFrame('admin-agent-contracts.php', 'View Agent Contracts')">
+          <i class="bi bi-files"></i>
+          View agent contracts
         </a>
       </div>
       <?php endif; ?>
