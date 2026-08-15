@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/includes/brand_logo.php';
+require_once __DIR__ . '/helpers/credit_transfer_programs.php';
 $parrotLogo = parrot_brand_logo_href(__DIR__);
+$upafaPrograms = pcvc_credit_transfer_programs_flat()['UPAFA'] ?? [];
+$upafaCatalogueRel = pcvc_credit_transfer_catalogue_path('UPAFA');
 ?>
 <!doctype html>
 <html lang="en">
@@ -227,6 +230,9 @@ $parrotLogo = parrot_brand_logo_href(__DIR__);
                        list="field_of_study_list" placeholder="Start typing a field…" required>
                 <datalist id="field_of_study_list"></datalist>
               </div>
+              <?php if ($upafaCatalogueRel): ?>
+                <a class="small ms-2" href="<?= htmlspecialchars($upafaCatalogueRel, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">UPAFA 2025 program catalogue (PDF)</a>
+              <?php endif; ?>
             </div>
           </div>
 
@@ -533,37 +539,7 @@ $parrotLogo = parrot_brand_logo_href(__DIR__);
   <!-- Field-of-Study options -->
   <script>
     (function(){
-      const fields = [
-        "Management Information Systems","General Computing","Economy","Corporate and Market Finance",
-        "Business Administration and Aviation","Business Administration in International Marketing",
-        "Maintenance – Networks and Telecommunications","Marketing & Public Relations","Hotel Management and Tourism",
-        "Supply Chain Management and Logistics","Business Management and Administration","Accounting",
-        "Economic and Financial Analysis","Islamic Finance","Home Economics","Finance Bank","Transport Logistics",
-        "Customs Transit","Project Planning and Management","Finance","Information and Communication Technology (ICT)",
-        "Computer and Multimedia Networks","Data Science","Catastrophic Risk Management and Adaptation to Climate Change",
-        "Risk Management and Insurance Digital and Customers","Portfolio Management","Cash Management","Organization Management",
-        "Economy of Inspiration","Economics of Resilience","Business Management","Public Administration","Audit","Literature History",
-        "Civilization and Heritage","Legal Sciences","Politics and Administration","Jurisprudence","Science of Education and Training",
-        "Translation and Interpretation","Journalism and Communication","Sociology and Anthropology",
-        "Social Work and Community Development","Human Resources Management","Philosophy","International Development",
-        "Private and Public Law","International Law","Criminology","Management and Political Science","Theology","Islamic Sciences",
-        "International Relations and Diplomacy","Human and Social Sciences","Comparison of Religions","Islamic Philosophy",
-        "Business Law and Taxation","Geography","Islamic Theology",
-        "Literature and Language (English, Chinese, Russian, Spanish, African Languages)",
-        "Surveying and Geomatics Sciences","Geotechnical and Pavement Engineering","Civil Engineering",
-        "Civil Engineering (Construction Technology, Road and Highway Engineering)","Electrical and Electronic Engineering",
-        "Water and Sanitation Engineering","Geology","Forestry Sciences","Agronomy and Animal Husbandry","Energy","Mining Survey",
-        "Mining Engineering","Oil and Gas Engineering","Architecture","Food Science","GIS and Urban Planning",
-        "Agri-business Management","Construction Management","Land Management and Administration","Mechanical Engineering",
-        "Mechanical Engineering (Automotive, Manufacturing)","Industrial Engineering","Biotechnology",
-        "Art and Design Technology (Graphic Design, Fashion Design, Textile and Sewing Technology)","Meter",
-        "Biodiversity and Conservation","Environmental Management","Thermal Engineering","Energy and Renewable Energy",
-        "Real Estate Valuation and Property Management","Biomedical Technology","General Medicine","Health Services Management",
-        "Public Health","Human Nutrition","Epidemiology","Forensic Medicine","Community Health",
-        "Clinical Psychology and Guidance","Biomedical Laboratory Sciences","Ultrasound","Medical Laboratory Sciences",
-        "Nursing","Pharmacy","Pathology","Orthopedic Surgery","Radiology","Gynecology and Obstetrics","Mental Health",
-        "Clinical Bacteriology"
-      ];
+      const fields = <?= json_encode(array_values($upafaPrograms), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
       const list = document.getElementById('field_of_study_list');
       fields.forEach(txt => {
         const opt = document.createElement('option');

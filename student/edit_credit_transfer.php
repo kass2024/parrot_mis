@@ -295,6 +295,15 @@ require_once __DIR__ . '/layout.php';
               <option value="IST" <?= ((string)($credit['university'] ?? '') === 'IST') ? 'selected' : '' ?>>Institut Supérieur de Burkina Faso (IST)</option>
               <option value="USOJ" <?= ((string)($credit['university'] ?? '') === 'USOJ') ? 'selected' : '' ?>>University of Saint Joseph Mbarara (USOJ)</option>
             </select>
+            <?php
+              $upafaCatalogueRel = pcvc_credit_transfer_catalogue_path('UPAFA');
+              $upafaCatalogueHref = $upafaCatalogueRel ? pcvc_url('/' . ltrim($upafaCatalogueRel, '/')) : '';
+            ?>
+            <?php if ($upafaCatalogueHref !== ''): ?>
+              <a id="upafaCatalogueLink" class="small d-block mt-1" href="<?= htmlspecialchars($upafaCatalogueHref, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"<?= ((string)($credit['university'] ?? '') === 'UPAFA') ? '' : ' style="display:none;"' ?>>
+                Download UPAFA 2025 program catalogue (PDF)
+              </a>
+            <?php endif; ?>
           </div>
           <div class="col-md-4">
             <label class="form-label fw-semibold">Birth month</label>
@@ -473,6 +482,8 @@ require_once __DIR__ . '/layout.php';
       rebuildDatalist();
       programInput.disabled = !uni.value;
       programInput.placeholder = uni.value ? 'Start typing to search programs...' : 'Select university first...';
+      const cat = document.getElementById('upafaCatalogueLink');
+      if (cat) cat.style.display = uni.value === 'UPAFA' ? '' : 'none';
       if (uni.value) programInput.focus();
     });
     programInput.addEventListener('input', rebuildDatalist);

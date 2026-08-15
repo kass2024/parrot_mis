@@ -139,6 +139,7 @@ $credit_translations = [
         'email_hint' => 'We\'ll send application updates to this email',
         'education_hint' => 'Select all that apply to your current education status',
         'program_hint' => 'Select university first, then type to filter available programs',
+        'upafa_catalogue' => 'Download UPAFA 2025 program catalogue (PDF)',
         'comments_hint' => 'Optional: Share your motivation, special circumstances, or questions',
         
         // Progress Messages
@@ -277,6 +278,7 @@ $credit_translations = [
         'email_hint' => 'Nous enverrons les mises à jour de la demande à cet email',
         'education_hint' => 'Sélectionnez tout ce qui s\'applique à votre statut d\'éducation actuel',
         'program_hint' => 'Sélectionnez d\'abord l\'université, puis tapez pour filtrer les programmes disponibles',
+        'upafa_catalogue' => 'Télécharger le catalogue des programmes UPAFA 2025 (PDF)',
         'comments_hint' => 'Optionnel : Partagez votre motivation, circonstances spéciales ou questions',
         
         // Progress Messages
@@ -1322,6 +1324,17 @@ if (!is_array($certChecked)) {
       margin-top: 8px; 
       font-style: italic;
     }
+    #upafaCatalogueLink {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 8px;
+      font-style: normal;
+      font-weight: 600;
+      color: var(--navy-blue);
+      text-decoration: none;
+    }
+    #upafaCatalogueLink:hover { text-decoration: underline; }
 
     .error-message {
       color: var(--danger);
@@ -1518,6 +1531,10 @@ if (!is_array($certChecked)) {
             <option value="IST"<?= $uniSel === 'IST' ? ' selected' : '' ?>>Institut Supérieur de Burkina Faso (IST)</option>
             <option value="USOJ"<?= $uniSel === 'USOJ' ? ' selected' : '' ?>>University of Saint Joseph Mbarara (USOJ)</option>
           </select>
+          <?php $upafaCatalogueRel = pcvc_credit_transfer_catalogue_path('UPAFA'); ?>
+          <a id="upafaCatalogueLink" href="<?= htmlspecialchars((string) $upafaCatalogueRel, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"<?= $uniSel === 'UPAFA' ? '' : ' style="display:none;"' ?>>
+            <i class="fas fa-file-pdf"></i> <?php echo htmlspecialchars(ct('upafa_catalogue'), ENT_QUOTES, 'UTF-8'); ?>
+          </a>
         </div>
         <div class="form-group">
           <label class="required"><?php echo ct('proposed_program'); ?></label>
@@ -1956,9 +1973,13 @@ function getValidExtensions(fieldName) {
 function populatePrograms(university) {
   const datalist = document.getElementById('programOptions');
   const programInput = document.getElementById('proposed_program');
+  const catalogueLink = document.getElementById('upafaCatalogueLink');
   
   datalist.innerHTML = '';
   programInput.value = '';
+  if (catalogueLink) {
+    catalogueLink.style.display = university === 'UPAFA' ? '' : 'none';
+  }
   
   const data = PROGRAMS[university];
   if (!data) return;
@@ -1970,15 +1991,21 @@ function populatePrograms(university) {
       datalist.appendChild(opt);
     });
   } else {
+    const counts = {};
     for (const category in data) {
-      if (Array.isArray(data[category])) {
-        data[category].forEach(name => {
-          const opt = document.createElement('option');
-          opt.value = `${name} (${category})`;
-          opt.dataset.category = category;
-          datalist.appendChild(opt);
-        });
-      }
+      if (!Array.isArray(data[category])) continue;
+      data[category].forEach(name => {
+        counts[name] = (counts[name] || 0) + 1;
+      });
+    }
+    for (const category in data) {
+      if (!Array.isArray(data[category])) continue;
+      data[category].forEach(name => {
+        const opt = document.createElement('option');
+        opt.value = counts[name] > 1 ? `${name} (${category})` : name;
+        opt.dataset.category = category;
+        datalist.appendChild(opt);
+      });
     }
   }
 }
