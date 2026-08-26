@@ -13,6 +13,7 @@ ob_start();
 session_start();
 header('Content-Type: application/json');
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/application_draft.php';
 // =========================================
 // SESSION VALIDATION (MUST BE FIRST)
 // =========================================
@@ -21,35 +22,41 @@ if (empty($_SESSION['user_id'])) {
     exit;
 }
 // =========================================
-// ATTACH TO EXISTING DRAFT APPLICATION ONLY
+// ATTACH TO EXISTING OR JUST-CREATED DRAFT
 // =========================================
 $sessionId = session_id();
+$userId = trim((string)$_SESSION['user_id']);
+$postedAppId = (int)($_POST['application_id'] ?? 0);
 
-$stmt = $conn->prepare(
-    "SELECT id FROM student_applications
-     WHERE session_id = ?
-       AND submitted = 0
-     LIMIT 1"
-);
-if (!$stmt) {
-    echo json_encode(['status'=>'error','message'=>'DB error']);
+try {
+    $draft = pcvc_ensure_application_draft($conn, $sessionId, $userId, $postedAppId);
+    $appId = (int)$draft['application_id'];
+} catch (Throwable $e) {
+    echo json_encode([
+        'status'  => 'error',
+        'message' => 'No active application draft found. Please start or continue your application first.',
+        'debug'   => $e->getMessage()
+    ]);
     exit;
 }
 
-$stmt->bind_param('s', $sessionId);
-$stmt->execute();
-$stmt->bind_result($appId);
-$stmt->fetch();
-$stmt->close();
-
 if (!$appId) {
-    // 🚫 Uploads must NOT create applications
     echo json_encode([
         'status'  => 'error',
         'message' => 'No active application draft found. Please start or continue your application first.'
     ]);
     exit;
 }
+
+$skipAiValidation = ($_POST['skip_ai_validation'] ?? '') === '1';
+$batchUploadToken = trim((string)($_POST['smart_autofill_batch_token'] ?? ''));
+$sessionBatchToken = trim((string)($_SESSION['smart_autofill_batch_upload_token'] ?? ''));
+$sessionBatchExpiry = (int)($_SESSION['smart_autofill_batch_upload_token_expires'] ?? 0);
+$trustedBatchUpload = $skipAiValidation
+    && $batchUploadToken !== ''
+    && $sessionBatchToken !== ''
+    && $sessionBatchExpiry >= time()
+    && hash_equals($sessionBatchToken, $batchUploadToken);
 
 require_once __DIR__ . '/helpers/load_env.php';
 require_once __DIR__ . '/helpers/document_vision_gemini.php';
@@ -65,8 +72,9 @@ foreach ([$TEMP_DIR, $UPLOAD_DIR] as $dir)
 
 // =========================================
 // CONFIG (document OCR/validation uses GEMINI_API_KEY in .env)
+// Batch routing after Smart AI analysis does not need to re-call Gemini.
 // =========================================
-if (!pcvc_docvision_is_configured()) {
+if (!$trustedBatchUpload && !pcvc_docvision_is_configured()) {
     echo json_encode([
         'status'  => 'error',
         'message' => 'Document verification is not configured. Set GEMINI_API_KEY in .env on the server.',
@@ -229,16 +237,6 @@ if (!move_uploaded_file($_FILES['file']['tmp_name'],$tmpPath))
         'debug' => $debug
     ]));
 appendDebugStage($debug, 'prepare', 'Temporary file saved on server.');
-
-$skipAiValidation = ($_POST['skip_ai_validation'] ?? '') === '1';
-$batchUploadToken = trim((string)($_POST['smart_autofill_batch_token'] ?? ''));
-$sessionBatchToken = trim((string)($_SESSION['smart_autofill_batch_upload_token'] ?? ''));
-$sessionBatchExpiry = (int)($_SESSION['smart_autofill_batch_upload_token_expires'] ?? 0);
-$trustedBatchUpload = $skipAiValidation
-    && $batchUploadToken !== ''
-    && $sessionBatchToken !== ''
-    && $sessionBatchExpiry >= time()
-    && hash_equals($sessionBatchToken, $batchUploadToken);
 
 if ($trustedBatchUpload) {
     if (!in_array($field, $allowedFileFields, true)) {

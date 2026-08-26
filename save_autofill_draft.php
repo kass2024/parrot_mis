@@ -6,6 +6,7 @@ header('Content-Type: application/json; charset=UTF-8');
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/study_choices.php';
+require_once __DIR__ . '/helpers/application_draft.php';
 
 function json_exit(array $payload, int $statusCode = 200): void
 {
@@ -74,36 +75,22 @@ $studyChoices = isset($data['study_choices']) && is_array($data['study_choices']
 $sessionId = session_id();
 $userId = (string)($_SESSION['user_id'] ?? '');
 
+try {
+    $ensured = pcvc_ensure_application_draft($conn, $sessionId, $userId, $applicationId);
+    $applicationId = (int)$ensured['application_id'];
+} catch (Throwable $e) {
+    json_exit([
+        'status' => 'error',
+        'message' => 'Draft application not found.',
+        'debug' => $e->getMessage()
+    ], 404);
+}
+
 if ($applicationId <= 0) {
     json_exit([
         'status' => 'error',
         'message' => 'Missing application id.'
     ], 400);
-}
-
-$stmt = $conn->prepare(
-    "SELECT id
-     FROM student_applications
-     WHERE id = ?
-       AND submitted = 0
-       AND (session_id = ? OR user_id = ?)
-     LIMIT 1"
-);
-if (!$stmt) {
-    json_exit(['status' => 'error', 'message' => 'DB error.'], 500);
-}
-
-$stmt->bind_param('iss', $applicationId, $sessionId, $userId);
-$stmt->execute();
-$stmt->bind_result($resolvedId);
-$found = $stmt->fetch();
-$stmt->close();
-
-if (!$found || !$resolvedId) {
-    json_exit([
-        'status' => 'error',
-        'message' => 'Draft application not found.'
-    ], 404);
 }
 
 $allowed = [

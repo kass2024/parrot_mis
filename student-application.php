@@ -4603,37 +4603,86 @@ function startValidationSimulation(progress) {
     renderQueue();
   }
 
+  function readExistingApplicationId() {
+    const candidates = [
+      window.currentApplicationId,
+      document.querySelector('[name="application_id"]')?.value,
+      document.getElementById("applicationForm")?.dataset.resumeAppId
+    ];
+    for (const raw of candidates) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return 0;
+  }
+
   async function ensureDraftExists() {
-    if (window.currentApplicationId) {
-      return window.currentApplicationId;
+    const existingId = readExistingApplicationId();
+    const fd = new FormData();
+    if (existingId > 0) {
+      fd.append("application_id", String(existingId));
+    }
+    const userId = document.querySelector('[name="user_id"]')?.value || "";
+    if (userId) {
+      fd.append("user_id", userId);
+    }
+    if (typeof collectStudyChoices === "function") {
+      const choices = collectStudyChoices();
+      if (choices.length) {
+        fd.append("study_choices", JSON.stringify(choices));
+      }
     }
 
-    const fd = new FormData();
-    const res = await fetch("save_application.php", {
-      method: "POST",
-      body: fd
-    });
-
     let data = null;
+    let res = null;
     try {
+      res = await fetch("ensure_application_draft.php", {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin"
+      });
       data = await res.json();
     } catch (err) {
+      data = null;
+    }
+
+    if (!data || data.status !== "success" || !data.application_id) {
+      try {
+        const fallbackFd = typeof buildApplicationFormData === "function"
+          ? buildApplicationFormData({ includeStep: true, stepValue: 0, final: false })
+          : fd;
+        if (existingId > 0) {
+          fallbackFd.set("application_id", String(existingId));
+        }
+        res = await fetch("save_application.php", {
+          method: "POST",
+          body: fallbackFd,
+          credentials: "same-origin"
+        });
+        data = await res.json();
+      } catch (err) {
+        throw new Error(texts.needDraft);
+      }
+    }
+
+    if (!data || data.status !== "success" || !data.application_id) {
+      throw new Error(data?.message || data?.debug || texts.needDraft);
+    }
+
+    const applicationId = Number(data.application_id);
+    if (!Number.isFinite(applicationId) || applicationId <= 0) {
       throw new Error(texts.needDraft);
     }
 
-    if (!res.ok || !data || data.status !== "success" || !data.application_id) {
-      throw new Error(data?.message || texts.needDraft);
-    }
-
     if (typeof syncApplicationIdToForm === "function") {
-      syncApplicationIdToForm(data.application_id);
+      syncApplicationIdToForm(applicationId);
     } else {
-      window.currentApplicationId = data.application_id;
+      window.currentApplicationId = applicationId;
       const hiddenIdField = document.querySelector('input[name="application_id"]');
-      if (hiddenIdField) hiddenIdField.value = data.application_id;
+      if (hiddenIdField) hiddenIdField.value = String(applicationId);
     }
 
-    return data.application_id;
+    return applicationId;
   }
 
   const attachmentFieldLabels = {

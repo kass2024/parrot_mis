@@ -869,6 +869,7 @@ if (!$appId) {
         $email = strtolower(trim($_POST['email']));
     }
 
+    $lookupUserId = trim((string)($userId ?? ''));
     $stmt = $conn->prepare("
         SELECT id
         FROM student_applications
@@ -876,6 +877,7 @@ if (!$appId) {
             (
                 session_id = ?
                 OR (email = ? AND email <> '')
+                OR (user_id = ? AND user_id <> '')
             )
         AND submitted = 0
         AND deny = 0
@@ -888,7 +890,7 @@ if (!$appId) {
         throw new Exception($conn->error);
     }
 
-    $stmt->bind_param("ss", $sessionId, $email);
+    $stmt->bind_param("sss", $sessionId, $email, $lookupUserId);
     $stmt->execute();
 
     $result = $stmt->get_result();
