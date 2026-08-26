@@ -59,25 +59,43 @@ if ($isSigned && !empty($contract['id'])) {
 }
 
 $display = [
-    'name'    => (string) ($contract['agent_name'] ?? ''),
-    'email'   => (string) ($contract['agent_email'] ?? ''),
-    'phone'   => (string) ($contract['agent_phone'] ?? ''),
-    'address' => (string) ($contract['agent_address'] ?? ''),
-    'title'   => (string) ($contract['agent_title'] ?? ''),
+    'name'           => (string) ($contract['agent_name'] ?? ''),
+    'email'          => (string) ($contract['agent_email'] ?? ''),
+    'phone'          => (string) ($contract['agent_phone'] ?? ''),
+    'address'        => (string) ($contract['agent_address'] ?? ''),
+    'title'          => (string) ($contract['agent_title'] ?? ''),
+    'username'       => '',
+    'national_id'    => '',
+    'date_of_birth'  => '',
+    'marital_status' => '',
+    'nationality'    => '',
+    'place_of_birth' => '',
 ];
 
-if (!$isSigned && !empty($contract['admin_id'])) {
+$needsAccount = empty($contract['admin_id']);
+$linkedUsername = '';
+
+if (!empty($contract['admin_id'])) {
     $aid = (int) $contract['admin_id'];
     $stmt = $conn->prepare('
-        SELECT first_name, last_name, full_name, email, phone_number, address, role
+        SELECT first_name, last_name, full_name, email, phone_number, address, role,
+               username, national_id, date_of_birth, marital_status, nationality, place_of_birth, position
         FROM admins WHERE id = ? LIMIT 1
     ');
+    if (!$stmt) {
+        $stmt = $conn->prepare('
+            SELECT first_name, last_name, full_name, email, phone_number, address, role, username
+            FROM admins WHERE id = ? LIMIT 1
+        ');
+    }
     if ($stmt) {
         $stmt->bind_param('i', $aid);
         $stmt->execute();
         $admin = $stmt->get_result()->fetch_assoc();
         $stmt->close();
         if ($admin) {
+            $linkedUsername = (string) ($admin['username'] ?? '');
+            $display['username'] = $linkedUsername;
             if ($display['name'] === '') {
                 $display['name'] = trim((string) ($admin['full_name'] ?? ''))
                     ?: trim(($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? ''));
@@ -92,8 +110,17 @@ if (!$isSigned && !empty($contract['admin_id'])) {
                 $display['address'] = (string) ($admin['address'] ?? '');
             }
             if ($display['title'] === '') {
-                $display['title'] = (($admin['role'] ?? '') === 'staff') ? 'Staff' : 'Agent';
+                $display['title'] = trim((string) ($admin['position'] ?? ''))
+                    ?: ((($admin['role'] ?? '') === 'staff') ? 'Staff' : 'Agent');
             }
+            $display['national_id']    = (string) ($admin['national_id'] ?? '');
+            $display['date_of_birth']  = (string) ($admin['date_of_birth'] ?? '');
+            if ($display['date_of_birth'] === '0000-00-00') {
+                $display['date_of_birth'] = '';
+            }
+            $display['marital_status'] = (string) ($admin['marital_status'] ?? '');
+            $display['nationality']    = (string) ($admin['nationality'] ?? '');
+            $display['place_of_birth'] = (string) ($admin['place_of_birth'] ?? '');
         }
     }
 }
@@ -185,12 +212,18 @@ ul.contract-list li { margin-bottom: 6px; }
   display: block; font-size: 12px; font-weight: 600; color: var(--muted);
   margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px;
 }
-.form-row input, .form-row textarea {
+.form-row input, .form-row textarea, .form-row select {
   width: 100%; padding: 11px 14px; border: 2px solid var(--border); border-radius: 8px;
-  font-size: 15px; font-family: inherit;
+  font-size: 15px; font-family: inherit; background: #fff;
 }
-.form-row input:focus, .form-row textarea:focus { outline: none; border-color: var(--primary-light); }
-.form-row input[readonly], .form-row textarea[readonly] { background: #f3f4f6; }
+.form-row input:focus, .form-row textarea:focus, .form-row select:focus { outline: none; border-color: var(--primary-light); }
+.form-row input[readonly], .form-row textarea[readonly], .form-row select[disabled] { background: #f3f4f6; }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { .form-row-2 { grid-template-columns: 1fr; } }
+.account-note {
+  background: #ecfdf5; border: 1px solid #86efac; border-radius: 10px;
+  padding: 12px 14px; margin: 0 0 16px; font-size: 13px; color: #166534; line-height: 1.5;
+}
 .fee-table-wrap { overflow-x: auto; margin: 16px 0; }
 .fee-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 420px; }
 .fee-table th, .fee-table td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; }
@@ -220,9 +253,16 @@ button {
 <div class="signed-banner">
   <h2>✓ Contract Signed Successfully</h2>
   <p>Your Agent Referral and Commission Agreement has been recorded.</p>
+  <?php if ($linkedUsername !== ''): ?>
+  <p>Your agent login username is <strong><?= htmlspecialchars($linkedUsername) ?></strong>.
+    Sign in at <a href="admin-login.php">admin login</a> with the password you set.</p>
+  <?php endif; ?>
   <div class="signed-actions">
     <a class="btn-dl" href="download-agent-contract.php?token=<?= urlencode($token) ?>">Download Signed PDF</a>
     <a class="btn-view" href="download-agent-contract.php?token=<?= urlencode($token) ?>&amp;inline=1" target="_blank" rel="noopener">View PDF</a>
+    <?php if ($linkedUsername !== ''): ?>
+    <a class="btn-view" href="admin-login.php">Go to login</a>
+    <?php endif; ?>
   </div>
 </div>
 <?php endif; ?>
@@ -237,7 +277,10 @@ button {
   <div class="contract-body">
     <?php if (!$isSigned): ?>
     <div class="notice">
-      Please read this Agreement carefully. By signing electronically below, you acknowledge that you fully understand and voluntarily accept all terms and conditions contained herein.
+      Please read this Agreement carefully. Complete every field in Agent / Staff details, then sign electronically below. By signing, you acknowledge that you fully understand and voluntarily accept all terms and conditions contained herein.
+      <?php if ($needsAccount): ?>
+      Signing also creates your <strong>agent account</strong> so you can log in to the system.
+      <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -254,30 +297,91 @@ button {
 
     <div class="agent-form">
       <h3>Agent / Staff details</h3>
+      <?php if ($needsAccount && !$isSigned): ?>
+      <div class="account-note">
+        You are not yet in the system. Fill in all of your details below, choose a username and password, then sign.
+        After submission your agent record is created automatically and you can log in.
+      </div>
+      <?php endif; ?>
       <div class="form-row">
         <label for="agent_name">Full legal / business name *</label>
         <input type="text" id="agent_name" value="<?= htmlspecialchars($isSigned ? $signedAgentName : $display['name']) ?>" placeholder="Enter full legal or business name" <?= $ro ?>>
       </div>
-      <div class="form-row">
-        <label for="agent_email">Email (notices) *</label>
-        <input type="email" id="agent_email" value="<?= htmlspecialchars($display['email']) ?>" placeholder="email@example.com" <?= $ro ?>>
-      </div>
-      <div class="form-row">
-        <label for="agent_phone">Phone</label>
-        <input type="text" id="agent_phone" value="<?= htmlspecialchars($display['phone']) ?>" <?= $ro ?>>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label for="agent_email">Email (notices) *</label>
+          <input type="email" id="agent_email" value="<?= htmlspecialchars($display['email']) ?>" placeholder="email@example.com" <?= $ro ?>>
+        </div>
+        <div class="form-row">
+          <label for="agent_phone">Phone *</label>
+          <input type="text" id="agent_phone" value="<?= htmlspecialchars($display['phone']) ?>" placeholder="Phone / WhatsApp" <?= $ro ?>>
+        </div>
       </div>
       <div class="form-row">
         <label for="agent_address">Address *</label>
         <textarea id="agent_address" rows="2" placeholder="Physical / business address" <?= $ro ?>><?= htmlspecialchars($display['address']) ?></textarea>
       </div>
-      <div class="form-row">
-        <label for="agent_title">Title (if applicable)</label>
-        <input type="text" id="agent_title" value="<?= htmlspecialchars($isSigned ? $signedTitle : $display['title']) ?>" placeholder="Agent / Staff / Director…" <?= $ro ?>>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label for="agent_title">Title (if applicable)</label>
+          <input type="text" id="agent_title" value="<?= htmlspecialchars($isSigned ? $signedTitle : $display['title']) ?>" placeholder="Agent / Staff / Director…" <?= $ro ?>>
+        </div>
+        <div class="form-row">
+          <label for="effective_date">Effective date *</label>
+          <input type="date" id="effective_date" value="<?= htmlspecialchars((string) $effectiveDate) ?>" <?= $ro ?>>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label for="national_id">National ID / passport</label>
+          <input type="text" id="national_id" value="<?= htmlspecialchars($display['national_id']) ?>" placeholder="ID or passport number" <?= $ro ?>>
+        </div>
+        <div class="form-row">
+          <label for="date_of_birth">Date of birth</label>
+          <input type="date" id="date_of_birth" value="<?= htmlspecialchars($display['date_of_birth']) ?>" <?= $ro ?>>
+        </div>
+      </div>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label for="nationality">Nationality</label>
+          <input type="text" id="nationality" value="<?= htmlspecialchars($display['nationality']) ?>" <?= $ro ?>>
+        </div>
+        <div class="form-row">
+          <label for="place_of_birth">Place of birth</label>
+          <input type="text" id="place_of_birth" value="<?= htmlspecialchars($display['place_of_birth']) ?>" <?= $ro ?>>
+        </div>
       </div>
       <div class="form-row">
-        <label for="effective_date">Effective date *</label>
-        <input type="date" id="effective_date" value="<?= htmlspecialchars((string) $effectiveDate) ?>" <?= $ro ?>>
+        <label for="marital_status">Marital status</label>
+        <select id="marital_status" <?= $isSigned ? 'disabled' : '' ?>>
+          <option value="">—</option>
+          <?php foreach (['Single', 'Married', 'Divorced', 'Widowed'] as $ms): ?>
+          <option value="<?= $ms ?>" <?= $display['marital_status'] === $ms ? 'selected' : '' ?>><?= $ms ?></option>
+          <?php endforeach; ?>
+        </select>
       </div>
+      <?php if ($needsAccount || $linkedUsername !== ''): ?>
+      <div class="form-row-2">
+        <div class="form-row">
+          <label for="agent_username"><?= $needsAccount && !$isSigned ? 'Login username *' : 'Login username' ?></label>
+          <input type="text" id="agent_username" value="<?= htmlspecialchars($display['username']) ?>"
+            placeholder="Letters, numbers, . _ -" autocomplete="username"
+            <?= $isSigned || !$needsAccount ? 'readonly' : '' ?>>
+        </div>
+        <?php if ($needsAccount && !$isSigned): ?>
+        <div class="form-row">
+          <label for="agent_password">Login password *</label>
+          <input type="password" id="agent_password" placeholder="At least 8 characters" autocomplete="new-password">
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php if ($needsAccount && !$isSigned): ?>
+      <div class="form-row">
+        <label for="agent_password_confirm">Confirm password *</label>
+        <input type="password" id="agent_password_confirm" placeholder="Re-enter password" autocomplete="new-password">
+      </div>
+      <?php endif; ?>
+      <?php endif; ?>
     </div>
 
     <p>The Company and the Agent are each a &ldquo;Party&rdquo; and together the &ldquo;Parties.&rdquo;</p>
@@ -513,6 +617,7 @@ button {
 
 <script>
 const CONTRACT_TOKEN = <?= json_encode($token) ?>;
+const NEEDS_ACCOUNT = <?= $needsAccount && !$isSigned ? 'true' : 'false' ?>;
 
 const emailInput = document.getElementById('agent_email');
 const noticeEmail = document.getElementById('notice_agent_email');
@@ -616,17 +721,47 @@ if (emailInput && noticeEmail) {
     const agentAddress = (document.getElementById('agent_address')?.value || '').trim();
     const agentTitle = (document.getElementById('agent_title')?.value || '').trim();
     const effectiveDate = (document.getElementById('effective_date')?.value || '').trim();
+    const username = (document.getElementById('agent_username')?.value || '').trim();
+    const password = document.getElementById('agent_password')?.value || '';
+    const passwordConfirm = document.getElementById('agent_password_confirm')?.value || '';
+    const nationalId = (document.getElementById('national_id')?.value || '').trim();
+    const dateOfBirth = (document.getElementById('date_of_birth')?.value || '').trim();
+    const maritalStatus = (document.getElementById('marital_status')?.value || '').trim();
+    const nationality = (document.getElementById('nationality')?.value || '').trim();
+    const placeOfBirth = (document.getElementById('place_of_birth')?.value || '').trim();
     const sigName = inputName.value.trim();
     const signedDate = inputDate.value;
 
-    if (!agentName || !agentEmail || !agentAddress || !effectiveDate) {
-      alert('Please complete name, email, address, and effective date before signing.');
+    if (!agentName || !agentEmail || !agentPhone || !agentAddress || !effectiveDate) {
+      alert('Please complete name, email, phone, address, and effective date before signing.');
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(agentEmail)) {
       alert('Please enter a valid email address.');
       document.getElementById('agent_email')?.focus();
       return;
+    }
+    if (NEEDS_ACCOUNT) {
+      if (!username) {
+        alert('Please choose a login username.');
+        document.getElementById('agent_username')?.focus();
+        return;
+      }
+      if (!/^[a-zA-Z0-9._-]{3,50}$/.test(username)) {
+        alert('Username must be 3–50 characters: letters, numbers, dot, underscore, or hyphen.');
+        document.getElementById('agent_username')?.focus();
+        return;
+      }
+      if (password.length < 8) {
+        alert('Please choose a password of at least 8 characters.');
+        document.getElementById('agent_password')?.focus();
+        return;
+      }
+      if (password !== passwordConfirm) {
+        alert('Password and confirmation do not match.');
+        document.getElementById('agent_password_confirm')?.focus();
+        return;
+      }
     }
     if (!sigName) {
       alert('Please enter your full name before signing.');
@@ -662,15 +797,29 @@ if (emailInput && noticeEmail) {
         agent_title: agentTitle,
         effective_date: effectiveDate,
         signed_date: signedDate,
-        signature: signature
+        signature: signature,
+        username: username,
+        password: password,
+        national_id: nationalId,
+        date_of_birth: dateOfBirth,
+        marital_status: maritalStatus,
+        nationality: nationality,
+        place_of_birth: placeOfBirth
       })
     })
     .then(r => r.json())
     .then(data => {
       if (data.success) {
-        alert(data.pdf_error
-          ? 'Contract signed, but PDF generation had an issue. Reload and try Download.'
-          : 'Contract signed successfully! You can now download your signed agreement.');
+        let msg = 'Contract signed successfully! You can now download your signed agreement.';
+        if (data.account && data.account.created && data.account.username) {
+          msg = 'Contract signed. Your agent account is ready. Username: ' + data.account.username + '. Log in with the password you chose.';
+        } else if (data.account && data.account.existing && data.account.username) {
+          msg = 'Contract signed. This email is already registered. Username: ' + data.account.username + '.';
+        }
+        if (data.pdf_error) {
+          msg += ' PDF generation had an issue — reload and try Download.';
+        }
+        alert(msg);
         window.location.reload();
         return;
       }

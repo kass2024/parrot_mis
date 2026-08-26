@@ -118,13 +118,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($message === null) {
-        if ($form['agent_name'] === '') {
-            $message = 'Please enter the agent/staff full legal name (or business name).';
-            $messageType = 'error';
-        } elseif ($form['agent_email'] === '' || !filter_var($form['agent_email'], FILTER_VALIDATE_EMAIL)) {
-            $message = 'A valid email is required (used for the signing invite and notices).';
-            $messageType = 'error';
-        } elseif ($form['effective_date'] === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $form['effective_date'])) {
+        if ($form['mode'] === 'registered') {
+            if ($form['agent_name'] === '') {
+                $message = 'Please enter the agent/staff full legal name (or business name).';
+                $messageType = 'error';
+            } elseif ($form['agent_email'] === '' || !filter_var($form['agent_email'], FILTER_VALIDATE_EMAIL)) {
+                $message = 'A valid email is required (used for the signing invite and notices).';
+                $messageType = 'error';
+            }
+        } elseif ($form['send_email'] === '1') {
+            if ($form['agent_email'] === '' || !filter_var($form['agent_email'], FILTER_VALIDATE_EMAIL)) {
+                $message = 'A valid email is required to send the signing link.';
+                $messageType = 'error';
+            }
+        }
+        if ($message === null && ($form['effective_date'] === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $form['effective_date']))) {
             $message = 'Please set a valid effective date.';
             $messageType = 'error';
         }
@@ -146,7 +154,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $existing = $stmt->get_result()->fetch_assoc();
             $stmt->close();
         }
-        if (!$existing) {
+        if (!$existing && $form['agent_email'] !== '') {
             $emailLookup = $form['agent_email'];
             $stmt = $conn->prepare("
                 SELECT id, contract_token, status
@@ -267,7 +275,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         if ($contractLink && $form['send_email'] === '1') {
-            $safeName = htmlspecialchars($form['agent_name'], ENT_QUOTES, 'UTF-8');
+            $safeName = htmlspecialchars($form['agent_name'] !== '' ? $form['agent_name'] : 'Agent', ENT_QUOTES, 'UTF-8');
             $safeLink = htmlspecialchars($contractLink, ENT_QUOTES, 'UTF-8');
             $effDisp  = htmlspecialchars(date('F j, Y', strtotime($form['effective_date'])), ENT_QUOTES, 'UTF-8');
             $body = "
@@ -275,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p><strong>Parrot Canada Visa Consultant Co. Ltd.</strong></p>
     <p>Dear {$safeName},</p>
     <p>You have been invited to review and electronically sign the <strong>Agent Referral and Commission Agreement</strong> (effective {$effDisp}).</p>
-    <p>Your details have been pre-filled where available. Please open the secure link below, confirm or complete any missing information, draw your signature, and submit:</p>
+    <p>Please open the secure link below, complete all of your details (including a username and password), draw your signature, and submit. Signing will create your agent account in our system.</p>
     <p style='margin:24px 0'><a href=\"{$safeLink}\" style='display:inline-block;background:#427431;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600'>Open &amp; Sign Agreement</a></p>
     <p style='font-size:12px;color:#555;word-break:break-all'>Or copy this link:<br>{$safeLink}</p>
     <p>If you have questions, reply to this email or contact <a href='mailto:admission@visaconsultantcanada.com'>admission@visaconsultantcanada.com</a>.</p>
@@ -364,7 +372,7 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
 <main class="container">
     <div style="text-align:center;margin-bottom:10px;font-size:12px;font-weight:600;color:var(--primary);">AGENT REFERRAL &amp; COMMISSION</div>
     <h1>Issue Agent Contract</h1>
-    <p class="subtitle">Send a prefilled signing link to registered staff/agents, or create a link for someone not yet in the system.</p>
+    <p class="subtitle">Send a signing link to registered staff/agents, or issue a blank link so an unregistered person can fill in their own details and be added as an agent.</p>
 
     <?php if ($message): ?>
         <div class="alert alert-<?= $messageType === 'error' ? 'error' : 'success' ?>"><?= htmlspecialchars($message) ?></div>
@@ -405,13 +413,17 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
             <p class="hint">Missing people? Add them under Staff Management, or use “Not registered”.</p>
         </div>
 
+        <p class="hint" id="externalHint" style="display:none;margin:-6px 0 16px;">
+            Leave name and contact blank if you want — they will complete everything on the signing page, including username and password. Their agent account is created when they submit. Email is only required if you click “Issue &amp; Email Link”.
+        </p>
+
         <div class="form-row-2">
             <div class="form-group">
-                <label for="agent_name">Full legal / business name *</label>
+                <label for="agent_name" id="label_agent_name">Full legal / business name *</label>
                 <input type="text" name="agent_name" id="agent_name" required value="<?= htmlspecialchars($form['agent_name']) ?>" placeholder="Name as it should appear on the contract">
             </div>
             <div class="form-group">
-                <label for="agent_email">Email *</label>
+                <label for="agent_email" id="label_agent_email">Email *</label>
                 <input type="email" name="agent_email" id="agent_email" required value="<?= htmlspecialchars($form['agent_email']) ?>" placeholder="signatory@email.com">
             </div>
         </div>
@@ -450,8 +462,8 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
         <input type="hidden" name="send_email" id="send_email_flag" value="<?= $form['send_email'] === '1' ? '1' : '0' ?>">
 
         <div class="btn-row">
-            <button class="btn btn-secondary" type="submit" onclick="document.getElementById('send_email_flag').value='0'">Issue &amp; Copy Link</button>
-            <button class="btn" type="submit" onclick="document.getElementById('send_email_flag').value='1'">Issue &amp; Email Link</button>
+            <button class="btn btn-secondary" type="submit" onclick="setSendEmail('0')">Issue &amp; Copy Link</button>
+            <button class="btn" type="submit" onclick="setSendEmail('1')">Issue &amp; Email Link</button>
         </div>
     </form>
 
@@ -470,8 +482,33 @@ const STAFF = <?= json_encode($staffJson, JSON_UNESCAPED_UNICODE) ?>;
 function toggleMode() {
   const mode = document.querySelector('input[name="mode"]:checked')?.value || 'registered';
   document.getElementById('registeredBlock').style.display = mode === 'registered' ? 'block' : 'none';
+  const name = document.getElementById('agent_name');
+  const email = document.getElementById('agent_email');
+  const hint = document.getElementById('externalHint');
+  const nameLabel = document.getElementById('label_agent_name');
+  const emailLabel = document.getElementById('label_agent_email');
   if (mode === 'external') {
     document.getElementById('agent_type').value = 'external';
+    name.required = false;
+    email.required = false;
+    if (hint) hint.style.display = 'block';
+    if (nameLabel) nameLabel.textContent = 'Full legal / business name (optional)';
+    if (emailLabel) emailLabel.textContent = 'Email (needed only to email the link)';
+  } else {
+    name.required = true;
+    email.required = true;
+    if (hint) hint.style.display = 'none';
+    if (nameLabel) nameLabel.textContent = 'Full legal / business name *';
+    if (emailLabel) emailLabel.textContent = 'Email *';
+  }
+}
+
+function setSendEmail(v) {
+  document.getElementById('send_email_flag').value = v;
+  const mode = document.querySelector('input[name="mode"]:checked')?.value || 'registered';
+  const email = document.getElementById('agent_email');
+  if (mode === 'external') {
+    email.required = v === '1';
   }
 }
 
