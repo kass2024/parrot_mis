@@ -16,8 +16,12 @@ if ($card === 'employment') {
     require_once __DIR__ . '/helpers/employment_opportunities_schema.php';
     eo_ensure_schema($conn);
 }
+if ($card === 'korea_event') {
+    require_once __DIR__ . '/helpers/korea_event_schema.php';
+    kep_ensure_schema($conn);
+}
 
-$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie', 'employment'];
+$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie', 'employment', 'korea_event'];
 if (!in_array($card, $allowedCards, true)) {
     echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);
     exit;
@@ -34,6 +38,7 @@ $cardSearchConfig = [
     'medical'      => ['table' => 'canada_medical_exams_requests','order' => 'created_at DESC, id DESC',    'has_submitted_at' => false, 'created_col' => 'created_at'],
     'francophonie' => ['table' => 'francophonie_mobility_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
     'employment'   => ['table' => 'employment_opportunities_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'korea_event'  => ['table' => 'korea_event_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
 ];
 
 if ($action === 'search') {
@@ -304,6 +309,21 @@ switch ($card) {
             exit;
         }
         $redirect = 'employment-opportunities-request.php';
+        $summary  = $name !== '' ? $name : $userId;
+        break;
+
+    case 'korea_event':
+        [$ok, $name] = row_found(
+            $conn,
+            'SELECT first_name, last_name, email FROM korea_event_applications WHERE user_id = ? LIMIT 1',
+            's',
+            $userId
+        );
+        if (!$ok) {
+            echo json_encode(['status' => 'error', 'message' => 'No South Korea Event Participation application found for this user ID.']);
+            exit;
+        }
+        $redirect = 'korea-event-participation-request.php?id=' . rawurlencode($userId);
         $summary  = $name !== '' ? $name : $userId;
         break;
 }

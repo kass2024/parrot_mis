@@ -15,6 +15,8 @@ if (isset($_GET['lang']) && array_key_exists($_GET['lang'], $available_languages
 $current_lang = $_SESSION['current_language'];
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/korea_event_schema.php';
+kep_ensure_schema($conn);
 require_once __DIR__ . '/includes/testimonials_lib.php';
 $home_testimonials = pcvc_get_published_testimonials($conn, 6);
 
@@ -284,6 +286,15 @@ $index_translations = [
         'card9_point5' => 'Logistics',
         'card9_point6' => 'Installation Works',
         'card9_point7' => 'Tiling Works',
+
+        // Card 10: South Korea Event Participation
+        'card10_title' => 'SOUTH KOREA EVENT PARTICIPATION FORM',
+        'card10_subtitle' => 'Event registration and documentation support',
+        'card10_description' => 'Register to attend the South Korea event. Submit your basic details together with your passport scan and CV for documentation review.',
+        'card10_point1' => 'Passport attachment',
+        'card10_point2' => 'CV / resume upload',
+        'card10_point3' => 'Personal and event details',
+        'card10_point4' => 'Email confirmation with reference ID',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -556,6 +567,15 @@ $index_translations = [
         'card9_point5' => 'Logistique',
         'card9_point6' => 'Travaux d\'installation',
         'card9_point7' => 'Travaux de carrelage',
+
+        // Card 10: South Korea Event Participation
+        'card10_title' => 'FORMULAIRE DE PARTICIPATION — ÉVÉNEMENT CORÉE DU SUD',
+        'card10_subtitle' => 'Inscription à l\'événement et soutien documentaire',
+        'card10_description' => 'Inscrivez-vous à l\'événement en Corée du Sud. Envoyez vos informations de base, le scan du passeport et le CV pour examen.',
+        'card10_point1' => 'Pièce jointe passeport',
+        'card10_point2' => 'Téléversement du CV',
+        'card10_point3' => 'Informations personnelles et événement',
+        'card10_point4' => 'Confirmation par e-mail avec référence',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -629,6 +649,12 @@ $cardRetrievalMeta = [
         'table_label' => 'employment_opportunities_applications',
         'placeholder' => 'eo_…',
         'example'     => 'eo_a1b2c3d4e5f6_1719150000',
+    ],
+    'korea_event' => [
+        'service'     => $current_lang === 'fr' ? 'Participation événement Corée du Sud' : 'South Korea Event Participation',
+        'table_label' => 'korea_event_applications',
+        'placeholder' => 'kep_…',
+        'example'     => 'kep_a1b2c3d4e5f6_1719150000',
     ],
 ];
 
@@ -731,6 +757,21 @@ $cards = [
         ],
         'form' => 'employment-opportunities-request.php',
         'color' => '#1e4d2b'
+    ],
+    [
+        'id' => 'korea_event',
+        'icon' => '🇰🇷',
+        'title_key' => 'card10_title',
+        'subtitle_key' => 'card10_subtitle',
+        'description_key' => 'card10_description',
+        'points_keys' => [
+            'card10_point1',
+            'card10_point2',
+            'card10_point3',
+            'card10_point4',
+        ],
+        'form' => 'korea-event-participation-request.php',
+        'color' => '#CD2E3A'
     ]
 ];
 
@@ -2325,6 +2366,7 @@ body.card-only-mode {
         case 'medical':
         case 'francophonie':
         case 'employment':
+        case 'korea_event':
           targetUrl = form;
           break;
         default:

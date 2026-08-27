@@ -6,10 +6,12 @@ require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 require_once __DIR__ . '/helpers/university_admins_schema.php';
 require_once __DIR__ . '/helpers/korea_invitation_contract_schema.php';
+require_once __DIR__ . '/helpers/korea_event_schema.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
 pcvc_ensure_university_admins_schema($conn);
 kic_contract_ensure_schema($conn);
+kep_ensure_schema($conn);
 
 $admin_id = $_SESSION['id'] ?? null;
 if (!$admin_id || !isset($_SESSION['role'])) {
@@ -383,6 +385,13 @@ $cards = [
       'admin-korea-invitation-contracts.php' => 'View Korea invitation contracts',
     ]
   ],
+  'korea_event_participation' => [
+    'title' => 'South Korea Event Participation',
+    'icon' => 'bi-flag',
+    'links' => [
+      'korea-event-applications.php' => 'View Applications',
+    ]
+  ],
   'agent_contracts' => [
     'title' => 'Agent Contract',
     'icon' => 'bi-person-badge',
@@ -406,7 +415,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts', 'agent_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts', 'korea_event_participation', 'agent_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -414,7 +423,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -2409,6 +2418,40 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('admin-partner-contracts.php', 'View Partner Contracts')">
           <i class="bi bi-files"></i>
           View partner contracts
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('korea_event_participation', $allowedSidebarItems)): ?>
+      <a href="#korea_event_participation" class="sidebar-link" onclick="toggleSidebarMenu('korea_event_participation')">
+        <i class="bi bi-flag"></i>
+        <span>South Korea Event Participation</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_korea_event_participation">
+        <a href="#" onclick="loadInFrame('korea-event-applications.php', 'South Korea Event Participation')">
+          <i class="bi bi-list-ul"></i>
+          View Applications
+        </a>
+        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=pending', 'Pending')">
+          <i class="bi bi-clock"></i>
+          Pending
+        </a>
+        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=under_review', 'Under Review')">
+          <i class="bi bi-eye"></i>
+          Under Review
+        </a>
+        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=approved', 'Approved')">
+          <i class="bi bi-check-circle"></i>
+          Approved
+        </a>
+        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=rejected', 'Rejected')">
+          <i class="bi bi-x-circle"></i>
+          Rejected
+        </a>
+        <a href="#" onclick="window.open('korea-event-participation-request.php', '_blank')">
+          <i class="bi bi-box-arrow-up-right"></i>
+          Open public form
         </a>
       </div>
       <?php endif; ?>
