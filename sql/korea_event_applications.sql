@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS `korea_event_applications` (
   `passport_file` varchar(255) NOT NULL,
   `cv_file` varchar(255) NOT NULL,
   `status` enum('pending','under_review','approved','rejected') NOT NULL DEFAULT 'pending',
+  `source` varchar(20) NOT NULL DEFAULT 'public',
+  `created_by_admin_id` int(11) DEFAULT NULL,
   `admin_notes` text DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),

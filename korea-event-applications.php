@@ -51,6 +51,136 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 
     $action = (string) ($_POST['action'] ?? '');
+
+    if ($action === 'register_application') {
+        $full_name = trim((string) ($_POST['full_name'] ?? ''));
+        $date_of_birth = trim((string) ($_POST['date_of_birth'] ?? ''));
+        $gender = strtolower(trim((string) ($_POST['gender'] ?? '')));
+        $nationality = trim((string) ($_POST['nationality'] ?? ''));
+        $country_of_residence = trim((string) ($_POST['country_of_residence'] ?? ''));
+        $passport_number = strtoupper(trim((string) ($_POST['passport_number'] ?? '')));
+        $phone_area_code = preg_replace('/\D+/', '', (string) ($_POST['phone_area_code'] ?? '')) ?? '';
+        $phone_number = preg_replace('/\D+/', '', (string) ($_POST['phone_number'] ?? '')) ?? '';
+        $messaging_app = strtolower(trim((string) ($_POST['messaging_app'] ?? 'whatsapp')));
+        $occupation = trim((string) ($_POST['occupation'] ?? ''));
+        $organization = trim((string) ($_POST['organization'] ?? ''));
+        $event_name = trim((string) ($_POST['event_name'] ?? ''));
+        if ($event_name === '') {
+            $event_name = 'South Korea Event';
+        }
+        $participation_purpose = trim((string) ($_POST['participation_purpose'] ?? ''));
+        $emailRaw = trim((string) ($_POST['email'] ?? ''));
+        $email = filter_var($emailRaw, FILTER_VALIDATE_EMAIL);
+        $passport_file = kep_normalize_rel_path((string) ($_POST['passport_file'] ?? ''));
+        $cv_file = kep_normalize_rel_path((string) ($_POST['cv_file'] ?? ''));
+
+        $allowedGenders = array_keys(kep_gender_options());
+        $missing = [];
+        if ($full_name === '') {
+            $missing[] = 'Full Name';
+        }
+        if ($date_of_birth === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $date_of_birth)) {
+            $missing[] = 'Date of Birth';
+        }
+        if (!in_array($gender, $allowedGenders, true)) {
+            $missing[] = 'Gender';
+        }
+        if ($nationality === '') {
+            $missing[] = 'Nationality';
+        }
+        if ($country_of_residence === '') {
+            $missing[] = 'Country of Residence';
+        }
+        if ($passport_number === '') {
+            $missing[] = 'Passport Number';
+        }
+        if (!$email) {
+            $missing[] = 'Valid Email';
+        }
+        if ($phone_number === '') {
+            $missing[] = 'Phone Number';
+        }
+        if (!in_array($messaging_app, ['whatsapp', 'telegram'], true)) {
+            $missing[] = 'Telegram or WhatsApp';
+        }
+        if ($occupation === '') {
+            $missing[] = 'Occupation';
+        }
+        if ($passport_file === '' || !kep_validate_stored_path($passport_file)) {
+            $missing[] = 'Passport Scan';
+        }
+        if ($cv_file === '' || !kep_validate_stored_path($cv_file)) {
+            $missing[] = 'CV / Resume';
+        }
+        if ($missing !== []) {
+            $respond(false, [
+                'message' => 'Please complete the required fields: ' . implode(', ', array_values(array_unique($missing))),
+                'missing' => array_values(array_unique($missing)),
+            ], 422);
+        }
+
+        $user_id = 'kep_admin_' . bin2hex(random_bytes(6)) . '_' . time();
+        $reference_id = 'KEP' . date('Y') . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+        $nameParts = preg_split('/\s+/', $full_name, 2) ?: [$full_name];
+        $first_name = $nameParts[0] ?? $full_name;
+        $last_name = $nameParts[1] ?? '';
+        $emailStore = strtolower((string) $email);
+        $source = 'admin';
+        $created_by = (int) $adminId;
+        $admin_notes = 'Registered from dashboard. No email sent.';
+
+        $sql = 'INSERT INTO korea_event_applications (
+            user_id, reference_id, full_name, first_name, last_name, date_of_birth, gender,
+            nationality, country_of_residence, passport_number, email,
+            phone_area_code, phone_number, messaging_app, occupation, organization,
+            event_name, participation_purpose, passport_file, cv_file, status, source,
+            created_by_admin_id, admin_notes, created_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,"pending",?,?,?,NOW())';
+
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) {
+            $respond(false, ['message' => 'Database error'], 500);
+        }
+        $stmt->bind_param(
+            'sssssssssssssssssssssis',
+            $user_id,
+            $reference_id,
+            $full_name,
+            $first_name,
+            $last_name,
+            $date_of_birth,
+            $gender,
+            $nationality,
+            $country_of_residence,
+            $passport_number,
+            $emailStore,
+            $phone_area_code,
+            $phone_number,
+            $messaging_app,
+            $occupation,
+            $organization,
+            $event_name,
+            $participation_purpose,
+            $passport_file,
+            $cv_file,
+            $source,
+            $created_by,
+            $admin_notes
+        );
+        if (!$stmt->execute()) {
+            $err = $conn->error;
+            $stmt->close();
+            $respond(false, ['message' => 'Could not save application' . ($err !== '' ? ': ' . $err : '')], 500);
+        }
+        $stmt->close();
+
+        // Office registration: do not email the applicant or the office.
+        $respond(true, [
+            'message' => 'Applicant registered. No email was sent.',
+            'reference_id' => $reference_id,
+        ]);
+    }
+
     $appId  = isset($_POST['application_id']) ? (int) $_POST['application_id'] : 0;
     if ($appId <= 0) {
         $respond(false, ['message' => 'Invalid application ID']);
@@ -162,6 +292,8 @@ function kep_status_badge(string $s): string
     return 'badge-' . preg_replace('/[^a-z_]/', '', $s);
 }
 
+$genders = kep_gender_options();
+
 $viewModel = [];
 foreach ($apps as $a) {
     $passportRel = pcvc_norm_upload_rel_path((string) ($a['passport_file'] ?? ''));
@@ -190,6 +322,7 @@ foreach ($apps as $a) {
         'event_name'    => $a['event_name'] ?? '',
         'purpose'       => $a['participation_purpose'] ?? '',
         'status'        => $a['status'] ?? 'pending',
+        'source'        => $a['source'] ?? 'public',
         'notes'         => $a['admin_notes'] ?? '',
         'created'       => !empty($a['created_at']) ? date('M j, Y H:i', strtotime($a['created_at'])) : '',
         'passport_view' => $passportRel !== '' ? pcvc_secure_file_url($passportRel, ['inline' => true]) : '',
@@ -223,6 +356,20 @@ foreach ($apps as $a) {
         .badge-under_review { background:#dbeafe; color:#1e40af; }
         .badge-approved { background:#d1fae5; color:#065f46; }
         .badge-rejected { background:#fee2e2; color:#991b1b; }
+        .badge-admin { background:#e0e7ff; color:#3730a3; }
+        .upload-zone {
+            border: 2px dashed #cbd5e1; border-radius: 10px;
+            padding: 0.85rem 0.7rem; text-align: center;
+            cursor: pointer; background: #fafafa;
+        }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--kep-blue); background: #f0f9ff; }
+        .file-chip {
+            display: flex; align-items: center; justify-content: space-between; gap: .5rem;
+            background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+            padding: .5rem .7rem; margin-top: .45rem; font-size: .86rem;
+        }
+        .reg-label { font-weight: 600; font-size: .9rem; margin-bottom: .3rem; display: block; }
+        .reg-label.required::after { content: " *"; color: var(--kep-red); }
         .app-card {
             background:#fff; border:1px solid #e2e8f0; border-radius:12px;
             padding:1rem; margin-bottom:.75rem; box-shadow:0 1px 4px rgba(0,0,0,.04);
@@ -242,8 +389,15 @@ foreach ($apps as $a) {
 <body>
 <div class="page-head">
     <div class="container-fluid px-3 px-md-4">
-        <h1 class="h4 h3-md mb-1"><i class="fas fa-flag me-2"></i>South Korea Event Participation</h1>
-        <p class="mb-0 opacity-75 small">Review applications, passport scans, and CVs</p>
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div>
+                <h1 class="h4 h3-md mb-1"><i class="fas fa-flag me-2"></i>South Korea Event Participation</h1>
+                <p class="mb-0 opacity-75 small">Review applications, passport scans, and CVs</p>
+            </div>
+            <button type="button" class="btn btn-light fw-semibold" data-bs-toggle="modal" data-bs-target="#registerModal">
+                <i class="fas fa-user-plus me-1"></i> Register applicant
+            </button>
+        </div>
     </div>
 </div>
 
@@ -254,6 +408,8 @@ foreach ($apps as $a) {
         Optional: set <code>KOREA_EVENT_NOTIFY_EMAIL</code> in <code>.env</code> to receive new applications with passport and CV attached.
     </div>
     <?php endif; ?>
+
+    <p class="small text-muted mb-3">Office registration is saved to this list only. No confirmation email is sent to the applicant or the office.</p>
 
     <div class="row g-2 g-md-3 mb-3">
         <div class="col-6 col-md-3"><div class="stat-card"><strong><?= $counts['total'] ?></strong><span class="small text-muted">Total</span></div></div>
@@ -294,6 +450,9 @@ foreach ($apps as $a) {
                 <div class="meta mb-2">
                     <?= htmlspecialchars((string) $a['email']) ?><br>
                     <?= htmlspecialchars((string) $a['event_name']) ?> · <?= date('M j, Y', strtotime((string) $a['created_at'])) ?>
+                    <?php if (($a['source'] ?? '') === 'admin'): ?>
+                        · <span class="badge badge-admin">Office</span>
+                    <?php endif; ?>
                 </div>
                 <button class="btn btn-outline-primary btn-sm w-100" onclick="viewApp(<?= (int)$a['id'] ?>)">
                     <i class="fas fa-eye me-1"></i> View &amp; manage
@@ -324,6 +483,9 @@ foreach ($apps as $a) {
                         <td>
                             <div class="fw-semibold"><?= htmlspecialchars((string) $a['full_name']) ?></div>
                             <div class="small text-muted"><?= htmlspecialchars((string) $a['email']) ?></div>
+                            <?php if (($a['source'] ?? '') === 'admin'): ?>
+                            <span class="badge badge-admin">Office</span>
+                            <?php endif; ?>
                         </td>
                         <td class="small"><?= htmlspecialchars((string) $a['event_name']) ?></td>
                         <td><span class="badge <?= kep_status_badge((string) $a['status']) ?>"><?= ucwords(str_replace('_',' ',(string) $a['status'])) ?></span></td>
@@ -341,6 +503,135 @@ foreach ($apps as $a) {
                 <?php endforeach; endif; ?>
                 </tbody>
             </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="registerModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-fullscreen-md-down">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-user-plus me-2"></i>Register applicant</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info py-2 small mb-3">
+                    This office registration is saved here only. <strong>No email is sent.</strong>
+                </div>
+                <form id="registerForm" novalidate>
+                    <input type="hidden" name="passport_file" id="reg_passport_file" value="">
+                    <input type="hidden" name="cv_file" id="reg_cv_file" value="">
+                    <div class="mb-3">
+                        <label class="reg-label required" for="reg_full_name">Full name</label>
+                        <input type="text" class="form-control" id="reg_full_name" name="full_name" required maxlength="200" placeholder="As on passport">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="reg-label required" for="reg_dob">Date of birth</label>
+                            <input type="date" class="form-control" id="reg_dob" name="date_of_birth" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="reg-label required" for="reg_passport_number">Passport number</label>
+                            <input type="text" class="form-control" id="reg_passport_number" name="passport_number" required maxlength="64">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="reg-label required">Gender</label>
+                        <div class="d-flex flex-wrap gap-2">
+                            <?php $gi = 0; foreach ($genders as $key => $label): $gi++; ?>
+                            <label class="border rounded px-3 py-2 mb-0" style="cursor:pointer">
+                                <input type="radio" name="gender" value="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>" <?= $gi === 1 ? 'checked' : '' ?>>
+                                <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?>
+                            </label>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="reg-label required" for="reg_nationality">Nationality</label>
+                            <input type="text" class="form-control" id="reg_nationality" name="nationality" required maxlength="100">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="reg-label required" for="reg_residence">Country of residence</label>
+                            <input type="text" class="form-control" id="reg_residence" name="country_of_residence" required maxlength="100">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="reg-label required" for="reg_email">Email</label>
+                        <input type="email" class="form-control" id="reg_email" name="email" required maxlength="150" placeholder="For the record only — not emailed">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-4">
+                            <label class="reg-label required" for="reg_area">Country code</label>
+                            <input type="text" class="form-control" id="reg_area" name="phone_area_code" required maxlength="6" value="250" placeholder="250">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="reg-label required" for="reg_phone">Phone number</label>
+                            <input type="tel" class="form-control" id="reg_phone" name="phone_number" required maxlength="20" placeholder="Without country code">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="reg-label required">Preferred app</label>
+                        <div class="d-flex gap-2">
+                            <label class="border rounded px-3 py-2 mb-0" style="cursor:pointer">
+                                <input type="radio" name="messaging_app" value="whatsapp" checked> WhatsApp
+                            </label>
+                            <label class="border rounded px-3 py-2 mb-0" style="cursor:pointer">
+                                <input type="radio" name="messaging_app" value="telegram"> Telegram
+                            </label>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="reg-label required" for="reg_event">Event / program name</label>
+                        <input type="text" class="form-control" id="reg_event" name="event_name" required maxlength="200" value="South Korea Event">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="reg-label required" for="reg_occupation">Occupation</label>
+                            <input type="text" class="form-control" id="reg_occupation" name="occupation" required maxlength="150">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="reg-label" for="reg_org">Organization</label>
+                            <input type="text" class="form-control" id="reg_org" name="organization" maxlength="150">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="reg-label" for="reg_purpose">Purpose of participation</label>
+                        <textarea class="form-control" id="reg_purpose" name="participation_purpose" maxlength="1500" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="reg-label required">Passport scan</label>
+                        <div class="upload-zone" id="regPassportZone" role="button" tabindex="0">
+                            <div id="regPassportZoneInner">
+                                <i class="fas fa-cloud-upload-alt mb-1 text-secondary"></i>
+                                <div>Tap to upload passport</div>
+                                <div class="small text-muted">PDF, JPG, PNG, WEBP, DOC — max 15MB</div>
+                            </div>
+                        </div>
+                        <input type="file" id="regPassportInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf" hidden>
+                        <div id="regPassportPreview"></div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="reg-label required">CV / Resume</label>
+                        <div class="upload-zone" id="regCvZone" role="button" tabindex="0">
+                            <div id="regCvZoneInner">
+                                <i class="fas fa-cloud-upload-alt mb-1 text-secondary"></i>
+                                <div>Tap to upload CV</div>
+                                <div class="small text-muted">PDF or Word preferred — max 15MB</div>
+                            </div>
+                        </div>
+                        <input type="file" id="regCvInput" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,image/*,application/pdf" hidden>
+                        <div id="regCvPreview"></div>
+                    </div>
+                    <div id="regError" class="text-danger small mt-3" style="display:none"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="regSubmitBtn">
+                    <i class="fas fa-save me-1"></i> Save without sending email
+                </button>
+            </div>
         </div>
     </div>
 </div>
@@ -393,6 +684,7 @@ function viewApp(id) {
         + '<tr><td>Occupation</td><td>' + esc(a.occupation) + '</td></tr>'
         + '<tr><td>Organization</td><td>' + esc(a.organization) + '</td></tr>'
         + '<tr><td>Event</td><td>' + esc(a.event_name) + '</td></tr>'
+        + '<tr><td>Registered via</td><td>' + (a.source === 'admin' ? 'Office (no email)' : 'Public form') + '</td></tr>'
         + purpose
         + '<tr><td>Submitted</td><td>' + esc(a.created) + '</td></tr>'
         + notes
@@ -467,10 +759,128 @@ function postAction(data) {
                         : 'Server returned an invalid response. Please refresh and try again.'
                 );
             }
-            if (!d.success) throw new Error(d.message || 'Request failed');
+            if (!d.success) {
+                let msg = d.message || 'Request failed';
+                if (Array.isArray(d.missing) && d.missing.length) {
+                    msg += ': ' + d.missing.join(', ');
+                }
+                throw new Error(msg);
+            }
             return d;
         });
 }
+
+function uploadAdminFile(file, field, onProgress) {
+    return new Promise((resolve, reject) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('field', field);
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', 'korea_event_upload.php');
+        xhr.timeout = 120000;
+        if (xhr.upload && typeof onProgress === 'function') {
+            xhr.upload.onprogress = (ev) => {
+                if (ev.lengthComputable && ev.total > 0) onProgress(Math.round((ev.loaded / ev.total) * 100));
+            };
+        }
+        xhr.onload = () => {
+            let data;
+            try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { reject(new Error('Upload failed')); return; }
+            if (!data.success) { reject(new Error(data.message || 'Upload failed')); return; }
+            resolve(data);
+        };
+        xhr.ontimeout = () => reject(new Error('Upload timed out'));
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+        xhr.send(fd);
+    });
+}
+
+function setRegFile(hiddenId, previewId, path, name) {
+    document.getElementById(hiddenId).value = path || '';
+    const box = document.getElementById(previewId);
+    if (!path) { box.innerHTML = ''; return; }
+    const clearId = 'clr_' + hiddenId;
+    box.innerHTML = '<div class="file-chip"><span><i class="fas fa-file me-1"></i>' + esc(name || 'File') + '</span>'
+        + '<button type="button" class="btn btn-sm btn-outline-danger" id="' + clearId + '">Remove</button></div>';
+    document.getElementById(clearId)?.addEventListener('click', () => setRegFile(hiddenId, previewId, '', ''));
+}
+
+function wireRegZone(zoneId, inputId, field, hiddenId, previewId, innerId) {
+    const zone = document.getElementById(zoneId);
+    const input = document.getElementById(inputId);
+    const inner = document.getElementById(innerId);
+    const open = () => input.click();
+    zone.addEventListener('click', open);
+    zone.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    });
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files?.length) handle(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', () => {
+        if (input.files?.length) handle(input.files[0]);
+        input.value = '';
+    });
+    async function handle(file) {
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+            alert('File too large (max 15MB)');
+            return;
+        }
+        const defaultHtml = inner.innerHTML;
+        inner.innerHTML = '<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ' + esc(file.name) + '…</span>';
+        try {
+            const res = await uploadAdminFile(file, field, (pct) => {
+                inner.innerHTML = '<span class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading ' + esc(file.name) + '… ' + pct + '%</span>';
+            });
+            inner.innerHTML = defaultHtml;
+            setRegFile(hiddenId, previewId, res.file_path, res.original_name || file.name);
+        } catch (err) {
+            inner.innerHTML = '<span class="text-danger">' + esc(err.message) + '</span>';
+            setTimeout(() => { inner.innerHTML = defaultHtml; }, 3500);
+        }
+    }
+}
+
+wireRegZone('regPassportZone', 'regPassportInput', 'passport', 'reg_passport_file', 'regPassportPreview', 'regPassportZoneInner');
+wireRegZone('regCvZone', 'regCvInput', 'cv', 'reg_cv_file', 'regCvPreview', 'regCvZoneInner');
+
+if (new URLSearchParams(window.location.search).get('register') === '1') {
+    new bootstrap.Modal(document.getElementById('registerModal')).show();
+}
+
+document.getElementById('regSubmitBtn').addEventListener('click', async () => {
+    const errEl = document.getElementById('regError');
+    const btn = document.getElementById('regSubmitBtn');
+    errEl.style.display = 'none';
+    const form = document.getElementById('registerForm');
+    const email = String(document.getElementById('reg_email').value || '').trim();
+    if (!form.full_name.value.trim()) { errEl.textContent = 'Please enter the full name.'; errEl.style.display = 'block'; return; }
+    if (!document.getElementById('reg_dob').value) { errEl.textContent = 'Please enter date of birth.'; errEl.style.display = 'block'; return; }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { errEl.textContent = 'Please enter a valid email (kept on file; not emailed).'; errEl.style.display = 'block'; return; }
+    if (!document.getElementById('reg_phone').value.trim()) { errEl.textContent = 'Please enter a phone number.'; errEl.style.display = 'block'; return; }
+    if (!document.getElementById('reg_passport_file').value) { errEl.textContent = 'Please upload the passport scan.'; errEl.style.display = 'block'; return; }
+    if (!document.getElementById('reg_cv_file').value) { errEl.textContent = 'Please upload the CV.'; errEl.style.display = 'block'; return; }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving…';
+    const fd = new FormData(form);
+    fd.append('action', 'register_application');
+    try {
+        const d = await postAction(Object.fromEntries(fd.entries()));
+        alert((d.message || 'Registered.') + (d.reference_id ? '\nReference: ' + d.reference_id : ''));
+        location.reload();
+    } catch (e) {
+        errEl.textContent = e.message || 'Could not register applicant.';
+        errEl.style.display = 'block';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save me-1"></i> Save without sending email';
+    }
+});
 </script>
 </body>
 </html>

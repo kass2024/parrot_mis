@@ -390,6 +390,7 @@ $cards = [
     'icon' => 'bi-flag',
     'links' => [
       'korea-event-applications.php' => 'View Applications',
+      'korea-event-applications.php?register=1' => 'Register applicant',
     ]
   ],
   'agent_contracts' => [
@@ -2432,6 +2433,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <a href="#" onclick="loadInFrame('korea-event-applications.php', 'South Korea Event Participation')">
           <i class="bi bi-list-ul"></i>
           View Applications
+        </a>
+        <a href="#" onclick="loadInFrame('korea-event-applications.php?register=1', 'Register applicant')">
+          <i class="bi bi-person-plus"></i>
+          Register applicant
         </a>
         <a href="#" onclick="loadInFrame('korea-event-applications.php?status=pending', 'Pending')">
           <i class="bi bi-clock"></i>

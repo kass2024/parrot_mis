@@ -42,6 +42,8 @@ function kep_ensure_schema(mysqli $conn): bool
       `passport_file` varchar(255) NOT NULL,
       `cv_file` varchar(255) NOT NULL,
       `status` enum('pending','under_review','approved','rejected') NOT NULL DEFAULT 'pending',
+      `source` varchar(20) NOT NULL DEFAULT 'public',
+      `created_by_admin_id` int(11) DEFAULT NULL,
       `admin_notes` text DEFAULT NULL,
       `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
       `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
@@ -70,6 +72,8 @@ function kep_ensure_schema(mysqli $conn): bool
         kep_ensure_column($conn, 'korea_event_applications', 'participation_purpose', "ALTER TABLE `korea_event_applications` ADD COLUMN `participation_purpose` text DEFAULT NULL AFTER `event_name`");
         kep_ensure_column($conn, 'korea_event_applications', 'cv_file', "ALTER TABLE `korea_event_applications` ADD COLUMN `cv_file` varchar(255) NOT NULL DEFAULT '' AFTER `passport_file`");
         kep_ensure_column($conn, 'korea_event_applications', 'admin_notes', "ALTER TABLE `korea_event_applications` ADD COLUMN `admin_notes` text DEFAULT NULL AFTER `status`");
+        kep_ensure_column($conn, 'korea_event_applications', 'source', "ALTER TABLE `korea_event_applications` ADD COLUMN `source` varchar(20) NOT NULL DEFAULT 'public' AFTER `status`");
+        kep_ensure_column($conn, 'korea_event_applications', 'created_by_admin_id', "ALTER TABLE `korea_event_applications` ADD COLUMN `created_by_admin_id` int(11) DEFAULT NULL AFTER `source`");
     } catch (Throwable $e) {
         error_log('kep_ensure_schema exception: ' . $e->getMessage());
         $ok = false;
