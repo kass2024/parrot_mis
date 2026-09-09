@@ -23,19 +23,21 @@ function xander_create_phpmailer_applicant_sender(): PHPMailer
 }
 
 /**
- * Simple HTML email send with optional attachments and BCC copies.
+ * Simple HTML email send with optional attachments, BCC, and CC copies.
  *
  * @param array<int, array{path:string, name?:string}> $attachments
  * @param string[] $bcc
+ * @param string[] $cc
  */
-function sendSMTPMail(string $to, string $subject, string $htmlBody, array $attachments = [], array $bcc = []): bool
+function sendSMTPMail(string $to, string $subject, string $htmlBody, array $attachments = [], array $bcc = [], array $cc = []): bool
 {
-    return sendSMTPMailDetailed($to, $subject, $htmlBody, $attachments, $bcc)['ok'];
+    return sendSMTPMailDetailed($to, $subject, $htmlBody, $attachments, $bcc, null, $cc)['ok'];
 }
 
 /**
  * @param array<int, array{path:string, name?:string}> $attachments
  * @param string[] $bcc
+ * @param string[] $cc
  * @return array{ok: bool, error?: string}
  */
 function sendSMTPMailDetailed(
@@ -44,7 +46,8 @@ function sendSMTPMailDetailed(
     string $htmlBody,
     array $attachments = [],
     array $bcc = [],
-    ?callable $mailerFactory = null
+    ?callable $mailerFactory = null,
+    array $cc = []
 ): array {
     $to = trim($to);
     if ($to === '' || !filter_var($to, FILTER_VALIDATE_EMAIL)) {
@@ -56,7 +59,14 @@ function sendSMTPMailDetailed(
         $mail->clearAddresses();
         $mail->clearAttachments();
         $mail->clearBCCs();
+        $mail->clearCCs();
         $mail->addAddress($to);
+        foreach ($cc as $copy) {
+            $copy = trim((string) $copy);
+            if ($copy !== '' && filter_var($copy, FILTER_VALIDATE_EMAIL) && strcasecmp($copy, $to) !== 0) {
+                $mail->addCC($copy);
+            }
+        }
         foreach ($bcc as $copy) {
             $copy = trim((string) $copy);
             if ($copy !== '' && filter_var($copy, FILTER_VALIDATE_EMAIL) && strcasecmp($copy, $to) !== 0) {

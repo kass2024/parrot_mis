@@ -7,11 +7,13 @@ require_once __DIR__ . '/helpers/secure_file.php';
 require_once __DIR__ . '/helpers/university_admins_schema.php';
 require_once __DIR__ . '/helpers/korea_invitation_contract_schema.php';
 require_once __DIR__ . '/helpers/korea_event_schema.php';
+require_once __DIR__ . '/helpers/noble_education_schema.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
 pcvc_ensure_university_admins_schema($conn);
 kic_contract_ensure_schema($conn);
 kep_ensure_schema($conn);
+neg_ensure_schema($conn);
 
 $admin_id = $_SESSION['id'] ?? null;
 if (!$admin_id || !isset($_SESSION['role'])) {
@@ -393,6 +395,13 @@ $cards = [
       'korea-event-applications.php?register=1' => 'Register applicant',
     ]
   ],
+  'noble_education' => [
+    'title' => 'Noble Education Group — Canada',
+    'icon' => 'bi-mortarboard',
+    'links' => [
+      'noble-education-applications.php' => 'View Applications',
+    ]
+  ],
   'agent_contracts' => [
     'title' => 'Agent Contract',
     'icon' => 'bi-person-badge',
@@ -416,7 +425,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts', 'korea_event_participation', 'agent_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'agent_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -424,7 +433,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'noble_education', 'platform'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -2455,6 +2464,40 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           Rejected
         </a>
         <a href="#" onclick="window.open('korea-event-participation-request.php', '_blank')">
+          <i class="bi bi-box-arrow-up-right"></i>
+          Open public form
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (in_array('noble_education', $allowedSidebarItems)): ?>
+      <a href="#noble_education" class="sidebar-link" onclick="toggleSidebarMenu('noble_education')">
+        <i class="bi bi-mortarboard"></i>
+        <span>Noble Education Group — Canada</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-submenu" id="submenu_noble_education">
+        <a href="#" onclick="loadInFrame('noble-education-applications.php', 'Noble Education Group — Canada')">
+          <i class="bi bi-list-ul"></i>
+          View Applications
+        </a>
+        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=pending', 'Pending')">
+          <i class="bi bi-clock"></i>
+          Pending
+        </a>
+        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=under_review', 'Under Review')">
+          <i class="bi bi-eye"></i>
+          Under Review
+        </a>
+        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=approved', 'Approved')">
+          <i class="bi bi-check-circle"></i>
+          Approved
+        </a>
+        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=rejected', 'Rejected')">
+          <i class="bi bi-x-circle"></i>
+          Rejected
+        </a>
+        <a href="#" onclick="window.open('noble-education-request.php', '_blank')">
           <i class="bi bi-box-arrow-up-right"></i>
           Open public form
         </a>

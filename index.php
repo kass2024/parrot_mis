@@ -17,6 +17,8 @@ $current_lang = $_SESSION['current_language'];
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/korea_event_schema.php';
 kep_ensure_schema($conn);
+require_once __DIR__ . '/helpers/noble_education_schema.php';
+neg_ensure_schema($conn);
 require_once __DIR__ . '/includes/testimonials_lib.php';
 $home_testimonials = pcvc_get_published_testimonials($conn, 6);
 
@@ -295,6 +297,15 @@ $index_translations = [
         'card10_point2' => 'CV / resume upload',
         'card10_point3' => 'Personal and event details',
         'card10_point4' => 'Email confirmation with reference ID',
+
+        // Card 11: Noble Education Group — Canada
+        'card11_title' => 'NOBLE EDUCATION GROUP — CANADA',
+        'card11_subtitle' => 'Canada admissions documentation support',
+        'card11_description' => 'Apply for Noble Education Group — Canada. Submit your personal details with passport, high school certificate, transcripts, and any other relevant documents.',
+        'card11_point1' => 'Passport attachment',
+        'card11_point2' => 'High school certificate upload',
+        'card11_point3' => 'Transcripts and supporting documents',
+        'card11_point4' => 'Email confirmation with reference ID',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -576,6 +587,15 @@ $index_translations = [
         'card10_point2' => 'Téléversement du CV',
         'card10_point3' => 'Informations personnelles et événement',
         'card10_point4' => 'Confirmation par e-mail avec référence',
+
+        // Card 11: Noble Education Group — Canada
+        'card11_title' => 'NOBLE EDUCATION GROUP — CANADA',
+        'card11_subtitle' => 'Soutien documentaire pour admissions Canada',
+        'card11_description' => 'Postulez pour Noble Education Group — Canada. Envoyez vos informations avec passeport, certificat d\'études secondaires, relevés de notes et autres documents.',
+        'card11_point1' => 'Pièce jointe passeport',
+        'card11_point2' => 'Certificat d\'études secondaires',
+        'card11_point3' => 'Relevés de notes et documents complémentaires',
+        'card11_point4' => 'Confirmation par e-mail avec référence',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -655,6 +675,12 @@ $cardRetrievalMeta = [
         'table_label' => 'korea_event_applications',
         'placeholder' => 'kep_…',
         'example'     => 'kep_a1b2c3d4e5f6_1719150000',
+    ],
+    'noble_education' => [
+        'service'     => $current_lang === 'fr' ? 'Noble Education Group — Canada' : 'Noble Education Group — Canada',
+        'table_label' => 'noble_education_applications',
+        'placeholder' => 'neg_…',
+        'example'     => 'neg_a1b2c3d4e5f6_1719150000',
     ],
 ];
 
@@ -772,6 +798,21 @@ $cards = [
         ],
         'form' => 'korea-event-participation-request.php',
         'color' => '#CD2E3A'
+    ],
+    [
+        'id' => 'noble_education',
+        'icon' => '🇨🇦',
+        'title_key' => 'card11_title',
+        'subtitle_key' => 'card11_subtitle',
+        'description_key' => 'card11_description',
+        'points_keys' => [
+            'card11_point1',
+            'card11_point2',
+            'card11_point3',
+            'card11_point4',
+        ],
+        'form' => 'noble-education-request.php',
+        'color' => '#0B3D2E'
     ]
 ];
 
@@ -2367,6 +2408,7 @@ body.card-only-mode {
         case 'francophonie':
         case 'employment':
         case 'korea_event':
+        case 'noble_education':
           targetUrl = form;
           break;
         default:
