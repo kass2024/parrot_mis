@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $msg = 'Status updated successfully.';
         if ($status === 'approved') {
             $msg = $emailSent
-                ? 'Approved and admissions email sent to ujeanmethode@gmail.com (CC included).'
+                ? 'Approved and admissions email sent to admissionspublic@nobleedugroup.ca (CC included).'
                 : ('Approved, but email failed: ' . ($emailError !== '' ? $emailError : 'unknown error'));
         }
 
@@ -397,7 +397,7 @@ function setStatus(id, status) {
         note = typed;
     }
     const label = status === 'approved'
-        ? 'Approve and send admissions email to ujeanmethode@gmail.com (CC: toukipi2023@gmail.com, infos@visaconsultantcanada.com)?'
+        ? 'Approve and send admissions email to admissionspublic@nobleedugroup.ca (CC: lydia@nobleedugroup.ca, infos@visaconsultantcanada.com)?'
         : ('Set status to "' + status.replace(/_/g, ' ') + '"?');
     if (!confirm(label)) return;
     postAction({ action: 'set_status', application_id: id, status: status, note: note }).then(d => {

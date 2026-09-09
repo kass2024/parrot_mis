@@ -11,14 +11,14 @@ require_once __DIR__ . '/noble_education_files.php';
 
 function neg_approval_to_email(): string
 {
-    return 'ujeanmethode@gmail.com';
+    return 'admissionspublic@nobleedugroup.ca';
 }
 
 /** @return list<string> */
 function neg_approval_cc_emails(): array
 {
     return [
-        'toukipi2023@gmail.com',
+        'lydia@nobleedugroup.ca',
         'infos@visaconsultantcanada.com',
     ];
 }
