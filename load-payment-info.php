@@ -41,6 +41,8 @@ $packages = [];
 $sql = "
   SELECT id, title, total_amount, currency
   FROM fee_packages
+  WHERE code NOT LIKE '%removed'
+    AND title NOT LIKE '[REMOVED]%'
   ORDER BY id ASC
 ";
 

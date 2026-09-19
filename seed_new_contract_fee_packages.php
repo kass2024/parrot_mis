@@ -4,12 +4,11 @@
  * so they appear in Record Payment, invoices, and online payment.
  *
  * Packages:
- *   - p77ca        7.8  Study in Canada (With Your Own Admission Letter)
- *   - p77loa       7.9  Study in Canada having LOA (Without Lawyer Consultation)
- *   - p77loalawyer 7.10 Study in Canada having LOA (Lawyer Consultation)
- *   - p710promo    7.16 Visit Canada with Invitation on Promotion
+ *   - p77loa       7.8  Study in Canada having LOA (Without Lawyer Consultation)
+ *   - p77loalawyer 7.9  Study in Canada having LOA (Lawyer Consultation)
+ *   - p710promo    7.15 Visit Canada with Invitation on Promotion
  *
- * Also syncs renumbered titles for existing packages.
+ * Removes retired package p77ca (Own Admission Letter) from fee_packages.
  *
  * Usage:
  *   php seed_new_contract_fee_packages.php
@@ -41,22 +40,21 @@ function fee_package_titles(): array
         'p74'         => '7.4 Study in Canada (Loan-Based)',
         'p75'         => '7.6 Study in Canada (Without Loan)',
         'p76'         => '7.7 Canada – High School Graduate (Loan-Based)',
-        'p77ca'       => '7.8 Study in Canada (With Your Own Admission Letter)',
-        'p77loa'      => '7.9 Study in Canada having LOA (Without Lawyer Consultation)',
-        'p77loalawyer'=> '7.10 Study in Canada having LOA (Lawyer Consultation)',
-        'p77'         => '7.11 Study in South Korea (Self-Sponsored)',
-        'p78'         => '7.12 South Korea Visitor Visa',
-        'p79'         => '7.13 Credit Transfer (Bachelor, Masters, PhD)',
-        'p710'        => '7.14 Canada Visit Visa',
-        'p710b'       => '7.15 Canada Visit Visa – With Invitation Letter',
-        'p710promo'   => '7.16 Visit Canada with Invitation on Promotion',
-        'p711'        => '7.17 USA Visit Visa',
-        'p712'        => '7.18 Europe Visit Visa',
-        'p713'        => '7.19 Asia Visit Visa',
-        'p714'        => '7.20 SHORT COURSES-CANADA',
-        'p715'        => '7.21 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
-        'p716'        => '7.22 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
-        'p717'        => '7.23 GUARANTEED EVALUATION SUPPORT!',
+        'p77loa'      => '7.8 Study in Canada having LOA (Without Lawyer Consultation)',
+        'p77loalawyer'=> '7.9 Study in Canada having LOA (Lawyer Consultation)',
+        'p77'         => '7.10 Study in South Korea (Self-Sponsored)',
+        'p78'         => '7.11 South Korea Visitor Visa',
+        'p79'         => '7.12 Credit Transfer (Bachelor, Masters, PhD)',
+        'p710'        => '7.13 Canada Visit Visa',
+        'p710b'       => '7.14 Canada Visit Visa – With Invitation Letter',
+        'p710promo'   => '7.15 Visit Canada with Invitation on Promotion',
+        'p711'        => '7.16 USA Visit Visa',
+        'p712'        => '7.17 Europe Visit Visa',
+        'p713'        => '7.18 Asia Visit Visa',
+        'p714'        => '7.19 SHORT COURSES-CANADA',
+        'p715'        => '7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+        'p716'        => '7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+        'p717'        => '7.22 GUARANTEED EVALUATION SUPPORT!',
     ];
 }
 
@@ -66,14 +64,6 @@ function fee_package_titles(): array
 function packages_to_seed(): array
 {
     return [
-        'p77ca' => [
-            'currency' => 'CAD',
-            'total' => 1735.00,
-            'items' => [
-                ['name' => 'Document Handling, Visa Application & Biometric Fees', 'amount' => 735.00],
-                ['name' => 'Service Fees (payable after visa approval)', 'amount' => 1000.00],
-            ],
-        ],
         'p77loa' => [
             'currency' => 'CAD',
             'total' => 2000.00,
@@ -282,6 +272,42 @@ $lines = [
 try {
     if (!$conn->begin_transaction()) {
         throw new RuntimeException('Could not start transaction');
+    }
+
+    // Retire Own Admission Letter package from payment dropdowns (keep history if referenced)
+    $retiredCode = 'p77ca';
+    $retiredId = get_package_id_by_code($conn, $retiredCode);
+    if ($retiredId !== null) {
+        $chk = $conn->prepare(
+            'SELECT COUNT(*) AS c
+             FROM application_payments ap
+             INNER JOIN fee_items fi ON fi.id = ap.fee_item_id
+             WHERE fi.package_id = ?'
+        );
+        $inUse = 0;
+        if ($chk) {
+            $chk->bind_param('i', $retiredId);
+            $chk->execute();
+            $inUse = (int) ($chk->get_result()->fetch_assoc()['c'] ?? 0);
+            $chk->close();
+        }
+
+        if ($inUse === 0) {
+            $conn->query('DELETE FROM fee_items WHERE package_id = ' . $retiredId);
+            $conn->query('DELETE FROM fee_packages WHERE id = ' . $retiredId);
+            $lines[] = "Deleted unused package p77ca (Own Admission Letter) id={$retiredId}";
+        } else {
+            $hiddenTitle = '[REMOVED] Study in Canada (With Your Own Admission Letter)';
+            $hiddenCode = 'p77ca_removed';
+            $upd = $conn->prepare('UPDATE fee_packages SET code = ?, title = ? WHERE id = ?');
+            if ($upd) {
+                $upd->bind_param('ssi', $hiddenCode, $hiddenTitle, $retiredId);
+                $upd->execute();
+                $upd->close();
+            }
+            $lines[] = "Soft-retired package p77ca -> p77ca_removed (id={$retiredId}, payments={$inUse})";
+        }
+        $lines[] = '';
     }
 
     foreach ($toSeed as $code => $pkg) {

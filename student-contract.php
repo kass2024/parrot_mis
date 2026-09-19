@@ -1231,27 +1231,8 @@ button {
 
 <div class="package-item">
   <label class="package-label">
-    <input type="radio" name="package" onclick="showPkg('p77ca')">
-    7.8 🇨🇦 Study in Canada (With Your Own Admission Letter)
-  </label>
-  <div id="p77ca" class="package-details">
-    ➤ Document Handling, Visa Application & Biometric Fees: CAD 735<br>
-    ➤ Service Fees (payable after visa approval): CAD 1,000<br>
-    <strong>🔥 Total Package: CAD 1,735</strong><br>
-    <div class="package-notes">
-      <strong>NOTE:</strong>
-      <ol>
-        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
-        <li>Each dependent pays CAD 1,000 after visa approval.</li>
-      </ol>
-    </div>
-  </div>
-</div>
-
-<div class="package-item">
-  <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77loa')">
-    7.9 🇨🇦 Study in Canada having LOA (Without Lawyer Consultation)
+    7.8 🇨🇦 Study in Canada having LOA (Without Lawyer Consultation)
   </label>
   <div id="p77loa" class="package-details">
     ➤ MIS Registration Fee: CAD 225<br>
@@ -1265,7 +1246,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77loalawyer')">
-    7.10 🇨🇦 Study in Canada having LOA (Lawyer Consultation)
+    7.9 🇨🇦 Study in Canada having LOA (Lawyer Consultation)
   </label>
   <div id="p77loalawyer" class="package-details">
     ➤ MIS Registration Fee: CAD 225<br>
@@ -1280,7 +1261,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77')">
-    7.11 🇰🇷 Study in South Korea (Self-Sponsored)
+    7.10 🇰🇷 Study in South Korea (Self-Sponsored)
   </label>
   <div id="p77" class="package-details">
     ➤ Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)<br>
@@ -1295,7 +1276,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p78')">
-    7.12 🇰🇷 South Korea Visitor Visa
+    7.11 🇰🇷 South Korea Visitor Visa
   </label>
   <div id="p78" class="package-details">
     ➤ Registration & Application Fee: USD 500<br>
@@ -1307,7 +1288,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p79')">
-    7.13 Credit Transfer (Bachelor, Masters, PhD)
+    7.12 Credit Transfer (Bachelor, Masters, PhD)
   </label>
   <div id="p79" class="package-details">
     ➤ Bachelor: USD 920<br>
@@ -1319,7 +1300,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710')">
-    7.14 🇨🇦 Canada Visit Visa
+    7.13 🇨🇦 Canada Visit Visa
   </label>
   <div id="p710" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1332,7 +1313,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710b')">
-    7.15 🇨🇦 Canada Visit Visa – With Invitation Letter
+    7.14 🇨🇦 Canada Visit Visa – With Invitation Letter
   </label>
   <div id="p710b" class="package-details">
     ➤ Invitation Letter: Already Provided by Applicant<br>
@@ -1347,7 +1328,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710promo')">
-    7.16 🇨🇦 Visit Canada with Invitation on Promotion
+    7.15 🇨🇦 Visit Canada with Invitation on Promotion
   </label>
   <div id="p710promo" class="package-details">
     ➤ Invitation Fees: CAD 360<br>
@@ -1361,7 +1342,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p711')">
-    7.17 🇺🇸 USA Visit Visa
+    7.16 🇺🇸 USA Visit Visa
   </label>
   <div id="p711" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1373,7 +1354,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p712')">
-    7.18 🇪🇺 Europe Visit Visa
+    7.17 🇪🇺 Europe Visit Visa
   </label>
   <div id="p712" class="package-details">
     ➤ Documents & Invitation Letter: €600<br>
@@ -1385,7 +1366,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p713')">
-    7.19 Asia Visit Visa
+    7.18 Asia Visit Visa
   </label>
   <div id="p713" class="package-details">
     ➤ Documents & Invitation Letter: USD 800<br>
@@ -1397,7 +1378,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p714')">
-    7.20 SHORT COURSES-CANADA
+    7.19 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)<br>
@@ -1420,7 +1401,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p715')">
-    7.21 STUDY PhD IN CANADA-USA-EUROPE & ASIA
+    7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA
   </label>
   <div id="p715" class="package-details">
     ➤ Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)<br>
@@ -1446,7 +1427,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p716')">
-    7.22 WES EVALUATION – INTERNATIONAL EQUIVALENCE
+    7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE
   </label>
   <div id="p716" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
@@ -1466,7 +1447,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p717')">
-    7.23 GUARANTEED EVALUATION SUPPORT!
+    7.22 GUARANTEED EVALUATION SUPPORT!
   </label>
   <div id="p717" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
