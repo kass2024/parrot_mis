@@ -105,6 +105,46 @@ function packages_to_seed(): array
                 ['name' => 'Service Fees After Visa Approval', 'amount' => 1000.00],
             ],
         ],
+        'p710b' => [
+            'currency' => 'CAD',
+            'total' => 3000.00,
+            'items' => [
+                ['name' => 'Document Preparation and Visa Application Screening', 'amount' => 815.00],
+                ['name' => 'Visa Application Fee', 'amount' => 100.00],
+                ['name' => 'Biometrics Fee', 'amount' => 85.00],
+                ['name' => 'Service Fee (After Visa Approval)', 'amount' => 2000.00],
+            ],
+        ],
+        'p714' => [
+            'currency' => 'CAD',
+            'total' => 3670.00,
+            'items' => [
+                ['name' => 'Registration & Application Fee', 'amount' => 450.00],
+                ['name' => 'Tuition Fees Deposit after getting offer letter', 'amount' => 535.00],
+                ['name' => 'Visit Visa Application Fee', 'amount' => 100.00],
+                ['name' => 'Biometrics', 'amount' => 85.00],
+                ['name' => 'After Visa Approval', 'amount' => 2500.00],
+            ],
+        ],
+        'p715' => [
+            'currency' => 'CAD',
+            'total' => 5500.00,
+            'items' => [
+                ['name' => 'Registration & Application Fee for Canada', 'amount' => 500.00],
+                ['name' => 'After Visa Approval for Canada', 'amount' => 5000.00],
+            ],
+        ],
+        'p717' => [
+            'currency' => 'CAD',
+            'total' => 900.00,
+            'items' => [
+                ['name' => '1. Professional Service Fees', 'amount' => 200.00],
+                ['name' => '2. Application & Processing Costs', 'amount' => 300.00],
+                ['name' => '3. University & Verification Coordination', 'amount' => 100.00],
+                ['name' => '4. Document Shipping & Delivery Expenses', 'amount' => 100.00],
+                ['name' => '5. Time, Administrative Work & Follow-up', 'amount' => 200.00],
+            ],
+        ],
     ];
 }
 
