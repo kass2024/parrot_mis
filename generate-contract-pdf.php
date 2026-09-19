@@ -292,10 +292,24 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.16 USA Visit Visa
+           7.16 Visit Canada with Invitation on Promotion
+        ========================== */
+        'p710promo' => [
+            'title' => '7.16 Visit Canada with Invitation on Promotion',
+            'lines' => [
+                'Invitation Fees: CAD 360',
+                'Documents Preparation Fees: CAD 240',
+                'Lawyer Consultation Fees: CAD 400',
+                'Service Fees After Visa Approval: CAD 1,000',
+            ],
+            'total' => 'CAD 2,000',
+        ],
+
+        /* =========================
+           7.17 USA Visit Visa
         ========================== */
         'p711' => [
-            'title' => '7.16 USA Visit Visa',
+            'title' => '7.17 USA Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: USD 185',
@@ -305,10 +319,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.17 Europe Visit Visa
+           7.18 Europe Visit Visa
         ========================== */
         'p712' => [
-            'title' => '7.17 Europe Visit Visa',
+            'title' => '7.18 Europe Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: €600',
                 'Visa Application Fees: €85 – €500 (depending on country)',
@@ -318,10 +332,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.18 Asia Visit Visa
+           7.19 Asia Visit Visa
         ========================== */
         'p713' => [
-            'title' => '7.18 Asia Visit Visa',
+            'title' => '7.19 Asia Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 800',
                 'Visa Application Fees: USD 85 – USD 500',
@@ -331,10 +345,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.19 Short Courses - Canada
+           7.20 Short Courses - Canada
         ========================== */
         'p714' => [
-            'title' => '7.19 SHORT COURSES-CANADA',
+            'title' => '7.20 SHORT COURSES-CANADA',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)',
                 'Registration & Application Fee for Family Member: CAD 200 (If applicable)',
@@ -349,10 +363,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.20 Study PhD in Multiple Destinations
+           7.21 Study PhD in Multiple Destinations
         ========================== */
         'p715' => [
-            'title' => '7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+            'title' => '7.21 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
             'lines' => [
                 'Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)',
                 'Registration & Application Fee for USA, Europe & Asia: USD 350 (Refundable if admission is not secured within 9 months)',
@@ -371,10 +385,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.21 WES Evaluation – International Equivalence
+           7.22 WES Evaluation – International Equivalence
         ========================== */
         'p716' => [
-            'title' => '7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+            'title' => '7.22 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
             'lines' => [
                 '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the WES evaluation process.',
                 '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
@@ -386,10 +400,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.22 Guaranteed Evaluation Support
+           7.23 Guaranteed Evaluation Support
         ========================== */
         'p717' => [
-            'title' => '7.22 GUARANTEED EVALUATION SUPPORT!',
+            'title' => '7.23 GUARANTEED EVALUATION SUPPORT!',
             'lines' => [
                 '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the all evaluation process.',
                 '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
