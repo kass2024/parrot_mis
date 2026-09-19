@@ -643,6 +643,31 @@ body {
   border-radius: 0 8px 8px 0;
 }
 
+.package-notes {
+  margin-top: 12pt;
+  padding: 10pt 12pt;
+  border-left: 4px solid #2e7d32;
+  border-radius: 0 6px 6px 0;
+  background: #eef8f0;
+  font-size: 10.8pt;
+  line-height: 1.6;
+}
+
+.package-notes > strong {
+  color: #1b5e20;
+  letter-spacing: .03em;
+}
+
+.package-notes ol {
+  margin: 4pt 0 0 20pt;
+  padding: 0;
+}
+
+.package-notes li {
+  padding-left: 3pt;
+  margin-bottom: 2pt;
+}
+
 /* Highlighted fee amounts (Article 7 packages) */
 .fee-price {
   display: inline-block;
@@ -1111,7 +1136,7 @@ button {
     ➤ After Loan Approval: USD 1,200<br>
     ➤ MOCK Interview Preparation Fees: USD 150<br>
     ➤ After Visa Approval: USD 1,500<br>
-    <strong>Total Package: USD 3,000</strong>
+    <strong>Total Package: USD 3,000</strong><br>
   </div>
 </div>
 
@@ -1125,7 +1150,7 @@ button {
     ➤ Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)<br>
     ➤ MOCK Interview Preparation Fees: USD 150<br>
     ➤ After Visa Approval: USD 2,000<br>
-    <strong>Total Package: USD 2,300</strong>
+    <strong>Total Package: USD 2,300</strong><br>
   </div>
 </div>
 
@@ -1138,7 +1163,7 @@ button {
     ➤ Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)<br>
     ➤ Before Visa Application: USD 250<br>
     ➤ After Visa Approval: USD 1,500<br>
-    <strong>Total Package: USD 2,000</strong>
+    <strong>Total Package: USD 2,000</strong><br>
   </div>
 </div>
 
@@ -1151,7 +1176,13 @@ button {
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
     ➤ After Visa Approval: CAD 3,050<br>
     <strong>Total Package: CAD 3,500</strong><br>
-    <em>Note: Tuition deposit CAD 500–5,000 payable directly by the Student.</em>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+        <li>Each dependent pays CAD 1,000 after visa approval.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
@@ -1163,7 +1194,14 @@ button {
   <div id="p75" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
     ➤ After Visa Approval: CAD 2,050<br>
-    <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong>
+    <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong><br>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+        <li>Each dependent pays CAD 1,000 after visa approval.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
@@ -1180,7 +1218,14 @@ button {
     ➤ Border Pass Fees: CAD 250<br>
     ➤ Loan Processing Fees: CAD 1,000<br>
     ➤ Service Fees After Visa Approval: CAD 1,933<br>
-    <strong>Total Package: CAD 4,000</strong>
+    <strong>Total Package: CAD 4,000</strong><br>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+        <li>Each dependent pays CAD 1,000 after visa approval.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
@@ -1192,14 +1237,50 @@ button {
   <div id="p77ca" class="package-details">
     ➤ Document Handling, Visa Application & Biometric Fees: CAD 735<br>
     ➤ Service Fees (payable after visa approval): CAD 1,000<br>
-    <strong>🔥 Total Package: CAD 1,735</strong>
+    <strong>🔥 Total Package: CAD 1,735</strong><br>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+        <li>Each dependent pays CAD 1,000 after visa approval.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p77loa')">
+    7.9 🇨🇦 Study in Canada having LOA (Without Lawyer Consultation)
+  </label>
+  <div id="p77loa" class="package-details">
+    ➤ MIS Registration Fee: CAD 225<br>
+    ➤ Documents Preparation Fees: CAD 375<br>
+    ➤ Upfront Fees: CAD 400<br>
+    ➤ After Visa Approval: CAD 1,000<br>
+    <strong>Total Package: CAD 2,000</strong>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p77loalawyer')">
+    7.10 🇨🇦 Study in Canada having LOA (Lawyer Consultation)
+  </label>
+  <div id="p77loalawyer" class="package-details">
+    ➤ MIS Registration Fee: CAD 225<br>
+    ➤ Documents Preparation Fees: CAD 375<br>
+    ➤ Lawyer Consultation Fees: CAD 500<br>
+    ➤ Upfront Fees: CAD 400<br>
+    ➤ After Visa Approval: CAD 1,000<br>
+    <strong>Total Package: CAD 2,500</strong>
   </div>
 </div>
 
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77')">
-    7.9 🇰🇷 Study in South Korea (Self-Sponsored)
+    7.11 🇰🇷 Study in South Korea (Self-Sponsored)
   </label>
   <div id="p77" class="package-details">
     ➤ Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)<br>
@@ -1214,7 +1295,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p78')">
-    7.10 🇰🇷 South Korea Visitor Visa
+    7.12 🇰🇷 South Korea Visitor Visa
   </label>
   <div id="p78" class="package-details">
     ➤ Registration & Application Fee: USD 500<br>
@@ -1226,7 +1307,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p79')">
-    7.11 Credit Transfer (Bachelor, Masters, PhD)
+    7.13 Credit Transfer (Bachelor, Masters, PhD)
   </label>
   <div id="p79" class="package-details">
     ➤ Bachelor: USD 920<br>
@@ -1238,7 +1319,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710')">
-    7.12 🇨🇦 Canada Visit Visa
+    7.14 🇨🇦 Canada Visit Visa
   </label>
   <div id="p710" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1251,7 +1332,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710b')">
-    7.13 🇨🇦 Canada Visit Visa – With Invitation Letter
+    7.15 🇨🇦 Canada Visit Visa – With Invitation Letter
   </label>
   <div id="p710b" class="package-details">
     ➤ Invitation Letter: Already Provided by Applicant<br>
@@ -1266,7 +1347,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p711')">
-    7.14 🇺🇸 USA Visit Visa
+    7.16 🇺🇸 USA Visit Visa
   </label>
   <div id="p711" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1278,7 +1359,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p712')">
-    7.15 🇪🇺 Europe Visit Visa
+    7.17 🇪🇺 Europe Visit Visa
   </label>
   <div id="p712" class="package-details">
     ➤ Documents & Invitation Letter: €600<br>
@@ -1290,7 +1371,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p713')">
-    7.16 Asia Visit Visa
+    7.18 Asia Visit Visa
   </label>
   <div id="p713" class="package-details">
     ➤ Documents & Invitation Letter: USD 800<br>
@@ -1302,7 +1383,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p714')">
-    7.17 SHORT COURSES-CANADA
+    7.19 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)<br>
@@ -1311,14 +1392,21 @@ button {
     ➤ Before starting Visa Application: CAD 100 for visit visa application (Paid to embassy)<br>
     ➤ Biometrics: CAD 85 (Paid to embassy)<br>
     ➤ After Visa Approval: CAD 2,500<br>
-    <strong>Total Package: CAD 3,670</strong>
+    <strong>Total Package: CAD 3,670</strong><br>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+        <li>Each dependent pays CAD 1,000 after visa approval.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p715')">
-    7.18 STUDY PhD IN CANADA-USA-EUROPE & ASIA
+    7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA
   </label>
   <div id="p715" class="package-details">
     ➤ Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)<br>
@@ -1331,14 +1419,20 @@ button {
     ➤ Tuition Fees Deposit after getting offer letter for USA, Europe & Asia: USD 500 to USD 5,000 (Paid directly to school after getting admission)<br>
     ➤ After Visa Approval for Canada: CAD 5,000<br>
     ➤ After Visa Approval for USA, Europe & Asia: USD 4,500<br>
-    <em>Note: All visa application fees must be paid to the embassy by the applicant. An additional fee of CAD 800 (Canada) or USD 500 (USA, Europe, and Asia) applies for each family member after visa approval.</em>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+        <li>Each dependent pays CAD 1,000 after visa approval.</li>
+      </ol>
+    </div>
   </div>
 </div>
 
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p716')">
-    7.19 WES EVALUATION – INTERNATIONAL EQUIVALENCE
+    7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE
   </label>
   <div id="p716" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
@@ -1358,7 +1452,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p717')">
-    7.20 GUARANTEED EVALUATION SUPPORT!
+    7.22 GUARANTEED EVALUATION SUPPORT!
   </label>
   <div id="p717" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
