@@ -104,7 +104,7 @@ function pcvc_staff_contract_inline_drawing_xml(string $rid, string $label, int 
 {
     return '<w:drawing><wp:inline distT="0" distB="0" distL="0" distR="0">'
         . '<wp:extent cx="' . $cx . '" cy="' . $cy . '"/>'
-        . '<wp:docPr id="' . (9000 + crc32($label) % 1000) . '" name="' . htmlspecialchars($label, ENT_XML1) . '"/>'
+        . '<wp:docPr id="' . (9000 + (abs((int) crc32($label)) % 1000)) . '" name="' . htmlspecialchars($label, ENT_XML1) . '"/>'
         . '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
         . '<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">'
         . '<pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">'
@@ -273,6 +273,18 @@ function pcvc_staff_contract_embed_image_at_placeholder(
         throw new RuntimeException('Could not open contract document for image embed.');
     }
 
+    $typesPath = '[Content_Types].xml';
+    $types = (string) $zip->getFromName($typesPath);
+    if ($types !== '' && strpos($types, 'Extension="png"') === false) {
+        $types = str_replace(
+            '</Types>',
+            '<Default Extension="png" ContentType="image/png"/></Types>',
+            $types
+        );
+        $zip->deleteName($typesPath);
+        $zip->addFromString($typesPath, $types);
+    }
+
     $mediaPath = 'word/media/' . $mediaFileName;
     if ($zip->locateName($mediaPath) !== false) {
         $zip->deleteName($mediaPath);
@@ -434,7 +446,7 @@ function pcvc_staff_contract_placeholder_keys(): array
 function pcvc_staff_contract_employer_defaults(): array
 {
     return [
-        'name' => 'TWAJAMAHORO JEAN PIERRE',
+        'name' => 'Dr. TWAJAMAHORO JEAN PIERRE',
         'position' => 'Managing director',
     ];
 }
@@ -442,6 +454,21 @@ function pcvc_staff_contract_employer_defaults(): array
 function pcvc_staff_contract_manager_signature_path(): string
 {
     return dirname(__DIR__) . '/admin/signature-manager.png';
+}
+
+function pcvc_staff_contract_company_stamp_path(): string
+{
+    return dirname(__DIR__) . '/admin/employer-signature.png';
+}
+
+function pcvc_staff_contract_company_stamp_bytes(): ?string
+{
+    $path = pcvc_staff_contract_company_stamp_path();
+    if (!is_file($path)) {
+        return null;
+    }
+    $bytes = file_get_contents($path);
+    return $bytes !== false && $bytes !== '' ? $bytes : null;
 }
 
 function pcvc_staff_contract_format_date(?string $value): string
@@ -511,12 +538,31 @@ function pcvc_staff_contract_docx_stats(string $docxAbs): array
 }
 
 /**
+ * True when the Word file still expects ${placeholder} merge.
+ */
+function pcvc_staff_contract_docx_has_merge_placeholders(string $docxAbs): bool
+{
+    if (!is_file($docxAbs)) {
+        return false;
+    }
+    $zip = new ZipArchive();
+    if ($zip->open($docxAbs) !== true) {
+        return false;
+    }
+    $xml = (string) $zip->getFromName('word/document.xml');
+    $zip->close();
+
+    return strpos($xml, '${full_name}') !== false || strpos($xml, '${position}') !== false;
+}
+
+/**
  * Pick the template used for merge (canonical Parrot file when upload lacks stamp/images).
+ * A finished custom contract has no ${placeholders} and must be kept as uploaded.
  */
 function pcvc_staff_contract_resolve_template_path(string $docxAbs): string
 {
     $stats = pcvc_staff_contract_docx_stats($docxAbs);
-    if ($stats['has_media']) {
+    if ($stats['has_media'] || !pcvc_staff_contract_docx_has_merge_placeholders($docxAbs)) {
         return $docxAbs;
     }
 
@@ -530,7 +576,7 @@ function pcvc_staff_contract_resolve_template_path(string $docxAbs): string
 function pcvc_staff_contract_ensure_rich_template(string $docxAbs): string
 {
     $stats = pcvc_staff_contract_docx_stats($docxAbs);
-    if ($stats['has_media']) {
+    if ($stats['has_media'] || !pcvc_staff_contract_docx_has_merge_placeholders($docxAbs)) {
         return '';
     }
 
@@ -1238,7 +1284,8 @@ function pcvc_staff_contract_fill_docx(
     string $outputDocxAbs,
     array $admin,
     ?string $signingDate = null,
-    ?string $signatureDataUrl = null
+    ?string $signatureDataUrl = null,
+    ?string $signingPlace = null
 ): void {
     if (!is_file($templateAbs)) {
         throw new RuntimeException('Contract Word template not found.');
@@ -1248,6 +1295,27 @@ function pcvc_staff_contract_fill_docx(
     $outDir = dirname($outputDocxAbs);
     if (!is_dir($outDir) && !mkdir($outDir, 0775, true) && !is_dir($outDir)) {
         throw new RuntimeException('Could not create generated contract directory.');
+    }
+
+    // Finished per-person contracts stay as written. Notice lines and the
+    // signature block are filled from the profile; the drawn signature is added
+    // only when the employee is actually signing.
+    if (!pcvc_staff_contract_docx_has_merge_placeholders($templateAbs)) {
+        if (!copy($templateAbs, $outputDocxAbs)) {
+            throw new RuntimeException('Could not copy custom contract.');
+        }
+        require_once __DIR__ . '/staff_contract_witness.php';
+        pcvc_staff_contract_fill_notice_and_identity($outputDocxAbs, $admin);
+        if ($signatureDataUrl !== null && trim($signatureDataUrl) !== '') {
+            pcvc_staff_contract_apply_employee_signature(
+                $outputDocxAbs,
+                $admin,
+                $signatureDataUrl,
+                $signingDate,
+                $signingPlace
+            );
+        }
+        return;
     }
 
     $effectiveTemplate = pcvc_staff_contract_resolve_template_path($templateAbs);
@@ -1288,6 +1356,7 @@ function pcvc_staff_contract_docx_to_pdf(string $docxAbs, string $pdfAbs): strin
         ]
         : [
             'pcvc_staff_contract_docx_to_pdf_libreoffice',
+            'pcvc_staff_contract_docx_to_pdf_phpword',
         ];
 
     $docxSize = filesize($docxAbs) ?: 0;
@@ -1420,11 +1489,35 @@ function pcvc_staff_contract_docx_to_pdf_phpword(string $docxAbs, string $pdfAbs
 
     \PhpOffice\PhpWord\Settings::setPdfRendererName(\PhpOffice\PhpWord\Settings::PDF_RENDERER_DOMPDF);
     \PhpOffice\PhpWord\Settings::setPdfRendererPath($dompdfPath);
+    \PhpOffice\PhpWord\Settings::setPdfRendererOptions(['font' => 'DejaVu Sans']);
 
     $phpWord = \PhpOffice\PhpWord\IOFactory::load($docxAbs);
     $writer = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'PDF');
+    $renderer = $writer->getRenderer();
+    $renderer->setEditCallback(static function (string $html): string {
+        return pcvc_staff_contract_pdf_force_unicode_font($html);
+    });
     $writer->save($pdfAbs);
-    unset($phpWord, $writer);
+    unset($phpWord, $writer, $renderer);
+}
+
+/**
+ * DomPDF only draws Unicode when the face is DejaVu Sans.
+ * A missing face such as Calibri falls back to Helvetica and prints "?".
+ */
+function pcvc_staff_contract_pdf_force_unicode_font(string $html): string
+{
+    $html = preg_replace(
+        '/font-family\s*:\s*[^;}{]+/i',
+        "font-family: 'DejaVu Sans'",
+        $html
+    ) ?? $html;
+    $style = "<style>body, p, span, td, th, li, div { font-family: 'DejaVu Sans'; }</style>";
+    if (stripos($html, '<head>') !== false) {
+        $html = preg_replace('/<head>/i', '<head>' . $style, $html, 1) ?? $html;
+    }
+
+    return $html;
 }
 
 function pcvc_staff_contract_docx_to_pdf_libreoffice(string $docxAbs, string $pdfAbs): void
@@ -1505,7 +1598,9 @@ function pcvc_staff_contract_resolve_download(
     $format = $format === 'docx' ? 'docx' : 'pdf';
     $useDocxPreview = pcvc_staff_contract_use_docx_preview();
 
-    if ($type === 'signed' && $format === 'pdf' && $useDocxPreview) {
+    if ($type === 'signed') {
+        $format = 'pdf';
+    } elseif ($format === 'pdf' && $useDocxPreview) {
         $format = 'docx';
     }
 
@@ -1528,18 +1623,7 @@ function pcvc_staff_contract_resolve_download(
         : trim((string) ($contract['source_pdf_path'] ?? ''));
 
     if ($rel === '' && $type === 'signed') {
-        try {
-            $docxRel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, 'signed');
-        } catch (Throwable $e) {
-            throw new RuntimeException('Signed contract not available: ' . $e->getMessage(), 0, $e);
-        }
-        if ($docxRel !== '') {
-            return [
-                'rel' => $docxRel,
-                'mime' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'ext' => 'docx',
-            ];
-        }
+        $rel = pcvc_staff_contract_ensure_signed_pdf($conn, $staffId, $contract);
     }
 
     if ($rel === '') {
@@ -1555,8 +1639,40 @@ function pcvc_staff_contract_resolve_download(
 }
 
 /**
- * Return a valid filled or signed DOCX path, rebuilding truncated/corrupt files automatically.
+ * Build the signed PDF from the signed Word file when the PDF is missing.
  */
+function pcvc_staff_contract_ensure_signed_pdf(mysqli $conn, int $staffId, array $contract): string
+{
+    $existing = pcvc_staff_contract_signed_path($contract);
+    if ($existing !== '' && is_file(pcvc_staff_contract_abs_path($existing))) {
+        return $existing;
+    }
+    $docxRel = pcvc_staff_contract_ensure_valid_docx($conn, $staffId, $contract, 'signed');
+    if ($docxRel === '') {
+        throw new RuntimeException('Signed contract not available');
+    }
+    $pdfRel = preg_replace('/\.docx$/i', '.pdf', $docxRel) ?: '';
+    if ($pdfRel === '' || $pdfRel === $docxRel) {
+        $pdfRel = 'uploads/staff_contracts/signed/signed_staff_' . $staffId . '_' . time() . '.pdf';
+    }
+    pcvc_staff_contract_docx_to_pdf(
+        pcvc_staff_contract_abs_path($docxRel),
+        pcvc_staff_contract_abs_path($pdfRel)
+    );
+    $contractId = (int) ($contract['id'] ?? 0);
+    if ($contractId > 0) {
+        $stmt = $conn->prepare(
+            'UPDATE employment_contracts SET signed_pdf_path = ?, pdf_path = ? WHERE admin_id = ? AND id = ?'
+        );
+        if ($stmt) {
+            $stmt->bind_param('ssii', $pdfRel, $pdfRel, $staffId, $contractId);
+            $stmt->execute();
+            $stmt->close();
+        }
+    }
+    return $pdfRel;
+}
+
 function pcvc_staff_contract_ensure_valid_docx(
     mysqli $conn,
     int $staffId,
@@ -1705,7 +1821,8 @@ function pcvc_staff_contract_generate_signed(
     array $contract,
     string $signatureDataUrl,
     string $typedName,
-    string $signedDate
+    string $signedDate,
+    ?string $signingPlace = null
 ): array {
     $admin = pcvc_staff_contract_admin_row($conn, $adminId);
     if (!$admin) {
@@ -1733,31 +1850,12 @@ function pcvc_staff_contract_generate_signed(
     $signedDocxAbs = pcvc_staff_contract_abs_path($signedDocxRel);
     $signedPdfAbs = pcvc_staff_contract_abs_path($signedPdfRel);
 
-    pcvc_staff_contract_fill_docx($docxAbs, $signedDocxAbs, $admin, $signedDate, $signatureDataUrl);
+    pcvc_staff_contract_fill_docx($docxAbs, $signedDocxAbs, $admin, $signedDate, $signatureDataUrl, $signingPlace);
 
-    $signedPdfOut = null;
-    if (!pcvc_staff_contract_use_docx_preview()) {
-        $previewPdfAbs = pcvc_staff_contract_abs_path(
-            'uploads/staff_contracts/generated/tmp_sign_' . $adminId . '_' . $stamp . '.pdf'
-        );
-        pcvc_staff_contract_docx_to_pdf($signedDocxAbs, $previewPdfAbs);
-        try {
-            pcvc_staff_contract_stamp_employee_signature_pdf($previewPdfAbs, $signatureDataUrl, $signedPdfAbs);
-            $signedPdfOut = $signedPdfRel;
-        } catch (Throwable $e) {
-            if (is_file($previewPdfAbs)) {
-                @copy($previewPdfAbs, $signedPdfAbs);
-                if (is_file($signedPdfAbs)) {
-                    $signedPdfOut = $signedPdfRel;
-                }
-            }
-            if ($signedPdfOut === null) {
-                throw new RuntimeException('Could not stamp signature on contract PDF: ' . $e->getMessage());
-            }
-        }
-        if (is_file($previewPdfAbs)) {
-            @unlink($previewPdfAbs);
-        }
+    pcvc_staff_contract_docx_to_pdf($signedDocxAbs, $signedPdfAbs);
+    $signedPdfOut = is_file($signedPdfAbs) ? $signedPdfRel : null;
+    if ($signedPdfOut === null) {
+        throw new RuntimeException('Signed contract PDF was not created.');
     }
 
     return [

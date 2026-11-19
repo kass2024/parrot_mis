@@ -7,6 +7,7 @@ declare(strict_types=1);
  * These lists are COPIED into MIS (not fetched from any e-learning API).
  * UPAFA programmes were copied from PROGRAM-2025.pdf (assets/docs/upafa-PROGRAM-2025.pdf).
  * USOJ programmes were copied from the University of Saint Joseph Mbarara catalogue.
+ * UDM programmes were copied from List of Programs for Université de Mwaro.docx.
  */
 
 /** @return array<string, mixed> */
@@ -165,6 +166,27 @@ function pcvc_credit_transfer_programs(): array
                 'Soft Skills',
             ],
         ],
+
+        // Copied into MIS from "List of Programs for Université de Mwaro.docx".
+        'UDM' => [
+            'Sciences de la santé (actuellement présentées)' => [
+                'Sciences et techniques paramédicales',
+                'Sciences infirmières',
+                'Sages-femmes',
+                "Laboratoire d'analyses biomédicales",
+                'Anesthésie et réanimation',
+            ],
+            'Filières / facultés non encore actives' => [
+                'Gestion et administration (en cours de développement)',
+                'Droit (mise en veilleuse)',
+            ],
+            "Programmes envisagés pour l'avenir" => [
+                'Médecine',
+                'Santé animale',
+                'Foresterie',
+                'Environnement',
+            ],
+        ],
     ];
 }
 
@@ -202,11 +224,12 @@ function pcvc_credit_transfer_university_codes(): array
     return array_keys(pcvc_credit_transfer_programs());
 }
 
-/** Public PDF catalogue for a credit-transfer university, if one is bundled. */
+/** Public catalogue file for a credit-transfer university, if one is bundled. */
 function pcvc_credit_transfer_catalogue_path(string $code): ?string
 {
     $map = [
         'UPAFA' => 'assets/docs/upafa-PROGRAM-2025.pdf',
+        'UDM'   => 'assets/docs/universite-de-mwaro-programs.docx',
     ];
 
     return $map[$code] ?? null;

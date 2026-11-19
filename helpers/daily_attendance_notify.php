@@ -182,7 +182,7 @@ function pcvc_daily_attendance_fetch_summaries(mysqli $conn, string $date): arra
     $admins = $conn->query("
         SELECT id, full_name, first_name, last_name, email, phone_number, role
         FROM admins
-        WHERE role IN ('staff', 'superadmin')
+        WHERE role IN ('staff', 'accountant', 'superadmin')
         ORDER BY id ASC
     ");
     if (!$admins) {

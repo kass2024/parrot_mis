@@ -26,13 +26,13 @@ function pcvc_fee_package_title_updates(): array
     return [
         'p710'  => '7.12 Canada Visit Visa',
         'p710b' => '7.13 Canada Visit Visa – With Invitation Letter',
-        'p711'  => '7.14 USA Visit Visa',
-        'p712'  => '7.15 Europe Visit Visa',
-        'p713'  => '7.16 Asia Visit Visa',
-        'p714'  => '7.17 SHORT COURSES-CANADA',
-        'p715'  => '7.18 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
-        'p716'  => '7.19 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
-        'p717'  => '7.20 GUARANTEED EVALUATION SUPPORT!',
+        'p711'  => '7.15 USA Visit Visa',
+        'p712'  => '7.16 Europe Visit Visa',
+        'p713'  => '7.17 Asia Visit Visa',
+        'p714'  => '7.18 SHORT COURSES-CANADA',
+        'p715'  => '7.19 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+        'p716'  => '7.20 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+        'p717'  => '7.21 GUARANTEED EVALUATION SUPPORT!',
     ];
 }
 

@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
-if (!isset($_SESSION['admin_id']) || $_SESSION['role'] !== 'superadmin') {
+if (!isset($_SESSION['admin_id']) || !pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
   header("Location: login.php");
   exit;
 }

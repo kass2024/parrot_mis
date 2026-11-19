@@ -28,7 +28,7 @@ $res = $stmt->get_result();
 $row = $res ? $res->fetch_assoc() : null;
 $stmt->close();
 
-if (!$row || ($row['role'] ?? '') !== 'superadmin') {
+if (!$row || !pcvc_is_superadmin_role($row['role'] ?? '')) {
     echo json_encode(['success' => false, 'error' => 'Forbidden']);
     exit;
 }

@@ -18,7 +18,7 @@ if ($result && mysqli_num_rows($result) > 0) {
     $role = $admin['role'] ?? 'standard';
 }
 
-$isSuperAdmin = ($role === 'superadmin');
+$isSuperAdmin = pcvc_is_superadmin_role($role);
 
 // Debug: Uncomment for testing
 // echo "Role: " . htmlspecialchars($role) . " | IsSuperAdmin: " . ($isSuperAdmin ? 'true' : 'false');
@@ -249,7 +249,7 @@ if (isset($_GET["delete"])) {
                     <label class="fw-semibold">Person in charge</label>
                     <select class="selectpicker w-100" name="person_in_charge" data-live-search="true" required>
                         <?php
-                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','superadmin','agent')");
+                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','accountant','superadmin','director','secretary','agent')");
                         while ($a = $adminQ->fetch_assoc()) {
                             echo "<option value='{$a['id']}'>{$a['full_name']}</option>";
                         }
@@ -316,7 +316,7 @@ if (isset($_GET["delete"])) {
                     <label class="fw-semibold">Person in charge</label>
                     <select class="selectpicker w-100" id="edit_person" name="person_in_charge" data-live-search="true" required>
                         <?php
-                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','superadmin')");
+                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','accountant','superadmin','director','secretary')");
                         while ($a = $adminQ->fetch_assoc()) {
                             echo "<option value='{$a['id']}'>{$a['full_name']}</option>";
                         }

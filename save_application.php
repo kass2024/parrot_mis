@@ -685,6 +685,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     /* ===============================
    FINAL SUBMIT – AGENT REQUIRED
 =============================== */
+if ($isFinal === 1 || $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $loggedAgent = pcvc_logged_in_admin_profile($conn);
+    if (
+        !$loggedAgent
+        || $loggedAgent['first_name'] === ''
+        || $loggedAgent['email'] === ''
+        || !filter_var($loggedAgent['email'], FILTER_VALIDATE_EMAIL)
+    ) {
+        http_response_code(401);
+        echo json_encode([
+            'status'  => 'error',
+            'message' => 'Please sign in before saving this application.'
+        ]);
+        exit;
+    }
+    $_POST['agent_first_name'] = $loggedAgent['first_name'];
+    $_POST['agent_last_name'] = $loggedAgent['last_name'];
+    $_POST['agent_email'] = $loggedAgent['email'];
+}
+
 if ($isFinal === 1) {
 
     if (
@@ -1104,11 +1124,12 @@ $allowed = [
             }
         }
 
-        if ($assignedPosted) {
-            if ($assignedToAdminId === null) {
-                $set[] = 'assigned_to_admin_id=NULL';
-            } else {
-                $set[] = 'assigned_to_admin_id=' . (int)$assignedToAdminId;
+        if ($assignedPosted && $assignedToAdminId !== null) {
+            $set[] = 'assigned_to_admin_id=' . (int) $assignedToAdminId;
+        } else {
+            $loggedAssigneeId = (int) ($loggedAgent['id'] ?? 0);
+            if ($loggedAssigneeId > 0) {
+                $set[] = 'assigned_to_admin_id=' . $loggedAssigneeId;
             }
         }
 

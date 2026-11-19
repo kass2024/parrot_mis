@@ -217,6 +217,22 @@ function isStudyChoiceComplete(card) {
   return false;
 }
 
+function choiceLabel(sel) {
+  if (!sel) return "";
+  if (window.jQuery && $(sel).data("select2")) {
+    const data = $(sel).select2("data") || [];
+    const text = data
+      .map(item => String(item.text || "").trim())
+      .filter(text => text && !/^(choose|select|all levels)/i.test(text))
+      .join(", ");
+    if (text) return text;
+  }
+  return [...(sel.selectedOptions || [])]
+    .filter(opt => opt.value && String(opt.text || "").trim())
+    .map(opt => opt.text.trim())
+    .join(", ");
+}
+
 function buildStudyCart() {
   if (!cartWrap || !cartList) return;
 
@@ -232,68 +248,34 @@ function buildStudyCart() {
   let hasValid = false;
 
   cards.forEach(card => {
-    if (!isStudyChoiceComplete(card)) return;
-
-    hasValid = true;
-
     const uniSel = card.querySelector(".university");
     const regionEl = card.querySelector(".region-badge");
-
-    const universityText =
-      uniSel?.selectedOptions?.[0]?.text || "Unknown University";
-    const regionText = regionEl?.textContent || "";
+    const universityText = choiceLabel(uniSel);
+    if (!universityText) return;
 
     const lines = [];
     card.querySelectorAll(".study-level-row").forEach(row => {
-      const levelSel = row.querySelector(".level");
-      const progSel = row.querySelector(".program");
-      if (!levelSel?.value) return;
-
-      const levelText =
-        levelSel.selectedOptions?.[0]?.text || "Level";
-
-      let programText = "";
-      if (progSel) {
-        if ($(progSel).data("select2")) {
-          const programs = $(progSel).select2("data") || [];
-          programText = programs.map(p => p.text).join(", ");
-        } else if (progSel.selectedOptions?.length) {
-          programText = [...progSel.selectedOptions]
-            .map(o => o.text)
-            .join(", ");
-        }
-      }
-      if (!programText.trim()) return;
-
-      lines.push(
-        `<div class="small text-muted">${escapeHtml(levelText)} — ${escapeHtml(programText)}</div>`
-      );
+      const levelText = choiceLabel(row.querySelector(".level"));
+      const programText = choiceLabel(row.querySelector(".program"));
+      if (!levelText && !programText) return;
+      const detail = [levelText, programText].filter(Boolean).join(" · ");
+      if (!detail) return;
+      lines.push(`<div class="small text-muted">${escapeHtml(detail)}</div>`);
     });
 
-    if (!lines.length) return;
+    hasValid = true;
 
+    const regionText = (regionEl?.textContent || "").trim();
     const item = document.createElement("div");
-    item.className =
-      "list-group-item d-flex justify-content-between align-items-start";
+    item.className = "list-group-item d-flex justify-content-between align-items-start gap-3";
 
     item.innerHTML = `
   <div class="me-2 flex-grow-1">
-    <div class="fw-semibold text-dark">
-      ${escapeHtml(universityText)}
-    </div>
-    ${lines.join("")}
-    ${regionText ? `
-      <div class="small text-primary fw-semibold mt-1">
-        ${escapeHtml(regionText)}
-      </div>
-    ` : ""}
+    <div class="fw-semibold text-dark">${escapeHtml(universityText)}</div>
+    ${lines.join("") || '<div class="small text-muted">Choose a program</div>'}
+    ${regionText ? `<div class="small fw-semibold mt-1">${escapeHtml(regionText)}</div>` : ""}
   </div>
-
-  <button
-    type="button"
-    class="btn btn-sm btn-link text-danger p-0 align-self-start">
-    Remove
-  </button>
+  <button type="button" class="btn btn-sm btn-link text-danger p-0 align-self-start">Remove</button>
 `;
 
     item.querySelector("button").addEventListener("click", () => {

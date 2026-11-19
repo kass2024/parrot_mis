@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/b2b_partnership_agreement.php';
 
 if (!isset($conn) || $conn->connect_error) {
     http_response_code(500);
@@ -38,7 +39,7 @@ $isSigned = ($contract['status'] === 'signed');
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Strategic Partnership Agreement</title>
+<title>Strategic B2B Partnership Agreement</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
 :root {
@@ -222,6 +223,13 @@ body {
   letter-spacing: .6px;
   text-transform: uppercase;
   margin-bottom: 32pt;
+}
+
+.contract-page h2 {
+  font-size: 15pt;
+  font-weight: 700;
+  margin-top: 28pt;
+  margin-bottom: 12pt;
 }
 
 .contract-page h3 {
@@ -515,16 +523,12 @@ button {
 
 <div class="contract-page">
 
-<h1>STRATEGIC PARTNERSHIP AGREEMENT</h1>
+<h1>STRATEGIC B2B PARTNERSHIP AGREEMENT</h1>
+<p style="text-align:center;font-weight:600;margin-top:-12pt;">International Education, Immigration Service Coordination and Overseas Employment Support</p>
 
-<p style="font-size:16px; text-align:justify; margin-bottom:30px;">
-This <strong>Strategic Partnership Agreement</strong> is made and entered into on the date of signature
-by and between:
-</p>
-
-<h3>1. PARTIES</h3>
-
-<p style="font-size:16px; font-weight:700; margin-bottom:8px;">1.1 The Partner Company</p>
+<h2>1. PARTIES</h2>
+<p>This Strategic Partnership Agreement is entered into between:</p>
+<p style="font-weight:700;">Partner Company</p>
 <div class="form-section">
   <h4>Company Information</h4>
   <div class="input-group">
@@ -552,140 +556,31 @@ by and between:
     <input type="text" id="company_address" name="company_address" placeholder="Enter your full address" value="<?= htmlspecialchars($contract['company_address'] ?? '') ?>">
   </div>
 </div>
-
-<p style="font-size:16px; font-weight:700; margin-bottom:8px;">1.2 Parrot Canada Visa Consultant Co. Ltd</p>
+<p>Hereafter referred to as &ldquo;the Partner.&rdquo;</p>
+<p style="font-weight:700;">And:</p>
 <p>
-<strong>Parrot Canada Visa Consultant Co. Ltd.</strong><br>
-Company Email: infos@visaconsultantcanada.ca<br>
-Company Phone Number: +1 (438) 290-6688<br>
-Full address: Rwanda - Kigali<br>
-Town Center Building (near Simba Supermarket),<br>
-2nd Floor, Door: F2B-022C, Nyarugenge<br>
-Full address: Canada - Quebec<br>
-294 Rue Vezina App 202<br>
-Lasalle, Quebec H8R 3M9
+<strong>Parrot Canada Visa Consultant Co. Ltd</strong><br>
+Representative: Dr Jean Pierre Twajamahoro<br>
+Position: Owner &amp; Managing Director<br>
+Email: infos@visaconsultantcanada.ca<br>
+Phone: +1 (438) 290-6688<br>
+<strong>Rwanda Address:</strong><br>
+Town Center Building, near Simba Supermarket<br>
+2nd Floor, Door F2B-022C, Nyarugenge<br>
+Kigali, Rwanda<br>
+<strong>Canada Address:</strong><br>
+294 Rue Vezina, App 202<br>
+Lasalle, Quebec H8R 3M9, Canada
 </p>
+<p>Hereafter referred to as &ldquo;Parrot.&rdquo;</p>
+<p>Parrot and the Partner are collectively referred to as &ldquo;the parties.&rdquo;</p>
 
-<h3>2. PURPOSE OF THE AGREEMENT</h3>
-<p>The primary purpose of this Agreement is to establish a complete and structured student support system, ensuring professional guidance at every stage, including:</p>
-<ul>
-<li>Document screening and eligibility assessment</li>
-<li>University/college selection</li>
-<li>Admission securing</li>
-<li>Partial scholarship and student loan assistance (where applicable)</li>
-<li>Visa consultation and approval</li>
-<li>Travel arrangements</li>
-<li>Airport pickup and settlement support in the destination country</li>
-</ul>
+<?php echo pcvc_b2b_agreement_body('en', $contract, true); ?>
 
-<h3>3. SCOPE OF PARTNERSHIP</h3>
-<p><strong>3.1 Student Recruitment & Counseling</strong><br>
-Identification and recruitment of qualified students<br>
-Academic and career guidance aligned with global opportunities</p>
+<h2>16. SIGNATURES</h2>
+<p>By signing below, the authorized representatives confirm that they have read, understood and accepted this agreement.</p>
 
-<p><strong>3.2 Document Screening & Admission Process</strong><br>
-Comprehensive document screening and eligibility verification<br>
-University and program selection worldwide<br>
-Application preparation and submission<br>
-Securing admission offers from institutions<br>
-Support for scholarship opportunities and loan assistance where applicable</p>
 
-<p><strong>3.3 Visa Processing & Immigration Support</strong><br>
-Professional visa consultation under Dr. Jean Pierre Twajamahoro<br>
-Documentation review and compliance with destination-country laws<br>
-Visa application processing and follow-up</p>
-
-<p><strong>3.4 Travel & Pre-Departure Services</strong><br>
-Travel planning and flight guidance<br>
-Pre-departure orientation</p>
-
-<p><strong>3.5 Airport Pickup & Settlement (Core Commitment)</strong><br>
-Guaranteed airport pickup arrangements in the student's destination country<br>
-Initial accommodation guidance<br>
-Settlement assistance upon arrival abroad<br>
-Coordination with local partners</p>
-
-<h3>4. CORE MISSION STATEMENT</h3>
-<p>Both parties agree to operate as a full-service global education consultancy, delivering:</p>
-<p> "From Screening to Settlement" Service Model<br>
- Covering all international destinations worldwide<br>
- Including admission, visa, travel, and arrival support<br>
- Ensuring a seamless transition from initial assessment to full settlement abroad.</p>
-
-<h3>5. ROLES AND RESPONSIBILITIES</h3>
-<p><strong>5.1 Partner Company</strong><br>
-Recruit and prepare students<br>
-Support document collection and initial screening<br>
-Assist in application preparation<br>
-Provide pre-departure guidance<br>
-Maintain communication with applicants</p>
-
-<p><strong>5.2 Parrot Canada Visa Consultant Co. Ltd</strong><br>
-Conduct initial document screening and eligibility assessment<br>
-Support university/college selection<br>
-Assist in securing admission offers<br>
-Provide partial scholarship and student loan assistance (where applicable)<br>
-Provide expert visa consultation and processing services<br>
-Ensure compliance with immigration laws of destination countries<br>
-Handle visa documentation and application procedures<br>
-Support travel planning coordination<br>
-Facilitate or coordinate airport pickup and settlement support in the student's destination country<br>
-Provide post-arrival support where applicable</p>
-
-<h3>6. FINANCIAL ARRANGEMENT</h3>
-<p>Both parties agree that each company retains the right to independently charge service fees to their respective students/clients based on their internal policies.</p>
-<p>Parrot Canada Visa Consultant Co. Ltd shall pay application service fees to Company Name upon successful issuance of an Offer Letter of Admission.</p>
-<p>The agreed university application fees are:</p>
-<ul>
-<li> Canada: 125 CAD per student</li>
-<li> United States: 100 USD per student</li>
-<li> Europe: 100 EUR per student</li>
-<li> Asia: 100 USD per student</li>
-</ul>
-<p>Payment shall be made immediately after issuance of the Offer Letter, using agreed payment methods.</p>
-<p>Both parties agree to maintain full transparency, accountability, and proper financial records.</p>
-
-<h3>7. VALUE PROPOSITION</h3>
-<p>This partnership delivers a premium global service model that:</p>
-<ul>
-<li>Covers the entire student journey from screening to settlement</li>
-<li>Improves admission and visa success rates</li>
-<li>Provides financial guidance through scholarships and loans</li>
-<li>Ensures safe arrival and integration abroad</li>
-</ul>
-
-<h3>8. COMMUNICATION AND COORDINATION</h3>
-<p>Dedicated representatives from both parties<br>
-Continuous monitoring of student progress<br>
-Real-time updates across all stages</p>
-
-<h3>9. CONFIDENTIALITY CLAUSE</h3>
-<p>All student and business information shall remain strictly confidential.</p>
-
-<h3>10. COMPLIANCE AND ETHICS</h3>
-<ul>
-<li>Full compliance with international education and immigration laws</li>
-<li>Ethical and transparent operations</li>
-<li>Zero tolerance for fraud or misrepresentation</li>
-</ul>
-
-<h3>11. DURATION AND TERMINATION</h3>
-<p>Effective upon signing<br>
-Valid for 1 Year<br>
-30-day written termination notice<br>
-Ongoing cases must be completed</p>
-
-<h3>12. DISPUTE RESOLUTION</h3>
-<p>Mutual negotiation<br>
-Arbitration if necessary</p>
-
-<h3>13. FORCE MAJEURE</h3>
-<p>Neither party shall be liable for uncontrollable events affecting obligations.</p>
-
-<h3>14. CONCLUSION</h3>
-<p>This Agreement represents a powerful global partnership, delivering complete international education services from document screening to airport pickup and settlement worldwide.</p>
-
-<h3 style="font-size:20px;font-weight:700;margin-bottom:32px;">15. SIGNATURES</h3>
 
 <div class="signature-grid">
 
@@ -1113,6 +1008,19 @@ Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
     if (displayEmail) displayEmail.textContent = emailValue || emptyHint;
     if (displayPhone) displayPhone.textContent = phoneValue || emptyHint;
     if (displayAddress) displayAddress.textContent = addressValue || emptyHint;
+
+    const mirrored = {
+      company_name: companyValue,
+      representative_name: nameValue,
+      representative_title: titleValue,
+      company_email: emailValue,
+      company_phone: phoneValue,
+      company_address: addressValue
+    };
+    document.querySelectorAll('[data-mirror]').forEach((el) => {
+      const key = el.getAttribute('data-mirror');
+      el.textContent = (mirrored[key] || '').trim() || emptyHint;
+    });
 
     const inlineNames = [
       document.getElementById('display_company_name'),

@@ -40,6 +40,43 @@ const steps = [...document.querySelectorAll(".step")];
 const bars  = [...document.querySelectorAll(".progress-step span")];
 const form  = document.getElementById("applicationForm");
 
+function parseApplicationJson(rawText) {
+  const text = String(rawText || "").replace(/^\uFEFF/, "").trim();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch (err) {
+    const marker = text.indexOf('{"status"');
+    if (marker < 0) return null;
+    const slice = text.slice(marker);
+    let depth = 0;
+    let inStr = false;
+    let esc = false;
+    for (let i = 0; i < slice.length; i++) {
+      const ch = slice[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (ch === "\\") esc = true;
+        else if (ch === '"') inStr = false;
+        continue;
+      }
+      if (ch === '"') inStr = true;
+      else if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          try {
+            return JSON.parse(slice.slice(0, i + 1));
+          } catch (inner) {
+            return null;
+          }
+        }
+      }
+    }
+    return null;
+  }
+}
+
 function getErrorMessage(err, fallback = "Something went wrong. Please try again.") {
   if (err == null) return fallback;
   if (typeof err === "string") {
@@ -908,9 +945,17 @@ function initAddUniversitySelect2() {
     theme: "bootstrap-5",
     width: "100%",
     placeholder: ph,
-    allowClear: true,
+    allowClear: false,
     minimumResultsForSearch: 0,
-    dropdownParent: $(document.body)
+    dropdownParent: $("#studyAddUniversityPanel").length
+      ? $("#studyAddUniversityPanel")
+      : $(document.body)
+  });
+
+  $el.off("select2:select.autoAdd").on("select2:select.autoAdd", function () {
+    if (typeof window.pcvcAddSelectedUniversity === "function") {
+      window.pcvcAddSelectedUniversity();
+    }
   });
 
   function syncAddUniversityButton() {
@@ -1467,32 +1512,35 @@ if (regionsSelect && studyChoicesWrap && studyTemplate) {
   });
 }
 
+function pcvcAddSelectedUniversity() {
+  const $sel = $("#addUniversitySelect");
+  const val = $sel.val();
+  if (!val) return;
+
+  const $opt = $sel.find("option:selected");
+  const optEl = $opt.get(0);
+  let regionId = null;
+  if (optEl) {
+    regionId =
+      (optEl.dataset && optEl.dataset.regionId) ||
+      optEl.getAttribute("data-region-id");
+  }
+  const university = {
+    id: Number(val),
+    name:
+      (optEl && optEl.dataset && optEl.dataset.universityName) ||
+      $opt.text()
+  };
+
+  if (!regionId || !university.id) return;
+
+  createUniversityStudyCard(String(regionId), university);
+  $sel.val(null).trigger("change");
+}
+window.pcvcAddSelectedUniversity = pcvcAddSelectedUniversity;
+
 if (btnAddUniversity && addUniversitySelect) {
-  btnAddUniversity.addEventListener("click", () => {
-    const $sel = $("#addUniversitySelect");
-    const val = $sel.val();
-    if (!val) return;
-
-    const $opt = $sel.find("option:selected");
-    const optEl = $opt.get(0);
-    let regionId = null;
-    if (optEl) {
-      regionId =
-        (optEl.dataset && optEl.dataset.regionId) ||
-        optEl.getAttribute("data-region-id");
-    }
-    const university = {
-      id: Number(val),
-      name:
-        (optEl && optEl.dataset && optEl.dataset.universityName) ||
-        $opt.text()
-    };
-
-    if (!regionId || !university.id) return;
-
-    createUniversityStudyCard(String(regionId), university);
-    $sel.val(null).trigger("change");
-  });
+  btnAddUniversity.addEventListener("click", pcvcAddSelectedUniversity);
 }
 
 /* =====================================================
@@ -1727,10 +1775,8 @@ async function submitForm(options = {}) {
     const res = await fetch(API, { method: "POST", body: fd });
     const httpStatus = res.status;
     const rawText = await res.text();
-    let data;
-    try {
-      data = JSON.parse(rawText);
-    } catch {
+    const data = parseApplicationJson(rawText);
+    if (!data || typeof data !== "object") {
       submitForm.lastErrorMessage = "Submission error. Please try again.";
       showApplicationSaveError(submitForm.lastErrorMessage);
       return false;

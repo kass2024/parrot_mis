@@ -5,7 +5,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/testimonials_lib.php';
 
 $admin_id = $_SESSION['id'] ?? null;
-if (!$admin_id || !isset($_SESSION['role']) || $_SESSION['role'] !== 'superadmin') {
+if (!$admin_id || !isset($_SESSION['role']) || !pcvc_is_superadmin_role($_SESSION['role'])) {
     header('Location: admin-login.php');
     exit;
 }

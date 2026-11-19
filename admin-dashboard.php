@@ -11,6 +11,7 @@ require_once __DIR__ . '/helpers/noble_education_schema.php';
 // Secondary database (e.g. applications from Cyprus system)
 require_once 'database.php';  // This connects to visaeofi_cyprus
 pcvc_ensure_university_admins_schema($conn);
+pcvc_ensure_account_status_column($conn);
 kic_contract_ensure_schema($conn);
 kep_ensure_schema($conn);
 neg_ensure_schema($conn);
@@ -27,6 +28,15 @@ if (!$result || mysqli_num_rows($result) === 0) {
   die("Admin not found.");
 }
 $admin = mysqli_fetch_assoc($result);
+$dashStatus = strtolower(trim((string) ($admin['account_status'] ?? 'active')));
+if (in_array($dashStatus, ['inactive', 'pending'], true)) {
+  $_SESSION = [];
+  if (session_status() === PHP_SESSION_ACTIVE) {
+    session_destroy();
+  }
+  header('Location: admin-login.php');
+  exit;
+}
 $role = pcvc_normalize_role_string($admin['role'] ?? 'standard');
 $displayName = trim(
   ($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? '')
@@ -225,7 +235,7 @@ $cards = [
     'title' => 'Staff Management',
     'icon' => 'bi-people',
     'links' => [
-      'staff-management.php'=> 'Manage staff ',
+      'staff-management.php'=> 'Accounts management',
       // 'tasks.php'=> 'Task Allocation',
       'admin/contracts-admin.php'=> 'Staff employment contracts',
       'salary-report.php'=> 'View Requested Salaries ',
@@ -261,6 +271,7 @@ $cards = [
     'links' => [
       'visa-report.php' => 'Applicant List',
       'visa-report.php?process_status=rejected' => 'Rejected',
+      'caq-report.php' => 'CAQ Applications',
     ]
   ],
   'staff_attendance' => [
@@ -269,6 +280,7 @@ $cards = [
     'links' => [
       'attendance-ui.php' => 'Take attendance',
       'job_todo_list.php' => 'Job Do List',
+      'daily-work-report.php' => 'Report Daily work',
       'salary.php' => 'Salary Request',
       'admin/contract.php'=> 'Sign your contract',
       'leave-request.php'=> 'Permission Request ',
@@ -318,6 +330,9 @@ $cards = [
       'francophonie-mobility-applications.php' => 'View Applications',
       'admin-generate-fm-contract.php' => 'Issue E-Sign Contract',
       'admin-fm-contracts.php' => 'Signed Contracts',
+      'admin-generate-fm-contract.php?variant=special' => 'Issue Special E-Sign',
+      'admin-fm-contracts.php?variant=special' => 'Signed Special Contracts',
+      'francophonie-record-invoice.php' => 'Record Invoice',
     ]
   ],
   'employment_opportunities' => [
@@ -359,14 +374,24 @@ $cards = [
       'websites.php?open=add' => 'Add new website',
     ]
   ],
+  'job_platforms' => [
+    'title' => 'Job platforms management',
+    'icon' => 'bi-briefcase',
+    'links' => [
+      'job-platforms.php' => 'List all job platforms',
+      'job-platforms.php?open=add' => 'Add new job platform',
+    ]
+  ],
   'contracts' => [
     'title' => 'Student contract',
     'icon' => 'bi-file-earmark-lock',
     'links' => [
-      'admin-generate-student-contract.php' => 'Issue contract link ',
+      'admin-generate-student-contract.php' => 'Issue English Contract Link',
+      'admin-generate-student-contract-french.php' => 'Issue French contract link',
       'admin-contracts.php' => 'View students Contracts',
       'admin-contracts-special.php' => 'Special students Contracts',
       'admin-generate-student-contract-special.php' => 'Issue special contract link',
+      'admin-special-contracts.php?only=cedrick' => 'Cedrick study Canada agreement',
       'admin/contract_esign.php' => 'Signed PhD Contracts',
     ]
   ],
@@ -377,6 +402,8 @@ $cards = [
       'admin-generate-partner-contract.php' => 'Issue partner contract link (English)',
       'admin-generate-partner-contract-french.php' => 'Issue partner contract link (French)',
       'admin-partner-contracts.php' => 'View partner contracts',
+      'admin-special-contracts.php?only=ccn_burundi' => 'CCN Burundi partnership (English)',
+      'admin-special-contracts.php?only=ccn_burundi_fr' => 'CCN Burundi partnership (French)',
     ]
   ],
   'korea_invitation_contracts' => [
@@ -402,12 +429,68 @@ $cards = [
       'noble-education-applications.php' => 'View Applications',
     ]
   ],
+  'malta_courses' => [
+    'title' => 'Malta – Professional Courses',
+    'icon' => 'bi-mortarboard',
+    'links' => [
+      'malta-courses-request.php?staff=1' => 'Add student',
+      'malta-courses-applications.php' => 'View applications',
+    ]
+  ],
+  'eci_malta' => [
+    'title' => 'Malta – ECI Student Application',
+    'icon' => 'bi-journal-richtext',
+    'links' => [
+      'eci-malta-application.php?staff=1' => 'Add student',
+      'eci-malta-applications.php' => 'View applications',
+    ]
+  ],
+  'canada_workers' => [
+    'title' => 'Canada Unskilled Workers Recruitment',
+    'icon' => 'bi-briefcase',
+    'links' => [
+      'canada-workers-applications.php' => 'View Applications',
+    ]
+  ],
   'agent_contracts' => [
     'title' => 'Agent Contract',
     'icon' => 'bi-person-badge',
     'links' => [
       'admin-generate-agent-contract.php' => 'Issue agent contract link',
       'admin-agent-contracts.php' => 'View agent contracts',
+    ]
+  ],
+  'german_language_contracts' => [
+    'title' => 'German Language Contract',
+    'icon' => 'bi-translate',
+    'links' => [
+      'admin-generate-german-language-contract.php' => 'Issue German language contract link (English)',
+      'admin-generate-german-language-contract-french.php' => 'Issue German language contract link (French)',
+      'admin-german-language-contracts.php' => 'View German language contracts',
+    ]
+  ],
+  'canada_partner_clients' => [
+    'title' => 'PARROT PartnerConnect',
+    'icon' => 'bi-person-lines-fill',
+    'links' => [
+      'canada-partners.php' => 'Partners and client monitor',
+      'canada-partner-client.php' => 'Client file',
+    ]
+  ],
+  'finance' => [
+    'title' => 'Finance',
+    'icon' => 'bi-cash-coin',
+    'links' => [
+      'finance.php' => 'Income',
+      'finance-budget.php' => 'Monthly budget',
+      'finance-request.php' => 'Request from a budget line',
+    ]
+  ],
+  'special_contracts' => [
+    'title' => 'Special contract',
+    'icon' => 'bi-journal-text',
+    'links' => [
+      'admin-special-contracts.php' => 'Special contracts',
     ]
   ],
 ];
@@ -425,7 +508,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'contracts', 'partner_contracts', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'agent_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -433,7 +516,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'noble_education', 'platform'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'malta_courses', 'eci_malta', 'platform', 'agent_contracts', 'german_language_contracts', 'special_contracts', 'finance'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -450,6 +533,54 @@ $dashboardRoleKey = pcvc_resolve_dashboard_role_key($role, $sidebarAccess, 'stan
 $allowedSidebarItems = $sidebarAccess[$dashboardRoleKey] ?? $sidebarAccess['standard'];
 if (pcvc_current_user_is_staff_or_superadmin($conn) && !in_array('meeting_invitation', $allowedSidebarItems, true)) {
     $allowedSidebarItems[] = 'meeting_invitation';
+}
+$sensitiveMenuKeys = ['website_management', 'job_platforms', 'noble_education', 'canada_workers'];
+$canAccessSensitiveMenus = pcvc_can_access_sensitive_menus($conn);
+if (!$canAccessSensitiveMenus) {
+    $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, $sensitiveMenuKeys));
+} else {
+    foreach ($sensitiveMenuKeys as $sensitiveKey) {
+        if (!in_array($sensitiveKey, $allowedSidebarItems, true)) {
+            $allowedSidebarItems[] = $sensitiveKey;
+        }
+    }
+}
+if (!pcvc_can_access_francophonie_mobility($conn)) {
+    $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, ['francophonie_mobility']));
+} elseif (!in_array('francophonie_mobility', $allowedSidebarItems, true)) {
+    $allowedSidebarItems[] = 'francophonie_mobility';
+}
+if (!pcvc_can_access_francophonie_mobility($conn)) {
+    $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, ['immigration_records']));
+} elseif (!in_array('immigration_records', $allowedSidebarItems, true)) {
+    $allowedSidebarItems[] = 'immigration_records';
+}
+$pcvcStaffClearanceOn = false;
+$pcvcClearanceDenied = [];
+$pcvcClearanceIndex = [];
+require_once __DIR__ . '/helpers/staff_level_clearance.php';
+if (pcvc_staff_level_clearance_is_target($role)) {
+    $pcvcStaffClearance = pcvc_staff_level_clearance_apply($conn, (int) $admin_id);
+    if (pcvc_is_superadmin_role($role)) {
+        $pcvcVisibleMenus = array_fill_keys($pcvcStaffClearance['menus'], true);
+        $pcvcClearanceCatalog = pcvc_staff_level_clearance_catalog();
+        $allowedSidebarItems = array_values(array_filter(
+            $allowedSidebarItems,
+            static function ($menuKey) use ($pcvcVisibleMenus, $pcvcClearanceCatalog): bool {
+                $menuKey = (string) $menuKey;
+
+                return isset($pcvcVisibleMenus[$menuKey]) || !isset($pcvcClearanceCatalog[$menuKey]);
+            }
+        ));
+    } else {
+        $allowedSidebarItems = $pcvcStaffClearance['menus'];
+    }
+    $pcvcStaffClearanceOn = true;
+    $pcvcClearanceDenied = $pcvcStaffClearance['denied'];
+    $pcvcClearanceIndex = $pcvcStaffClearance['index'];
+}
+if (pcvc_admin_row_is_akayezu_sonia($admin)) {
+    $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, ['website_management']));
 }
 $allowedDashboardCards = $allowedCardsByRole[$dashboardRoleKey] ?? ($allowedCardsByRole['standard'] ?? []);
 
@@ -475,24 +606,19 @@ if (strtolower($role) !== 'catholic university of america') {
     }
 
     // Pipeline columns are mutually exclusive (update-flag sets one flag = 1, others 0).
-    // "Submitted" in the chart means at or past submission in the workflow, not only submitted=1.
+    // "Submitted" means at or past submission, not only submitted=1. The KPI list uses the same expressions.
+    $submittedExpr = pcvc_agent_pipeline_expr('submitted');
+    $admitExpr = pcvc_agent_pipeline_expr('admit');
+    $visaExpr = pcvc_agent_pipeline_expr('visa_approved');
+    $enrolledExpr = pcvc_agent_pipeline_expr('enrolled');
     $mainAgentsQuery = "
       SELECT 
         LOWER(TRIM(sa.agent_email)) AS agent_email_norm,
         COUNT(*) AS total_students,
-        SUM(
-          IFNULL(sa.submitted, 0) = 1 OR IFNULL(sa.app_paid, 0) = 1 OR IFNULL(sa.admit, 0) = 1
-          OR IFNULL(sa.i20_sent, 0) = 1 OR IFNULL(sa.sevis_paid, 0) = 1 OR IFNULL(sa.visa_scheduled, 0) = 1
-          OR IFNULL(sa.visa_approved, 0) = 1 OR IFNULL(sa.enrolled, 0) = 1 OR IFNULL(sa.addn_doc, 0) = 1
-          OR IFNULL(sa.deny, 0) = 1
-        ) AS submitted,
-        SUM(
-          IFNULL(sa.admit, 0) = 1 OR IFNULL(sa.i20_sent, 0) = 1 OR IFNULL(sa.sevis_paid, 0) = 1
-          OR IFNULL(sa.visa_scheduled, 0) = 1 OR IFNULL(sa.visa_approved, 0) = 1 OR IFNULL(sa.enrolled, 0) = 1
-          OR IFNULL(sa.addn_doc, 0) = 1
-        ) AS admit,
-        SUM(IFNULL(sa.visa_approved, 0) = 1 OR IFNULL(sa.enrolled, 0) = 1) AS visa_approved,
-        SUM(IFNULL(sa.enrolled, 0) = 1) AS enrolled
+        SUM({$submittedExpr}) AS submitted,
+        SUM({$admitExpr}) AS admit,
+        SUM({$visaExpr}) AS visa_approved,
+        SUM({$enrolledExpr}) AS enrolled
       FROM student_applications sa
       WHERE sa.agent_email IS NOT NULL AND TRIM(sa.agent_email) != ''
       GROUP BY LOWER(TRIM(sa.agent_email))
@@ -541,7 +667,7 @@ if (strtolower($role) !== 'catholic university of america') {
     }
 
     foreach ($agentsCombined as $agent) {
-        if ($role !== 'superadmin' && strtolower(trim($agent['email'] ?? '')) !== strtolower(trim($admin['email'] ?? ''))) continue;
+        if (!pcvc_is_superadmin_role($role) && strtolower(trim($agent['email'] ?? '')) !== strtolower(trim($admin['email'] ?? ''))) continue;
         $chart_labels[] = $agent['name'];
         $chart_data[] = (int)$agent['total'];
     }
@@ -617,7 +743,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   
   <!-- Bootstrap 5 CSS -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   
   <!-- DataTables CSS -->
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
@@ -782,6 +908,47 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       transform: rotate(180deg);
     }
 
+    .sidebar-group {
+      display: none;
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    .sidebar-group.open {
+      display: block;
+    }
+
+    .sidebar-group-link span {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: normal;
+      line-height: 1.25;
+    }
+
+    .sidebar-group-link span.as-written {
+      text-transform: none;
+      letter-spacing: 0.01em;
+    }
+
+    .sidebar-group > .sidebar-link {
+      padding-left: 28px;
+      font-size: 0.86rem;
+    }
+
+    .sidebar-group > .sidebar-link span {
+      white-space: normal;
+      line-height: 1.3;
+    }
+
+    .sidebar-group .sidebar-submenu a {
+      padding-left: 64px;
+    }
+
+    .sidebar-group .sidebar-submenu a::before {
+      left: 48px;
+    }
+
     .sidebar-submenu {
       background: rgba(0, 0, 0, 0.15);
       display: none;
@@ -828,6 +995,16 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       border-radius: 50%;
       transform: translateY(-50%);
       opacity: 0.5;
+    }
+
+    .sidebar-submenu .menu-label {
+      display: block;
+      padding: 14px 20px 4px 56px;
+      color: rgba(255, 255, 255, 0.55);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
     }
 
     .sidebar-submenu a i {
@@ -1254,6 +1431,98 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     .staff-agent-email-badge {
       font-family: ui-monospace, monospace;
       font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .agent-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 1100px) {
+      .agent-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .agent-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .agent-kpi {
+      appearance: none;
+      text-align: left;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 14px;
+      padding: 14px 14px 12px;
+      cursor: pointer;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+      min-height: 124px;
+    }
+    .agent-kpi:hover,
+    .agent-kpi:focus-visible {
+      transform: translateY(-3px);
+      box-shadow: var(--shadow-lg);
+      border-color: rgba(66, 116, 49, 0.35);
+      outline: none;
+    }
+    .agent-kpi-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .agent-kpi-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      color: #fff;
+    }
+    .agent-kpi-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .agent-kpi-value {
+      display: block;
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.04em;
+      color: var(--text);
+    }
+    .agent-kpi-hint {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--navy);
+    }
+    .agent-kpi.is-allocated .agent-kpi-icon { background: #427431; }
+    .agent-kpi.is-submitted .agent-kpi-icon { background: #3661b9; }
+    .agent-kpi.is-admit .agent-kpi-icon { background: #0ea5e9; }
+    .agent-kpi.is-visa .agent-kpi-icon { background: #d97706; }
+    .agent-kpi.is-enrolled .agent-kpi-icon { background: #0d9f6e; }
+    .agent-count-link {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--navy);
+      font-weight: 800;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+    .agent-count-link:hover { color: var(--navy-secondary); }
+    .staff-agent-chart-note {
+      margin: 0 0 8px;
+      font-size: 0.82rem;
       color: var(--muted);
     }
 
@@ -1759,6 +2028,25 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       }
     }
 
+    @media (max-width: 768px) {
+      .topbar { padding: 10px 12px; }
+      .topbar-content { align-items: flex-start; gap: 8px; }
+      .page-title { min-width: 0; flex: 1; }
+      .page-title h1 { font-size: 1.15rem; }
+      .page-title p { font-size: 0.78rem; }
+      .topbar-actions { gap: 8px; }
+      .btn.btn-create-reminder { padding: 8px 10px; font-size: 0; }
+      .btn.btn-create-reminder i { font-size: 1.15rem; margin: 0 !important; }
+      .content-wrapper { padding: 12px; }
+      #content-frame {
+        height: calc(100dvh - 118px);
+        border-radius: 0;
+      }
+      .dropdown-menu { max-width: calc(100vw - 20px); }
+      #notifMenu { min-width: 0 !important; width: min(360px, calc(100vw - 20px)); }
+      .sidebar { width: min(288px, 88vw); }
+    }
+
     @media (max-width: 576px) {
       .topbar-actions {
         flex-wrap: wrap;
@@ -1863,716 +2151,1081 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       <h3>Partners of Parrot<br><small>Canada Visa Consultant</small></h3>
     </div>
     
-    <!-- Dashboard Section -->
+    <!-- Five main menus -->
+
+    <?php
+    $pcvcSidebarGroups = [
+      'study' => ['all_admissions', 'loan_applications', 'I-20_applications', 'credit_transfer', 'german_language_contracts', 'noble_education', 'malta_courses', 'eci_malta', 'contracts'],
+      'work' => ['jobsabrod', 'francophonie_mobility', 'canada_workers', 'employment_opportunities', 'employment_agreement', 'dubai_work', 'czech_work'],
+      'visit' => ['visit_study_visa', 'canada_medical', 'korea_event_participation', 'korea_invitation_contracts', 'client_consent', 'immigration_records'],
+      'partners' => ['staff_reporting', 'staff_attendance', 'commission_request', 'marketing', 'smart_brochure', 'meeting_invitation', 'refund_requests', 'partner_contracts', 'agent_contracts', 'special_contracts'],
+      'connect' => ['canada_partner_clients'],
+      'finance' => ['finance'],
+      'system' => ['platform', 'website_management', 'job_platforms'],
+    ];
+    $pcvcSidebarGroupOpen = [];
+    foreach ($pcvcSidebarGroups as $pcvcGroupId => $pcvcGroupKeys) {
+        $pcvcSidebarGroupOpen[$pcvcGroupId] = false;
+        foreach ($pcvcGroupKeys as $pcvcGroupKey) {
+            if (!in_array($pcvcGroupKey, $allowedSidebarItems, true)) {
+                continue;
+            }
+            if ($pcvcGroupKey === 'staff_reporting' && empty($isSuperExecutive) && empty($pcvcStaffClearanceOn)) {
+                continue;
+            }
+            $pcvcSidebarGroupOpen[$pcvcGroupId] = true;
+            break;
+        }
+    }
+    $pcvcSidebarGroupOpen['system'] = true;
+    ?>
     <div class="sidebar-section">
-      <div class="sidebar-section-title">Main Menu</div>
-      <a href="#" class="sidebar-link active" onclick="showDashboard()">
-        <i class="bi bi-speedometer2"></i>
-        <span>Dashboard</span>
-      </a>
-    </div>
-    
-    <!-- Applications Section -->
-    <div class="sidebar-section">
-      <div class="sidebar-section-title">Applications</div>
-      
-      <?php if (in_array('all_admissions', $allowedSidebarItems)): ?>
-      <!-- All university admissions -->
-      <a href="#all_admissions" class="sidebar-link" onclick="toggleSidebarMenu('all_admissions')">
+      <?php if (!empty($pcvcSidebarGroupOpen['study'])): ?>
+      <a href="#group_study" class="sidebar-link sidebar-group-link" onclick="toggleSidebarGroup('study'); return false;">
         <i class="bi bi-mortarboard"></i>
-        <span>All university admissions</span>
+        <span>Study Abroad</span>
         <i class="bi bi-chevron-down arrow"></i>
       </a>
-      <div class="sidebar-submenu" id="submenu_all_admissions">
-        <a href="#" onclick="loadInFrame('application-list.php', 'Student Application Report')">
-          <i class="bi bi-file-text"></i>
-          Student application Report
+      <div class="sidebar-group" id="group_study">
+  <?php if (in_array('all_admissions', $allowedSidebarItems)): ?>
+        <!-- All university admissions -->
+        <a href="#all_admissions" class="sidebar-link" onclick="toggleSidebarMenu('all_admissions')">
+          <i class="bi bi-mortarboard"></i>
+          <span>University & College Admissions</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <a href="#" onclick="loadInFrame('students-manage.php', 'Applicants Management')">
-          <i class="bi bi-gear"></i>
-          Applicants Management
+        <div class="sidebar-submenu" id="submenu_all_admissions">
+          <a href="#" onclick="loadInFrame('student-application.php', 'Add student')">
+            <i class="bi bi-person-plus"></i>
+            Add student
+          </a>
+          <a href="#" onclick="loadInFrame('application-list.php', 'Student Application Report')">
+            <i class="bi bi-file-text"></i>
+            Student application Report
+          </a>
+          <a href="#" onclick="loadInFrame('students-manage.php', 'Applicants Management')">
+            <i class="bi bi-gear"></i>
+            Applicants Management
+          </a>
+          <a href="#" onclick="loadInFrame('receipt_viewer.php', 'Check Payment Receipt')">
+            <i class="bi bi-receipt"></i>
+            Check payment Receipt
+          </a>
+          <a href="#" onclick="loadInFrame('applyboard-dashboard.php', 'ApplyBoard Applications')">
+            <i class="bi bi-grid-1x2"></i>
+            ApplyBoard Applications
+          </a>
+          <a href="#" onclick="loadInFrame('task-assignment-monitoring.php', 'Task assignment monitoring')">
+            <i class="bi bi-kanban"></i>
+            Task assignment monitoring
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('loan_applications', $allowedSidebarItems)): ?>
+        <!-- Study Loan Applications -->
+        <a href="#loan_applications" class="sidebar-link" onclick="toggleSidebarMenu('loan_applications')">
+          <i class="bi bi-bank"></i>
+          <span>Study Loan Applications</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <a href="#" onclick="loadInFrame('receipt_viewer.php', 'Check Payment Receipt')">
-          <i class="bi bi-receipt"></i>
-          Check payment Receipt
-        </a>
-        <a href="#" onclick="loadInFrame('applyboard-dashboard.php', 'ApplyBoard Applications')">
-          <i class="bi bi-grid-1x2"></i>
-          ApplyBoard Applications
-        </a>
-        <a href="#" onclick="loadInFrame('task-assignment-monitoring.php', 'Task assignment monitoring')">
-          <i class="bi bi-kanban"></i>
-          Task assignment monitoring
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('loan_applications', $allowedSidebarItems)): ?>
-      <!-- Study Loan Applications -->
-      <a href="#loan_applications" class="sidebar-link" onclick="toggleSidebarMenu('loan_applications')">
-        <i class="bi bi-bank"></i>
-        <span>Study Loan Applications</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_loan_applications">
-        <a href="#" onclick="loadInFrame('loan-applicants-report.php', 'Loan Application List')">
-          <i class="bi bi-list-check"></i>
-          Loan Application list
-        </a>
-        <a href="#" onclick="loadInFrame('loan_search.php', 'Search by User ID')">
-          <i class="bi bi-search"></i>
-          User-iD
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('I-20_applications', $allowedSidebarItems)): ?>
-      <!-- I-20 Applications -->
-      <a href="#I-20_applications" class="sidebar-link" onclick="toggleSidebarMenu('I-20_applications')">
-        <i class="bi bi-file-earmark-text"></i>
-        <span>I-20 Applications</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_I-20_applications">
-        <a href="#" onclick="loadInFrame('form-20-report.php', 'I-20 Applicant List')">
-          <i class="bi bi-file-earmark"></i>
-          I-20 Applicant List
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('staff_reporting', $allowedSidebarItems) && $isSuperExecutive): ?>
-      <!-- Staff Management - Superadmin only -->
-      <a href="#staff_reporting" class="sidebar-link" onclick="toggleSidebarMenu('staff_reporting')">
-        <i class="bi bi-people"></i>
-        <span>Staff Management</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_staff_reporting">
-        <a href="#" onclick="loadInFrame('staff-management.php', 'Manage Staff')">
-          <i class="bi bi-person-gear"></i>
-          Staff
-        </a>
-        <!-- <a href="#" onclick="loadInFrame('tasks.php', 'Task Allocation')">
-          <i class="bi bi-list-task"></i>
-          Task Allocation
-        </a> -->
-        <a href="#" onclick="loadInFrame('admin/contracts-admin.php', 'Staff Employment Contracts')">
+        <div class="sidebar-submenu" id="submenu_loan_applications">
+          <a href="#" onclick="loadInFrame('loan-applicants-report.php', 'Loan Application List')">
+            <i class="bi bi-list-check"></i>
+            Loan Application list
+          </a>
+          <a href="#" onclick="loadInFrame('loan_search.php', 'Search by User ID')">
+            <i class="bi bi-search"></i>
+            User-iD
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('I-20_applications', $allowedSidebarItems)): ?>
+        <!-- I-20 Applications -->
+        <a href="#I-20_applications" class="sidebar-link" onclick="toggleSidebarMenu('I-20_applications')">
           <i class="bi bi-file-earmark-text"></i>
-          Staff employment contracts
+          <span>USA – I-20 Applications</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <a href="#" onclick="loadInFrame('salary-report.php', 'Requested Salaries')">
-          <i class="bi bi-cash-stack"></i>
-          Salaries
-        </a>
-        <a href="#" onclick="loadInFrame('leave-approvals.php', 'Manage Permissions')">
-          <i class="bi bi-calendar-check"></i>
-          Permissions
-        </a>
-        <a href="#" onclick="loadInFrame('overtime-approvals.php', 'Overtime Management')">
-          <i class="bi bi-clock-history"></i>
-          Overtime
-        </a>
-        <a href="#" onclick="loadInFrame('jobs_report.php', 'Job Report')">
-          <i class="bi bi-clipboard-check"></i>
-          Job reports
-        </a>
-        <a href="#" onclick="loadInFrame('admin-payroll.php', 'Payroll')">
-          <i class="bi bi-credit-card"></i>
-          Payroll
-        </a>
-        <a href="#" onclick="loadInFrame('cards/generate_staff_card.php', 'Generate Staff Cards')">
-          <i class="bi bi-card-text"></i>
-          Staff cards
-        </a>
-        <a href="#" onclick="loadInFrame('staff-warning-letters.php', 'Staff Warning Letters')">
-          <i class="bi bi-exclamation-octagon"></i>
-          Warning letters
-        </a>
-        <a href="#" onclick="loadInFrame('mopay-payment-transactions.php', 'MoPay Transactions')">
+        <div class="sidebar-submenu" id="submenu_I-20_applications">
+          <a href="#" onclick="loadInFrame('form-20-report.php', 'I-20 Applicant List')">
+            <i class="bi bi-file-earmark"></i>
+            I-20 Applicant List
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('credit_transfer', $allowedSidebarItems)): ?>
+        <!-- Credit Transfer Applications - Superadmin only -->
+        <a href="#credit_transfer" class="sidebar-link" onclick="toggleSidebarMenu('credit_transfer')">
           <i class="bi bi-arrow-left-right"></i>
-          MoPay transactions
+          <span>Credit Transfer Applications</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('commission_request', $allowedSidebarItems)): ?>
-      <!-- Commission Request -->
-      <a href="#commission_request" class="sidebar-link" onclick="toggleSidebarMenu('commission_request')">
-        <i class="bi bi-cash-coin"></i>
-        <span>Commission Request</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_commission_request">
-        <a href="#" onclick="loadInFrame('Commission-Request.php', 'Request Commission')">
-          <i class="bi bi-plus-circle"></i>
-          Request commission
+        <div class="sidebar-submenu" id="submenu_credit_transfer">
+          <a href="#" onclick="loadInFrame('Credit-Transfer-report.php', 'Transfer Requests List')">
+            <i class="bi bi-list-check"></i>
+            Transfer Requests list
+          </a>
+          <!-- <a href="#" onclick="loadInFrame('transfer-status.php', 'Review Transfer Status')">
+            <i class="bi bi-eye"></i>
+            Review Status
+          </a> -->
+          <a href="#" onclick="loadInFrame('credit-search.php', 'Search Credit User ID')">
+            <i class="bi bi-search"></i>
+            credit userID
+          </a>
+          <a href="#" onclick="loadInFrame('research-project-elearning.php', 'Research Project for E-Learning')">
+            <i class="bi bi-journal-bookmark"></i>
+            RESEARCH PROJECT FOR ELEARNING
+          </a>
+          <?php if ($isSuperExecutive || $pcvcStaffClearanceOn): ?>
+          <a href="#" onclick="loadInFrame('special-student-payments.php', 'Record Credit Transfer / UPAFA Payment')">
+            <i class="bi bi-cash-stack"></i>
+            Record Payment (Credit Transfer / UPAFA)
+          </a>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('german_language_contracts', $allowedSidebarItems)): ?>
+        <a href="#german_language_contracts" class="sidebar-link" onclick="toggleSidebarMenu('german_language_contracts')">
+          <i class="bi bi-translate"></i>
+          <span>Germany – Language Programs & Contracts</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <a href="#" onclick="loadInFrame('commission-my-requests.php', 'My Commission Requests')">
-          <i class="bi bi-person-check"></i>
-          My requests
+        <div class="sidebar-submenu" id="submenu_german_language_contracts">
+          <a href="#" onclick="return loadInFrame('admin-generate-german-language-contract.php', 'Issue German Language Contract Link')">
+            <i class="bi bi-link"></i>
+            Issue German language contract link (English)
+          </a>
+          <a href="#" onclick="return loadInFrame('admin-generate-german-language-contract-french.php', 'Issue German Language Contract Link (French)')">
+            <i class="bi bi-link"></i>
+            Issue German language contract link (French)
+          </a>
+          <a href="#" onclick="return loadInFrame('admin-german-language-contracts.php', 'View German Language Contracts')">
+            <i class="bi bi-files"></i>
+            View German language contracts
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('noble_education', $allowedSidebarItems)): ?>
+        <a href="#noble_education" class="sidebar-link" onclick="toggleSidebarMenu('noble_education')">
+          <i class="bi bi-mortarboard"></i>
+          <span>Canada – Noble Education Group</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <?php if (!empty($isSuperExecutive)): ?>
-        <a href="#" onclick="loadInFrame('commission-requests-report.php', 'All Commission Requests')">
-          <i class="bi bi-receipt"></i>
-          All Requests
+        <div class="sidebar-submenu" id="submenu_noble_education">
+          <a href="#" onclick="loadInFrame('noble-education-applications.php', 'Noble Education Group — Canada')">
+            <i class="bi bi-list-ul"></i>
+            View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('noble-education-applications.php?status=pending', 'Pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('noble-education-applications.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('noble-education-applications.php?status=approved', 'Approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('noble-education-applications.php?status=rejected', 'Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+          <a href="#" onclick="window.open('noble-education-request.php', '_blank')">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Open public form
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('malta_courses', $allowedSidebarItems)): ?>
+        <a href="#malta_courses" class="sidebar-link" onclick="toggleSidebarMenu('malta_courses')">
+          <i class="bi bi-mortarboard"></i>
+          <span>Malta – Professional Courses</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
+        <div class="sidebar-submenu" id="submenu_malta_courses">
+          <a href="#" onclick="return loadInFrame('malta-courses-request.php?staff=1', 'Add Malta student')">
+            <i class="bi bi-person-plus"></i>
+            Add student
+          </a>
+          <a href="#" onclick="return loadInFrame('malta-courses-applications.php', 'Malta applications')">
+            <i class="bi bi-list-ul"></i>
+            View applications
+          </a>
+          <a href="#" onclick="return loadInFrame('malta-courses-applications.php?status=pending', 'Malta pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="return loadInFrame('malta-courses-applications.php?status=approved', 'Malta approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="window.open('malta-courses-request.php', '_blank')">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Open public form
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('eci_malta', $allowedSidebarItems)): ?>
+        <a href="#eci_malta" class="sidebar-link" onclick="toggleSidebarMenu('eci_malta')">
+          <i class="bi bi-journal-richtext"></i>
+          <span>Malta – ECI Student Application</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_eci_malta">
+          <a href="#" onclick="return loadInFrame('eci-malta-application.php?staff=1', 'Add ECI student')">
+            <i class="bi bi-person-plus"></i>
+            Add student
+          </a>
+          <a href="#" onclick="return loadInFrame('eci-malta-applications.php', 'ECI Malta applications')">
+            <i class="bi bi-list-ul"></i>
+            View applications
+          </a>
+          <a href="#" onclick="return loadInFrame('eci-malta-applications.php?status=pending', 'ECI pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="return loadInFrame('eci-malta-applications.php?status=approved', 'ECI approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="window.open('eci-malta-application.php', '_blank')">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Open public form
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('contracts', $allowedSidebarItems)): ?>
+        <!-- Student contract -->
+        <a href="#contracts" class="sidebar-link" onclick="toggleSidebarMenu('contracts')">
+          <i class="bi bi-file-earmark-lock"></i>
+          <span>Student Contracts</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_contracts">
+          <a href="#" onclick="loadInFrame('admin-generate-student-contract.php', 'Issue English Contract Link')">
+            <i class="bi bi-link"></i>
+            Issue English Contract Link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-generate-student-contract-french.php', 'Issue French Contract Link')">
+            <i class="bi bi-translate"></i>
+            Issue French contract link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-contracts.php', 'View Student Contracts')">
+            <i class="bi bi-files"></i>
+            View students Contracts
+          </a>
+          <a href="#" onclick="loadInFrame('admin-contracts-special.php', 'Special Student Contracts')">
+            <i class="bi bi-star"></i>
+            Special students Contracts
+          </a>
+          <a href="#" onclick="loadInFrame('admin-generate-student-contract-special.php', 'Issue Special Contract Link')">
+            <i class="bi bi-link-45deg"></i>
+            Issue special contract link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-special-contracts.php?only=cedrick', 'Cedrick study Canada agreement')">
+            <i class="bi bi-file-earmark-person"></i>
+            Cedrick study Canada agreement
+          </a>
+          <a href="#" onclick="loadInFrame('admin/contract_esign.php', 'Signed PhD Contracts')">
+            <i class="bi bi-file-earmark-arrow-down"></i>
+            Signed PhD Contracts
+          </a>
+        </div>
         <?php endif; ?>
       </div>
       <?php endif; ?>
-      
-   <?php if (in_array('credit_transfer', $allowedSidebarItems)): ?>
-      <!-- Credit Transfer Applications - Superadmin only -->
-      <a href="#credit_transfer" class="sidebar-link" onclick="toggleSidebarMenu('credit_transfer')">
-        <i class="bi bi-arrow-left-right"></i>
-        <span>Credit Transfer Applications</span>
+
+      <?php if (!empty($pcvcSidebarGroupOpen['work'])): ?>
+      <a href="#group_work" class="sidebar-link sidebar-group-link" onclick="toggleSidebarGroup('work'); return false;">
+        <i class="bi bi-briefcase"></i>
+        <span>Work Abroad</span>
         <i class="bi bi-chevron-down arrow"></i>
       </a>
-      <div class="sidebar-submenu" id="submenu_credit_transfer">
-        <a href="#" onclick="loadInFrame('Credit-Transfer-report.php', 'Transfer Requests List')">
-          <i class="bi bi-list-check"></i>
-          Transfer Requests list
+      <div class="sidebar-group" id="group_work">
+  <?php if (in_array('jobsabrod', $allowedSidebarItems)): ?>
+        <!-- Jobs Application - Superadmin only -->
+        <a href="#jobsabrod" class="sidebar-link" onclick="toggleSidebarMenu('jobsabrod')">
+          <i class="bi bi-briefcase"></i>
+          <span>International Job Applications</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <!-- <a href="#" onclick="loadInFrame('transfer-status.php', 'Review Transfer Status')">
-          <i class="bi bi-eye"></i>
-          Review Status
-        </a> -->
-        <a href="#" onclick="loadInFrame('credit-search.php', 'Search Credit User ID')">
-          <i class="bi bi-search"></i>
-          credit userID
+        <div class="sidebar-submenu" id="submenu_jobsabrod">
+          <a href="#" onclick="loadInFrame('job-applicant.php', 'Check Job Applicants')">
+            <i class="bi bi-person-check"></i>
+            Check job Applicants
+          </a>
+          <a href="#" onclick="loadInFrame('job-applicant.php?process_status=rejected', 'Job Applicants — Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('francophonie_mobility', $allowedSidebarItems)): ?>
+        <a href="#francophonie_mobility" class="sidebar-link" onclick="toggleSidebarMenu('francophonie_mobility')">
+          <i class="bi bi-map"></i>
+          <span>Canada – Francophone Mobility</span>
+          <i class="bi bi-chevron-down arrow"></i>
         </a>
-        <a href="#" onclick="loadInFrame('research-project-elearning.php', 'Research Project for E-Learning')">
-          <i class="bi bi-journal-bookmark"></i>
-          RESEARCH PROJECT FOR ELEARNING
+        <div class="sidebar-submenu" id="submenu_francophonie_mobility">
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php', 'Francophonie Mobility')">
+            <i class="bi bi-list-ul"></i>
+            View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=pending', 'Pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=approved', 'Approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=rejected', 'Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+          <a href="#" onclick="loadInFrame('admin-generate-fm-contract.php', 'Issue E-Sign Contract')">
+            <i class="bi bi-file-earmark-text"></i>
+            Issue E-Sign Contract
+          </a>
+          <a href="#" onclick="loadInFrame('admin-fm-contracts.php', 'Signed Mobility Contracts')">
+            <i class="bi bi-file-earmark-check"></i>
+            Signed Contracts
+          </a>
+          <span class="menu-label">Special Contract</span>
+          <a href="#" onclick="loadInFrame('admin-generate-fm-contract.php?variant=special', 'Issue Special E-Sign')">
+            <i class="bi bi-file-earmark-text"></i>
+            Issue Special E-Sign
+          </a>
+          <a href="#" onclick="loadInFrame('admin-fm-contracts.php?variant=special', 'Signed Special Contracts')">
+            <i class="bi bi-file-earmark-check"></i>
+            Signed Special Contracts
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-record-invoice.php', 'Record Invoice')">
+            <i class="bi bi-receipt"></i>
+            Record Invoice
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('canada_workers', $allowedSidebarItems)): ?>
+        <a href="#canada_workers" class="sidebar-link" onclick="toggleSidebarMenu('canada_workers')">
+          <i class="bi bi-briefcase"></i>
+          <span>Canada – General Worker Recruitment</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_canada_workers">
+          <a href="#" onclick="loadInFrame('canada-workers-applications.php', 'Canada Unskilled Workers Recruitment')">
+            <i class="bi bi-list-ul"></i>
+            View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('canada-workers-applications.php?status=pending', 'Pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('canada-workers-applications.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('canada-workers-applications.php?status=approved', 'Approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('canada-workers-applications.php?status=rejected', 'Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+          <a href="#" onclick="window.open('canada-workers-request.php', '_blank')">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Open public form
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('employment_opportunities', $allowedSidebarItems)): ?>
+        <a href="#employment_opportunities" class="sidebar-link" onclick="toggleSidebarMenu('employment_opportunities')">
+          <i class="bi bi-briefcase"></i>
+          <span>Russia – Employment Opportunities</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_employment_opportunities">
+          <a href="#" onclick="loadInFrame('employment-opportunities-applications.php', 'Russian Employment Opportunities')">
+            <i class="bi bi-list-ul"></i>
+            View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=pending', 'Pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=approved', 'Approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=rejected', 'Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+          <a href="#" onclick="loadInFrame('admin-generate-eo-contract.php', 'Issue E-Sign Contract')">
+            <i class="bi bi-file-earmark-text"></i>
+            Issue E-Sign Contract
+          </a>
+          <a href="#" onclick="loadInFrame('admin-eo-contracts.php', 'Signed Employment Contracts')">
+            <i class="bi bi-file-earmark-check"></i>
+            Signed Contracts
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('employment_agreement', $allowedSidebarItems)): ?>
+        <a href="#employment_agreement" class="sidebar-link" onclick="toggleSidebarMenu('employment_agreement')">
+          <i class="bi bi-briefcase"></i>
+          <span>Europe – Employment Applications & Agreements</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_employment_agreement">
+          <a href="#" onclick="loadInFrame('admin-generate-employment-agreement.php', 'Issue European International Employment Agreement Link')">
+            <i class="bi bi-link"></i>
+            Issue employment agreement link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-employment-agreements.php', 'View European International Employment Agreements')">
+            <i class="bi bi-files"></i>
+            View employment agreements
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('dubai_work', $allowedSidebarItems)): ?>
+        <a href="#dubai_work" class="sidebar-link" onclick="toggleSidebarMenu('dubai_work')">
+          <i class="bi bi-briefcase"></i>
+          <span>Dubai – Work Contract</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_dubai_work">
+          <a href="#" onclick="loadInFrame('admin-generate-dubai-contract.php', 'Issue Dubai work contract')">
+            <i class="bi bi-link"></i>
+            Issue Dubai work contract
+          </a>
+          <a href="#" onclick="loadInFrame('admin-dubai-contracts.php', 'View Dubai work contracts')">
+            <i class="bi bi-files"></i>
+            View Dubai work contracts
+          </a>
+          <a href="#" onclick="loadInFrame('dubai-record-invoice.php', 'Record Invoice')">
+            <i class="bi bi-receipt"></i>
+            Record Invoice
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('czech_work', $allowedSidebarItems)): ?>
+        <a href="#czech_work" class="sidebar-link" onclick="toggleSidebarMenu('czech_work')">
+          <i class="bi bi-briefcase"></i>
+          <span>Czech Republic – Work Permit</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_czech_work">
+          <a href="#" onclick="loadInFrame('admin-generate-czech-contract.php', 'Issue Czech work permit agreement')">
+            <i class="bi bi-link"></i>
+            Issue Czech work permit agreement
+          </a>
+          <a href="#" onclick="loadInFrame('admin-czech-contracts.php', 'View Czech work permit agreements')">
+            <i class="bi bi-files"></i>
+            View Czech work permit agreements
+          </a>
+          <a href="#" onclick="loadInFrame('czech-record-invoice.php', 'Record Invoice')">
+            <i class="bi bi-receipt"></i>
+            Record Invoice
+          </a>
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($pcvcSidebarGroupOpen['visit'])): ?>
+      <a href="#group_visit" class="sidebar-link sidebar-group-link" onclick="toggleSidebarGroup('visit'); return false;">
+        <i class="bi bi-passport"></i>
+        <span>Visit & Immigration</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-group" id="group_visit">
+  <?php if (in_array('visit_study_visa', $allowedSidebarItems)): ?>
+        <!-- Visit And Study Visa -->
+        <a href="#visit_study_visa" class="sidebar-link" onclick="toggleSidebarMenu('visit_study_visa')">
+          <i class="bi bi-globe2"></i>
+          <span>Visitor & Study Visa Applications</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_visit_study_visa">
+          <a href="#" onclick="loadInFrame('visa-report.php', 'Visa Applicant List')">
+            <i class="bi bi-people"></i>
+            Applicant List
+          </a>
+          <a href="#" onclick="loadInFrame('visa-report.php?process_status=rejected', 'Visa — Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+          <a href="#" onclick="loadInFrame('caq-report.php', 'CAQ Applications')">
+            <i class="bi bi-file-earmark-text"></i>
+            CAQ Applications
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('canada_medical', $allowedSidebarItems)): ?>
+        <!-- Canada Medical Exams -->
+        <a href="#canada_medical" class="sidebar-link" onclick="toggleSidebarMenu('canada_medical')">
+          <i class="bi bi-hospital"></i>
+          <span>Canada – Immigration Medical Examinations</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_canada_medical">
+          <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php', 'View Applications')">
+            <i class="bi bi-list-ul"></i>
+            View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=pending', 'Pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=approved', 'Approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=rejected', 'Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('korea_event_participation', $allowedSidebarItems)): ?>
+        <a href="#korea_event_participation" class="sidebar-link" onclick="toggleSidebarMenu('korea_event_participation')">
+          <i class="bi bi-flag"></i>
+          <span>South Korea – Events & Conferences</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_korea_event_participation">
+          <a href="#" onclick="loadInFrame('korea-event-applications.php', 'South Korea Event Participation')">
+            <i class="bi bi-list-ul"></i>
+            View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('korea-event-applications.php?register=1', 'Register applicant')">
+            <i class="bi bi-person-plus"></i>
+            Register applicant
+          </a>
+          <a href="#" onclick="loadInFrame('korea-event-applications.php?status=pending', 'Pending')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('korea-event-applications.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('korea-event-applications.php?status=approved', 'Approved')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('korea-event-applications.php?status=rejected', 'Rejected')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+          <a href="#" onclick="window.open('korea-event-participation-request.php', '_blank')">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Open public form
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('korea_invitation_contracts', $allowedSidebarItems)): ?>
+        <!-- Korea invitation contract -->
+        <a href="#korea_invitation_contracts" class="sidebar-link" onclick="toggleSidebarMenu('korea_invitation_contracts')">
+          <i class="bi bi-file-earmark-text"></i>
+          <span>South Korea – Invitation & Visa Contracts</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_korea_invitation_contracts">
+          <a href="#" onclick="loadInFrame('admin-generate-korea-invitation-contract.php', 'Issue Korea Invitation Contract Link')">
+            <i class="bi bi-link"></i>
+            Issue Korea invitation contract link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-korea-invitation-contracts.php', 'View Korea Invitation Contracts')">
+            <i class="bi bi-files"></i>
+            View Korea invitation contracts
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('client_consent', $allowedSidebarItems)): ?>
+        <a href="#client_consent" class="sidebar-link" onclick="toggleSidebarMenu('client_consent')">
+          <i class="bi bi-file-earmark-check"></i>
+          <span>Immigration Client Consent Agreements</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_client_consent">
+          <a href="#" onclick="loadInFrame('admin-generate-client-consent.php', 'Issue Client Consent Link')">
+            <i class="bi bi-link"></i>
+            Issue client consent link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-client-consents.php', 'View Client Consent Agreements')">
+            <i class="bi bi-files"></i>
+            View client consent agreements
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('immigration_records', $allowedSidebarItems)): ?>
+        <a href="#immigration_records" class="sidebar-link" onclick="toggleSidebarMenu('immigration_records')">
+          <i class="bi bi-folder2-open"></i>
+          <span>Immigration Records Agreement</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_immigration_records">
+          <a href="#" onclick="loadInFrame('admin-generate-irs-agreement.php', 'Issue Immigration Records Agreement')">
+            <i class="bi bi-link"></i>
+            Issue signing link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-irs-agreements.php', 'Signed Immigration Records Agreements')">
+            <i class="bi bi-file-earmark-check"></i>
+            Signed agreements
+          </a>
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($pcvcSidebarGroupOpen['partners'])): ?>
+      <a href="#group_partners" class="sidebar-link sidebar-group-link" onclick="toggleSidebarGroup('partners'); return false;">
+        <i class="bi bi-people"></i>
+        <span>Partners & Operations</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-group" id="group_partners">
+  <?php if (in_array('staff_reporting', $allowedSidebarItems) && ($isSuperExecutive || $pcvcStaffClearanceOn)): ?>
+        <!-- Staff Management - Superadmin only -->
+        <a href="#staff_reporting" class="sidebar-link" onclick="toggleSidebarMenu('staff_reporting')">
+          <i class="bi bi-people"></i>
+          <span>Staff Management</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_staff_reporting">
+          <a href="#" onclick="loadInFrame('staff-management.php', 'Accounts management')">
+            <i class="bi bi-person-gear"></i>
+            Accounts management
+          </a>
+          <!-- <a href="#" onclick="loadInFrame('tasks.php', 'Task Allocation')">
+            <i class="bi bi-list-task"></i>
+            Task Allocation
+          </a> -->
+          <a href="#" onclick="loadInFrame('admin/contracts-admin.php', 'Staff Employment Contracts')">
+            <i class="bi bi-file-earmark-text"></i>
+            Staff employment contracts
+          </a>
+          <a href="#" onclick="loadInFrame('salary-report.php', 'Requested Salaries')">
+            <i class="bi bi-cash-stack"></i>
+            Salaries
+          </a>
+          <a href="#" onclick="loadInFrame('leave-approvals.php', 'Manage Permissions')">
+            <i class="bi bi-calendar-check"></i>
+            Permissions
+          </a>
+          <a href="#" onclick="loadInFrame('overtime-approvals.php', 'Overtime Management')">
+            <i class="bi bi-clock-history"></i>
+            Overtime
+          </a>
+          <a href="#" onclick="loadInFrame('jobs_report.php', 'Job Report')">
+            <i class="bi bi-clipboard-check"></i>
+            Job reports
+          </a>
+          <a href="#" onclick="loadInFrame('staff_daily_report.php', 'Contract team daily report')">
+            <i class="bi bi-calendar2-check"></i>
+            Contract team daily report
+          </a>
+          <a href="#" onclick="loadInFrame('admin-payroll.php', 'Payroll')">
+            <i class="bi bi-credit-card"></i>
+            Payroll
+          </a>
+          <a href="#" onclick="loadInFrame('cards/generate_staff_card.php', 'Generate Staff Cards')">
+            <i class="bi bi-card-text"></i>
+            Staff cards
+          </a>
+          <a href="#" onclick="loadInFrame('staff-warning-letters.php', 'Staff Warning Letters')">
+            <i class="bi bi-exclamation-octagon"></i>
+            Warning letters
+          </a>
+          <a href="#" onclick="loadInFrame('mopay-payment-transactions.php', 'MoPay Transactions')">
+            <i class="bi bi-arrow-left-right"></i>
+            MoPay transactions
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('staff_attendance', $allowedSidebarItems)): ?>
+        <!-- Staff Attendance -->
+        <a href="#staff_attendance" class="sidebar-link" onclick="toggleSidebarMenu('staff_attendance')">
+          <i class="bi bi-calendar-check"></i>
+          <span>Staff Attendance</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_staff_attendance">
+          <a href="#" onclick="loadInFrame('attendance-ui.php', 'Take Attendance')">
+            <i class="bi bi-calendar-plus"></i>
+            Take attendance
+          </a>
+          <a href="#" onclick="loadInFrame('job_todo_list.php', 'Job To-Do List')">
+            <i class="bi bi-list-task"></i>
+            Job Do List
+          </a>
+          <a href="#" onclick="loadInFrame('daily-work-report.php', 'Report Daily work')">
+            <i class="bi bi-journal-text"></i>
+            Report Daily work
+          </a>
+          <a href="#" onclick="loadInFrame('salary.php', 'Salary Request')">
+            <i class="bi bi-wallet2"></i>
+            Salary Request
+          </a>
+          <a href="#" onclick="loadInFrame('admin/contract.php', 'Sign Contract')">
+            <i class="bi bi-pen"></i>
+            Sign your contract
+          </a>
+          <a href="#" onclick="loadInFrame('leave-request.php', 'Permission Request')">
+            <i class="bi bi-calendar-x"></i>
+            Permission Request
+          </a>
+          <a href="#" onclick="loadInFrame('staff_overtime_request.php', 'Overtime Request')">
+            <i class="bi bi-clock-history"></i>
+            Overtime request
+          </a>
+          <a href="#" onclick="loadInFrame('my-leaves.php', 'Permission Status')">
+            <i class="bi bi-calendar-check2"></i>
+            Check permission status
+          </a>
+          <a href="#" onclick="loadInFrame('attendance-report.php', 'Attendance Report')">
+            <i class="bi bi-graph-up"></i>
+            Attendance Report
+          </a>
+          <a href="#" onclick="loadInFrame('jobs_report.php', 'Job Report')">
+            <i class="bi bi-bar-chart"></i>
+            Check job report
+          </a>
+          <a href="#" onclick="loadInFrame('cards/generate_staff_card.php', 'Generate Service Card')">
+            <i class="bi bi-award"></i>
+            Generate your service card
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('commission_request', $allowedSidebarItems)): ?>
+        <!-- Commission Request -->
+        <a href="#commission_request" class="sidebar-link" onclick="toggleSidebarMenu('commission_request')">
+          <i class="bi bi-cash-coin"></i>
+          <span>Commission Requests</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_commission_request">
+          <a href="#" onclick="loadInFrame('Commission-Request.php', 'Request Commission')">
+            <i class="bi bi-plus-circle"></i>
+            Request commission
+          </a>
+          <a href="#" onclick="loadInFrame('commission-my-requests.php', 'My Commission Requests')">
+            <i class="bi bi-person-check"></i>
+            My requests
+          </a>
+          <?php if (!empty($isSuperExecutive) || $pcvcStaffClearanceOn): ?>
+          <a href="#" onclick="loadInFrame('commission-requests-report.php', 'All Commission Requests')">
+            <i class="bi bi-receipt"></i>
+            All Requests
+          </a>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('marketing', $allowedSidebarItems)): ?>
+        <!-- Marketing Materials -->
+        <a href="#marketing" class="sidebar-link" onclick="toggleSidebarMenu('marketing')">
+          <i class="bi bi-megaphone"></i>
+          <span>Marketing Materials</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_marketing">
+          <a href="#" onclick="loadInFrame('upload-materials.php', 'Upload Marketing Materials')">
+            <i class="bi bi-upload"></i>
+            Upload Marketing materials
+          </a>
+          <a href="#" onclick="loadInFrame('get-materials.php', 'Get Marketing Materials')">
+            <i class="bi bi-download"></i>
+            Get Marketing materials
+          </a>
+          <a href="#" onclick="loadInFrame('weekly-advert.php', 'Weekly Advert')">
+            <i class="bi bi-stars"></i>
+            Weekly advert
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('smart_brochure', $allowedSidebarItems)): ?>
+        <!-- Smart Brochure Sharing -->
+        <a href="#smart_brochure" class="sidebar-link" onclick="toggleSidebarMenu('smart_brochure')">
+          <i class="bi bi-megaphone-fill"></i>
+          <span>Smart Brochure Sharing</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_smart_brochure">
+          <a href="#" onclick="loadInFrame('marketing-brochures.php', 'Smart Brochure Sharing')">
+            <i class="bi bi-collection"></i>
+            Brochures &amp; Share Center
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('meeting_invitation', $allowedSidebarItems)): ?>
+        <a href="#meeting_invitation" class="sidebar-link" onclick="toggleSidebarMenu('meeting_invitation')">
+          <i class="bi bi-camera-video"></i>
+          <span>Meeting Invitations</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_meeting_invitation">
+          <a href="#" onclick="loadInFrame('francophonie-meeting-invitation.php', 'Meeting Invitation')">
+            <i class="bi bi-envelope-open"></i>
+            Meeting Invitation
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-meeting-recordings.php', 'Meeting Recordings')">
+            <i class="bi bi-cloud-download"></i>
+            Meeting Recordings
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('refund_requests', $allowedSidebarItems)): ?>
+        <!-- Refund Requests (superadmin) -->
+        <a href="#refund_requests" class="sidebar-link" onclick="toggleSidebarMenu('refund_requests')">
+          <i class="bi bi-cash-stack"></i>
+          <span>Refund Management</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_refund_requests">
+          <a href="#" onclick="loadInFrame('refund-requests-report.php', 'Refund Requests')">
+            <i class="bi bi-list-ul"></i>
+            All Refund Requests
+          </a>
+          <a href="#" onclick="loadInFrame('refund-requests-report.php?status=pending', 'Pending Refunds')">
+            <i class="bi bi-clock"></i>
+            Pending
+          </a>
+          <a href="#" onclick="loadInFrame('refund-requests-report.php?status=under_review', 'Under Review')">
+            <i class="bi bi-eye"></i>
+            Under Review
+          </a>
+          <a href="#" onclick="loadInFrame('refund-requests-report.php?status=approved', 'Approved Refunds')">
+            <i class="bi bi-check-circle"></i>
+            Approved
+          </a>
+          <a href="#" onclick="loadInFrame('refund-requests-report.php?status=rejected', 'Rejected Refunds')">
+            <i class="bi bi-x-circle"></i>
+            Rejected
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('partner_contracts', $allowedSidebarItems)): ?>
+        <!-- Partner contract -->
+        <a href="#partner_contracts" class="sidebar-link" onclick="toggleSidebarMenu('partner_contracts')">
+          <i class="bi bi-handshake"></i>
+          <span>B2B Partner Contracts</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_partner_contracts">
+          <a href="#" onclick="loadInFrame('admin-generate-partner-contract.php', 'Issue Partner Contract Link (English)')">
+            <i class="bi bi-link"></i>
+            Issue partner contract link (English)
+          </a>
+          <a href="#" onclick="loadInFrame('admin-generate-partner-contract-french.php', 'Issue Partner Contract Link (French)')">
+            <i class="bi bi-link"></i>
+            Issue partner contract link (French)
+          </a>
+          <a href="#" onclick="loadInFrame('admin-partner-contracts.php', 'View Partner Contracts')">
+            <i class="bi bi-files"></i>
+            View partner contracts
+          </a>
+          <a href="#" onclick="loadInFrame('admin-special-contracts.php?only=ccn_burundi', 'CCN Burundi partnership (English)')">
+            <i class="bi bi-building"></i>
+            CCN Burundi partnership (English)
+          </a>
+          <a href="#" onclick="loadInFrame('admin-special-contracts.php?only=ccn_burundi_fr', 'CCN Burundi partnership (French)')">
+            <i class="bi bi-building"></i>
+            CCN Burundi partnership (French)
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('agent_contracts', $allowedSidebarItems)): ?>
+        <!-- Agent referral contract -->
+        <a href="#agent_contracts" class="sidebar-link" onclick="toggleSidebarMenu('agent_contracts')">
+          <i class="bi bi-person-badge"></i>
+          <span>Individual Agent Contracts</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_agent_contracts">
+          <a href="#" onclick="loadInFrame('admin-generate-agent-contract.php', 'Issue Agent Contract Link')">
+            <i class="bi bi-link"></i>
+            Issue agent contract link
+          </a>
+          <a href="#" onclick="loadInFrame('admin-agent-contracts.php', 'View Agent Contracts')">
+            <i class="bi bi-files"></i>
+            View agent contracts
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('special_contracts', $allowedSidebarItems)): ?>
+        <a href="#special_contracts" class="sidebar-link" onclick="toggleSidebarMenu('special_contracts')">
+          <i class="bi bi-journal-text"></i>
+          <span>Special Service Contracts</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_special_contracts">
+          <a href="#" onclick="return loadInFrame('admin-special-contracts.php', 'Special contract')">
+            <i class="bi bi-files"></i>
+            Special contracts
+          </a>
+        </div>
+        <?php endif; ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($pcvcSidebarGroupOpen['connect'])): ?>
+      <a href="#group_connect" class="sidebar-link sidebar-group-link" onclick="toggleSidebarGroup('connect'); return false;">
+        <i class="bi bi-person-lines-fill"></i>
+        <span class="as-written">PARROT PartnerConnect</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-group" id="group_connect">
+        <a href="#" class="sidebar-link" onclick="return loadInFrame('canada-partners.php', 'PARROT PartnerConnect')">
+          <i class="bi bi-grid"></i>
+          <span>Partners and client monitor</span>
+        </a>
+        <a href="#" class="sidebar-link" onclick="return loadInFrame('canada-partners.php#partner-form', 'Add a partner')">
+          <i class="bi bi-person-plus"></i>
+          <span>Add a partner</span>
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($pcvcSidebarGroupOpen['finance'])): ?>
+      <a href="#group_finance" class="sidebar-link sidebar-group-link" onclick="toggleSidebarGroup('finance'); return false;">
+        <i class="bi bi-cash-coin"></i>
+        <span class="as-written">Finance</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-group" id="group_finance">
+        <?php if ($isSuperExecutive): ?>
+        <a href="#" class="sidebar-link" onclick="return loadInFrame('finance.php', 'Income')">
+          <i class="bi bi-graph-up"></i>
+          <span>Income</span>
+        </a>
+        <a href="#" class="sidebar-link" onclick="return loadInFrame('finance-budget.php', 'Monthly budget')">
+          <i class="bi bi-file-earmark-spreadsheet"></i>
+          <span>Monthly budget</span>
+        </a>
+        <?php endif; ?>
+        <a href="#" class="sidebar-link" onclick="return loadInFrame('finance-request.php', 'Budget request')">
+          <i class="bi bi-wallet2"></i>
+          <span>Request from a budget line</span>
+        </a>
+      </div>
+      <?php endif; ?>
+
+      <?php if (!empty($pcvcSidebarGroupOpen['system'])): ?>
+      <a href="#group_system" class="sidebar-link sidebar-group-link active" onclick="toggleSidebarGroup('system'); return false;">
+        <i class="bi bi-gear"></i>
+        <span>System & Account</span>
+        <i class="bi bi-chevron-down arrow"></i>
+      </a>
+      <div class="sidebar-group open" id="group_system">
+        <a href="#" class="sidebar-link active" onclick="showDashboard()">
+          <i class="bi bi-speedometer2"></i>
+          <span>Main Dashboard</span>
+        </a>
+  <?php if (in_array('platform', $allowedSidebarItems)): ?>
+        <!-- Platforms management - All admins -->
+        <a href="#platform" class="sidebar-link" onclick="toggleSidebarMenu('platform')">
+          <i class="bi bi-diagram-3"></i>
+          <span>Platform Management</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_platform">
+          <a href="#" onclick="loadInFrame('platforms.php', 'Platforms Management')">
+            <i class="bi bi-gear"></i>
+            Platforms management
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('website_management', $allowedSidebarItems, true)): ?>
+        <a href="#" class="sidebar-link" onclick="loadInFrame('websites.php', 'Website Management')">
+          <i class="bi bi-globe2"></i>
+          <span>Website Management</span>
+        </a>
+        <?php endif; ?>
+  <?php if (in_array('job_platforms', $allowedSidebarItems, true)): ?>
+        <a href="#" class="sidebar-link" onclick="loadInFrame('job-platforms.php', 'Job platforms management')">
+          <i class="bi bi-briefcase"></i>
+          <span>Job Platform Management</span>
+        </a>
+        <?php endif; ?>
+        <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#profileModal">
+          <i class="bi bi-person"></i>
+          <span>My Profile</span>
+        </a>
+        <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#changePassModal">
+          <i class="bi bi-key"></i>
+          <span>Password & Security</span>
         </a>
         <?php if ($isSuperExecutive): ?>
-        <a href="#" onclick="loadInFrame('special-student-payments.php', 'Record Credit Transfer / UPAFA Payment')">
-          <i class="bi bi-cash-stack"></i>
-          Record Payment (Credit Transfer / UPAFA)
+        <a href="#" class="sidebar-link" onclick="loadInFrame('admin-level-clearance.php', 'Level Clearance')">
+          <i class="bi bi-shield-lock"></i>
+          <span>Level Clearance</span>
         </a>
         <?php endif; ?>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('visit_study_visa', $allowedSidebarItems)): ?>
-      <!-- Visit And Study Visa -->
-      <a href="#visit_study_visa" class="sidebar-link" onclick="toggleSidebarMenu('visit_study_visa')">
-        <i class="bi bi-globe2"></i>
-        <span>Visit And Study Visa</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_visit_study_visa">
-        <a href="#" onclick="loadInFrame('visa-report.php', 'Visa Applicant List')">
-          <i class="bi bi-people"></i>
-          Applicant List
-        </a>
-        <a href="#" onclick="loadInFrame('visa-report.php?process_status=rejected', 'Visa — Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('staff_attendance', $allowedSidebarItems)): ?>
-      <!-- Staff Attendance -->
-      <a href="#staff_attendance" class="sidebar-link" onclick="toggleSidebarMenu('staff_attendance')">
-        <i class="bi bi-calendar-check"></i>
-        <span>Staff Attendance</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_staff_attendance">
-        <a href="#" onclick="loadInFrame('attendance-ui.php', 'Take Attendance')">
-          <i class="bi bi-calendar-plus"></i>
-          Take attendance
-        </a>
-        <a href="#" onclick="loadInFrame('job_todo_list.php', 'Job To-Do List')">
-          <i class="bi bi-list-task"></i>
-          Job Do List
-        </a>
-        <a href="#" onclick="loadInFrame('salary.php', 'Salary Request')">
-          <i class="bi bi-wallet2"></i>
-          Salary Request
-        </a>
-        <a href="#" onclick="loadInFrame('admin/contract.php', 'Sign Contract')">
-          <i class="bi bi-pen"></i>
-          Sign your contract
-        </a>
-        <a href="#" onclick="loadInFrame('leave-request.php', 'Permission Request')">
-          <i class="bi bi-calendar-x"></i>
-          Permission Request
-        </a>
-        <a href="#" onclick="loadInFrame('staff_overtime_request.php', 'Overtime Request')">
-          <i class="bi bi-clock-history"></i>
-          Overtime request
-        </a>
-        <a href="#" onclick="loadInFrame('my-leaves.php', 'Permission Status')">
-          <i class="bi bi-calendar-check2"></i>
-          Check permission status
-        </a>
-        <a href="#" onclick="loadInFrame('attendance-report.php', 'Attendance Report')">
-          <i class="bi bi-graph-up"></i>
-          Attendance Report
-        </a>
-        <a href="#" onclick="loadInFrame('jobs_report.php', 'Job Report')">
-          <i class="bi bi-bar-chart"></i>
-          Check job report
-        </a>
-        <a href="#" onclick="loadInFrame('cards/generate_staff_card.php', 'Generate Service Card')">
-          <i class="bi bi-award"></i>
-          Generate your service card
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('university_portal', $allowedSidebarItems)): ?>
-      <!-- Apply for Student -->
-      <a href="#university_portal" class="sidebar-link" onclick="toggleSidebarMenu('university_portal')">
-        <i class="bi bi-person-plus"></i>
-        <span>Apply for Student</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_university_portal">
-        <a href="#" onclick="loadInFrame('student-application.php', 'Apply Now')">
-          <i class="bi bi-pencil-square"></i>
-          Apply Now
-        </a>
-        <a href="#" onclick="loadInFrame('agent-student-manage.php', 'Manage Students')">
-          <i class="bi bi-people"></i>
-          Manage Students
-        </a>
-        <a href="#" onclick="loadInFrame('userid-search.php', 'User ID Search')">
-          <i class="bi bi-search"></i>
-          User-id
-        </a>
+        <?php if ($isSuperExecutive): ?>
+          <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#adminSettingsModal">
+            <i class="bi bi-gear"></i>
+            <span>System Settings</span>
+          </a>
+          <a href="admin-testimonials.php" class="sidebar-link">
+            <i class="bi bi-chat-quote"></i>
+            <span>Website Testimonials</span>
+          </a>
+        <?php endif; ?>
+        <form action="admin-logout.php" method="POST" class="d-inline">
+          <button type="submit" class="sidebar-link w-100 text-start border-0 bg-transparent text-white" style="outline: none;">
+            <i class="bi bi-box-arrow-right"></i>
+            <span>Logout</span>
+          </button>
+        </form>
       </div>
       <?php endif; ?>
 
-      <?php if (in_array('marketing', $allowedSidebarItems)): ?>
-      <!-- Marketing Materials -->
-      <a href="#marketing" class="sidebar-link" onclick="toggleSidebarMenu('marketing')">
-        <i class="bi bi-megaphone"></i>
-        <span>Marketing Materials</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_marketing">
-        <a href="#" onclick="loadInFrame('upload-materials.php', 'Upload Marketing Materials')">
-          <i class="bi bi-upload"></i>
-          Upload Marketing materials
-        </a>
-        <a href="#" onclick="loadInFrame('get-materials.php', 'Get Marketing Materials')">
-          <i class="bi bi-download"></i>
-          Get Marketing materials
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('smart_brochure', $allowedSidebarItems)): ?>
-      <!-- Smart Brochure Sharing -->
-      <a href="#smart_brochure" class="sidebar-link" onclick="toggleSidebarMenu('smart_brochure')">
-        <i class="bi bi-megaphone-fill"></i>
-        <span>Smart Brochure Sharing</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_smart_brochure">
-        <a href="#" onclick="loadInFrame('marketing-brochures.php', 'Smart Brochure Sharing')">
-          <i class="bi bi-collection"></i>
-          Brochures &amp; Share Center
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('jobsabrod', $allowedSidebarItems)): ?>
-      <!-- Jobs Application - Superadmin only -->
-      <a href="#jobsabrod" class="sidebar-link" onclick="toggleSidebarMenu('jobsabrod')">
-        <i class="bi bi-briefcase"></i>
-        <span>Jobs Application</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_jobsabrod">
-        <a href="#" onclick="loadInFrame('job-applicant.php', 'Check Job Applicants')">
-          <i class="bi bi-person-check"></i>
-          Check job Applicants
-        </a>
-        <a href="#" onclick="loadInFrame('job-applicant.php?process_status=rejected', 'Job Applicants — Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('canada_medical', $allowedSidebarItems)): ?>
-      <!-- Canada Medical Exams -->
-      <a href="#canada_medical" class="sidebar-link" onclick="toggleSidebarMenu('canada_medical')">
-        <i class="bi bi-hospital"></i>
-        <span>Canada Medical Exams</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_canada_medical">
-        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php', 'View Applications')">
-          <i class="bi bi-list-ul"></i>
-          View Applications
-        </a>
-        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=pending', 'Pending')">
-          <i class="bi bi-clock"></i>
-          Pending
-        </a>
-        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=under_review', 'Under Review')">
-          <i class="bi bi-eye"></i>
-          Under Review
-        </a>
-        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=approved', 'Approved')">
-          <i class="bi bi-check-circle"></i>
-          Approved
-        </a>
-        <a href="#" onclick="loadInFrame('canada-medical-exams-applications.php?status=rejected', 'Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('francophonie_mobility', $allowedSidebarItems)): ?>
-      <a href="#francophonie_mobility" class="sidebar-link" onclick="toggleSidebarMenu('francophonie_mobility')">
-        <i class="bi bi-map"></i>
-        <span>Francophonie Mobility</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_francophonie_mobility">
-        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php', 'Francophonie Mobility')">
-          <i class="bi bi-list-ul"></i>
-          View Applications
-        </a>
-        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=pending', 'Pending')">
-          <i class="bi bi-clock"></i>
-          Pending
-        </a>
-        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=under_review', 'Under Review')">
-          <i class="bi bi-eye"></i>
-          Under Review
-        </a>
-        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=approved', 'Approved')">
-          <i class="bi bi-check-circle"></i>
-          Approved
-        </a>
-        <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=rejected', 'Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-        <a href="#" onclick="loadInFrame('admin-generate-fm-contract.php', 'Issue E-Sign Contract')">
-          <i class="bi bi-file-earmark-text"></i>
-          Issue E-Sign Contract
-        </a>
-        <a href="#" onclick="loadInFrame('admin-fm-contracts.php', 'Signed Mobility Contracts')">
-          <i class="bi bi-file-earmark-check"></i>
-          Signed Contracts
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('employment_opportunities', $allowedSidebarItems)): ?>
-      <a href="#employment_opportunities" class="sidebar-link" onclick="toggleSidebarMenu('employment_opportunities')">
-        <i class="bi bi-briefcase"></i>
-        <span>Russian Employment Opportunities</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_employment_opportunities">
-        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php', 'Russian Employment Opportunities')">
-          <i class="bi bi-list-ul"></i>
-          View Applications
-        </a>
-        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=pending', 'Pending')">
-          <i class="bi bi-clock"></i>
-          Pending
-        </a>
-        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=under_review', 'Under Review')">
-          <i class="bi bi-eye"></i>
-          Under Review
-        </a>
-        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=approved', 'Approved')">
-          <i class="bi bi-check-circle"></i>
-          Approved
-        </a>
-        <a href="#" onclick="loadInFrame('employment-opportunities-applications.php?status=rejected', 'Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-        <a href="#" onclick="loadInFrame('admin-generate-eo-contract.php', 'Issue E-Sign Contract')">
-          <i class="bi bi-file-earmark-text"></i>
-          Issue E-Sign Contract
-        </a>
-        <a href="#" onclick="loadInFrame('admin-eo-contracts.php', 'Signed Employment Contracts')">
-          <i class="bi bi-file-earmark-check"></i>
-          Signed Contracts
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('meeting_invitation', $allowedSidebarItems)): ?>
-      <a href="#meeting_invitation" class="sidebar-link" onclick="toggleSidebarMenu('meeting_invitation')">
-        <i class="bi bi-camera-video"></i>
-        <span>Meeting Invitation</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_meeting_invitation">
-        <a href="#" onclick="loadInFrame('francophonie-meeting-invitation.php', 'Meeting Invitation')">
-          <i class="bi bi-envelope-open"></i>
-          Meeting Invitation
-        </a>
-        <a href="#" onclick="loadInFrame('francophonie-meeting-recordings.php', 'Meeting Recordings')">
-          <i class="bi bi-cloud-download"></i>
-          Meeting Recordings
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('refund_requests', $allowedSidebarItems)): ?>
-      <!-- Refund Requests (superadmin) -->
-      <a href="#refund_requests" class="sidebar-link" onclick="toggleSidebarMenu('refund_requests')">
-        <i class="bi bi-cash-stack"></i>
-        <span>Refund Requests</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_refund_requests">
-        <a href="#" onclick="loadInFrame('refund-requests-report.php', 'Refund Requests')">
-          <i class="bi bi-list-ul"></i>
-          All Refund Requests
-        </a>
-        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=pending', 'Pending Refunds')">
-          <i class="bi bi-clock"></i>
-          Pending
-        </a>
-        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=under_review', 'Under Review')">
-          <i class="bi bi-eye"></i>
-          Under Review
-        </a>
-        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=approved', 'Approved Refunds')">
-          <i class="bi bi-check-circle"></i>
-          Approved
-        </a>
-        <a href="#" onclick="loadInFrame('refund-requests-report.php?status=rejected', 'Rejected Refunds')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('platform', $allowedSidebarItems)): ?>
-      <!-- Platforms management - All admins -->
-      <a href="#platform" class="sidebar-link" onclick="toggleSidebarMenu('platform')">
-        <i class="bi bi-diagram-3"></i>
-        <span>Platforms management</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_platform">
-        <a href="#" onclick="loadInFrame('platforms.php', 'Platforms Management')">
-          <i class="bi bi-gear"></i>
-          Platforms management
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if ($isSuperExecutive): ?>
-      <a href="#" class="sidebar-link" onclick="loadInFrame('websites.php', 'Website Management')">
-        <i class="bi bi-globe2"></i>
-        <span>Website management</span>
-      </a>
-      <?php endif; ?>
-      
-      <?php if (in_array('contracts', $allowedSidebarItems)): ?>
-      <!-- Student contract -->
-      <a href="#contracts" class="sidebar-link" onclick="toggleSidebarMenu('contracts')">
-        <i class="bi bi-file-earmark-lock"></i>
-        <span>Student contract</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_contracts">
-        <a href="#" onclick="loadInFrame('admin-generate-student-contract.php', 'Issue Contract Link')">
-          <i class="bi bi-link"></i>
-          Issue contract link
-        </a>
-        <a href="#" onclick="loadInFrame('admin-contracts.php', 'View Student Contracts')">
-          <i class="bi bi-files"></i>
-          View students Contracts
-        </a>
-        <a href="#" onclick="loadInFrame('admin-contracts-special.php', 'Special Student Contracts')">
-          <i class="bi bi-star"></i>
-          Special students Contracts
-        </a>
-        <a href="#" onclick="loadInFrame('admin-generate-student-contract-special.php', 'Issue Special Contract Link')">
-          <i class="bi bi-link-45deg"></i>
-          Issue special contract link
-        </a>
-        <a href="#" onclick="loadInFrame('admin/contract_esign.php', 'Signed PhD Contracts')">
-          <i class="bi bi-file-earmark-arrow-down"></i>
-          Signed PhD Contracts
-        </a>
-      </div>
-      <?php endif; ?>
-      
-      <?php if (in_array('partner_contracts', $allowedSidebarItems)): ?>
-      <!-- Partner contract -->
-      <a href="#partner_contracts" class="sidebar-link" onclick="toggleSidebarMenu('partner_contracts')">
-        <i class="bi bi-handshake"></i>
-        <span>Partner Contract</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_partner_contracts">
-        <a href="#" onclick="loadInFrame('admin-generate-partner-contract.php', 'Issue Partner Contract Link (English)')">
-          <i class="bi bi-link"></i>
-          Issue partner contract link (English)
-        </a>
-        <a href="#" onclick="loadInFrame('admin-generate-partner-contract-french.php', 'Issue Partner Contract Link (French)')">
-          <i class="bi bi-link"></i>
-          Issue partner contract link (French)
-        </a>
-        <a href="#" onclick="loadInFrame('admin-partner-contracts.php', 'View Partner Contracts')">
-          <i class="bi bi-files"></i>
-          View partner contracts
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('korea_event_participation', $allowedSidebarItems)): ?>
-      <a href="#korea_event_participation" class="sidebar-link" onclick="toggleSidebarMenu('korea_event_participation')">
-        <i class="bi bi-flag"></i>
-        <span>South Korea Event Participation</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_korea_event_participation">
-        <a href="#" onclick="loadInFrame('korea-event-applications.php', 'South Korea Event Participation')">
-          <i class="bi bi-list-ul"></i>
-          View Applications
-        </a>
-        <a href="#" onclick="loadInFrame('korea-event-applications.php?register=1', 'Register applicant')">
-          <i class="bi bi-person-plus"></i>
-          Register applicant
-        </a>
-        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=pending', 'Pending')">
-          <i class="bi bi-clock"></i>
-          Pending
-        </a>
-        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=under_review', 'Under Review')">
-          <i class="bi bi-eye"></i>
-          Under Review
-        </a>
-        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=approved', 'Approved')">
-          <i class="bi bi-check-circle"></i>
-          Approved
-        </a>
-        <a href="#" onclick="loadInFrame('korea-event-applications.php?status=rejected', 'Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-        <a href="#" onclick="window.open('korea-event-participation-request.php', '_blank')">
-          <i class="bi bi-box-arrow-up-right"></i>
-          Open public form
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('noble_education', $allowedSidebarItems)): ?>
-      <a href="#noble_education" class="sidebar-link" onclick="toggleSidebarMenu('noble_education')">
-        <i class="bi bi-mortarboard"></i>
-        <span>Noble Education Group — Canada</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_noble_education">
-        <a href="#" onclick="loadInFrame('noble-education-applications.php', 'Noble Education Group — Canada')">
-          <i class="bi bi-list-ul"></i>
-          View Applications
-        </a>
-        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=pending', 'Pending')">
-          <i class="bi bi-clock"></i>
-          Pending
-        </a>
-        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=under_review', 'Under Review')">
-          <i class="bi bi-eye"></i>
-          Under Review
-        </a>
-        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=approved', 'Approved')">
-          <i class="bi bi-check-circle"></i>
-          Approved
-        </a>
-        <a href="#" onclick="loadInFrame('noble-education-applications.php?status=rejected', 'Rejected')">
-          <i class="bi bi-x-circle"></i>
-          Rejected
-        </a>
-        <a href="#" onclick="window.open('noble-education-request.php', '_blank')">
-          <i class="bi bi-box-arrow-up-right"></i>
-          Open public form
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('korea_invitation_contracts', $allowedSidebarItems)): ?>
-      <!-- Korea invitation contract -->
-      <a href="#korea_invitation_contracts" class="sidebar-link" onclick="toggleSidebarMenu('korea_invitation_contracts')">
-        <i class="bi bi-file-earmark-text"></i>
-        <span>Korea Invitation Contract</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_korea_invitation_contracts">
-        <a href="#" onclick="loadInFrame('admin-generate-korea-invitation-contract.php', 'Issue Korea Invitation Contract Link')">
-          <i class="bi bi-link"></i>
-          Issue Korea invitation contract link
-        </a>
-        <a href="#" onclick="loadInFrame('admin-korea-invitation-contracts.php', 'View Korea Invitation Contracts')">
-          <i class="bi bi-files"></i>
-          View Korea invitation contracts
-        </a>
-      </div>
-      <?php endif; ?>
-
-      <?php if (in_array('agent_contracts', $allowedSidebarItems)): ?>
-      <!-- Agent referral contract -->
-      <a href="#agent_contracts" class="sidebar-link" onclick="toggleSidebarMenu('agent_contracts')">
-        <i class="bi bi-person-badge"></i>
-        <span>Agent Contract</span>
-        <i class="bi bi-chevron-down arrow"></i>
-      </a>
-      <div class="sidebar-submenu" id="submenu_agent_contracts">
-        <a href="#" onclick="loadInFrame('admin-generate-agent-contract.php', 'Issue Agent Contract Link')">
-          <i class="bi bi-link"></i>
-          Issue agent contract link
-        </a>
-        <a href="#" onclick="loadInFrame('admin-agent-contracts.php', 'View Agent Contracts')">
-          <i class="bi bi-files"></i>
-          View agent contracts
-        </a>
-      </div>
-      <?php endif; ?>
-    </div>
-    
-    <!-- Account Section -->
-    <div class="sidebar-section">
-      <div class="sidebar-section-title">Account</div>
-      <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#profileModal">
-        <i class="bi bi-person"></i>
-        <span>My Profile</span>
-      </a>
-      <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#changePassModal">
-        <i class="bi bi-key"></i>
-        <span>Change Password</span>
-      </a>
-      <?php if ($isSuperExecutive): ?>
-        <a href="#" class="sidebar-link" data-bs-toggle="modal" data-bs-target="#adminSettingsModal">
-          <i class="bi bi-gear"></i>
-          <span>System Settings</span>
-        </a>
-        <a href="admin-testimonials.php" class="sidebar-link">
-          <i class="bi bi-chat-quote"></i>
-          <span>Website testimonials</span>
-        </a>
-      <?php endif; ?>
-      <form action="admin-logout.php" method="POST" class="d-inline">
-        <button type="submit" class="sidebar-link w-100 text-start border-0 bg-transparent text-white" style="outline: none;">
-          <i class="bi bi-box-arrow-right"></i>
-          <span>Logout</span>
-        </button>
-      </form>
     </div>
   </div>
-  
+  <?php if ($pcvcStaffClearanceOn): ?>
+  <script>
+  window.pcvcClearanceDenied = <?= json_encode(array_values($pcvcClearanceDenied), JSON_UNESCAPED_SLASHES) ?>;
+  window.pcvcClearanceIndex = <?= json_encode($pcvcClearanceIndex, JSON_UNESCAPED_SLASHES) ?>;
+  window.pcvcClearanceBlocks = function (url) {
+    const keys = (window.pcvcClearanceIndex && window.pcvcClearanceIndex[url]) || [];
+    if (!keys.length) return false;
+    return keys.every(key => window.pcvcClearanceDenied.indexOf(key) !== -1);
+  };
+  document.querySelectorAll('.sidebar-submenu a[onclick]').forEach(link => {
+    const match = (link.getAttribute('onclick') || '').match(/loadInFrame\('([^']+)'/);
+    if (!match) return;
+    const menu = (link.closest('.sidebar-submenu') || {}).id || '';
+    const key = 'sub:' + menu.replace('submenu_', '') + '|' + match[1];
+    if (window.pcvcClearanceDenied.indexOf(key) !== -1) link.style.display = 'none';
+  });
+  document.querySelectorAll('.sidebar-submenu').forEach(menu => {
+    const visible = [...menu.querySelectorAll(':scope > a')].filter(link => link.style.display !== 'none');
+    if (visible.length) return;
+    menu.style.display = 'none';
+    const parent = menu.previousElementSibling;
+    if (parent && parent.classList.contains('sidebar-link')) parent.style.display = 'none';
+  });
+  </script>
+  <?php endif; ?>
+
   <!-- MAIN CONTENT -->
   <div class="main-content">
     <!-- TOPBAR -->
@@ -2706,53 +3359,46 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         </div>
         </div>
 
-        <?php if ($myAgentStats !== null): ?>
+        <?php if ($myAgentStats !== null):
+            $kpiCards = [
+                ['key' => 'allocated', 'class' => 'is-allocated', 'icon' => 'bi-people', 'label' => 'Allocated', 'value' => (int) ($myAgentStats['total'] ?? 0)],
+                ['key' => 'submitted', 'class' => 'is-submitted', 'icon' => 'bi-send-check', 'label' => 'Submitted', 'value' => (int) ($myAgentStats['submitted'] ?? 0)],
+                ['key' => 'admit', 'class' => 'is-admit', 'icon' => 'bi-mortarboard', 'label' => 'Admitted', 'value' => (int) ($myAgentStats['admit'] ?? 0)],
+                ['key' => 'visa_approved', 'class' => 'is-visa', 'icon' => 'bi-passport', 'label' => 'Visa approved', 'value' => (int) ($myAgentStats['visa_approved'] ?? 0)],
+                ['key' => 'enrolled', 'class' => 'is-enrolled', 'icon' => 'bi-patch-check', 'label' => 'Enrolled', 'value' => (int) ($myAgentStats['enrolled'] ?? 0)],
+            ];
+        ?>
         <section class="staff-agent-panel" aria-labelledby="staffAgentPanelTitle">
           <div class="staff-agent-panel-head">
             <div>
               <h3 id="staffAgentPanelTitle"><i class="bi bi-diagram-3 me-1"></i> My allocated students</h3>
+              <p class="staff-agent-panel-sub"><?= htmlspecialchars((string) ($myAgentStats['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars((string) ($myAgentStats['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></p>
             </div>
             <button type="button" class="btn btn-sm btn-primary rounded-pill px-3" onclick="loadInFrame('agent-student-manage.php', 'My students')">
               <i class="bi bi-people me-1"></i> Manage students
             </button>
           </div>
           <div class="staff-agent-panel-body">
-            <div class="row g-4 align-items-stretch">
-              <div class="col-lg-5">
-                <div class="staff-agent-chart-wrap">
-                  <canvas id="staffAgentChart" aria-label="Your student pipeline chart"></canvas>
-                </div>
-              </div>
-              <div class="col-lg-7">
-                <div class="table-responsive staff-agent-table-wrap">
-                  <table id="staffAgentTable" class="table table-hover align-middle mb-0">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>Your name</th>
-                        <th>Agent email</th>
-                        <th>Allocated</th>
-                        <th>Submitted</th>
-                        <th>Admit</th>
-                        <th>Visa OK</th>
-                        <th>Enrolled</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>1</td>
-                        <td><strong><?= htmlspecialchars((string) ($myAgentStats['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong></td>
-                        <td><span class="staff-agent-email-badge"><?= htmlspecialchars((string) ($myAgentStats['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span></td>
-                        <td><?= (int) ($myAgentStats['total'] ?? 0) ?></td>
-                        <td><?= (int) ($myAgentStats['submitted'] ?? 0) ?></td>
-                        <td><?= (int) ($myAgentStats['admit'] ?? 0) ?></td>
-                        <td><?= (int) ($myAgentStats['visa_approved'] ?? 0) ?></td>
-                        <td><?= (int) ($myAgentStats['enrolled'] ?? 0) ?></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            <div class="agent-kpi-grid">
+              <?php foreach ($kpiCards as $kpi): ?>
+              <button type="button"
+                class="agent-kpi <?= htmlspecialchars($kpi['class'], ENT_QUOTES, 'UTF-8') ?> js-my-agent-kpi"
+                data-pipeline="<?= htmlspecialchars($kpi['key'], ENT_QUOTES, 'UTF-8') ?>"
+                data-label="<?= htmlspecialchars($kpi['label'], ENT_QUOTES, 'UTF-8') ?>"
+                data-agent-email="<?= htmlspecialchars((string) ($myAgentStats['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                data-agent-name="<?= htmlspecialchars((string) ($myAgentStats['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                <span class="agent-kpi-top">
+                  <span class="agent-kpi-label"><?= htmlspecialchars($kpi['label'], ENT_QUOTES, 'UTF-8') ?></span>
+                  <span class="agent-kpi-icon"><i class="bi <?= htmlspecialchars($kpi['icon'], ENT_QUOTES, 'UTF-8') ?>"></i></span>
+                </span>
+                <span class="agent-kpi-value"><?= (int) $kpi['value'] ?></span>
+                <span class="agent-kpi-hint">View students</span>
+              </button>
+              <?php endforeach; ?>
+            </div>
+            <p class="staff-agent-chart-note">Click a number or a bar to open that list.</p>
+            <div class="staff-agent-chart-wrap">
+              <canvas id="staffAgentChart" aria-label="Your student pipeline chart"></canvas>
             </div>
           </div>
         </section>
@@ -2904,67 +3550,11 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             </div>
           </div>
         <?php endif; ?>
-        
-        <!-- Agent Tracking (superadmin only) -->
+
         <?php if ($isSuperExecutive): ?>
-          <div class="agent-tracking-card">
-            <h3><i class="bi bi-person-lines-fill me-2"></i> Agent Tracking Summary</h3>
-            <div class="border rounded-3 p-3 mb-3 bg-white shadow-sm">
-              <div class="fw-semibold text-dark mb-1"><i class="bi bi-arrow-left-right me-1"></i> Change recruiting agent</div>
-              <p class="small text-muted mb-2 mb-0">Search an applicant by name or email, pick a new agent from the roster (admin accounts), then save. Superadmin only.</p>
-              <label for="pcvcStudentAgentSearch" class="form-label small mb-1 mt-2">Search student</label>
-              <input type="search" id="pcvcStudentAgentSearch" class="form-control form-control-sm" maxlength="140" placeholder="Type at least 2 characters…" autocomplete="off">
-              <div id="pcvcStudentAgentSearchResults" class="mt-2"></div>
-            </div>
-            <canvas id="agentChart" height="120" style="margin-bottom:20px;"></canvas>
-            <div style="overflow-x: auto;">
-              <table id="agentTable" class="display compact stripe" style="width: 100%;">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Agent Name</th>
-                    <th>Email</th>
-                    <th>Total Students</th>
-                    <th>Submitted</th>
-                    <th>Admit</th>
-                    <th>Visa Approved</th>
-                    <th>Enrolled</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <?php
-                  $i = 1;
-                  foreach ($agentsCombined as $agent) {
-                      $agentName = htmlspecialchars((string) ($agent['name'] ?? ''), ENT_QUOTES, 'UTF-8');
-                      $agentEmailRaw = (string) ($agent['email'] ?? '');
-                      $agentEmailEsc = htmlspecialchars($agentEmailRaw, ENT_QUOTES, 'UTF-8');
-                      $agentNameAttr = htmlspecialchars((string) ($agent['name'] ?? ''), ENT_QUOTES, 'UTF-8');
-                      echo '<tr>
-                      <td>' . (int) $i . '</td>
-                      <td><button type="button" class="btn btn-link p-0 m-0 align-baseline text-start text-decoration-none fw-semibold js-agent-students" title="View students allocated to this agent" data-agent-email="' . $agentEmailEsc . '" data-agent-name="' . $agentNameAttr . '">' . $agentName . '</button></td>
-                      <td>' . $agentEmailEsc . '</td>
-                      <td>' . (int) ($agent['total'] ?? 0) . '</td>
-                      <td>' . (int) ($agent['submitted'] ?? 0) . '</td>
-                      <td>' . (int) ($agent['admit'] ?? 0) . '</td>
-                      <td>' . (int) ($agent['visa_approved'] ?? 0) . '</td>
-                      <td>' . (int) ($agent['enrolled'] ?? 0) . '</td>
-                    </tr>';
-                      $i++;
-                  }
-                  ?>
-                </tbody>
-              </table>
-            </div>
-            <script>
-            window.pcvcAgentPickerOptions = <?= json_encode(array_values(array_map(static function ($row) {
-                return [
-                    'email' => (string) ($row['email'] ?? ''),
-                    'name' => (string) ($row['name'] ?? ''),
-                ];
-            }, $agentsCombined)), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
-            </script>
-          </div>
+          <?php include __DIR__ . '/includes/dashboard_control_board.php'; ?>
         <?php endif; ?>
+
       </div>
       
       <!-- Content Frame for loaded pages -->
@@ -3476,7 +4066,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                   $conn,
                   "SELECT id, full_name, email, role
                    FROM admins
-                   WHERE LOWER(TRIM(COALESCE(role,''))) IN ('staff','superadmin','admin')
+                   WHERE LOWER(TRIM(COALESCE(role,''))) IN ('staff','accountant','superadmin','director','secretary','admin')
                    ORDER BY full_name"
                 );
                 while ($row = mysqli_fetch_assoc($adminsQ)) {
@@ -3659,6 +4249,25 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       document.getElementById('sidebar').classList.toggle('show');
     }
     
+    function toggleSidebarGroup(groupId) {
+      const body = document.getElementById('group_' + groupId);
+      const link = document.querySelector('[href="#group_' + groupId + '"]');
+      if (!body || !link) return;
+      const willOpen = !body.classList.contains('open');
+      document.querySelectorAll('.sidebar-group').forEach(group => group.classList.remove('open'));
+      document.querySelectorAll('.sidebar-group-link').forEach(item => {
+        item.classList.remove('active');
+        const arrow = item.querySelector('.arrow');
+        if (arrow) arrow.style.transform = 'rotate(0deg)';
+      });
+      if (willOpen) {
+        body.classList.add('open');
+        link.classList.add('active');
+        const arrow = link.querySelector('.arrow');
+        if (arrow) arrow.style.transform = 'rotate(180deg)';
+      }
+    }
+
     function toggleSidebarMenu(menuId) {
       const link = document.querySelector(`[href="#${menuId}"]`);
       const submenu = document.getElementById(`submenu_${menuId}`);
@@ -3702,6 +4311,13 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           link.classList.add('active');
         }
       });
+      const systemGroup = document.getElementById('group_system');
+      const systemLink = document.querySelector('[href="#group_system"]');
+      if (systemGroup && !systemGroup.classList.contains('open') && typeof toggleSidebarGroup === 'function') {
+        toggleSidebarGroup('system');
+      } else if (systemLink) {
+        systemLink.classList.add('active');
+      }
       
       // Close all submenus
       document.querySelectorAll('.sidebar-submenu').forEach(menu => {
@@ -3721,8 +4337,15 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     };
     
     window.loadInFrame = function loadInFrame(url, title) {
+      if (window.pcvcClearanceBlocks && window.pcvcClearanceBlocks(url)) {
+        alert('This page is not on your level clearance.');
+        return false;
+      }
       const contentFrame = document.getElementById('content-frame');
       const dashboardView = document.getElementById('dashboard-view');
+      if (contentFrame && dashboardView && dashboardView.contains(contentFrame)) {
+        dashboardView.insertAdjacentElement('afterend', contentFrame);
+      }
       
       // Show loading spinner
       document.getElementById('loadingSpinner').style.display = 'block';
@@ -3762,6 +4385,17 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           .container { max-width: 1200px; }
           .card { border-radius: 10px; }
           .btn-primary { background: linear-gradient(135deg, #427431, #3661B9); }
+          img, svg, video, canvas { max-width: 100%; height: auto; }
+          .modal-dialog { max-width: calc(100% - 16px); }
+          @media (max-width: 760px) {
+            html, body { overflow-x: hidden; }
+            .container, .container-fluid, .wrap, .main-container { padding-left: 12px !important; padding-right: 12px !important; }
+            h1 { font-size: 1.35rem; }
+            table { display: block; width: 100%; overflow-x: auto; }
+            th, td { white-space: normal; }
+            .btn, button, input, select, textarea { max-width: 100%; }
+            .row { margin-left: 0; margin-right: 0; }
+          }
         `;
         iframeDoc.head.appendChild(style);
       } catch (e) {
@@ -4090,7 +4724,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       }
     });
     
-    window.pcvcAppStatusLabels = <?= json_encode($isSuperExecutive ? pcvc_application_status_labels() : [], JSON_UNESCAPED_UNICODE) ?>;
+    window.pcvcAppStatusLabels = <?= json_encode(pcvc_application_status_labels(), JSON_UNESCAPED_UNICODE) ?>;
 
     function pcvcEscapeHtml(s) {
       return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -4100,7 +4734,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     }
 
-    window.pcvcOpenAgentStudentsModal = async function (agentEmail, agentName) {
+    window.pcvcOpenAgentStudentsModal = async function (agentEmail, agentName, pipeline, pipelineLabel) {
       const modalEl = document.getElementById('agentStudentsModal');
       const titleEl = document.getElementById('agentStudentsModalLabel');
       const subEl = document.getElementById('agentStudentsModalSub');
@@ -4111,23 +4745,17 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
 
       const email = String(agentEmail || '').trim();
       const name = String(agentName || '').trim();
+      const stage = String(pipeline || 'allocated').trim();
+      const stageLabel = String(pipelineLabel || 'Allocated').trim();
       if (!email) return;
 
       alertEl.classList.add('d-none');
       alertEl.textContent = '';
-      titleEl.textContent = 'Students — ' + (name || email);
-      subEl.textContent = 'Agent email: ' + email + ' · Parrot MIS applications (with documents on file).';
+      titleEl.textContent = stageLabel + ' — ' + (name || email);
+      subEl.textContent = 'Loading ' + stageLabel.toLowerCase() + ' students for ' + email + '…';
       bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">Loading…</td></tr>';
-
       if (reportBtn) {
-        reportBtn.onclick = function () {
-          if (typeof window.loadInFrame === 'function') {
-            const u = 'application-list.php?agent_email=' + encodeURIComponent(email);
-            window.loadInFrame(u, 'Agent students — ' + (name || email));
-          }
-          const inst = bootstrap.Modal.getInstance(modalEl);
-          if (inst) inst.hide();
-        };
+        reportBtn.classList.add('d-none');
       }
 
       const modal = (typeof bootstrap.Modal.getOrCreateInstance === 'function')
@@ -4136,34 +4764,25 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       modal.show();
 
       try {
-        const params = new URLSearchParams({ action: 'list', agent_email: email, q: '' });
-        const res = await fetch('api/applications.php?' + params.toString(), { credentials: 'same-origin' });
+        const params = new URLSearchParams({ pipeline: stage, agent_email: email });
+        const res = await fetch('api/agent-pipeline-students.php?' + params.toString(), { credentials: 'same-origin' });
         const json = await res.json();
         if (!json || !json.success || !Array.isArray(json.data)) {
-          throw new Error(json && json.message ? String(json.message) : 'Could not load applications.');
+          throw new Error(json && json.message ? String(json.message) : 'Could not load students.');
         }
         const rows = json.data;
-        const labels = window.pcvcAppStatusLabels || {};
+        const count = json.meta && typeof json.meta.count === 'number' ? json.meta.count : rows.length;
+        subEl.textContent = count + ' ' + stageLabel.toLowerCase() + (count === 1 ? ' student' : ' students') + ' · ' + email;
         if (!rows.length) {
-          bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No applications found for this agent.</td></tr>';
+          bodyEl.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No students in this list.</td></tr>';
           return;
         }
         bodyEl.innerHTML = rows.map(function (app) {
-          const bio = app.bio || {};
-          const meta = app.meta || {};
-          const study = app.study || {};
-          const nm = pcvcEscapeHtml(((bio.first_name || '') + ' ' + (bio.last_name || '')).trim()) || '—';
-          const em = pcvcEscapeHtml(bio.email || '') || '—';
-          const studyLine = [study.universities, study.regions, study.countries].filter(Boolean).join(' · ');
-          const inst = pcvcEscapeHtml(studyLine) || '—';
-          const eff = meta.effective_status ? String(meta.effective_status) : '';
-          const st = eff ? pcvcEscapeHtml(labels[eff] || eff) : '—';
-          let applied = '—';
-          if (meta.created_at) {
-            const d = String(meta.created_at).slice(0, 10);
-            applied = pcvcEscapeHtml(d);
-          }
-          return '<tr><td>' + nm + '</td><td>' + em + '</td><td class="small">' + inst + '</td><td class="small">' + st + '</td><td class="text-nowrap small">' + applied + '</td></tr>';
+          return '<tr><td>' + (pcvcEscapeHtml(app.name) || '—')
+            + '</td><td>' + (pcvcEscapeHtml(app.email) || '—')
+            + '</td><td class="small">' + (pcvcEscapeHtml(app.study) || '—')
+            + '</td><td class="small">' + (pcvcEscapeHtml(app.status) || '—')
+            + '</td><td class="text-nowrap small">' + (pcvcEscapeHtml(app.applied) || '—') + '</td></tr>';
         }).join('');
       } catch (err) {
         console.error(err);
@@ -4194,11 +4813,24 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           e.stopPropagation();
           const em = ($(this).attr('data-agent-email') || '').trim();
           const nm = ($(this).attr('data-agent-name') || '').trim();
+          const stage = ($(this).attr('data-pipeline') || 'allocated').trim();
+          const label = ($(this).attr('data-label') || 'Allocated').trim();
           if (typeof window.pcvcOpenAgentStudentsModal === 'function') {
-            window.pcvcOpenAgentStudentsModal(em, nm);
+            window.pcvcOpenAgentStudentsModal(em, nm, stage, label);
           }
         });
       }
+      document.querySelectorAll('.js-my-agent-kpi').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          if (typeof window.pcvcOpenAgentStudentsModal !== 'function') return;
+          window.pcvcOpenAgentStudentsModal(
+            btn.getAttribute('data-agent-email') || '',
+            btn.getAttribute('data-agent-name') || '',
+            btn.getAttribute('data-pipeline') || 'allocated',
+            btn.getAttribute('data-label') || 'Allocated'
+          );
+        });
+      });
       if ($('#staffAgentTable').length) {
         $('#staffAgentTable').DataTable({
           paging: false,
@@ -4378,13 +5010,26 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           options: {
             responsive: true,
             maintainAspectRatio: true,
-            aspectRatio: 1.1,
+            aspectRatio: 3.4,
             plugins: {
               legend: { display: false },
               tooltip: {
                 mode: 'index',
                 intersect: false
               }
+            },
+            onClick: function (evt, elements) {
+              if (!elements || !elements.length) return;
+              const keys = ['allocated', 'submitted', 'admit', 'visa_approved', 'enrolled'];
+              const idx = elements[0].index;
+              const card = document.querySelectorAll('.js-my-agent-kpi')[idx];
+              if (!card || typeof window.pcvcOpenAgentStudentsModal !== 'function') return;
+              window.pcvcOpenAgentStudentsModal(
+                card.getAttribute('data-agent-email') || '',
+                card.getAttribute('data-agent-name') || '',
+                keys[idx] || 'allocated',
+                card.getAttribute('data-label') || 'Allocated'
+              );
             },
             scales: {
               y: {

@@ -590,15 +590,14 @@ function pcvc_related_suggestion_notify_recipients(
 }
 
 /**
- * If the application has no assignee, assign the first admin in charge
- * of any study-choice university that has university_admins.
+ * If the application has no assignee, assign the staff member who added it.
+ * Never use the university person in charge.
  */
 function pcvc_ensure_application_assignee_from_university_admins(mysqli $conn, int $applicationId): int
 {
     if ($applicationId <= 0) {
         return 0;
     }
-    pcvc_ensure_university_admins_schema($conn);
 
     $st = $conn->prepare('SELECT assigned_to_admin_id FROM student_applications WHERE id = ? LIMIT 1');
     if (!$st) {
@@ -614,14 +613,11 @@ function pcvc_ensure_application_assignee_from_university_admins(mysqli $conn, i
     }
 
     $sql = "
-        SELECT ua.admin_id
-        FROM application_study_choices ascx
-        INNER JOIN university_admins ua ON ua.university_id = ascx.university_id
-        INNER JOIN admins a ON a.id = ua.admin_id
-        WHERE ascx.application_id = ?
-          AND a.email IS NOT NULL
-          AND TRIM(a.email) <> ''
-        ORDER BY ua.admin_id ASC
+        SELECT a.id
+        FROM student_applications sa
+        INNER JOIN admins a ON LOWER(TRIM(a.email)) = LOWER(TRIM(sa.agent_email))
+        WHERE sa.id = ?
+          AND TRIM(COALESCE(sa.agent_email, '')) <> ''
         LIMIT 1
     ";
     $st = $conn->prepare($sql);
@@ -632,7 +628,10 @@ function pcvc_ensure_application_assignee_from_university_admins(mysqli $conn, i
     $st->execute();
     $pick = $st->get_result()->fetch_assoc();
     $st->close();
-    $adminId = (int) ($pick['admin_id'] ?? 0);
+    $adminId = (int) ($pick['id'] ?? 0);
+    if ($adminId <= 0 && function_exists('pcvc_logged_in_admin_id')) {
+        $adminId = pcvc_logged_in_admin_id();
+    }
     if ($adminId <= 0) {
         return 0;
     }

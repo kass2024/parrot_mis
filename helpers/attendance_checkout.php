@@ -2,8 +2,50 @@
 declare(strict_types=1);
 
 const PCVC_CHECKOUT_MIN_JOBS_TODAY   = 10;
+const PCVC_YVETTE_DAILY_JOB_TARGET   = 5;
 const PCVC_CHECKOUT_FULL_DAY_HOURS   = 7;
 const PCVC_CHECKOUT_FULL_DAY_MINUTES = 480;
+
+/**
+ * Daily finished-job target. Username yvette26 is 5. Everyone else is 10.
+ *
+ * @param list<int> $adminIds
+ * @return array<int, int>
+ */
+function pcvc_daily_job_targets_for_admins(mysqli $conn, array $adminIds): array
+{
+    $targets = [];
+    foreach ($adminIds as $adminId) {
+        $id = (int) $adminId;
+        if ($id > 0) {
+            $targets[$id] = PCVC_CHECKOUT_MIN_JOBS_TODAY;
+        }
+    }
+    if ($targets === []) {
+        return $targets;
+    }
+
+    $idSql = implode(',', array_map('intval', array_keys($targets)));
+    $res = $conn->query("SELECT id, username FROM admins WHERE id IN ({$idSql})");
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $username = strtolower(trim((string) ($row['username'] ?? '')));
+            if ($username === 'yvette26') {
+                $targets[(int) $row['id']] = PCVC_YVETTE_DAILY_JOB_TARGET;
+            }
+        }
+        $res->free();
+    }
+
+    return $targets;
+}
+
+function pcvc_daily_job_target(mysqli $conn, int $adminId): int
+{
+    $targets = pcvc_daily_job_targets_for_admins($conn, [$adminId]);
+
+    return $targets[$adminId] ?? PCVC_CHECKOUT_MIN_JOBS_TODAY;
+}
 
 /**
  * Ensure job_list.completed_at exists (when a job was marked completed).
@@ -150,16 +192,17 @@ function pcvc_validate_attendance_checkout(
 ): array {
     $jobsCompleted = pcvc_count_jobs_completed_on_date($conn, $admin_id, $today);
     $elapsedMinutes = max(0, (int) ceil((strtotime($now) - strtotime($check_in_time)) / 60));
-    $salaryEligible = $jobsCompleted >= PCVC_CHECKOUT_MIN_JOBS_TODAY;
+    $jobsRequired = pcvc_daily_job_target($conn, $admin_id);
+    $salaryEligible = $jobsCompleted >= $jobsRequired;
 
     if (!$salaryEligible) {
         return [
             'ok'              => false,
             'message'         => sprintf(
                 'Complete at least %d jobs today before checking out. You have completed %d of %d.',
-                PCVC_CHECKOUT_MIN_JOBS_TODAY,
+                $jobsRequired,
                 $jobsCompleted,
-                PCVC_CHECKOUT_MIN_JOBS_TODAY
+                $jobsRequired
             ),
             'jobs_completed'  => $jobsCompleted,
             'elapsed_minutes' => $elapsedMinutes,
@@ -198,6 +241,7 @@ function pcvc_attendance_checkout_status(
     string $now
 ): array {
     $jobsCompleted = pcvc_count_jobs_completed_on_date($conn, $admin_id, $today);
+    $jobsRequired = pcvc_daily_job_target($conn, $admin_id);
 
     $stmt = $conn->prepare("
         SELECT check_in_time, check_out_time
@@ -211,7 +255,7 @@ function pcvc_attendance_checkout_status(
             'check_in_time'    => null,
             'check_out_time'   => null,
             'jobs_completed'   => $jobsCompleted,
-            'jobs_required'    => PCVC_CHECKOUT_MIN_JOBS_TODAY,
+            'jobs_required'    => $jobsRequired,
             'elapsed_minutes'  => 0,
             'full_day_hours'   => PCVC_CHECKOUT_FULL_DAY_HOURS,
             'can_checkout'     => false,
@@ -232,7 +276,7 @@ function pcvc_attendance_checkout_status(
             'check_in_time'    => null,
             'check_out_time'   => null,
             'jobs_completed'   => $jobsCompleted,
-            'jobs_required'    => PCVC_CHECKOUT_MIN_JOBS_TODAY,
+            'jobs_required'    => $jobsRequired,
             'elapsed_minutes'  => 0,
             'full_day_hours'   => PCVC_CHECKOUT_FULL_DAY_HOURS,
             'can_checkout'     => false,
@@ -248,7 +292,7 @@ function pcvc_attendance_checkout_status(
         'check_in_time'    => $checkIn,
         'check_out_time'   => $checkOut ?: null,
         'jobs_completed'   => $jobsCompleted,
-        'jobs_required'    => PCVC_CHECKOUT_MIN_JOBS_TODAY,
+        'jobs_required'    => $jobsRequired,
         'elapsed_minutes'  => $validation['elapsed_minutes'],
         'full_day_hours'   => PCVC_CHECKOUT_FULL_DAY_HOURS,
         'can_checkout'     => $validation['ok'],

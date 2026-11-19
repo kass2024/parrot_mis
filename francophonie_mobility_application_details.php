@@ -6,6 +6,7 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 fm_ensure_schema($conn);
 require_once __DIR__ . '/helpers/francophonie_mobility_notify.php';
@@ -13,11 +14,12 @@ require_once __DIR__ . '/helpers/francophonie_mobility_files.php';
 require_once __DIR__ . '/helpers/fm_public_share.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 
-if (empty($_SESSION['id'])) {
+if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
     http_response_code(403);
     echo '<div class="alert alert-danger">Access denied</div>';
     exit;
 }
+pcvc_require_francophonie_mobility($conn);
 
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -205,8 +207,14 @@ $appId = (int) $row['id'];
                         <i class="fas fa-video"></i> <?= $inviteUrl !== '' ? 'Regenerate video link' : 'Send video upload link' ?>
                     </button>
                     <?php endif; ?>
+                    <a href="francophonie-record-invoice.php?application_id=<?= $appId ?>" class="btn btn-success btn-sm">
+                        <i class="fas fa-file-invoice-dollar"></i> Record invoice
+                    </a>
                     <a href="admin-generate-fm-contract.php?application_id=<?= $appId ?>" target="_blank" class="btn btn-outline-dark btn-sm">
                         <i class="fas fa-file-signature"></i> Issue E-Sign Contract
+                    </a>
+                    <a href="admin-generate-fm-contract.php?variant=special&amp;application_id=<?= $appId ?>" target="_blank" class="btn btn-outline-success btn-sm">
+                        <i class="fas fa-file-signature"></i> Issue special e-sign
                     </a>
                     <a href="mailto:<?= htmlspecialchars($row['email'], ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-envelope"></i> Open in mail client

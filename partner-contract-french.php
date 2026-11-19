@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/b2b_partnership_agreement.php';
 
 if (!isset($conn) || $conn->connect_error) {
     http_response_code(500);
@@ -38,7 +39,7 @@ $isSigned = ($contract['status'] === 'signed');
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>ACCORD DE PARTENARIAT STRATÉGIQUE</title>
+<title>Accord de partenariat stratégique B2B</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <style>
 :root {
@@ -226,6 +227,13 @@ body {
   letter-spacing: .6px;
   text-transform: uppercase;
   margin-bottom: 32pt;
+}
+
+.contract-page h2 {
+  font-size: 15pt;
+  font-weight: 700;
+  margin-top: 28pt;
+  margin-bottom: 12pt;
 }
 
 .contract-page h3 {
@@ -549,16 +557,12 @@ button {
 
 <div class="contract-page">
 
-<h1>ACCORD DE PARTENARIAT STRATÉGIQUE</h1>
+<h1>ACCORD DE PARTENARIAT STRATÉGIQUE B2B</h1>
+<p style="text-align:center;font-weight:600;margin-top:-12pt;">Éducation internationale, coordination des services d’immigration et soutien à l’emploi à l’étranger</p>
 
-<p style="font-size:16px; text-align:justify; margin-bottom:30px;">
-Le présent <strong>accord de partenariat stratégique</strong> est conclu et signé à la date de signature
-entre :
-</p>
-
-<h3>1. Introduction</h3>
-
-<p style="font-size:16px; font-weight:700; margin-bottom:8px;">1.1 Nom de l'Entreprise</p>
+<h2>1. PARTIES</h2>
+<p>Le présent accord de partenariat stratégique est conclu entre :</p>
+<p style="font-weight:700;">Entreprise partenaire</p>
 <div class="form-section">
   <h4>Informations de l'Entreprise</h4>
   <div class="input-group">
@@ -586,142 +590,31 @@ entre :
     <input type="text" id="company_address" name="company_address" placeholder="Entrez l'adresse complète" value="<?= htmlspecialchars($contract['company_address'] ?? '') ?>">
   </div>
 </div>
-
-<p style="font-size:16px; font-weight:700; margin-bottom:8px;">1.2 Parrot Canada Visa Consultant Co. Ltd</p>
+<p>Ci-après dénommée &laquo; le Partenaire &raquo;.</p>
+<p style="font-weight:700;">Et :</p>
 <p>
-<strong>Parrot Canada Visa Consultant Co. Ltd.</strong><br>
-Dr Jean Pierre Twajamahoro<br>
-Propriétaire & Directeur Général<br>
-Adresse courriel: infos@visaconsultantcanada.ca<br>
-Téléphone: +1 (438) 290-6688<br>
-Adresse au Rwanda: Rwanda - Kigali<br>
-Town Center Building (near Simba Supermarket),<br>
-2nd Floor, Door: F2B-022C, Nyarugenge<br>
-Adresse au Canada:<br>
-294 Rue Vezina App 202; Lasalle, Quebec H8R 3M9
+<strong>Parrot Canada Visa Consultant Co. Ltd</strong><br>
+Représentant : Dr Jean Pierre Twajamahoro<br>
+Fonction : Propriétaire et directeur général<br>
+Courriel : infos@visaconsultantcanada.ca<br>
+Téléphone : +1 (438) 290-6688<br>
+<strong>Adresse au Rwanda :</strong><br>
+Town Center Building, near Simba Supermarket<br>
+2nd Floor, Door F2B-022C, Nyarugenge<br>
+Kigali, Rwanda<br>
+<strong>Adresse au Canada :</strong><br>
+294 Rue Vezina, App 202<br>
+Lasalle, Quebec H8R 3M9, Canada
 </p>
+<p>Ci-après dénommée &laquo; Parrot &raquo;.</p>
+<p>Parrot et le Partenaire sont ensemble dénommés &laquo; les parties &raquo;.</p>
 
-<h3>2. Objet de l'Accord</h3>
-<p>L'objectif principal de cet accord est de mettre en place un système complet et structuré d'accompagnement des étudiants, comprenant :</p>
-<ul>
-<li>L'évaluation des documents et de l'éligibilité</li>
-<li>La sélection des universités/établissements</li>
-<li>L'obtention de l'admission</li>
-<li>L'assistance pour les bourses partielles et les prêts étudiants (si applicable)</li>
-<li>Le conseil et l'obtention de visa</li>
-<li>L'organisation du voyage</li>
-<li>L'accueil à l'aéroport et l'assistance à l'installation dans le pays de destination</li>
-</ul>
+<?php echo pcvc_b2b_agreement_body('fr', $contract, true); ?>
 
-<h3>3. Portée du Partenariat</h3>
-<p><strong>3.1 Recrutement et Conseil aux Étudiants</strong><br>
-Identification et recrutement d'étudiants qualifiés<br>
-Orientation académique et professionnelle adaptée aux opportunités internationales</p>
+<h2>16. SIGNATURES</h2>
+<p>En signant ci-dessous, les représentants autorisés confirment avoir lu, compris et accepté le présent accord.</p>
 
-<p><strong>3.2 Évaluation des Documents et Processus d'Admission</strong><br>
-Vérification complète des documents et de l'éligibilité<br>
-Sélection des universités et programmes à l'international<br>
-Préparation et soumission des candidatures<br>
-Obtention des lettres d'admission<br>
-Assistance pour les bourses et prêts étudiants (si applicable)</p>
 
-<p><strong>3.3 Traitement des Visas et Immigration</strong><br>
-Conseil en visa sous la supervision du Dr Jean Pierre Twajamahoro<br>
-Vérification des documents selon les lois du pays de destination<br>
-Traitement et suivi des demandes de visa</p>
-
-<p><strong>3.4 Services de Voyage et Pré-départ</strong><br>
-Planification du voyage et assistance pour les vols<br>
-Orientation avant le départ</p>
-
-<p><strong>3.5 Accueil à l'Aéroport et Installation (Engagement Clé)</strong><br>
-Organisation de l'accueil à l'aéroport dans le pays de destination<br>
-Assistance pour le logement initial<br>
-Aide à l'installation à l'arrivée<br>
-Coordination avec les partenaires locaux</p>
-
-<h3>4. Mission Principale</h3>
-<p>Les deux parties conviennent d'opérer comme un cabinet global de conseil en éducation internationale, offrant :</p>
-<p>Un modèle de service « De l'Évaluation à l'Installation »<br>
-Couvrant toutes les destinations internationales<br>
-Incluant admission, visa, voyage et accompagnement à l'arrivée<br>
-Ce partenariat garantit une transition fluide depuis l'évaluation initiale jusqu'à l'installation complète à l'étranger.</p>
-
-<h3>5. Rôles et Responsabilités</h3>
-<p><strong>5.1 Nom de l'Entreprise : <span id="display_company_name"><?= htmlspecialchars($contract['company_name'] ?: '____________________________') ?></span></strong><br>
-Recruter et préparer les étudiants<br>
-Assister dans la collecte et la vérification initiale des documents<br>
-Aider à la préparation des candidatures<br>
-Fournir un accompagnement avant le départ<br>
-Maintenir la communication avec les candidats</p>
-
-<p><strong>5.2 Parrot Canada Visa Consultant Co. Ltd</strong><br>
-(Représentée par Dr Jean Pierre Twajamahoro, Propriétaire & Directeur Général)<br>
-Effectuer l'évaluation initiale des documents et de l'éligibilité<br>
-Aider à la sélection des universités/établissements<br>
-Assister dans l'obtention des admissions<br>
-Fournir une assistance pour les bourses partielles et prêts étudiants (si applicable)<br>
-Fournir des services professionnels de conseil et traitement des visas<br>
-Assurer la conformité avec les lois d'immigration des pays de destination<br>
-Gérer les documents et procédures de visa<br>
-Coordonner la planification du voyage<br>
-Organiser l'accueil à l'aéroport et l'assistance à l'installation dans le pays de destination<br>
-Fournir un accompagnement après l'arrivée si nécessaire</p>
-
-<h3>6. Dispositions Financières</h3>
-<p>Chaque partie conserve le droit de facturer ses propres frais de service aux étudiants selon ses politiques internes.</p>
-<p>Parrot Canada Visa Consultant Co. Ltd s'engage à payer des frais de service d'application à Nom de l'Entreprise dès l'émission d'une lettre d'admission officielle.</p>
-<p>Les frais convenus pour application sont :</p>
-<ul>
-<li> Canada : 125 CAD par étudiant</li>
-<li> États-Unis : 100 USD par étudiant</li>
-<li> Europe : 100 EUR par étudiant</li>
-<li> Asie : 100 USD par étudiant</li>
-</ul>
-<p>Le paiement doit être effectué immédiatement après l'obtention de la lettre d'admission, selon les modalités convenues.</p>
-<p>Les deux parties s'engagent à assurer transparence et traçabilité financière.</p>
-
-<h3>7. Valeur Ajoutée</h3>
-<p>Ce partenariat offre :</p>
-<ul>
-<li>Un service complet de l'évaluation à l'installation</li>
-<li>Une amélioration du taux de réussite des admissions et visas</li>
-<li>Une assistance financière (bourses et prêts)</li>
-<li>Une arrivée sécurisée et une intégration réussie à l'étranger</li>
-</ul>
-
-<h3>8. Communication et Coordination</h3>
-<p>Désignation de représentants dédiés<br>
-Suivi continu des dossiers étudiants<br>
-Communication en temps réel</p>
-
-<h3>9. Confidentialité</h3>
-<p>Toutes les informations échangées restent strictement confidentielles.</p>
-
-<h3>10. Conformité et Éthique</h3>
-<ul>
-<li>Respect total des lois internationales</li>
-<li>Engagement éthique et transparent</li>
-<li>Tolérance zéro pour la fraude</li>
-</ul>
-
-<h3>11. Durée et Résiliation</h3>
-<p>Entrée en vigueur à la signature<br>
-Valide pour 1 ans<br>
-Résiliation avec préavis écrit de 30 jours<br>
-Finalisation des dossiers en cours obligatoire</p>
-
-<h3>12. Résolution des Litiges</h3>
-<p>Résolution à l'amiable<br>
-Arbitrage si nécessaire</p>
-
-<h3>13. Force Majeure</h3>
-<p>Aucune partie ne sera responsable en cas de circonstances indépendantes de sa volonté.</p>
-
-<h3>14. Conclusion</h3>
-<p>Cet accord représente un partenariat stratégique global, visant à fournir des services complets d'éducation internationale, de l'évaluation des documents jusqu'à l'accueil et l'installation à l'étranger.</p>
-
-<h3 style="font-size:20px;font-weight:700;margin-bottom:32px;">15. SIGNATURES</h3>
 
 <div class="signature-grid">
 
@@ -1128,6 +1021,19 @@ Référence du Contrat : <?= htmlspecialchars($contract['contract_token']) ?>
     if (displayEmail) displayEmail.textContent = emailValue || emptyHint;
     if (displayPhone) displayPhone.textContent = phoneValue || emptyHint;
     if (displayAddress) displayAddress.textContent = addressValue || emptyHint;
+
+    const mirrored = {
+      company_name: companyValue,
+      representative_name: nameValue,
+      representative_title: titleValue,
+      company_email: emailValue,
+      company_phone: phoneValue,
+      company_address: addressValue
+    };
+    document.querySelectorAll('[data-mirror]').forEach((el) => {
+      const key = el.getAttribute('data-mirror');
+      el.textContent = (mirrored[key] || '').trim() || emptyHint;
+    });
 
     const inlineName = document.getElementById('display_company_name');
     if (inlineName) inlineName.textContent = companyValue || '______________________________';

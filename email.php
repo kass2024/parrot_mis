@@ -22,7 +22,7 @@ function sendMail($subject, $messageHtml)
         $mail->Host       = 'visaconsultantcanada.com'; 
         $mail->SMTPAuth   = true;
         $mail->Username   = 'admission@visaconsultantcanada.com';
-        $mail->Password   = 'Petero@1981';
+        $mail->Password   = 'Parrot@2026';
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; 
         $mail->Port       = 465;
 

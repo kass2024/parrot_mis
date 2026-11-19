@@ -48,7 +48,7 @@ try {
     $mail->Host = 'visaconsultantcanada.com';
     $mail->SMTPAuth = true;
     $mail->Username = 'admission@visaconsultantcanada.com';
-    $mail->Password = getenv('SMTP_PASSWORD') ?: 'Petero@1981';
+    $mail->Password = getenv('SMTP_PASSWORD') ?: 'Parrot@2026';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port = 465;
 
@@ -127,7 +127,7 @@ try {
         $studentMail->Host = 'visaconsultantcanada.com';
         $studentMail->SMTPAuth = true;
         $studentMail->Username = 'admission@visaconsultantcanada.com';
-        $studentMail->Password = getenv('SMTP_PASSWORD') ?: 'Petero@1981';
+        $studentMail->Password = getenv('SMTP_PASSWORD') ?: 'Parrot@2026';
         $studentMail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
         $studentMail->Port = 465;
 

@@ -3,6 +3,7 @@ ini_set('display_errors', 1);
 ini_set('log_errors', 1);
 error_reporting(E_ALL);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/caq_status.php';
 require_once __DIR__ . '/includes/company_branding.php';
 session_start();
 
@@ -1066,7 +1067,11 @@ $applicantCount = count($all_applicants);
           foreach ($all_applicants as $s): 
             $currentStatus = null;
             $currentStatusText = 'Select Status';
+            $isCanadaDestination = pcvc_destination_is_canada((string) ($s['destination'] ?? ''));
             foreach ($statusDisplayPriority as $key) {
+              if ($key === 'sevis_paid' && $isCanadaDestination) {
+                continue;
+              }
               if (!empty($s[$key]) && (int)$s[$key] === 1) {
                 $currentStatus = $key;
                 $currentStatusText = $statusOptions[$key] ?? 'Select Status';
@@ -1152,6 +1157,7 @@ $applicantCount = count($all_applicants);
                 </button>
                 <div class="status-dropdown-menu">
                   <?php foreach ($statusOptions as $key => $label): ?>
+                  <?php if ($key === 'sevis_paid' && !empty($isCanadaDestination)) continue; ?>
                   <div class="status-dropdown-item status-<?= $key ?>" data-flag="<?= $key ?>">
                     <span><?= htmlspecialchars($label) ?></span>
                     <span class="status-check <?= (!empty($s[$key]) && (int)$s[$key] === 1) ? 'active' : '' ?>">✓</span>
@@ -1740,6 +1746,7 @@ $(function() {
           if (errMsg === 'rejection_reason_required') {
             errMsg = 'A rejection reason is required when sending email or WhatsApp.';
           }
+          if (errMsg === 'sevis_not_for_canada') errMsg = 'Sevis Paid cannot be used when the destination is Canada.';
           alert('Failed to update status: ' + errMsg);
           return;
         }

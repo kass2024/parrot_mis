@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/websites_schema.php';
 
 pcvc_ensure_websites_schema($conn);
@@ -19,8 +20,9 @@ if ($result && mysqli_num_rows($result) > 0) {
     $role = trim($admin['role'] ?? 'standard');
 }
 
-if ($role !== 'superadmin') {
-    header('Location: admin-dashboard.php');
+if (!pcvc_can_access_sensitive_menus($conn) || pcvc_current_user_hides_website_management($conn)) {
+    if (!function_exists('pcvc_deny_page')) { require_once __DIR__ . '/helpers/role.php'; }
+    pcvc_deny_page();
     exit;
 }
 
@@ -465,10 +467,18 @@ if (isset($_GET['added'])) {
             justify-content: center;
         }
 
+        .wm-link-cell .wm-link-row {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            max-width: 100%;
+        }
+
         .wm-link-cell a {
             color: var(--wm-blue);
             text-decoration: none;
             font-weight: 500;
+            min-width: 0;
         }
 
         .wm-link-cell a:hover { text-decoration: underline; }
@@ -934,10 +944,17 @@ if (isset($_GET['added'])) {
                         <td><strong><?= htmlspecialchars($row['website_name']) ?></strong></td>
                         <td class="wm-link-cell">
                             <?php if (!empty($row['website_link'])): ?>
-                                <a href="<?= htmlspecialchars($row['website_link']) ?>" target="_blank" title="<?= htmlspecialchars($row['website_link']) ?>">
-                                    <i class="bi bi-box-arrow-up-right"></i>
-                                    <?= htmlspecialchars(previewLink($row['website_link'])) ?>
-                                </a>
+                                <div class="wm-link-row">
+                                    <a href="<?= htmlspecialchars($row['website_link']) ?>" target="_blank" title="<?= htmlspecialchars($row['website_link']) ?>">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                        <?= htmlspecialchars(previewLink($row['website_link'])) ?>
+                                    </a>
+                                    <button type="button" class="wm-icon-btn wm-icon-btn-copy" title="Copy website link"
+                                        data-copy="<?= htmlspecialchars($row['website_link'], ENT_QUOTES) ?>"
+                                        onclick="copyText(this.dataset.copy)">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
                             <?php else: ?>
                                 <span class="text-muted">—</span>
                             <?php endif; ?>
@@ -1226,7 +1243,12 @@ if (isset($_GET['added'])) {
                     </div>
                     <div class="wm-view-item">
                         <label>Website Link</label>
-                        <div class="val" id="view_link">—</div>
+                        <div class="val d-flex align-items-center gap-2 flex-wrap">
+                            <span id="view_link">—</span>
+                            <button type="button" class="wm-icon-btn wm-icon-btn-copy" id="view_link_copy" style="display:none;" title="Copy website link" onclick="copyText(viewWebsiteLinkReal)">
+                                <i class="bi bi-clipboard"></i>
+                            </button>
+                        </div>
                     </div>
                     <div class="wm-view-item">
                         <label>Admin Username</label>
@@ -1290,6 +1312,7 @@ if (isset($_GET['added'])) {
 let viewPwdReal = '';
 let viewPwdVisible = false;
 let viewEmailLinkReal = '';
+let viewWebsiteLinkReal = '';
 let currentViewRow = null;
 let saveProgressTimer = null;
 let emailRowCounter = 0;
@@ -1535,11 +1558,18 @@ function viewCredentials(row) {
     viewPwdReal = row.admin_password || '';
     viewPwdVisible = false;
     viewEmailLinkReal = row.email_link || '';
+    viewWebsiteLinkReal = row.website_link || '';
 
     document.getElementById('view_name').textContent = row.website_name;
-    document.getElementById('view_link').innerHTML = row.website_link
-        ? '<a href="' + row.website_link + '" target="_blank">' + row.website_link + '</a>'
-        : '—';
+    const viewLinkEl = document.getElementById('view_link');
+    const viewLinkCopy = document.getElementById('view_link_copy');
+    if (row.website_link) {
+        viewLinkEl.innerHTML = '<a href="' + row.website_link + '" target="_blank">' + row.website_link + '</a>';
+        viewLinkCopy.style.display = '';
+    } else {
+        viewLinkEl.textContent = '—';
+        viewLinkCopy.style.display = 'none';
+    }
     document.getElementById('view_user').textContent = row.admin_username || '—';
     document.getElementById('view_pwd').textContent = viewPwdReal ? '••••••••' : '—';
 

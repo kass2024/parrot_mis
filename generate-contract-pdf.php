@@ -7,6 +7,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/helpers/contract_price_highlight.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
+require_once __DIR__ . '/helpers/country_flag.php';
 
 /* =====================================================
    SAFE ESCAPE
@@ -59,7 +60,9 @@ function contractPdfRenderPackageLines(array $lines): string
         }
 
         $flushNotes();
-        $html .= '<li>' . contractPdfRenderFeeLine($line) . '</li>';
+        $flagCode = pcvc_flag_code_for_text($line);
+        $flag = $flagCode !== '' ? pcvc_country_flag($flagCode, true) : '';
+        $html .= '<li>' . $flag . contractPdfRenderFeeLine($line) . '</li>';
     }
 
     $flushNotes();
@@ -104,10 +107,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.3 USA – Without Loan
+           7.2 USA – Without Loan
         ========================== */
         'p72' => [
-            'title' => '7.3 Study in the USA (Without Loan)',
+            'title' => '7.2 Study in the USA (Without Loan)',
             'lines' => [
                 'Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)',
                 'Mock Interview Preparation Fees: USD 150',
@@ -117,23 +120,23 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.4 Europe – Without Loan
+           7.3 Europe – Without Loan
         ========================== */
         'p73' => [
-            'title' => '7.4 Study in Europe (Without Loan)',
+            'title' => '7.3 Study in Europe (Without Loan)',
             'lines' => [
-                'Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)',
-                'Before Visa Application: USD 250',
-                'After Visa Approval: USD 1,500',
+                'Registration & Application Fee: EUR 250 (Refundable if admission is not secured within 4 months)',
+                'Before Visa Application: EUR 250',
+                'After Visa Approval: EUR 1,500',
             ],
-            'total' => 'USD 2,000',
+            'total' => 'EUR 2,000',
         ],
 
         /* =========================
-           7.5 Canada – Loan Based
+           7.4 Canada – Loan Based
         ========================== */
         'p74' => [
-            'title' => '7.5 Study in Canada (Loan-Based)',
+            'title' => '7.4 Study in Canada (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'After Visa Approval: CAD 3,050',
@@ -144,10 +147,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.6 Canada – Without Loan
+           7.5 Canada – Without Loan
         ========================== */
         'p75' => [
-            'title' => '7.6 Study in Canada (Without Loan)',
+            'title' => '7.5 Study in Canada (Without Loan)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'After Visa Approval: CAD 2,050',
@@ -158,10 +161,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.7 Canada – High School (Loan)
+           7.6 Canada – High School (Loan)
         ========================== */
         'p76' => [
-            'title' => '7.7 Canada – High School Graduate (Loan-Based)',
+            'title' => '7.6 Canada – High School Graduate (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450',
                 'Study Permit Fees (Embassy): CAD 150',
@@ -177,10 +180,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.8 Canada – LOA Without Lawyer
+           7.7 Canada – LOA Without Lawyer
         ========================== */
         'p77loa' => [
-            'title' => '7.8 Study in Canada having LOA (Without Lawyer Consultation)',
+            'title' => '7.7 Study in Canada having LOA (Without Lawyer Consultation)',
             'lines' => [
                 'MIS Registration Fee: CAD 225',
                 'Documents Preparation Fees: CAD 375',
@@ -191,10 +194,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.9 Canada – LOA With Lawyer
+           7.8 Canada – LOA With Lawyer
         ========================== */
         'p77loalawyer' => [
-            'title' => '7.9 Study in Canada having LOA (Lawyer Consultation)',
+            'title' => '7.8 Study in Canada having LOA (Lawyer Consultation)',
             'lines' => [
                 'MIS Registration Fee: CAD 225',
                 'Documents Preparation Fees: CAD 375',
@@ -206,10 +209,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.10 South Korea – Study
+           7.9 South Korea – Study
         ========================== */
         'p77' => [
-            'title' => '7.10 Study in South Korea (Self-Sponsored)',
+            'title' => '7.9 Study in South Korea (Self-Sponsored)',
             'lines' => [
                 'Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)',
                 'Self-Sponsored Service Fees – Bachelor: USD 2,000 (Includes free Korean language training for 3 months & Pre-Departure Orientation)',
@@ -222,10 +225,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.11 South Korea – Visit
+           7.10 South Korea – Visit
         ========================== */
         'p78' => [
-            'title' => '7.11 🇰🇷 South Korea Visitor Visa',
+            'title' => '7.10 🇰🇷 South Korea Visitor Visa',
             'lines' => [
                 'Registration & Application Fee: USD 500',
                 'Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500',
@@ -235,10 +238,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.12 Credit Transfer
+           7.11 Credit Transfer
         ========================== */
         'p79' => [
-            'title' => '7.12 Credit Transfer (Bachelor, Masters, PhD)',
+            'title' => '7.11 Credit Transfer (Bachelor, Masters, PhD)',
             'lines' => [
                 'Bachelor Program: USD 920',
                 'Masters Program: USD 1,220',
@@ -248,10 +251,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.13 Canada Visit Visa
+           7.12 Canada Visit Visa
         ========================== */
         'p710' => [
-            'title' => '7.13 Canada Visit Visa',
+            'title' => '7.12 Canada Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: CAD 100',
@@ -262,10 +265,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.14 Canada Visit Visa – With Invitation Letter
+           7.13 Canada Visit Visa – With Invitation Letter
         ========================== */
         'p710b' => [
-            'title' => '7.14 Canada Visit Visa – With Invitation Letter',
+            'title' => '7.13 Canada Visit Visa – With Invitation Letter',
             'lines' => [
                 'Invitation Letter: Already Provided by Applicant',
                 'Document Preparation and Visa Application Screening: CAD 815',
@@ -278,10 +281,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.15 Visit Canada with Invitation on Promotion
+           7.14 Visit Canada with Invitation on Promotion
         ========================== */
         'p710promo' => [
-            'title' => '7.15 Visit Canada with Invitation on Promotion',
+            'title' => '7.14 Visit Canada with Invitation on Promotion',
             'lines' => [
                 'Invitation Fees: CAD 360',
                 'Documents Preparation Fees: CAD 240',
@@ -292,10 +295,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.16 USA Visit Visa
+           7.15 USA Visit Visa
         ========================== */
         'p711' => [
-            'title' => '7.16 USA Visit Visa',
+            'title' => '7.15 USA Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 1,000',
                 'Visa Application Fees: USD 185',
@@ -305,10 +308,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.17 Europe Visit Visa
+           7.16 Europe Visit Visa
         ========================== */
         'p712' => [
-            'title' => '7.17 Europe Visit Visa',
+            'title' => '7.16 Europe Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: €600',
                 'Visa Application Fees: €85 – €500 (depending on country)',
@@ -318,10 +321,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.18 Asia Visit Visa
+           7.17 Asia Visit Visa
         ========================== */
         'p713' => [
-            'title' => '7.18 Asia Visit Visa',
+            'title' => '7.17 Asia Visit Visa',
             'lines' => [
                 'Documents & Invitation Letter: USD 800',
                 'Visa Application Fees: USD 85 – USD 500',
@@ -331,10 +334,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.19 Short Courses - Canada
+           7.18 Short Courses - Canada
         ========================== */
         'p714' => [
-            'title' => '7.19 SHORT COURSES-CANADA',
+            'title' => '7.18 SHORT COURSES-CANADA',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)',
                 'Registration & Application Fee for Family Member: CAD 200 (If applicable)',
@@ -349,10 +352,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.20 Study PhD in Multiple Destinations
+           7.19 Study PhD in Multiple Destinations
         ========================== */
         'p715' => [
-            'title' => '7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+            'title' => '7.19 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
             'lines' => [
                 'Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)',
                 'Registration & Application Fee for USA, Europe & Asia: USD 350 (Refundable if admission is not secured within 9 months)',
@@ -371,10 +374,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.21 WES Evaluation – International Equivalence
+           7.20 WES Evaluation – International Equivalence
         ========================== */
         'p716' => [
-            'title' => '7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+            'title' => '7.20 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
             'lines' => [
                 '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the WES evaluation process.',
                 '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
@@ -386,10 +389,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.22 Guaranteed Evaluation Support
+           7.21 Guaranteed Evaluation Support
         ========================== */
         'p717' => [
-            'title' => '7.22 GUARANTEED EVALUATION SUPPORT!',
+            'title' => '7.21 GUARANTEED EVALUATION SUPPORT!',
             'lines' => [
                 '1. Professional Service Fees: CAD 200 — The fee includes professional consultation, guidance, document preparation assistance, and personalized support throughout the all evaluation process.',
                 '2. Application & Processing Costs: CAD 300 — The amount covers application-related expenses, communication with institutions, document handling, and processing follow-up during the evaluation procedure.',
@@ -399,6 +402,29 @@ function getPackageDetails(string $code): array
             ],
             'total' => 'CAD 900',
             'total_label' => 'Total packages',
+        ],
+
+        /* =========================
+           7.22 Malta – Professional courses
+        ========================== */
+        'p718' => [
+            'title' => '7.22 Study Professional Courses in Malta – European Schengen Country',
+            'lines' => [
+                'Registration & Application Fee: EUR 250',
+                'After Visa Approval: EUR 1,750',
+                'Complete PARROT Visa Support Package: EUR 2,000',
+                'AVAILABLE TRAINING PACKAGES (14 WEEKS EACH)',
+                'Soft Program: Tuition fees EUR 4,500 and initial tuition deposit EUR 1,350',
+                'Semi-Intensive Program: Tuition fees EUR 6,900 and initial tuition deposit EUR 2,070',
+                'Intensive Program: Tuition fees EUR 10,900 and initial tuition deposit EUR 3,270',
+                'NOTE: The tuition fees listed above are separate from PARROT\'s EUR 2,000 service package.',
+                'NOTE: The initial tuition deposit (30%) is payable upon signing the academy\'s enrolment contract, before the visa application.',
+                'NOTE: The remaining tuition balance (70%) is payable after visa issuance and before training begins.',
+                'NOTE: Accommodation, travel, insurance, living expenses and other third-party costs are not included.',
+                'NOTE: Visa approval is not guaranteed.',
+            ],
+            'total' => 'EUR 2,000',
+            'total_label' => 'Complete PARROT Visa Support Package',
         ],
     ];
 
@@ -891,7 +917,7 @@ subject to the specific service package selected by the Student under this Agree
 <h2>7. FEES &amp; PAYMENT TERMS (SELECTED PACKAGE)</h2>
 
 <div class="selected-package-box">
-<p class="package-title"><?= esc(contractPdfPlainText($package['title'])) ?></p>
+<p class="package-title"><?php $flagCode = pcvc_flag_code_for_text((string) ($package['title'] ?? '')); echo $flagCode !== '' ? pcvc_country_flag($flagCode, true) : ''; ?><?= esc(contractPdfPlainText($package['title'])) ?></p>
 
 <ul class="package-fees-list">
 <?= contractPdfRenderPackageLines($package['lines']) ?>

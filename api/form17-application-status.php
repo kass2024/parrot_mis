@@ -41,10 +41,13 @@ if (!$roleRow) {
 
 $dbRole = (string) ($roleRow['role'] ?? '');
 $sessionRole = (string) ($_SESSION['role'] ?? '');
-if (
-    !xander_is_superadmin_role($dbRole)
-    && !xander_is_superadmin_role($sessionRole)
-) {
+$canChangeVisaStatus = xander_is_superadmin_role($dbRole)
+    || xander_is_superadmin_role($sessionRole)
+    || pcvc_is_staff_role($dbRole)
+    || pcvc_is_staff_role($sessionRole)
+    || strtolower(trim($dbRole)) === 'agent'
+    || strtolower(trim($sessionRole)) === 'agent';
+if (!$canChangeVisaStatus) {
     jsonResponse('Forbidden', false, 403);
 }
 
@@ -55,7 +58,7 @@ if ($userId === '') {
     jsonResponse('Invalid user id', false, 400);
 }
 
-if (!xander_is_valid_job_process_status($statusKey)) {
+if (!xander_is_valid_visa_process_status($statusKey)) {
     jsonResponse('Invalid status', false, 400);
 }
 
@@ -109,7 +112,7 @@ if ($notifyEmail || $notifyWhatsapp) {
     }
 }
 
-$labels = xander_job_application_process_statuses();
+$labels = xander_visa_application_process_statuses();
 $data = [
     'user_id' => $userId,
     'process_status' => $statusKey,

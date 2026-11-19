@@ -43,9 +43,122 @@ function pcvc_table_has_column(mysqli $conn, string $table, string $column): boo
     return $r && $r->num_rows > 0;
 }
 
-// Handle new record submission
+if (empty($_SESSION['applicant_add_csrf'])) {
+    $_SESSION['applicant_add_csrf'] = bin2hex(random_bytes(16));
+}
+$applicantAddCsrf = (string) $_SESSION['applicant_add_csrf'];
+$applicantAddFlash = $_SESSION['applicant_add_flash'] ?? null;
+unset($_SESSION['applicant_add_flash']);
+
+// Quick add from this list: name, email, and phone only. This submit must not email the student.
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_new'])) {
-    // ... (your existing POST handling code remains the same)
+    $adminId = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    $sentCsrf = (string) ($_POST['csrf'] ?? '');
+    if ($adminId < 1 || $sentCsrf === '' || !hash_equals($applicantAddCsrf, $sentCsrf)) {
+        $_SESSION['applicant_add_flash'] = ['type' => 'bad', 'text' => 'The form expired. Open Add student again.'];
+        header('Location: students-manage.php');
+        exit;
+    }
+
+    $fullName = trim((string) preg_replace('/\s+/', ' ', (string) ($_POST['full_name'] ?? '')));
+    $email = strtolower(trim((string) ($_POST['email'] ?? '')));
+    $phone = trim((string) preg_replace('/[^\d+\s()-]/', '', (string) ($_POST['phone'] ?? '')));
+    $phone = trim((string) preg_replace('/\s+/', ' ', $phone));
+    if ($fullName === '' || mb_strlen($fullName) > 180 || !filter_var($email, FILTER_VALIDATE_EMAIL) || $phone === '' || strlen($phone) > 30) {
+        $_SESSION['applicant_add_flash'] = ['type' => 'bad', 'text' => 'Enter a name, a valid email, and a phone number. No email was sent.'];
+        header('Location: students-manage.php');
+        exit;
+    }
+
+    $parts = preg_split('/\s+/', $fullName) ?: [];
+    $lastName = (string) array_pop($parts);
+    $firstName = trim(implode(' ', $parts));
+    if ($firstName === '') {
+        $firstName = $lastName;
+        $lastName = '';
+    }
+    $firstName = mb_substr($firstName, 0, 100);
+    $lastName = mb_substr($lastName, 0, 100);
+
+    $already = null;
+    foreach ([
+        ['student_applications', 'first_name', 'last_name'],
+        ['malta_applications', 'name', 'surname'],
+        ['turkey_applications', 'first_name', 'last_name'],
+    ] as $spec) {
+        $table = $spec[0];
+        $exists = $conn->query("SHOW TABLES LIKE '" . $conn->real_escape_string($table) . "'");
+        if (!$exists || $exists->num_rows === 0) {
+            continue;
+        }
+        $sql = "SELECT `{$spec[1]}` AS fn, `{$spec[2]}` AS ln FROM `{$table}` WHERE LOWER(email) = ? LIMIT 1";
+        $dup = $conn->prepare($sql);
+        if (!$dup) {
+            continue;
+        }
+        $dup->bind_param('s', $email);
+        $dup->execute();
+        $row = $dup->get_result()->fetch_assoc();
+        $dup->close();
+        if ($row) {
+            $already = trim((string) ($row['fn'] ?? '') . ' ' . (string) ($row['ln'] ?? ''));
+            break;
+        }
+    }
+    if ($already !== null) {
+        $who = $already !== '' ? ' for ' . $already : '';
+        $_SESSION['applicant_add_flash'] = ['type' => 'bad', 'text' => 'That email is already on the list' . $who . '. No email was sent.'];
+        header('Location: students-manage.php');
+        exit;
+    }
+
+    $userId = '';
+    for ($try = 0; $try < 5; $try++) {
+        $candidate = 'desk_' . bin2hex(random_bytes(8));
+        $chk = $conn->prepare('SELECT id FROM student_applications WHERE user_id = ? LIMIT 1');
+        $chk->bind_param('s', $candidate);
+        $chk->execute();
+        $taken = (bool) $chk->get_result()->fetch_assoc();
+        $chk->close();
+        if (!$taken) {
+            $userId = $candidate;
+            break;
+        }
+    }
+    $appCode = '';
+    for ($try = 0; $try < 5; $try++) {
+        $candidate = '/' . random_int(1000000000, 1999999999);
+        $chk = $conn->prepare('SELECT id FROM student_applications WHERE application_id = ? LIMIT 1');
+        $chk->bind_param('s', $candidate);
+        $chk->execute();
+        $taken = (bool) $chk->get_result()->fetch_assoc();
+        $chk->close();
+        if (!$taken) {
+            $appCode = $candidate;
+            break;
+        }
+    }
+    if ($userId === '' || $appCode === '') {
+        $_SESSION['applicant_add_flash'] = ['type' => 'bad', 'text' => 'The student could not be saved. No email was sent.'];
+        header('Location: students-manage.php');
+        exit;
+    }
+
+    $today = date('Y-m-d');
+    $area = '';
+    $remarks = 'Added from the applicants list. No email was sent.';
+    $incomplete = 1;
+    $stmt = $conn->prepare('INSERT INTO student_applications
+        (user_id, first_name, last_name, email, area_code, phone_number, application_date, application_id, application_remarks, incomplete_app)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmt->bind_param('sssssssssi', $userId, $firstName, $lastName, $email, $area, $phone, $today, $appCode, $remarks, $incomplete);
+    $saved = $stmt->execute();
+    $stmt->close();
+    $_SESSION['applicant_add_flash'] = $saved
+        ? ['type' => 'ok', 'text' => $fullName . ' was added with name, email, and phone only. No email was sent.']
+        : ['type' => 'bad', 'text' => 'The student could not be saved. No email was sent.'];
+    header('Location: students-manage.php');
+    exit;
 }
 
 // Fetch data from ALL sources properly with country names
@@ -467,6 +580,46 @@ if ($uq) {
     .page-title::before {
       content: '🎓';
       font-size: 30px;
+    }
+
+    .add-student-flash, .add-student-miss, .add-student-form {
+      margin: 0 0 14px;
+      border-radius: 12px;
+    }
+    .add-student-flash { padding: 10px 14px; font-weight: 600; }
+    .add-student-flash.ok { background: #d8f3dc; color: #1b4332; }
+    .add-student-flash.bad { background: #fff3d6; color: #7a4e00; }
+    .add-student-miss {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: #fff8e8;
+      border: 1px solid #ecd9a2;
+      color: #6a4b00;
+    }
+    .add-student-form {
+      display: none;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px 12px;
+      padding: 14px;
+      background: #fff;
+      border: 1px solid rgba(1, 47, 107, 0.12);
+      box-shadow: 0 2px 8px rgba(1, 47, 107, 0.06);
+    }
+    .add-student-copy { grid-column: 1 / -1; color: #334155; font-size: 14px; }
+    .add-student-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 650; color: #1e293b; }
+    .add-student-form input {
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      font-weight: 500;
+    }
+    .add-student-actions { grid-column: 1 / -1; display: flex; gap: 8px; }
+    @media (max-width: 768px) {
+      .add-student-form { grid-template-columns: 1fr; }
     }
 
     /* ===== BUTTONS ===== */
@@ -1035,13 +1188,38 @@ if ($uq) {
   <!-- Page Header - Removed action buttons -->
   <div class="page-header">
     <div class="page-title">All Applicants Management Portal</div>
+    <button type="button" class="btn btn-primary" id="showAddStudent">Add student</button>
   </div>
+  <?php if (is_array($applicantAddFlash) && !empty($applicantAddFlash['text'])): ?>
+    <div class="add-student-flash <?= ($applicantAddFlash['type'] ?? '') === 'ok' ? 'ok' : 'bad' ?>">
+      <?= htmlspecialchars((string) $applicantAddFlash['text'], ENT_QUOTES, 'UTF-8') ?>
+    </div>
+  <?php endif; ?>
 
   <!-- Search Bar -->
   <div class="search-container">
     <input type="text" id="searchInput" class="search-box" placeholder="🔍 Smart search: name, email, phone, university, program, destination, assigned staff, status, app ID, remarks, source…">
     <span class="search-icon">🔍</span>
   </div>
+  <div id="searchMiss" class="add-student-miss">
+    No student matches this search.
+    <button type="button" class="btn btn-sm btn-primary" id="addFromSearch">Add this student</button>
+  </div>
+  <form id="addStudentForm" method="post" action="students-manage.php" class="add-student-form" autocomplete="off">
+    <input type="hidden" name="add_new" value="1">
+    <input type="hidden" name="csrf" value="<?= htmlspecialchars($applicantAddCsrf, ENT_QUOTES, 'UTF-8') ?>">
+    <div class="add-student-copy">
+      <strong>Add a student who is not on this list.</strong>
+      Only the name, email, and phone are saved. Submitting does not email the student.
+    </div>
+    <label>Full name<input type="text" name="full_name" maxlength="180" required placeholder="First and last name"></label>
+    <label>Email<input type="email" name="email" maxlength="100" required placeholder="name@email.com"></label>
+    <label>Phone<input type="tel" name="phone" maxlength="30" required placeholder="+250 ..."></label>
+    <div class="add-student-actions">
+      <button type="submit" class="btn btn-primary">Save student</button>
+      <button type="button" class="btn btn-outline-secondary" id="hideAddStudent">Cancel</button>
+    </div>
+  </form>
 
   <!-- Smart filters -->
   <form method="get" action="students-manage.php" class="smart-filter-bar" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:16px;padding:12px 14px;background:var(--white);border:1px solid rgba(1,47,107,0.12);border-radius:12px;box-shadow:0 2px 8px rgba(1,47,107,0.06);">
@@ -1138,6 +1316,9 @@ if ($uq) {
             $currentStatus = null;
             $currentStatusText = 'Select Status';
             foreach ($statusDisplayPriority as $key) {
+              if ($key === 'sevis_paid' && $isCanadaDestination) {
+                continue;
+              }
               if (!empty($s[$key]) && $s[$key] == 1) {
                 $currentStatus = $key;
                 $currentStatusText = $statusOptions[$key] ?? 'Select Status';
@@ -1309,6 +1490,7 @@ if ($uq) {
                 <div class="status-dropdown-menu">
                   <?php foreach ($statusOptions as $key => $label): ?>
                   <?php if ($key === 'caq' && (!$isCanadaDestination || ($s['source'] ?? '') !== 'student_applications')) continue; ?>
+                  <?php if ($key === 'sevis_paid' && $isCanadaDestination) continue; ?>
                   <div class="status-dropdown-item status-<?= $key ?>" data-flag="<?= $key ?>">
                     <span><?= htmlspecialchars($label) ?></span>
                     <span class="status-check <?= (!empty($s[$key]) && (int)$s[$key] === 1) ? 'active' : '' ?>">✓</span>
@@ -1953,26 +2135,61 @@ $(function() {
       return str.toLowerCase();
     }
   }
+  function openAddStudent(prefill) {
+    const form = document.getElementById('addStudentForm');
+    if (!form) return;
+    form.style.display = 'grid';
+    const name = form.querySelector('[name="full_name"]');
+    const email = form.querySelector('[name="email"]');
+    const phone = form.querySelector('[name="phone"]');
+    const q = (prefill || '').trim();
+    if (q.indexOf('@') !== -1) {
+      email.value = q;
+      name.focus();
+    } else if (/^[+\d][\d\s()-]{5,}$/.test(q)) {
+      phone.value = q;
+      name.focus();
+    } else if (q) {
+      name.value = q;
+      email.focus();
+    } else {
+      name.focus();
+    }
+    form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
   function pcvcSmartApplicantSearch(query) {
     const q = (query || '').trim();
     const rows = document.querySelectorAll('#applicantTable tbody tr');
+    let visible = 0;
     if (!q) {
       rows.forEach(function (row) { row.style.display = ''; });
-      return;
+      visible = rows.length;
+    } else {
+      const norm = pcvcNormalizeSearchStr(q);
+      const tokens = norm.split(/[^a-z0-9]+/i).filter(function (t) { return t.length > 0; });
+      rows.forEach(function (row) {
+        let hay = row.getAttribute('data-search') || '';
+        if (!hay) {
+          hay = pcvcNormalizeSearchStr(row.textContent || '');
+        } else {
+          hay = pcvcNormalizeSearchStr(hay);
+        }
+        const ok = tokens.every(function (t) { return hay.indexOf(t) !== -1; });
+        row.style.display = ok ? '' : 'none';
+        if (ok) visible++;
+      });
     }
-    const norm = pcvcNormalizeSearchStr(q);
-    const tokens = norm.split(/[^a-z0-9]+/i).filter(function (t) { return t.length > 0; });
-    rows.forEach(function (row) {
-      let hay = row.getAttribute('data-search') || '';
-      if (!hay) {
-        hay = pcvcNormalizeSearchStr(row.textContent || '');
-      } else {
-        hay = pcvcNormalizeSearchStr(hay);
-      }
-      const ok = tokens.every(function (t) { return hay.indexOf(t) !== -1; });
-      row.style.display = ok ? '' : 'none';
-    });
+    const miss = document.getElementById('searchMiss');
+    if (miss) miss.style.display = (q && visible === 0) ? 'flex' : 'none';
   }
+  document.getElementById('showAddStudent')?.addEventListener('click', function () { openAddStudent(''); });
+  document.getElementById('addFromSearch')?.addEventListener('click', function () {
+    openAddStudent(document.getElementById('searchInput')?.value || '');
+  });
+  document.getElementById('hideAddStudent')?.addEventListener('click', function () {
+    const form = document.getElementById('addStudentForm');
+    if (form) form.style.display = 'none';
+  });
   $('#searchInput').off('keyup.smartsearch input.smartsearch').on('keyup.smartsearch input.smartsearch', function () {
     const self = this;
     clearTimeout(smartSearchTimer);
@@ -2281,6 +2498,8 @@ $(function() {
             errMsg = 'A rejection reason is required when sending email or WhatsApp.';
           } else if (errMsg === 'missing_column') {
             errMsg = 'The database column for this status is missing. Run the ALTER TABLE command first.';
+          } else if (errMsg === 'sevis_not_for_canada') {
+            errMsg = 'Sevis Paid cannot be used when the destination is Canada.';
           }
           alert('Failed to update status: ' + errMsg);
           return;

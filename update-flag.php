@@ -80,6 +80,19 @@ if (
     xander_update_flag_respond($wantJson, false, 'invalid');
 }
 
+if ($flag === 'sevis_paid' && $table === 'student_applications') {
+    $dst = $conn->prepare('SELECT destination FROM student_applications WHERE id = ? LIMIT 1');
+    if ($dst) {
+        $dst->bind_param('i', $id);
+        $dst->execute();
+        $drow = $dst->get_result()->fetch_assoc();
+        $dst->close();
+        if ($drow && pcvc_destination_is_canada((string) ($drow['destination'] ?? ''))) {
+            xander_update_flag_respond($wantJson, false, 'sevis_not_for_canada');
+        }
+    }
+}
+
 if ($flag === 'caq') {
     if ($table !== 'student_applications') {
         xander_update_flag_respond($wantJson, false, 'caq_canada_only');

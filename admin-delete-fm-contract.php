@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 
-if (!isset($_SESSION['admin_id'])) {
+if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
     exit('Unauthorized');
 }
+pcvc_require_francophonie_mobility($conn);
 
 if (empty($_POST['csrf_token']) || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
     http_response_code(403);
@@ -24,7 +26,7 @@ fm_contract_ensure_schema($conn);
 
 $contractId = (int) $_POST['contract_id'];
 
-$stmt = $conn->prepare('SELECT pdf_path FROM fm_mobility_contracts WHERE id = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT pdf_path, contract_variant FROM fm_mobility_contracts WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $contractId);
 $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
@@ -52,5 +54,7 @@ $stmt->bind_param('i', $contractId);
 $stmt->execute();
 $stmt->close();
 
-header('Location: admin-fm-contracts.php?deleted=1');
+$backVariant = fm_contract_normalize_variant($row['contract_variant'] ?? ($_POST['variant'] ?? 'standard'));
+$back = 'admin-fm-contracts.php?deleted=1' . ($backVariant === 'special' ? '&variant=special' : '');
+header('Location: ' . $back);
 exit;

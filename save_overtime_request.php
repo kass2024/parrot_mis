@@ -27,7 +27,7 @@ header('Content-Type: application/json; charset=utf-8');
 /* =====================================================
    SECURITY
 ===================================================== */
-if (!isset($_SESSION['admin_id'], $_SESSION['role']) || $_SESSION['role'] !== 'staff') {
+if (!isset($_SESSION['admin_id']) && !isset($_SESSION['id'])) {
     echo json_encode([
         'success' => false,
         'message' => 'Unauthorized or session expired'
@@ -35,7 +35,7 @@ if (!isset($_SESSION['admin_id'], $_SESSION['role']) || $_SESSION['role'] !== 's
     exit;
 }
 
-$staffId = (int)$_SESSION['admin_id'];
+$staffId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 
 /* =====================================================
    INPUT VALIDATION
@@ -43,6 +43,14 @@ $staffId = (int)$_SESSION['admin_id'];
 $date   = $_POST['date']   ?? null;
 $reason = trim($_POST['reason'] ?? '');
 $hours  = $_POST['hours'] ?? null;
+
+if (($_POST['policy_accepted'] ?? '') !== '1') {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Accept the overtime policy before you submit.'
+    ]);
+    exit;
+}
 
 if (!$date || $reason === '') {
     echo json_encode([
@@ -52,18 +60,14 @@ if (!$date || $reason === '') {
     exit;
 }
 
-if ($hours !== null && $hours !== '') {
-    if (!is_numeric($hours) || $hours <= 0) {
-        echo json_encode([
-            'success' => false,
-            'message' => 'Expected hours must be a valid number'
-        ]);
-        exit;
-    }
-    $hours = (float)$hours;
-} else {
-    $hours = null;
+if (!is_numeric($hours) || (float) $hours < 3 || (float) $hours > 4) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'Each overtime request must be between 3 and 4 hours.'
+    ]);
+    exit;
 }
+$hours = (float) $hours;
 
 /* =====================================================
    PREVENT MULTIPLE PENDING REQUESTS
@@ -144,7 +148,7 @@ try {
     $mail->Host       = 'visaconsultantcanada.com';
     $mail->SMTPAuth   = true;
     $mail->Username   = 'admission@visaconsultantcanada.com';
-    $mail->Password   = 'Petero@1981';
+    $mail->Password   = 'Parrot@2026';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port       = 465;
 

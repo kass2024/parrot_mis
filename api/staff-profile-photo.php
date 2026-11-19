@@ -6,7 +6,7 @@ require_once dirname(__DIR__) . '/db.php';
 require_once dirname(__DIR__) . '/helpers/secure_file.php';
 require_once dirname(__DIR__) . '/helpers/profile_photo_upload.php';
 
-if (!isset($_SESSION['id']) || ($_SESSION['role'] ?? '') !== 'superadmin') {
+if (!isset($_SESSION['id']) || ($_SESSION['role'] ?? '') === '' || !pcvc_is_superadmin_role($_SESSION['role'])) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'error' => 'Access denied. Superadmin only.']);
     exit;

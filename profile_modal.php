@@ -1,5 +1,6 @@
 <!-- Profile Modal -->
 <?php if (!function_exists('pcvc_profile_photo_url')) { require_once __DIR__ . '/helpers/secure_file.php'; } ?>
+<?php if (!function_exists('pcvc_staff_employment_type_options')) { require_once __DIR__ . '/helpers/staff_contract_schema.php'; } ?>
 <div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <form action="profile_update.php" method="POST" enctype="multipart/form-data" class="modal-content">
@@ -110,9 +111,17 @@
           <div class="col-md-6">
             <label class="form-label">Employment Type</label>
             <select name="employment_type" class="form-select">
-              <?php foreach (['Full-time','Part-time','Contract'] as $type): ?>
-                <option value="<?= $type ?>" <?= ($admin['employment_type'] ?? '') === $type ? 'selected' : '' ?>>
-                  <?= $type ?>
+              <option value="">--</option>
+              <?php
+              $employmentCurrent = (string) ($admin['employment_type'] ?? '');
+              $employmentSelected = pcvc_staff_employment_type_normalize($employmentCurrent);
+              if ($employmentSelected === '') {
+                  $employmentSelected = $employmentCurrent;
+              }
+              foreach (pcvc_staff_employment_type_choices($employmentCurrent) as $type):
+              ?>
+                <option value="<?= htmlspecialchars($type) ?>" <?= $employmentSelected === $type ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($type) ?>
                 </option>
               <?php endforeach; ?>
             </select>
@@ -122,6 +131,17 @@
             <label class="form-label">Employment Start Date</label>
             <input type="date" name="employment_start_date" class="form-control"
                    value="<?= htmlspecialchars($admin['employment_start_date'] ?? '') ?>">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Monthly salary</label>
+            <input type="number" step="0.01" min="0" name="monthly_salary" class="form-control"
+                   value="<?= htmlspecialchars((string) ($admin['monthly_salary'] ?? '')) ?>">
+          </div>
+
+          <div class="col-md-6">
+            <label class="form-label">Currency</label>
+            <input type="text" class="form-control" value="RWF — Rwandan francs" readonly>
           </div>
 
         </div>

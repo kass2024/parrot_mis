@@ -140,6 +140,7 @@ $credit_translations = [
         'education_hint' => 'Select all that apply to your current education status',
         'program_hint' => 'Select university first, then type to filter available programs',
         'upafa_catalogue' => 'Download UPAFA 2025 program catalogue (PDF)',
+        'udm_catalogue' => 'Download Université de Mwaro program list (Word)',
         'comments_hint' => 'Optional: Share your motivation, special circumstances, or questions',
         
         // Progress Messages
@@ -279,6 +280,7 @@ $credit_translations = [
         'education_hint' => 'Sélectionnez tout ce qui s\'applique à votre statut d\'éducation actuel',
         'program_hint' => 'Sélectionnez d\'abord l\'université, puis tapez pour filtrer les programmes disponibles',
         'upafa_catalogue' => 'Télécharger le catalogue des programmes UPAFA 2025 (PDF)',
+        'udm_catalogue' => 'Télécharger la liste des programmes de l\'Université de Mwaro (Word)',
         'comments_hint' => 'Optionnel : Partagez votre motivation, circonstances spéciales ou questions',
         
         // Progress Messages
@@ -1324,7 +1326,8 @@ if (!is_array($certChecked)) {
       margin-top: 8px; 
       font-style: italic;
     }
-    #upafaCatalogueLink {
+    #upafaCatalogueLink,
+    #udmCatalogueLink {
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
@@ -1334,7 +1337,8 @@ if (!is_array($certChecked)) {
       color: var(--navy-blue);
       text-decoration: none;
     }
-    #upafaCatalogueLink:hover { text-decoration: underline; }
+    #upafaCatalogueLink:hover,
+    #udmCatalogueLink:hover { text-decoration: underline; }
 
     .error-message {
       color: var(--danger);
@@ -1530,10 +1534,17 @@ if (!is_array($certChecked)) {
             <option value="DPHU"<?= $uniSel === 'DPHU' ? ' selected' : '' ?>>Distant Production house University (DPHU)</option>
             <option value="IST"<?= $uniSel === 'IST' ? ' selected' : '' ?>>Institut Supérieur de Burkina Faso (IST)</option>
             <option value="USOJ"<?= $uniSel === 'USOJ' ? ' selected' : '' ?>>University of Saint Joseph Mbarara (USOJ)</option>
+            <option value="UDM"<?= $uniSel === 'UDM' ? ' selected' : '' ?>>Université de Mwaro (UDM)</option>
           </select>
-          <?php $upafaCatalogueRel = pcvc_credit_transfer_catalogue_path('UPAFA'); ?>
+          <?php
+            $upafaCatalogueRel = pcvc_credit_transfer_catalogue_path('UPAFA');
+            $udmCatalogueRel = pcvc_credit_transfer_catalogue_path('UDM');
+          ?>
           <a id="upafaCatalogueLink" href="<?= htmlspecialchars((string) $upafaCatalogueRel, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"<?= $uniSel === 'UPAFA' ? '' : ' style="display:none;"' ?>>
             <i class="fas fa-file-pdf"></i> <?php echo htmlspecialchars(ct('upafa_catalogue'), ENT_QUOTES, 'UTF-8'); ?>
+          </a>
+          <a id="udmCatalogueLink" href="<?= htmlspecialchars((string) $udmCatalogueRel, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"<?= $uniSel === 'UDM' ? '' : ' style="display:none;"' ?>>
+            <i class="fas fa-file-word"></i> <?php echo htmlspecialchars(ct('udm_catalogue'), ENT_QUOTES, 'UTF-8'); ?>
           </a>
         </div>
         <div class="form-group">
@@ -1974,11 +1985,15 @@ function populatePrograms(university) {
   const datalist = document.getElementById('programOptions');
   const programInput = document.getElementById('proposed_program');
   const catalogueLink = document.getElementById('upafaCatalogueLink');
+  const udmCatalogueLink = document.getElementById('udmCatalogueLink');
   
   datalist.innerHTML = '';
   programInput.value = '';
   if (catalogueLink) {
     catalogueLink.style.display = university === 'UPAFA' ? '' : 'none';
+  }
+  if (udmCatalogueLink) {
+    udmCatalogueLink.style.display = university === 'UDM' ? '' : 'none';
   }
   
   const data = PROGRAMS[university];

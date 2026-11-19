@@ -684,56 +684,71 @@ abstract class ProfessionalPDFGenerator {
     }
     
     protected function getContractTitle(): string {
-        return $this->t('Strategic Partnership Agreement', 'Accord de Partenariat Stratégique');
+        return $this->t('Strategic B2B Partnership Agreement', 'Accord de partenariat stratégique B2B');
     }
     
     protected function getSubtitle(): string {
-        return $this->t('A Professional Partnership for Global Education Services', 'Un Partenariat Professionnel pour les Services d\'Éducation Mondiale');
+        return $this->t(
+            'International Education, Immigration Service Coordination and Overseas Employment Support',
+            'Éducation internationale, coordination des services d\'immigration et soutien à l\'emploi à l\'étranger'
+        );
     }
     
     protected function getPartiesSection(): string {
         $partnerName = $this->esc($this->contract['company_name']);
         $repName = $this->esc($this->contract['representative_name']);
         $repTitle = $this->esc($this->contract['representative_title']);
-        $repEmail = $this->esc($this->contract['representative_email']);
-        $companyEmail = $this->esc($this->contract['company_email']);
+        $companyEmail = $this->esc($this->contract['company_email'] ?: $this->contract['representative_email']);
         $companyPhone = $this->esc($this->contract['company_phone']);
         $companyAddress = $this->esc($this->contract['company_address']);
-        
-        $between = $this->t('Between', 'Entre');
-        $and = $this->t('and', 'et');
-        $companyName = $this->t('Company Name', 'Nom de l\'Entreprise');
-        $representative = $this->t('Representative', 'Représentant');
-        $position = $this->t('Position', 'Fonction');
-        $email = $this->t('Email', 'Email');
-        $phone = $this->t('Phone', 'Téléphone');
-        $fullAddress = $this->t('Full Address', 'Adresse complète');
-        
-        $parrotInfo = $this->t(
-            'Parrot Canada Visa Consultant Co. Ltd<br>
-            Dr Jean Pierre Twajamahoro<br>
-            Owner & Managing Director<br>
-            Email: infos@visaconsultantcanada.ca<br>
-            Phone: +1 (438) 290-6688<br>
-            Rwanda Address: Rwanda - Kigali<br>
-            Town Center Building (near Simba Supermarket),<br>
-            2nd Floor, Door: F2B-022C, Nyarugenge<br>
-            Canada Address:<br>
-            294 Rue Vezina App 202; Lasalle, Quebec H8R 3M9',
-            
-            'Parrot Canada Visa Consultant Co. Ltd<br>
-            Dr Jean Pierre Twajamahoro<br>
-            Propriétaire & Directeur Général<br>
-            Adresse courriel: infos@visaconsultantcanada.ca<br>
-            Téléphone: +1 (438) 290-6688<br>
-            Adresse au Rwanda: Rwanda - Kigali<br>
-            Town Center Building (near Simba Supermarket),<br>
-            2nd Floor, Door: F2B-022C, Nyarugenge<br>
-            Adresse au Canada:<br>
-            294 Rue Vezina App 202; Lasalle, Quebec H8R 3M9'
-        );
-        
-        return "<h2>1. " . $this->t('PARTIES', 'PARTIES') . "</h2><p><strong>$between</strong></p><div class='party-info'><h4>$partnerName</h4><p><strong>$companyName:</strong> $partnerName</p><p><strong>$representative:</strong> $repName</p><p><strong>$position:</strong> $repTitle</p><p><strong>$email:</strong> $companyEmail</p><p><strong>$phone:</strong> $companyPhone</p><p><strong>$fullAddress:</strong> $companyAddress</p></div><p><strong>$and</strong></p><div class='party-info'><h4>Parrot Canada Visa Consultant Co. Ltd</h4><p>$parrotInfo</p></div>";
+
+        if ($this->isFrench) {
+            return "<h2>1. PARTIES</h2>"
+                . "<p>Le présent accord de partenariat stratégique est conclu entre :</p>"
+                . "<p><strong>Entreprise partenaire</strong></p>"
+                . "<div class='party-info'>"
+                . "<p><strong>Nom de l'entreprise :</strong> $partnerName</p>"
+                . "<p><strong>Représentant :</strong> $repName</p>"
+                . "<p><strong>Fonction :</strong> $repTitle</p>"
+                . "<p><strong>Courriel :</strong> $companyEmail</p>"
+                . "<p><strong>Téléphone :</strong> $companyPhone</p>"
+                . "<p><strong>Adresse complète :</strong> $companyAddress</p>"
+                . "</div>"
+                . "<p>Ci-après dénommée « le Partenaire ».</p>"
+                . "<p><strong>Et :</strong></p>"
+                . "<div class='party-info'><p><strong>Parrot Canada Visa Consultant Co. Ltd</strong><br>"
+                . "Représentant : Dr Jean Pierre Twajamahoro<br>"
+                . "Fonction : Propriétaire et directeur général<br>"
+                . "Courriel : infos@visaconsultantcanada.ca<br>"
+                . "Téléphone : +1 (438) 290-6688</p>"
+                . "<p><strong>Adresse au Rwanda :</strong><br>Town Center Building, near Simba Supermarket<br>2nd Floor, Door F2B-022C, Nyarugenge<br>Kigali, Rwanda</p>"
+                . "<p><strong>Adresse au Canada :</strong><br>294 Rue Vezina, App 202<br>Lasalle, Quebec H8R 3M9, Canada</p></div>"
+                . "<p>Ci-après dénommée « Parrot ».</p>"
+                . "<p>Parrot et le Partenaire sont ensemble dénommés « les parties ».</p>";
+        }
+
+        return "<h2>1. PARTIES</h2>"
+            . "<p>This Strategic Partnership Agreement is entered into between:</p>"
+            . "<p><strong>Partner Company</strong></p>"
+            . "<div class='party-info'>"
+            . "<p><strong>Company Name:</strong> $partnerName</p>"
+            . "<p><strong>Representative:</strong> $repName</p>"
+            . "<p><strong>Position:</strong> $repTitle</p>"
+            . "<p><strong>Email:</strong> $companyEmail</p>"
+            . "<p><strong>Phone:</strong> $companyPhone</p>"
+            . "<p><strong>Full Address:</strong> $companyAddress</p>"
+            . "</div>"
+            . "<p>Hereafter referred to as “the Partner.”</p>"
+            . "<p><strong>And:</strong></p>"
+            . "<div class='party-info'><p><strong>Parrot Canada Visa Consultant Co. Ltd</strong><br>"
+            . "Representative: Dr Jean Pierre Twajamahoro<br>"
+            . "Position: Owner &amp; Managing Director<br>"
+            . "Email: infos@visaconsultantcanada.ca<br>"
+            . "Phone: +1 (438) 290-6688</p>"
+            . "<p><strong>Rwanda Address:</strong><br>Town Center Building, near Simba Supermarket<br>2nd Floor, Door F2B-022C, Nyarugenge<br>Kigali, Rwanda</p>"
+            . "<p><strong>Canada Address:</strong><br>294 Rue Vezina, App 202<br>Lasalle, Quebec H8R 3M9, Canada</p></div>"
+            . "<p>Hereafter referred to as “Parrot.”</p>"
+            . "<p>Parrot and the Partner are collectively referred to as “the parties.”</p>";
     }
     
     protected function getSignatureSection(): string {
@@ -749,10 +764,10 @@ abstract class ProfessionalPDFGenerator {
         $managerSignature = $this->getManagerSignature();
         $companyStamp = $this->getCompanyStamp();
         
-        $signaturesTitle = $this->t('15. SIGNATURES', '15. SIGNATURES');
+        $signaturesTitle = $this->t('16. SIGNATURES', '16. SIGNATURES');
         $executedBy = $this->t(
-            'This Strategic Partnership Agreement is executed by authorized representatives of both parties on the date indicated below:',
-            'Cet Accord de Partenariat Stratégique est exécuté par les représentants autorisés des deux parties à la date indiquée ci-dessous :'
+            'By signing below, the authorized representatives confirm that they have read, understood and accepted this agreement.',
+            'En signant ci-dessous, les représentants autorisés confirment avoir lu, compris et accepté le présent accord.'
         );
         $leftTitle = $this->t('For Parrot Canada Visa Consultant Co. Ltd', 'Pour Parrot Canada Visa Consultant Co. Ltd');
         $rightTitle = $this->t('Partner Company', 'Entreprise Partenaire');
@@ -804,12 +819,7 @@ abstract class ProfessionalPDFGenerator {
     }
     
     protected function getFooterSection(): string {
-        $footerText = $this->t(
-            'This agreement constitutes the entire understanding between parties and supersedes all prior discussions, negotiations, and agreements.<br>IN WITNESS WHEREOF, parties have executed this Strategic Partnership Agreement as of date indicated above.',
-            'Cet accord constitue l\'entente complète entre les parties et remplace toutes les discussions, négociations et accords antérieurs.<br>EN FOI DE QUOI, les parties ont exécuté cet Accord de Partenariat Stratégique à la date indiquée ci-dessus.'
-        );
-        
-        return "<div class='footer avoid-break'><p>$footerText</p></div>";
+        return '';
     }
     
     abstract protected function getMainContent(): string;

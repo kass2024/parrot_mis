@@ -52,7 +52,7 @@ $header_translations = [
         'nav_mtn_momo' => 'MTN Mobile Money',
         'nav_stripe' => 'Stripe Card Payment',
         'get_started' => 'Get Started',
-        'admin_login' => 'Admin Login',
+        'admin_login' => 'Login',
         
         // Language switcher
         'current_language' => 'English',
@@ -80,7 +80,7 @@ $header_translations = [
         'nav_mtn_momo' => 'Mobile Money MTN',
         'nav_stripe' => 'Paiement Carte Stripe',
         'get_started' => 'Commencer',
-        'admin_login' => 'Connexion Admin',
+        'admin_login' => 'Connexion',
         
         // Language switcher
         'current_language' => 'Français',
@@ -839,7 +839,7 @@ nav a:hover::after {
         <div class="portal-switcher-dropdown" id="portalDropdown" role="listbox" aria-label="Choose portal">
           <a href="admin-login.php" class="portal-option">
             <i class="fas fa-user-shield" aria-hidden="true"></i>
-            <span>Admin login</span>
+            <span><?php echo htmlspecialchars(ht('admin_login')); ?></span>
           </a>
           <a href="student-login.php" class="portal-option">
             <i class="fas fa-user-graduate" aria-hidden="true"></i>

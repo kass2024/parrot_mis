@@ -27,28 +27,22 @@ if ($adminPk > 0) {
         }
     }
 }
-$canEditVisaProcess = xander_is_superadmin_role($dbRole) || xander_is_superadmin_role($sessionRole);
-$canDeleteVisaApplication = $canEditVisaProcess;
+$canEditVisaProcess = $adminPk > 0;
+$canDeleteVisaApplication = xander_is_superadmin_role($dbRole) || xander_is_superadmin_role($sessionRole);
 
-$JOB_PROCESS_STATUSES = xander_job_application_process_statuses();
-$JOB_PROCESS_ORDER = xander_job_application_status_keys_in_order();
+$JOB_PROCESS_STATUSES = xander_visa_application_process_statuses();
+$JOB_PROCESS_ORDER = array_keys($JOB_PROCESS_STATUSES);
 
 // Initialize search + optional process filter (sidebar: Rejected, etc.)
 $searchTerm = isset($_GET['search']) ? trim((string) $_GET['search']) : '';
 $processStatusFilter = isset($_GET['process_status']) ? trim((string) $_GET['process_status']) : '';
-$visaProcessFilterActive = $processStatusFilter !== '' && xander_is_valid_job_process_status($processStatusFilter);
+$visaProcessFilterActive = $processStatusFilter !== '' && xander_is_valid_visa_process_status($processStatusFilter);
 $visaFilterLabel = $visaProcessFilterActive ? ($JOB_PROCESS_STATUSES[$processStatusFilter] ?? $processStatusFilter) : '';
 
 $whereParts = [];
 $params = [];
 $paramTypes = '';
 
-if ($searchTerm !== '') {
-    $searchTermLike = '%' . $searchTerm . '%';
-    $whereParts[] = '(f.first_name LIKE ? OR f.last_name LIKE ? OR f.email LIKE ? OR f.passport_number LIKE ? OR f.user_id LIKE ?)';
-    array_push($params, $searchTermLike, $searchTermLike, $searchTermLike, $searchTermLike, $searchTermLike);
-    $paramTypes .= 'sssss';
-}
 if ($visaProcessFilterActive) {
     $whereParts[] = 'f.process_status = ?';
     $params[] = $processStatusFilter;
@@ -76,6 +70,22 @@ if ($stmt) {
     $stmt->close();
 } else {
     die("Error preparing query: " . $conn->error);
+}
+
+$visaKpiCounts = array_fill_keys(array_keys($JOB_PROCESS_STATUSES), 0);
+$visaKpiTotal = 0;
+$kpiRes = $conn->query('SELECT process_status, COUNT(*) AS c FROM form_17_applications GROUP BY process_status');
+if ($kpiRes) {
+    while ($kpiRow = $kpiRes->fetch_assoc()) {
+        $kpiKey = xander_normalize_visa_process_status($kpiRow['process_status'] ?? null);
+        $kpiCount = (int) ($kpiRow['c'] ?? 0);
+        $visaKpiCounts[$kpiKey] = ($visaKpiCounts[$kpiKey] ?? 0) + $kpiCount;
+        $visaKpiTotal += $kpiCount;
+    }
+}
+$visaKpiSearch = [];
+if ($searchTerm !== '') {
+    $visaKpiSearch['search'] = $searchTerm;
 }
 
 // Brand color codes
@@ -154,9 +164,9 @@ $fileFields = [
         /* Dashboard Header */
         .dashboard-header {
             background: <?= $colors['white'] ?>;
-            padding: 20px;
+            padding: 12px 14px;
             border-radius: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
             border-left: 5px solid <?= $colors['gold'] ?>;
             display: flex;
@@ -169,7 +179,7 @@ $fileFields = [
 
         .header-title h1 {
             color: <?= $colors['navy'] ?>;
-            font-size: 1.5rem;
+            font-size: 1.15rem;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -181,14 +191,45 @@ $fileFields = [
 
         .header-title p {
             color: #666;
-            font-size: 0.9rem;
-            margin-top: 5px;
+            font-size: 0.8rem;
+            margin-top: 2px;
         }
 
         .header-stats {
             display: flex;
-            gap: 20px;
+            gap: 10px;
             align-items: center;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
+        .visa-export-tools {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .visa-export-tools label {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #334155;
+        }
+
+        .visa-export-tools input[type="date"] {
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 7px 8px;
+            font-size: 13px;
+            color: #14532d;
+        }
+
+        .visa-export-tools input[type="date"]:disabled {
+            background: #f1f5f9;
+            color: #94a3b8;
         }
 
         .applicant-count {
@@ -222,12 +263,21 @@ $fileFields = [
             transform: translateY(-2px);
         }
 
+        .export-btn-pdf {
+            background: #166534;
+            color: #fff;
+        }
+
+        .export-btn-pdf:hover {
+            background: #14532d;
+        }
+
         /* Search Container */
         .search-container {
             background: <?= $colors['white'] ?>;
-            padding: 15px 20px;
+            padding: 8px 12px;
             border-radius: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 8px;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
             flex-shrink: 0;
         }
@@ -241,7 +291,8 @@ $fileFields = [
 
         .search-input {
             flex: 1;
-            min-width: 250px;
+            width: 100%;
+            min-width: 0;
             padding: 12px 20px;
             border: 2px solid <?= $colors['border_gray'] ?>;
             border-radius: 8px;
@@ -295,14 +346,20 @@ $fileFields = [
         /* Main Content - Cards Grid */
         .applicants-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            margin-bottom: 16px;
         }
 
-        @media (max-width: 768px) {
+        @media (min-width: 980px) {
             .applicants-grid {
-                grid-template-columns: 1fr;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (min-width: 1500px) {
+            .applicants-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
             }
         }
 
@@ -318,7 +375,6 @@ $fileFields = [
         }
 
         .applicant-card:hover {
-            transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12);
         }
 
@@ -341,29 +397,34 @@ $fileFields = [
         .card-header {
             background: linear-gradient(135deg, <?= $colors['navy'] ?> 0%, <?= $colors['dark_blue'] ?> 100%);
             color: <?= $colors['white'] ?>;
-            padding: 15px;
+            padding: 8px 12px;
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
         }
 
         .applicant-name {
-            font-size: 1.2rem;
-            font-weight: 600;
-            margin-bottom: 5px;
-            padding-right: 20px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.2;
+            margin: 0;
+            padding-right: 8px;
         }
 
         .applicant-id {
-            font-size: 0.85rem;
+            font-size: 0.72rem;
             opacity: 0.8;
             font-family: monospace;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 3px 8px;
-            border-radius: 4px;
-            display: inline-block;
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
         .card-body {
-            padding: 15px;
+            padding: 0 0 8px;
         }
 
         .card-section {
@@ -502,11 +563,13 @@ $fileFields = [
 
         /* Card Footer */
         .card-footer {
-            padding: 15px;
+            padding: 8px 10px;
             background: <?= $colors['light_gray'] ?>;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
             border-top: 1px solid <?= $colors['border_gray'] ?>;
         }
 
@@ -520,6 +583,7 @@ $fileFields = [
 
         .action-buttons {
             display: flex;
+            flex-wrap: wrap;
             gap: 8px;
         }
 
@@ -581,9 +645,9 @@ $fileFields = [
 
         /* Application process (same workflow as job applications) */
         .process-panel {
-            background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+            background: #fff;
             border-bottom: 1px solid <?= $colors['border_gray'] ?>;
-            padding: 14px 15px 16px;
+            padding: 8px 10px;
         }
 
         .process-panel-title {
@@ -686,19 +750,57 @@ $fileFields = [
         .status-pill-v--final_decision { background: #d1fae5; color: #065f46; }
         .status-pill-v--closed { background: #e2e8f0; color: #334155; }
         .status-pill-v--rejected { background: #fee2e2; color: #991b1b; }
+        .status-pill-v--visa_approved { background: #dcfce7; color: #166534; }
+        .status-pill-v--visa_application_done { background: #dbeafe; color: #1e3a8a; }
+        .status-pill-v--visit_visa { background: #ede9fe; color: #5b21b6; }
+        .status-pill-v--waiting_for_visa_application,
+        .status-pill-v--waiting_for_caq,
+        .status-pill-v--waiting_for_deferral,
+        .status-pill-v--waiting_for_letters_and_visa,
+        .status-pill-v--intake_changed,
+        .status-pill-v--intake_changed_waiting_documents,
+        .status-pill-v--names_changed_waiting_documents { background: #ffedd5; color: #9a3412; }
 
         .visa-process-select {
-            flex: 1;
-            min-width: 200px;
+            width: 100%;
+            min-width: 0;
             max-width: 100%;
+            min-height: 36px;
             padding: 8px 12px;
             border-radius: 8px;
             border: 2px solid <?= $colors['border_gray'] ?>;
-            font-size: 0.85rem;
+            font-size: 0.95rem;
             font-weight: 600;
             color: <?= $colors['navy'] ?>;
             background: #fff;
             cursor: pointer;
+        }
+
+        .card-facts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px 12px;
+            padding: 6px 12px 2px;
+        }
+        .card-date-light { color: rgba(255,255,255,.9); font-size: 12px; white-space: nowrap; }
+        .view-btn, .contact-btn, .btn-delete-visa { padding: 6px 10px; font-size: 0.8rem; }
+
+        .card-fact {
+            display: flex;
+            gap: 8px;
+            align-items: flex-start;
+            font-size: 0.82rem;
+            line-height: 1.3;
+            color: <?= $colors['navy'] ?>;
+            word-break: break-word;
+        }
+
+        .card-fact i {
+            width: 16px;
+            margin-top: 3px;
+            color: <?= $colors['gold'] ?>;
+            flex-shrink: 0;
+            text-align: center;
         }
 
         .sr-only {
@@ -773,50 +875,35 @@ $fileFields = [
         }
 
         /* Responsive */
-        @media (max-width: 768px) {
-            .dashboard-container {
-                padding: 15px;
-            }
-            
+        @media (max-width: 720px) {
             .dashboard-header {
                 flex-direction: column;
                 align-items: stretch;
-                text-align: center;
             }
-            
-            .header-stats {
-                justify-content: center;
-                flex-wrap: wrap;
+            .header-stats,
+            .visa-export-tools {
+                justify-content: flex-start;
             }
-            
+            .dashboard-container {
+                padding: 12px;
+            }
+        }
+
+        @media (max-width: 768px) {
             .search-form {
                 flex-direction: column;
             }
-            
-            .search-input {
-                width: 100%;
-            }
-            
-            .search-btn, .clear-btn {
+            .search-input,
+            .search-btn,
+            .clear-btn {
                 width: 100%;
                 justify-content: center;
             }
-            
-            .info-row {
-                flex-direction: column;
-            }
-            
-            .info-label {
-                width: 100%;
-                margin-bottom: 5px;
-            }
-            
             .card-footer {
                 flex-direction: column;
                 gap: 10px;
                 align-items: stretch;
             }
-            
             .action-buttons {
                 justify-content: center;
             }
@@ -892,6 +979,42 @@ $fileFields = [
         .visa-notify-cancel { background: #fff; border: 1px solid #cbd5e1 !important; color: #475569; }
         .visa-notify-confirm { background: linear-gradient(135deg, #427431, #3661B9); color: #fff; }
         .process-toast-v.warn { background: linear-gradient(135deg, #b45309, #d97706); }
+        .process-status-row { display: flex; align-items: center; gap: 8px; }
+        .visa-kpis {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 0 0 8px;
+            flex-shrink: 0;
+        }
+        .visa-kpi {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 999px;
+            padding: 4px 10px;
+            text-decoration: none;
+            color: #14532d;
+            line-height: 1.2;
+        }
+        .visa-kpi strong { font-size: 13px; line-height: 1; }
+        .visa-kpi span { font-size: 12px; font-weight: 700; color: #475569; }
+        .visa-kpi.active { border-color: #166534; box-shadow: inset 0 0 0 1px #166534; background: #f0fdf4; }
+        .visa-kpi.kpi-approved strong { color: #166534; }
+        .visa-kpi.kpi-rejected strong { color: #b91c1c; }
+        .visa-add-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 8px 12px; margin: 0 0 8px; }
+        .process-panel { padding: 8px 10px; }
+        .visa-add-card summary { cursor: pointer; font-size: 1.05rem; font-weight: 700; color: #14532d; }
+        .visa-add-card form { margin-top: 12px; }
+        .visa-add-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        @media (min-width: 800px) { .visa-add-grid { grid-template-columns: 1.3fr 1fr .8fr .9fr 1.4fr auto; align-items: end; } }
+        .visa-add-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #334155; }
+        .visa-add-grid input, .visa-add-grid select { font: inherit; font-size: 15px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; }
+        .visa-add-grid button { background: #166534; color: #fff; border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 700; cursor: pointer; }
+        .process-panel { padding-bottom: 12px; }
     </style>
 </head>
 <body>
@@ -908,44 +1031,112 @@ $fileFields = [
             <div class="header-stats">
                 <div class="applicant-count">
                     <i class="fas fa-users"></i>
-                    <?php 
+                    <span id="visaVisibleCount"><?php
                         $total = count($applicants);
                         echo $total . ' Application' . ($total != 1 ? 's' : '');
-                    ?>
+                    ?></span>
                 </div>
-                <button class="export-btn" onclick="exportToCSV()">
-                    <i class="fas fa-download"></i> Export CSV
-                </button>
+                <div class="visa-export-tools">
+                    <label><input type="radio" name="visaExportMode" value="today" checked> Today</label>
+                    <label><input type="radio" name="visaExportMode" value="range"> Date range</label>
+                    <input type="date" id="visaExportFrom" disabled aria-label="From date">
+                    <input type="date" id="visaExportTo" disabled aria-label="To date">
+                    <button type="button" class="export-btn" id="visaExportCsv">
+                        <i class="fas fa-file-csv"></i> Export CSV
+                    </button>
+                    <button type="button" class="export-btn export-btn-pdf" id="visaExportPdf">
+                        <i class="fas fa-file-pdf"></i> Export PDF
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Search Section -->
-        <div class="search-container">
-            <?php if(!empty($searchTerm)): ?>
-            <div class="search-info">
-                <i class="fas fa-search"></i>
-                Searching for: <strong><?= htmlspecialchars($searchTerm) ?></strong>
+        <div class="visa-kpis" aria-label="Visa status totals">
+            <?php
+            $allKpiQuery = $visaKpiSearch;
+            $allKpiHref = 'visa-report.php' . ($allKpiQuery === [] ? '' : '?' . http_build_query($allKpiQuery));
+            ?>
+            <a class="visa-kpi<?= $visaProcessFilterActive ? '' : ' active' ?>" href="<?= htmlspecialchars($allKpiHref) ?>">
+                <strong><?= (int) $visaKpiTotal ?></strong>
+                <span>All applications</span>
+            </a>
+            <?php
+            $kpiKeys = ['visa_approved', 'rejected'];
+            foreach ($JOB_PROCESS_ORDER as $kpiKey) {
+                if (in_array($kpiKey, $kpiKeys, true)) {
+                    continue;
+                }
+                if (($visaKpiCounts[$kpiKey] ?? 0) > 0) {
+                    $kpiKeys[] = $kpiKey;
+                }
+            }
+            foreach ($kpiKeys as $kpiKey):
+                $kpiQuery = $visaKpiSearch;
+                $kpiQuery['process_status'] = $kpiKey;
+                $kpiClass = 'visa-kpi';
+                if ($kpiKey === 'visa_approved') {
+                    $kpiClass .= ' kpi-approved';
+                } elseif ($kpiKey === 'rejected') {
+                    $kpiClass .= ' kpi-rejected';
+                }
+                if ($processStatusFilter === $kpiKey) {
+                    $kpiClass .= ' active';
+                }
+            ?>
+            <a class="<?= $kpiClass ?>" href="<?= htmlspecialchars('visa-report.php?' . http_build_query($kpiQuery)) ?>">
+                <strong data-kpi-num="<?= htmlspecialchars($kpiKey) ?>"><?= (int) ($visaKpiCounts[$kpiKey] ?? 0) ?></strong>
+                <span><?= htmlspecialchars($JOB_PROCESS_STATUSES[$kpiKey] ?? $kpiKey) ?></span>
+            </a>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if ($canEditVisaProcess): ?>
+        <details class="visa-add-card">
+            <summary>Add an applicant</summary>
+            <form id="visaAddForm">
+            <div class="visa-add-grid">
+                <label>Full name
+                    <input name="full_name" required maxlength="200" placeholder="First and last name">
+                </label>
+                <label>Email
+                    <input name="email" type="email" maxlength="150" placeholder="Optional">
+                </label>
+                <label>Phone
+                    <input name="phone" maxlength="40" placeholder="Optional">
+                </label>
+                <label>Visa type
+                    <select name="visa_type">
+                        <option>Study Visa</option>
+                        <option>Visit Visa</option>
+                        <option>Work Visa</option>
+                    </select>
+                </label>
+                <label>Status
+                    <select name="process_status">
+                        <?php foreach ($JOB_PROCESS_STATUSES as $k => $lab): ?>
+                        <option value="<?= htmlspecialchars($k) ?>"><?= htmlspecialchars($lab) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <button type="submit">Add</button>
             </div>
-            <?php endif; ?>
-            
-            <form method="GET" action="" class="search-form">
+            <p id="visaAddMsg" style="margin:8px 0 0;font-size:13px;font-weight:700;"></p>
+            </form>
+        </details>
+        <?php endif; ?>
+
+        <div class="search-container">
+            <form class="search-form" onsubmit="return false;">
                 <?php if ($visaProcessFilterActive): ?>
                 <input type="hidden" name="process_status" value="<?= htmlspecialchars($processStatusFilter) ?>">
                 <?php endif; ?>
-                <input type="text" 
-                       name="search" 
-                       class="search-input" 
-                       placeholder="Search by name, email, passport number, or ID..." 
+                <input type="search"
+                       name="search"
+                       class="search-input"
+                       placeholder="Search by name, email, passport number, or ID..."
                        value="<?= htmlspecialchars($searchTerm) ?>"
-                       title="Search by applicant's name, email, passport number, or ID">
-                <button type="submit" class="search-btn">
-                    <i class="fas fa-search"></i> Search
-                </button>
-                <?php if(!empty($searchTerm)): ?>
-                <a href="<?= $visaProcessFilterActive ? htmlspecialchars('?' . http_build_query(['process_status' => $processStatusFilter])) : '?' ?>" class="clear-btn">
-                    <i class="fas fa-times"></i> Clear
-                </a>
-                <?php endif; ?>
+                       autocomplete="off"
+                       aria-label="Search applicants">
             </form>
         </div>
 
@@ -972,126 +1163,91 @@ $fileFields = [
                 </div>
             <?php else: ?>
                 <?php foreach($applicants as $applicant): 
-                    // Full name with prefix
-                    $fullName = '';
-                    if (!empty($applicant['prefix'])) {
-                        $fullName .= $applicant['prefix'] . ' ';
+                    $firstName = trim((string) ($applicant['first_name'] ?? ''));
+                    $middleName = trim((string) ($applicant['middle_name'] ?? ''));
+                    $lastName = trim((string) ($applicant['last_name'] ?? ''));
+                    if ($lastName !== '' && strcasecmp($firstName, $lastName) === 0 && $middleName === '') {
+                        $lastName = '';
                     }
-                    $fullName .= $applicant['first_name'];
-                    if (!empty($applicant['middle_name'])) {
-                        $fullName .= ' ' . $applicant['middle_name'];
-                    }
-                    $fullName .= ' ' . $applicant['last_name'];
+                    $fullName = trim(implode(' ', array_filter([
+                        trim((string) ($applicant['prefix'] ?? '')),
+                        $firstName,
+                        $middleName,
+                        $lastName,
+                    ])));
                     
-                    // Format date
                     $appliedDate = !empty($applicant['date']) ? date('M d, Y', strtotime($applicant['date'])) : 'Not specified';
-                    
-                    // Check if unread
                     $isUnread = $applicant['is_read'] == 0;
-                    
-                    // Format passport info
-                    $passportInfo = $applicant['passport_number'];
+                    $passportInfo = trim((string) ($applicant['passport_number'] ?? ''));
                     if (!empty($applicant['passport_expiry'])) {
                         $passportInfo .= ' (Exp: ' . $applicant['passport_expiry'] . ')';
                     }
-
-                    $procKey = xander_normalize_job_process_status($applicant['process_status'] ?? null);
-                    $procLabel = $JOB_PROCESS_STATUSES[$procKey];
-                    $curIdx = array_search($procKey, $JOB_PROCESS_ORDER, true);
-                    if ($curIdx === false) {
-                        $curIdx = 0;
+                    $emailText = trim((string) ($applicant['email'] ?? ''));
+                    $phoneText = trim((string) ($applicant['applicant_mobile'] ?? ''));
+                    $birthText = trim((string) ($applicant['birthdate'] ?? ''));
+                    if ($birthText === '0000-00-00') {
+                        $birthText = '';
                     }
+                    $genderText = trim((string) ($applicant['gender'] ?? ''));
+                    $fromCountry = trim((string) ($applicant['country_applying_from'] ?? ''));
+                    $toCountry = trim((string) ($applicant['country_to_visit'] ?? ''));
+                    $visaTypeText = trim((string) ($applicant['visa_type'] ?? ''));
+
+                    $procKey = xander_normalize_visa_process_status($applicant['process_status'] ?? null);
+                    $procLabel = $JOB_PROCESS_STATUSES[$procKey];
+                    $searchBlob = mb_strtolower(trim(implode(' ', array_filter([
+                        $fullName,
+                        $emailText,
+                        $phoneText,
+                        $passportInfo,
+                        $visaTypeText,
+                        (string) ($applicant['user_id'] ?? ''),
+                        $fromCountry,
+                        $toCountry,
+                    ]))));
                 ?>
-                <div class="applicant-card <?= $isUnread ? 'unread' : '' ?>" data-id="<?= htmlspecialchars($applicant['user_id']) ?>" data-user-id="<?= htmlspecialchars($applicant['user_id']) ?>">
-                    <!-- Unread dot -->
+                <div class="applicant-card <?= $isUnread ? 'unread' : '' ?>" data-id="<?= htmlspecialchars($applicant['user_id']) ?>" data-user-id="<?= htmlspecialchars($applicant['user_id']) ?>" data-search="<?= htmlspecialchars($searchBlob) ?>" title="<?= htmlspecialchars($fullName) ?>">
                     <div class="unread-dot" title="Unread"></div>
-                    
-                    <!-- Card Header -->
                     <div class="card-header">
                         <div class="applicant-name"><?= htmlspecialchars($fullName) ?></div>
-                        <div class="applicant-id">ID: <?= htmlspecialchars($applicant['user_id']) ?></div>
+                        <div class="applied-date card-date-light"><?= htmlspecialchars($appliedDate) ?></div>
                     </div>
-
                     <div class="process-panel">
-                        <div class="process-panel-title">
-                            <i class="fas fa-route"></i> Application process
-                        </div>
-                        <div class="process-tracker" role="list">
-                            <?php foreach ($JOB_PROCESS_ORDER as $i => $stepKey):
-                                $st = $i < $curIdx ? 'done' : ($i === $curIdx ? 'current' : 'pending');
-                                $stepLabel = $JOB_PROCESS_STATUSES[$stepKey];
-                            ?>
-                            <div class="process-step <?= $st ?>" role="listitem">
-                                <span class="process-step-dot" aria-hidden="true"></span>
-                                <span class="process-step-label"><?= htmlspecialchars($stepLabel) ?></span>
-                            </div>
+                        <?php if ($canEditVisaProcess): ?>
+                        <label class="sr-only" for="visa-status-<?= htmlspecialchars(preg_replace('/[^a-zA-Z0-9_-]/', '_', $applicant['user_id'])) ?>">Set application status</label>
+                        <select id="visa-status-<?= htmlspecialchars(preg_replace('/[^a-zA-Z0-9_-]/', '_', $applicant['user_id'])) ?>"
+                                class="visa-process-select"
+                                data-user-id="<?= htmlspecialchars($applicant['user_id']) ?>"
+                                title="Application status">
+                            <?php foreach ($JOB_PROCESS_STATUSES as $k => $lab): ?>
+                            <option value="<?= htmlspecialchars($k) ?>" <?= $k === $procKey ? 'selected' : '' ?>><?= htmlspecialchars($lab) ?></option>
                             <?php endforeach; ?>
-                        </div>
-                        <div class="process-status-row">
-                            <span class="status-pill-v status-pill-v--<?= htmlspecialchars($procKey) ?>"><?= htmlspecialchars($procLabel) ?></span>
-                            <?php if ($canEditVisaProcess): ?>
-                            <label class="sr-only" for="visa-status-<?= htmlspecialchars(preg_replace('/[^a-zA-Z0-9_-]/', '_', $applicant['user_id'])) ?>">Set application status</label>
-                            <select id="visa-status-<?= htmlspecialchars(preg_replace('/[^a-zA-Z0-9_-]/', '_', $applicant['user_id'])) ?>"
-                                    class="visa-process-select"
-                                    data-user-id="<?= htmlspecialchars($applicant['user_id']) ?>"
-                                    title="Superadmin only">
-                                <?php foreach ($JOB_PROCESS_STATUSES as $k => $lab): ?>
-                                <option value="<?= htmlspecialchars($k) ?>" <?= $k === $procKey ? 'selected' : '' ?>><?= htmlspecialchars($lab) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <?php endif; ?>
-                        </div>
+                        </select>
+                        <?php endif; ?>
                     </div>
                     
                     <!-- Card Body -->
                     <div class="card-body">
-                        <!-- Contact Info -->
-                        <div class="card-section">
-                            <div class="info-row">
-                                <div class="info-label">Contact</div>
-                                <div class="info-value">
-                                    <div><i class="fas fa-envelope"></i> <?= htmlspecialchars($applicant['email']) ?></div>
-                                    <div><i class="fas fa-phone"></i> <?= htmlspecialchars($applicant['applicant_mobile']) ?></div>
-                                </div>
-                            </div>
+                        <div class="card-facts">
+                            <?php if ($visaTypeText !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-file-alt"></i><span><?= htmlspecialchars($visaTypeText) ?></span></div>
+                            <?php endif; ?>
+                            <?php if ($fromCountry !== '' || $toCountry !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-plane"></i><span><?= htmlspecialchars($fromCountry !== '' ? $fromCountry : '—') ?> → <?= htmlspecialchars($toCountry !== '' ? $toCountry : '—') ?></span></div>
+                            <?php endif; ?>
+                            <?php if ($emailText !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-envelope"></i><span><?= htmlspecialchars($emailText) ?></span></div>
+                            <?php endif; ?>
+                            <?php if ($phoneText !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-phone"></i><span><?= htmlspecialchars($phoneText) ?></span></div>
+                            <?php endif; ?>
+                            <?php if ($passportInfo !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-passport"></i><span><?= htmlspecialchars($passportInfo) ?></span></div>
+                            <?php endif; ?>
+                            <?php if ($birthText !== '' || $genderText !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-user"></i><span><?= htmlspecialchars(trim($birthText . ($genderText !== '' ? ' (' . $genderText . ')' : ''))) ?></span></div>
+                            <?php endif; ?>
                         </div>
-                        
-                        <!-- Personal Info -->
-                        <div class="card-section">
-                            <div class="info-row">
-                                <div class="info-label">Personal</div>
-                                <div class="info-value">
-                                    <div><i class="fas fa-birthday-cake"></i> <?= htmlspecialchars($applicant['birthdate']) ?> (<?= htmlspecialchars($applicant['gender']) ?>)</div>
-                                    <div><i class="fas fa-globe"></i> <?= htmlspecialchars($applicant['country_name'] ?? 'Not specified') ?></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Passport & Visa Info -->
-                        <div class="card-section">
-                            <div class="info-row">
-                                <div class="info-label">Passport & Visa</div>
-                                <div class="info-value">
-                                    <div><i class="fas fa-passport"></i> <?= htmlspecialchars($passportInfo) ?></div>
-                                    <div><i class="fas fa-plane-departure"></i> From: <?= htmlspecialchars($applicant['country_applying_from']) ?></div>
-                                    <div><i class="fas fa-plane-arrival"></i> To: <?= htmlspecialchars($applicant['country_to_visit']) ?></div>
-                                    <div><i class="fas fa-file-alt"></i> Visa Type: <span class="status-tag visa"><?= htmlspecialchars($applicant['visa_type']) ?></span></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Region & Terms -->
-                        <div class="card-section">
-                            <div class="info-row">
-                                <div class="info-label">Region & Terms</div>
-                                <div class="info-value">
-                                    <div><i class="fas fa-map-marker-alt"></i> <?= htmlspecialchars($applicant['region_name'] ?? 'Not specified') ?></div>
-                                    <div><i class="fas fa-check-circle"></i> Terms: <?= !empty($applicant['terms']) ? 'Accepted' : 'Not accepted' ?></div>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Documents -->
                         <?php 
                         $hasDocuments = false;
                         foreach ($fileFields as $field => $label) {
@@ -1143,13 +1299,13 @@ $fileFields = [
                     
                     <!-- Card Footer -->
                     <div class="card-footer">
-                        <div class="applied-date">
-                            <i class="fas fa-calendar-check"></i> <?= $appliedDate ?>
-                        </div>
-                        <div class="action-buttons" style="flex-wrap: wrap;">
-                            <a href="mailto:<?= htmlspecialchars($applicant['email']) ?>" class="contact-btn" title="Send Email">
+                        <span class="status-pill-v status-pill-v--<?= htmlspecialchars($procKey) ?>"><?= htmlspecialchars($procLabel) ?></span>
+                        <div class="action-buttons">
+                            <?php if ($emailText !== ''): ?>
+                            <a href="mailto:<?= htmlspecialchars($emailText) ?>" class="contact-btn" title="Send Email">
                                 <i class="fas fa-envelope"></i> Contact
                             </a>
+                            <?php endif; ?>
                             <button class="view-btn view-details-btn" 
                                     data-applicant='<?= htmlspecialchars(json_encode([
                                         'name' => $fullName,
@@ -1182,6 +1338,11 @@ $fileFields = [
                 </div>
                 <?php endforeach; ?>
             <?php endif; ?>
+            <div id="visaLiveEmpty" class="empty-state" style="display:none; grid-column: 1 / -1;">
+                <i class="fas fa-search"></i>
+                <h3>No applications match</h3>
+                <p>Try a different name, email, passport number, or ID.</p>
+            </div>
         </div>
         </div>
     </div>
@@ -1398,6 +1559,16 @@ $fileFields = [
                 }
             });
 
+            function shiftVisaKpi(fromKey, toKey) {
+                if (!fromKey || !toKey || fromKey === toKey) return;
+                [fromKey, toKey].forEach(function(key, index) {
+                    var el = document.querySelector('[data-kpi-num="' + key + '"]');
+                    if (!el) return;
+                    var n = parseInt(el.textContent, 10) || 0;
+                    el.textContent = String(Math.max(0, n + (index === 0 ? -1 : 1)));
+                });
+            }
+
             function showProcessToastV(msg) {
                 const t = document.getElementById('processToastV');
                 const m = document.getElementById('processToastMsgV');
@@ -1502,6 +1673,7 @@ $fileFields = [
                     }
                     sel.value = statusKey;
                     sel.setAttribute('data-prev-status', statusKey);
+                    shiftVisaKpi(p.prevKey, statusKey);
                     var card = sel.closest('.applicant-card');
                     updateCardVisaProcessUI(card, statusKey);
                     var label = (json.data && json.data.label) ? json.data.label : ((window.JOB_PROCESS_LABELS && window.JOB_PROCESS_LABELS[statusKey]) || statusKey);
@@ -1589,6 +1761,29 @@ $fileFields = [
                 openVisaNotifyModal();
             });
 
+            var visaAddForm = document.getElementById('visaAddForm');
+            if (visaAddForm) {
+                visaAddForm.addEventListener('submit', function(ev) {
+                    ev.preventDefault();
+                    var msg = document.getElementById('visaAddMsg');
+                    var fd = new FormData(visaAddForm);
+                    if (msg) msg.textContent = 'Saving…';
+                    fetch('api/form17-add-applicant.php', {
+                        method: 'POST',
+                        body: fd,
+                        credentials: 'same-origin'
+                    }).then(function(r) { return r.json(); }).then(function(json) {
+                        if (!json.success) {
+                            if (msg) msg.textContent = json.message || 'Could not add the applicant.';
+                            return;
+                        }
+                        window.location.reload();
+                    }).catch(function() {
+                        if (msg) msg.textContent = 'Network error.';
+                    });
+                });
+            }
+
             document.addEventListener('click', function(e) {
                 var btn = e.target.closest('.btn-delete-visa-app');
                 if (!btn) return;
@@ -1615,10 +1810,8 @@ $fileFields = [
                         return;
                     }
                     var card = btn.closest('.applicant-card');
-                    if (card) {
-                        card.style.opacity = '0.5';
-                        setTimeout(function() { card.remove(); }, 200);
-                    }
+                    if (card) card.remove();
+                    if (window.visaFilterCards) window.visaFilterCards();
                     showProcessToastV('Application deleted');
                 })
                 .catch(function(err) {
@@ -1629,11 +1822,78 @@ $fileFields = [
             });
         });
         
-        function exportToCSV() {
-            // Simple CSV export functionality
-            alert('CSV export functionality would be implemented here.\nThis would generate a file with all visa application data.');
-            // In a real implementation, you would make an AJAX call to an export script
-        }
+        (function () {
+            var searchEl = document.querySelector('.search-input');
+            var liveEmpty = document.getElementById('visaLiveEmpty');
+            var countEl = document.getElementById('visaVisibleCount');
+            function visaFilterCards() {
+                var q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+                var shown = 0;
+                document.querySelectorAll('.applicant-card').forEach(function (card) {
+                    var hay = (card.getAttribute('data-search') || '').toLowerCase();
+                    var match = q === '' || hay.indexOf(q) !== -1;
+                    card.style.display = match ? '' : 'none';
+                    if (match) shown++;
+                });
+                if (liveEmpty) liveEmpty.style.display = shown === 0 && q !== '' ? '' : 'none';
+                if (countEl) countEl.textContent = shown + ' Application' + (shown === 1 ? '' : 's');
+            }
+            if (searchEl) {
+                searchEl.addEventListener('input', visaFilterCards);
+                if (searchEl.value.trim() !== '') visaFilterCards();
+            }
+            window.visaFilterCards = visaFilterCards;
+
+            var fromEl = document.getElementById('visaExportFrom');
+            var toEl = document.getElementById('visaExportTo');
+            var today = new Date();
+            var iso = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+            if (fromEl && !fromEl.value) fromEl.value = iso;
+            if (toEl && !toEl.value) toEl.value = iso;
+            document.querySelectorAll('input[name="visaExportMode"]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    var rangeOn = radio.value === 'range' && radio.checked;
+                    if (fromEl) fromEl.disabled = !rangeOn;
+                    if (toEl) toEl.disabled = !rangeOn;
+                });
+            });
+            function visaExport(format) {
+                var modeEl = document.querySelector('input[name="visaExportMode"]:checked');
+                var mode = modeEl ? modeEl.value : 'today';
+                var params = new URLSearchParams();
+                params.set('format', format);
+                params.set('range', mode);
+                if (mode === 'range') {
+                    if (!fromEl.value || !toEl.value) {
+                        alert('Choose a start date and an end date.');
+                        return;
+                    }
+                    params.set('from', fromEl.value);
+                    params.set('to', toEl.value);
+                }
+                var searchEl = document.querySelector('.search-input');
+                if (searchEl && searchEl.value.trim() !== '') {
+                    params.set('search', searchEl.value.trim());
+                }
+                var statusEl = document.querySelector('.search-form input[name="process_status"]');
+                if (statusEl && statusEl.value) {
+                    params.set('process_status', statusEl.value);
+                }
+                var frame = document.getElementById('visaExportFrame');
+                if (!frame) {
+                    frame = document.createElement('iframe');
+                    frame.id = 'visaExportFrame';
+                    frame.hidden = true;
+                    frame.setAttribute('aria-hidden', 'true');
+                    document.body.appendChild(frame);
+                }
+                frame.src = 'visa-export.php?' + params.toString();
+            }
+            var csvBtn = document.getElementById('visaExportCsv');
+            var pdfBtn = document.getElementById('visaExportPdf');
+            if (csvBtn) csvBtn.addEventListener('click', function () { visaExport('csv'); });
+            if (pdfBtn) pdfBtn.addEventListener('click', function () { visaExport('pdf'); });
+        })();
     </script>
 </body>
 </html>

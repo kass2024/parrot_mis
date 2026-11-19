@@ -37,7 +37,7 @@ register_shutdown_function(function () {
 /* =====================================================
    AUTH
 ===================================================== */
-if (($_SESSION['role'] ?? '') !== 'superadmin') {
+if (!pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
     ob_clean();
     http_response_code(403);
     echo json_encode(['ok' => false, 'msg' => 'Unauthorized']);

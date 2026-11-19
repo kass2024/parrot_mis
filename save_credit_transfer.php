@@ -159,7 +159,7 @@ if ($step === 'step2') {
   require_once __DIR__ . '/helpers/credit_transfer_programs.php';
   $allowedUniversities = pcvc_credit_transfer_university_codes();
   if (!in_array($university, $allowedUniversities, true)) {
-    echo json_encode(['status' => 'error', 'message' => 'Invalid university. Choose UPAFA, DPHU, IST or USOJ.']);
+    echo json_encode(['status' => 'error', 'message' => 'Invalid university. Choose UPAFA, DPHU, IST, USOJ or UDM.']);
     $conn->close();
     exit;
   }

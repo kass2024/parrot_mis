@@ -5,6 +5,7 @@ use Dompdf\Dompdf;
 use Dompdf\Options;
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
+require_once __DIR__ . '/helpers/country_flag.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 /* =====================================================
@@ -13,6 +14,42 @@ require_once __DIR__ . '/vendor/autoload.php';
 function esc(?string $v): string
 {
     return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+}
+
+function contractPdfRenderPackageLines(array $lines): string
+{
+    $html = '';
+    $notes = [];
+
+    $flushNotes = static function () use (&$html, &$notes): void {
+        if ($notes === []) {
+            return;
+        }
+
+        $html .= '<li class="package-note-block"><strong>NOTE:</strong><ol>';
+        foreach ($notes as $note) {
+            $html .= '<li>' . esc($note) . '</li>';
+        }
+        $html .= '</ol></li>';
+        $notes = [];
+    };
+
+    foreach ($lines as $line) {
+        $line = (string) $line;
+        if (preg_match('/^\s*NOTE:\s*(.+)$/u', $line, $match)) {
+            $notes[] = trim($match[1]);
+            continue;
+        }
+
+        $flushNotes();
+        $flagCode = pcvc_flag_code_for_text($line);
+        $flag = $flagCode !== '' ? pcvc_country_flag($flagCode, true) : '';
+        $html .= '<li>' . $flag . esc($line) . '</li>';
+    }
+
+    $flushNotes();
+
+    return $html;
 }
 
 /* =====================================================
@@ -53,10 +90,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.3 USA – Without Loan
+           7.2 USA – Without Loan
         ========================== */
         'p72' => [
-            'title' => '7.3 Study in the USA (Without Loan-Based)',
+            'title' => '7.2 Study in the USA (Without Loan-Based)',
             'lines' => [
                 'Admission Support',
                 'Registration & Application Fee: USD 150 (Refundable if admission is not secured within 4 months)',
@@ -67,48 +104,51 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.4 Europe – Without Loan
+           7.3 Europe – Without Loan
         ========================== */
         'p73' => [
-            'title' => '7.4 Study in Europe (Without Loan-Based)',
+            'title' => '7.3 Study in Europe (Without Loan-Based)',
             'lines' => [
-                'Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)',
-                'Fees payable before visa application: USD 250',
-                'Service Fees (payable after visa approval): USD 1,500',
+                'Registration & Application Fee: EUR 250 (Refundable if admission is not secured within 4 months)',
+                'Fees payable before visa application: EUR 250',
+                'Service Fees (payable after visa approval): EUR 1,500',
             ],
-            'total' => 'USD 2,000',
+            'total' => 'EUR 2,000',
         ],
 
         /* =========================
-           7.5 Canada – Loan-Based
+           7.4 Canada – Loan-Based
         ========================== */
         'p74' => [
-            'title' => '7.5 Study in Canada (Loan-Based)',
+            'title' => '7.4 Study in Canada (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'Service Fees (payable after visa approval): CAD 3,050',
-                'Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.',
+                'NOTE: Tuition deposit: CAD 500–5,000 payable directly by the Student.',
+                'NOTE: EACH DEPENDENT PAYS CAD 1,000 AFTER VISA APPROVAL.',
             ],
             'total' => 'CAD 3,500',
         ],
 
         /* =========================
-           7.6 Canada – Without Loan
+           7.5 Canada – Without Loan
         ========================== */
         'p75' => [
-            'title' => '7.6 Study in Canada (Without Loan-Based)',
+            'title' => '7.5 Study in Canada (Without Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)',
                 'After Visa Approval: CAD 2,050',
+                'NOTE: Tuition deposit: CAD 500–5,000 payable directly by the Student.',
+                'NOTE: EACH DEPENDENT PAYS CAD 1,000 AFTER VISA APPROVAL.',
             ],
             'total' => 'CAD 2,500',
         ],
 
         /* =========================
-           7.7 Canada – High School Graduate
+           7.6 Canada – High School Graduate
         ========================== */
         'p76' => [
-            'title' => '7.7 Canada – High School Graduate (Loan-Based)',
+            'title' => '7.6 Canada – High School Graduate (Loan-Based)',
             'lines' => [
                 'Registration & Application Fee: CAD 450',
                 'Study Permit Fees (Embassy): CAD 150',
@@ -117,15 +157,17 @@ function getPackageDetails(string $code): array
                 'Border Pass Fees (Lawyer): CAD 250',
                 'Loan Approval Fees (payable after visa approval): CAD 1,000',
                 'Service Fees (payable after visa approval): CAD 1,933',
+                'NOTE: Tuition deposit: CAD 500–5,000 payable directly by the Student.',
+                'NOTE: EACH DEPENDENT PAYS CAD 1,000 AFTER VISA APPROVAL.',
             ],
             'total' => 'CAD 4,000',
         ],
 
         /* =========================
-           7.8 South Korea – Study
+           7.7 South Korea – Study
         ========================== */
         'p77' => [
-            'title' => '7.8 Study in South Korea (Self-Sponsored)',
+            'title' => '7.7 Study in South Korea (Self-Sponsored)',
             'lines' => [
                 'Registration & Application Fee: USD 500 (Refundable if admission is not secured)',
                 'Service Fees – Bachelor’s Program: USD 1,800',
@@ -139,10 +181,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.9 South Korea – Visit Visa
+           7.8 South Korea – Visit Visa
         ========================== */
         'p78' => [
-            'title' => '7.9 🇰🇷 South Korea Visitor Visa',
+            'title' => '7.8 South Korea Visitor Visa',
             'lines' => [
                 'Registration & Application Fee: USD 500',
                 'Service Fee (Paid After Receiving the Invitation Letter and Guarantee Letter): USD 1,500',
@@ -152,10 +194,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.10 Credit Transfer
+           7.9 Credit Transfer
         ========================== */
         'p79' => [
-            'title' => '7.10 Credit Transfer (Bachelor, Masters & PhD)',
+            'title' => '7.9 Credit Transfer (Bachelor, Masters & PhD)',
             'lines' => [
                 'Bachelor Program: USD 920',
                 'Masters Program: USD 1,220',
@@ -165,10 +207,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.11 Canada Visit Visa
+           7.10 Canada Visit Visa
         ========================== */
         'p710' => [
-            'title' => '7.11 Canada Visit Visa',
+            'title' => '7.10 Canada Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: USD 1,000',
                 'Visa Application Fees (Embassy): CAD 100',
@@ -179,10 +221,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.12 USA Visit Visa
+           7.11 USA Visit Visa
         ========================== */
         'p711' => [
-            'title' => '7.12 USA Visit Visa',
+            'title' => '7.11 USA Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: USD 1,000',
                 'Visa Application Fees (Embassy): USD 185',
@@ -192,10 +234,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.13 Europe Visit Visa
+           7.12 Europe Visit Visa
         ========================== */
         'p712' => [
-            'title' => '7.13 Europe Visit Visa',
+            'title' => '7.12 Europe Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: EUR 600',
                 'Visa Application Fees (Embassy): EUR 85 – EUR 500 (depending on country)',
@@ -205,10 +247,10 @@ function getPackageDetails(string $code): array
         ],
 
         /* =========================
-           7.14 Asia Visit Visa
+           7.13 Asia Visit Visa
         ========================== */
         'p713' => [
-            'title' => '7.14 Asia Visit Visa',
+            'title' => '7.13 Asia Visit Visa',
             'lines' => [
                 'Documents Preparation & Invitation Letter: USD 800',
                 'Visa Application Fees (Embassy): USD 85 – USD 500',
@@ -390,6 +432,29 @@ ul, ol {
 
 li {
     margin-bottom: 6pt;
+}
+
+.package-note-block {
+    list-style: none;
+    margin: 10pt 0 0 -32pt;
+    padding: 8pt 10pt;
+    border-left: 4pt solid #2e7d32;
+    background: #eef8f0;
+    page-break-inside: avoid;
+}
+
+.package-note-block > strong {
+    color: #1b5e20;
+    letter-spacing: .03em;
+}
+
+.package-note-block ol {
+    margin: 4pt 0 0 18pt;
+    padding: 0;
+}
+
+.package-note-block li {
+    margin-bottom: 2pt;
 }
 
 /* =========================
@@ -580,12 +645,10 @@ subject to the specific service package selected by the Student under this Agree
 ========================= -->
 <h2>7. FEES &amp; PAYMENT TERMS (SELECTED PACKAGE)</h2>
 
-<p><strong><?= esc($package['title']) ?></strong></p>
+<p><strong><?php $flagCode = pcvc_flag_code_for_text((string) ($package['title'] ?? '')); echo $flagCode !== '' ? pcvc_country_flag($flagCode, true) : ''; ?><?= esc($package['title']) ?></strong></p>
 
 <ul>
-<?php foreach ($package['lines'] as $line): ?>
-    <li><?= esc($line) ?></li>
-<?php endforeach; ?>
+<?= contractPdfRenderPackageLines($package['lines']) ?>
 </ul>
 
 <?php if (!empty($package['total'])): ?>

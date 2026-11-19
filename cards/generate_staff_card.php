@@ -29,12 +29,12 @@ use setasign\Fpdi\Fpdi;
 $staffIds = [];
 
 /* ---- ANY NON-SUPERADMIN STAFF: only own card ---- */
-if ($loggedInRole !== 'superadmin') {
+if (!pcvc_is_superadmin_role($loggedInRole)) {
     $staffIds[] = $loggedInAdminId;
 }
 
 /* ---- SUPERADMIN INPUT ---- */
-if ($loggedInRole === 'superadmin') {
+if (pcvc_is_superadmin_role($loggedInRole)) {
 
     if (isset($_GET['id']) && ctype_digit($_GET['id'])) {
         $staffIds[] = (int) $_GET['id'];
@@ -66,7 +66,7 @@ if ($loggedInRole === 'superadmin') {
 /* =====================================================
    SUPERADMIN UI FALLBACK (ONLY WHEN NOTHING SELECTED)
 ===================================================== */
-if ($loggedInRole === 'superadmin' && empty($staffIds) && !isset($_GET['all'])) {
+if (pcvc_is_superadmin_role($loggedInRole) && empty($staffIds) && !isset($_GET['all'])) {
 
     $result = $conn->query("
         SELECT id, full_name, role
@@ -134,7 +134,7 @@ if ($loggedInRole === 'superadmin' && empty($staffIds) && !isset($_GET['all'])) 
 }
 
 /* ---- SUPERADMIN DEFAULT: ALL STAFF ---- */
-if ($loggedInRole === 'superadmin' && empty($staffIds)) {
+if (pcvc_is_superadmin_role($loggedInRole) && empty($staffIds)) {
     $res = $conn->query("
         SELECT id
         FROM admins

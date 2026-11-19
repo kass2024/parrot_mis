@@ -8,7 +8,7 @@ $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
 /* ===========================================================
    SECURITY CHECK
 ============================================================ */
-if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || $_SESSION['role'] !== 'superadmin') {
+if (!isset($_SESSION['id']) || !isset($_SESSION['role']) || !pcvc_is_superadmin_role($_SESSION['role'])) {
     http_response_code(403);
     exit('Unauthorized access. Please log in as superadmin.');
 }

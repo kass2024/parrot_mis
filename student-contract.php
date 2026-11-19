@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/country_flag.php';
 /**
  * 0. Safety check: DB connection
  */
@@ -556,6 +557,17 @@ body {
 .package-label-text {
   min-width: 0;
   word-break: break-word;
+}
+
+.country-flag {
+  display: inline-block;
+  width: 22px;
+  height: 16px;
+  margin: 0 6px 2px 0;
+  vertical-align: -3px;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
 }
 
 .article-7-intro {
@@ -1117,18 +1129,19 @@ button {
     <span class="package-label-text">7.1 FEES PAID BY STUDENTS FOR OUR PARTNER UNIVERSITIES, COMPANIES, AND SOME TARGETED COUNTRIES</span>
   </label>
   <div id="p70" class="package-details">
-    ➤ USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)<br>
-    ➤ Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)<br>
-    ➤ Europe – Registration and Application Fee: USD 150 (Paid before starting application)<br>
-    ➤ South Korea – Registration and Application Fee: USD 250 (Paid before starting application)<br>
+    ➤ <?= pcvc_country_flag('us') ?> USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)<br>
+    ➤ <?= pcvc_country_flag('ca') ?> Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)<br>
+    ➤ <?= pcvc_country_flag('eu') ?> Europe – Registration and Application Fee: USD 150 (Paid before starting application)<br>
+    ➤ <?= pcvc_country_flag('kr') ?> South Korea – Registration and Application Fee: USD 250 (Paid before starting application)<br>
     <em>Note: Students are responsible for all additional costs associated with their visa application and immigration process, including any fees charged by embassies, visa application centers, government agencies, medical institutions, or other relevant authorities.</em>
   </div>
 </div>
 
+<?php if ($selectedPackageCode === 'p71'): ?>
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p71')">
-    7.2 🇺🇸 Study in the USA (Loan-Based)
+    7.2 <?= pcvc_country_flag('us') ?>  Study in the USA (Loan-Based)
   </label>
   <div id="p71" class="package-details">
     ✔ Admission Support<br>
@@ -1139,11 +1152,12 @@ button {
     <strong>Total Package: USD 3,000</strong><br>
   </div>
 </div>
+<?php endif; ?>
 
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p72')">
-    7.3 🇺🇸 Study in the USA (Without Loan)
+    7.2 <?= pcvc_country_flag('us') ?>  Study in the USA (Without Loan)
   </label>
   <div id="p72" class="package-details">
     ✔ Admission Support<br>
@@ -1157,20 +1171,20 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p73')">
-    7.4 🇪🇺 Study in Europe (Without Loan)
+    7.3 <?= pcvc_country_flag('eu') ?>  Study in Europe (Without Loan)
   </label>
   <div id="p73" class="package-details">
-    ➤ Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)<br>
-    ➤ Before Visa Application: USD 250<br>
-    ➤ After Visa Approval: USD 1,500<br>
-    <strong>Total Package: USD 2,000</strong><br>
+    ➤ Registration & Application Fee: EUR 250 (Refundable if admission is not secured within 4 months)<br>
+    ➤ Before Visa Application: EUR 250<br>
+    ➤ After Visa Approval: EUR 1,500<br>
+    <strong>Total Package: EUR 2,000</strong><br>
   </div>
 </div>
 
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p74')">
-    7.5 🇨🇦 Study in Canada (Loan-Based)
+    7.4 <?= pcvc_country_flag('ca') ?>  Study in Canada (Loan-Based)
   </label>
   <div id="p74" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
@@ -1189,7 +1203,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p75')">
-    7.6 🇨🇦 Study in Canada (Without Loan)
+    7.5 <?= pcvc_country_flag('ca') ?>  Study in Canada (Without Loan)
   </label>
   <div id="p75" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
@@ -1208,7 +1222,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p76')">
-    7.7 🇨🇦 Canada – High School Graduate (Loan-Based)
+    7.6 <?= pcvc_country_flag('ca') ?>  Canada – High School Graduate (Loan-Based)
   </label>
   <div id="p76" class="package-details">
     ➤ Registration & Application Fee: CAD 450<br>
@@ -1232,7 +1246,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77loa')">
-    7.8 🇨🇦 Study in Canada having LOA (Without Lawyer Consultation)
+    7.7 <?= pcvc_country_flag('ca') ?>  Study in Canada having LOA (Without Lawyer Consultation)
   </label>
   <div id="p77loa" class="package-details">
     ➤ MIS Registration Fee: CAD 225<br>
@@ -1246,7 +1260,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77loalawyer')">
-    7.9 🇨🇦 Study in Canada having LOA (Lawyer Consultation)
+    7.8 <?= pcvc_country_flag('ca') ?>  Study in Canada having LOA (Lawyer Consultation)
   </label>
   <div id="p77loalawyer" class="package-details">
     ➤ MIS Registration Fee: CAD 225<br>
@@ -1261,7 +1275,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p77')">
-    7.10 🇰🇷 Study in South Korea (Self-Sponsored)
+    7.9 <?= pcvc_country_flag('kr') ?>  Study in South Korea (Self-Sponsored)
   </label>
   <div id="p77" class="package-details">
     ➤ Registration and Application Follow-up fees: USD 500 (Must be paid before starting the admission process; refundable if admission letter is not secured)<br>
@@ -1276,7 +1290,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p78')">
-    7.11 🇰🇷 South Korea Visitor Visa
+    7.10 <?= pcvc_country_flag('kr') ?>  South Korea Visitor Visa
   </label>
   <div id="p78" class="package-details">
     ➤ Registration & Application Fee: USD 500<br>
@@ -1288,7 +1302,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p79')">
-    7.12 Credit Transfer (Bachelor, Masters, PhD)
+    7.11 Credit Transfer (Bachelor, Masters, PhD)
   </label>
   <div id="p79" class="package-details">
     ➤ Bachelor: USD 920<br>
@@ -1300,7 +1314,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710')">
-    7.13 🇨🇦 Canada Visit Visa
+    7.12 <?= pcvc_country_flag('ca') ?>  Canada Visit Visa
   </label>
   <div id="p710" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1313,7 +1327,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710b')">
-    7.14 🇨🇦 Canada Visit Visa – With Invitation Letter
+    7.13 <?= pcvc_country_flag('ca') ?>  Canada Visit Visa – With Invitation Letter
   </label>
   <div id="p710b" class="package-details">
     ➤ Invitation Letter: Already Provided by Applicant<br>
@@ -1328,7 +1342,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p710promo')">
-    7.15 🇨🇦 Visit Canada with Invitation on Promotion
+    7.14 <?= pcvc_country_flag('ca') ?>  Visit Canada with Invitation on Promotion
   </label>
   <div id="p710promo" class="package-details">
     ➤ Invitation Fees: CAD 360<br>
@@ -1342,7 +1356,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p711')">
-    7.16 🇺🇸 USA Visit Visa
+    7.15 <?= pcvc_country_flag('us') ?>  USA Visit Visa
   </label>
   <div id="p711" class="package-details">
     ➤ Documents & Invitation Letter: USD 1,000<br>
@@ -1354,7 +1368,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p712')">
-    7.17 🇪🇺 Europe Visit Visa
+    7.16 <?= pcvc_country_flag('eu') ?>  Europe Visit Visa
   </label>
   <div id="p712" class="package-details">
     ➤ Documents & Invitation Letter: €600<br>
@@ -1366,7 +1380,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p713')">
-    7.18 Asia Visit Visa
+    7.17 Asia Visit Visa
   </label>
   <div id="p713" class="package-details">
     ➤ Documents & Invitation Letter: USD 800<br>
@@ -1378,7 +1392,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p714')">
-    7.19 SHORT COURSES-CANADA
+    7.18 SHORT COURSES-CANADA
   </label>
   <div id="p714" class="package-details">
     ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 2 weeks)<br>
@@ -1401,7 +1415,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p715')">
-    7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA
+    7.19 STUDY PhD IN CANADA-USA-EUROPE & ASIA
   </label>
   <div id="p715" class="package-details">
     ➤ Registration & Application Fee for Canada: CAD 500 (Refundable if admission is not secured within 9 months)<br>
@@ -1427,7 +1441,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p716')">
-    7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE
+    7.20 WES EVALUATION – INTERNATIONAL EQUIVALENCE
   </label>
   <div id="p716" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
@@ -1447,7 +1461,7 @@ button {
 <div class="package-item">
   <label class="package-label">
     <input type="radio" name="package" onclick="showPkg('p717')">
-    7.22 GUARANTEED EVALUATION SUPPORT!
+    7.21 GUARANTEED EVALUATION SUPPORT!
   </label>
   <div id="p717" class="package-details">
     <strong>1. Professional Service Fees: CAD 200</strong><br>
@@ -1461,6 +1475,34 @@ button {
     <strong>5. Time, Administrative Work &amp; Follow-up: CAD 200</strong><br>
     Considerable time and administrative effort are required for monitoring submissions, correcting issues, responding to updates, and supporting applicants until the evaluation process is completed successfully.<br><br>
     <strong>🔹 Total packages: CAD 900</strong>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p718')">
+    7.22 🇲🇹 Study Professional Courses in Malta – European Schengen Country
+  </label>
+  <div id="p718" class="package-details">
+    ➤ Registration &amp; Application Fee: EUR 250<br>
+    ➤ After Visa Approval: EUR 1,750<br>
+    <strong>🔥 Complete PARROT Visa Support Package: EUR 2,000</strong><br>
+    <div class="package-notes">
+      <strong>🎓 AVAILABLE TRAINING PACKAGES (14 WEEKS EACH)</strong>
+      <ol>
+        <li>Soft Program: Tuition fees EUR 4,500 and initial tuition deposit EUR 1,350.</li>
+        <li>Semi-Intensive Program: Tuition fees EUR 6,900 and initial tuition deposit EUR 2,070.</li>
+        <li>Intensive Program: Tuition fees EUR 10,900 and initial tuition deposit EUR 3,270.</li>
+      </ol>
+      <strong>NOTE:</strong>
+      <ol>
+        <li>The tuition fees listed above are separate from PARROT's EUR 2,000 service package.</li>
+        <li>The initial tuition deposit (30%) is payable upon signing the academy's enrolment contract, before the visa application.</li>
+        <li>The remaining tuition balance (70%) is payable after visa issuance and before training begins.</li>
+        <li>Accommodation, travel, insurance, living expenses and other third-party costs are not included.</li>
+        <li>Visa approval is not guaranteed.</li>
+      </ol>
+    </div>
   </div>
 </div>
 

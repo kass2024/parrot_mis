@@ -75,7 +75,7 @@ function pcvc_finance_smtp_mailer(?string $fromNameOverride = null): PHPMailer
         $fromGetenv = getenv('SMTP_PASSWORD');
         $password = ($fromGetenv !== false && trim((string) $fromGetenv) !== '')
             ? trim((string) $fromGetenv)
-            : 'Petero@1981';
+            : 'Parrot@2026';
     }
 
     $portStr = xander_env_get('SMTP_PORT');

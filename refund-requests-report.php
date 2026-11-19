@@ -24,7 +24,8 @@ $st->close();
 $role = (string) ($roleRow['role'] ?? '');
 
 if (!pcvc_is_superadmin_role($role)) {
-    header('Location: admin-dashboard.php');
+    if (!function_exists('pcvc_deny_page')) { require_once __DIR__ . '/helpers/role.php'; }
+    pcvc_deny_page();
     exit;
 }
 

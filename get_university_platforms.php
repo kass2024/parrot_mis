@@ -6,7 +6,7 @@ require_once __DIR__ . '/helpers/university_admins_schema.php';
 
 header('Content-Type: application/json');
 
-if (($_SESSION['role'] ?? '') !== 'superadmin') {
+if (!pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
     http_response_code(403);
     echo json_encode(['ok' => false, 'msg' => 'Unauthorized']);
     exit;

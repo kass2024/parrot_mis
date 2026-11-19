@@ -18,8 +18,7 @@ xander_load_env_file();
 $adminId = $_SESSION['id'] ?? $_SESSION['admin_id'] ?? null;
 $roleRaw = trim((string) ($_SESSION['role'] ?? ''));
 $roleKey = strtolower(preg_replace('/\s+/', ' ', $roleRaw) ?? $roleRaw);
-$roleOk = in_array($roleKey, ['superadmin', 'staff'], true)
-    || in_array($roleRaw, ['superadmin', 'staff'], true);
+$roleOk = pcvc_is_superadmin_role($roleRaw) || pcvc_is_staff_role($roleRaw);
 
 if (empty($adminId) || !$roleOk) {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {

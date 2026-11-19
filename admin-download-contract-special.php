@@ -42,6 +42,27 @@ if (!$row || empty($row['pdf_path'])) {
 
 $pdfPath = $row['pdf_path'];
 
+$storedPdf = $pdfPath;
+try {
+    require_once __DIR__ . '/generate-contract-pdf-special.php';
+    $freshPdf = generateContractPDF($contractId);
+    if ($freshPdf !== '' && is_file($freshPdf)) {
+        $pdfPath = $freshPdf;
+        if ($pdfPath !== $storedPdf) {
+            $updateFresh = $conn->prepare('UPDATE student_contracts_special SET pdf_path = ? WHERE id = ?');
+            if ($updateFresh) {
+                $updateFresh->bind_param('si', $pdfPath, $contractId);
+                $updateFresh->execute();
+                $updateFresh->close();
+            }
+        }
+    }
+} catch (Throwable $e) {
+    $pdfPath = $storedPdf;
+}
+/* pcvc_notice_rebuild */
+
+
 /* ===============================
    FILE SAFETY
 ================================ */

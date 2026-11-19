@@ -16,7 +16,7 @@ function sendStudentEmail($data, $filePath) {
         $mail->Host       = 'visaconsultantcanada.com';
         $mail->SMTPAuth   = true;
         $mail->Username   = 'admission@visaconsultantcanada.com';
-        $mail->Password   = getenv('SMTP_PASSWORD') ?: 'Petero@1981'; // Better to use env var
+        $mail->Password   = getenv('SMTP_PASSWORD') ?: 'Parrot@2026'; // Better to use env var
         $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // SSL
         $mail->Port       = 465;
 

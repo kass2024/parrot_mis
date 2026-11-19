@@ -1136,6 +1136,11 @@ $tableColCount = $isSuperAdmin ? 9 : 8;
                 </div>
             </div>
             
+            <?php if ($isSuperAdmin): ?>
+            <a class="sheet-btn" href="staff_daily_report.php">
+                <i class="bi bi-calendar2-check"></i> Team daily report
+            </a>
+            <?php endif; ?>
             <?php if (!empty($admin_info['sheet_link'])): ?>
             <a class="sheet-btn" href="<?= htmlspecialchars($admin_info['sheet_link']) ?>" target="_blank">
                 <i class="bi bi-google"></i> Google Sheet

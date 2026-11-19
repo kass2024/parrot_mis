@@ -182,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $university = trim((string)($_POST['university'] ?? ''));
         $allowedUniversities = pcvc_credit_transfer_university_codes();
         if ($university !== '' && !in_array($university, $allowedUniversities, true)) {
-            $_SESSION['pcvc_flash_error_credit_transfer'] = 'Invalid university. Choose UPAFA, DPHU, IST or USOJ.';
+            $_SESSION['pcvc_flash_error_credit_transfer'] = 'Invalid university. Choose UPAFA, DPHU, IST, USOJ or UDM.';
             header('Location: ' . pcvc_url('/student/edit_credit_transfer.php'));
             exit;
         }
@@ -294,14 +294,22 @@ require_once __DIR__ . '/layout.php';
               <option value="DPHU" <?= ((string)($credit['university'] ?? '') === 'DPHU') ? 'selected' : '' ?>>Distant Production house University (DPHU)</option>
               <option value="IST" <?= ((string)($credit['university'] ?? '') === 'IST') ? 'selected' : '' ?>>Institut Supérieur de Burkina Faso (IST)</option>
               <option value="USOJ" <?= ((string)($credit['university'] ?? '') === 'USOJ') ? 'selected' : '' ?>>University of Saint Joseph Mbarara (USOJ)</option>
+              <option value="UDM" <?= ((string)($credit['university'] ?? '') === 'UDM') ? 'selected' : '' ?>>Université de Mwaro (UDM)</option>
             </select>
             <?php
               $upafaCatalogueRel = pcvc_credit_transfer_catalogue_path('UPAFA');
               $upafaCatalogueHref = $upafaCatalogueRel ? pcvc_url('/' . ltrim($upafaCatalogueRel, '/')) : '';
+              $udmCatalogueRel = pcvc_credit_transfer_catalogue_path('UDM');
+              $udmCatalogueHref = $udmCatalogueRel ? pcvc_url('/' . ltrim($udmCatalogueRel, '/')) : '';
             ?>
             <?php if ($upafaCatalogueHref !== ''): ?>
               <a id="upafaCatalogueLink" class="small d-block mt-1" href="<?= htmlspecialchars($upafaCatalogueHref, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"<?= ((string)($credit['university'] ?? '') === 'UPAFA') ? '' : ' style="display:none;"' ?>>
                 Download UPAFA 2025 program catalogue (PDF)
+              </a>
+            <?php endif; ?>
+            <?php if ($udmCatalogueHref !== ''): ?>
+              <a id="udmCatalogueLink" class="small d-block mt-1" href="<?= htmlspecialchars($udmCatalogueHref, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"<?= ((string)($credit['university'] ?? '') === 'UDM') ? '' : ' style="display:none;"' ?>>
+                Download Université de Mwaro program list (Word)
               </a>
             <?php endif; ?>
           </div>
@@ -483,7 +491,9 @@ require_once __DIR__ . '/layout.php';
       programInput.disabled = !uni.value;
       programInput.placeholder = uni.value ? 'Start typing to search programs...' : 'Select university first...';
       const cat = document.getElementById('upafaCatalogueLink');
+      const udmCat = document.getElementById('udmCatalogueLink');
       if (cat) cat.style.display = uni.value === 'UPAFA' ? '' : 'none';
+      if (udmCat) udmCat.style.display = uni.value === 'UDM' ? '' : 'none';
       if (uni.value) programInput.focus();
     });
     programInput.addEventListener('input', rebuildDatalist);

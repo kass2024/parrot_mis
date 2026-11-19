@@ -107,7 +107,7 @@ try {
     $mail->Host       = 'visaconsultantcanada.com';
     $mail->SMTPAuth   = true;
     $mail->Username   = 'admission@visaconsultantcanada.com';
-    $mail->Password   = getenv('SMTP_PASSWORD') ?: 'Petero@1981';
+    $mail->Password   = getenv('SMTP_PASSWORD') ?: 'Parrot@2026';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port       = 465;
     $mail->CharSet    = 'UTF-8';

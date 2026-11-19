@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f5a26">
+<title>Create a student | Parrot Canada</title>
+<style>
+  :root {
+    --green: #427431;
+    --green-dark: #2f5a26;
+    --navy: #0b3c5d;
+    --red: #E21D1E;
+    --ink: #1e3a2f;
+    --muted: #5c6f64;
+    --line: #d7e3dc;
+    --bg: #eef3ef;
+    --card: #fff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(900px 420px at 0% -10%, rgba(66, 116, 49, 0.18), transparent 55%),
+      var(--bg);
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+  .wrap {
+    width: min(1100px, 100%);
+    margin: 0 auto;
+    padding: 16px 16px calc(118px + env(safe-area-inset-bottom));
+  }
+  header.top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: flex-end;
+    margin-bottom: 14px;
+  }
+  .kicker {
+    margin: 0 0 4px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--green);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(1.45rem, 4vw, 2rem);
+    letter-spacing: -0.03em;
+    color: var(--navy);
+  }
+  .lede { margin: 6px 0 0; color: var(--muted); max-width: 40rem; line-height: 1.45; }
+  .stage {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    overflow: hidden;
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  }
+  .stage::before {
+    content: "";
+    display: block;
+    height: 5px;
+    background: linear-gradient(90deg, var(--green), var(--navy));
+  }
+  .layout { display: block; }
+  .shot {
+    background: #f7faf6;
+    min-height: 180px;
+  }
+  .shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 52vh;
+    object-fit: contain;
+    object-position: center top;
+    background: #f4f7f5;
+  }
+  .copy { padding: 16px 16px 18px; }
+  .step-label {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--green);
+  }
+  h2 { margin: 0 0 8px; font-size: 1.25rem; color: var(--navy); }
+  .caption {
+    margin: 0;
+    font-size: 1.05rem;
+    line-height: 1.5;
+    color: var(--ink);
+  }
+  .dots {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .dots button {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--navy);
+    font-weight: 800;
+  }
+  .dots button[aria-current="step"] {
+    background: var(--green);
+    border-color: var(--green);
+    color: #fff;
+  }
+  .player {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 5;
+    background: #fff;
+    border-top: 1px solid var(--line);
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.06);
+  }
+  .player-inner { width: min(1100px, 100%); margin: 0 auto; }
+  .track {
+    height: 8px;
+    background: #e6eee8;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+  .track > span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: var(--green);
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: 64px 1fr 64px;
+    gap: 8px;
+    align-items: center;
+  }
+  .controls button, .play {
+    min-height: 48px;
+    border-radius: 14px;
+    border: 0;
+    font-weight: 800;
+    font-size: 1rem;
+  }
+  .nav {
+    background: #f3f7f4;
+    color: var(--navy);
+  }
+  .play {
+    background: var(--green);
+    color: #fff;
+    width: 100%;
+  }
+  .play.is-on { background: var(--green-dark); }
+  .time {
+    margin: 6px 0 0;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  @media (min-width: 860px) {
+    .wrap { padding-top: 28px; }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.8fr);
+    }
+    .shot img { max-height: 70vh; }
+    .copy { padding: 28px 24px; display: flex; flex-direction: column; justify-content: center; }
+    .player-inner { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; }
+    .time { margin: 0; text-align: right; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <p class="kicker">Parrot Canada · Staff guide</p>
+      <h1>Create a student</h1>
+      <p class="lede">From sign-in to the final click. Tap Play tour. Each picture stays with its voice, then moves on when that clip ends.</p>
+    </div>
+  </header>
+  <section class="stage" aria-live="polite">
+    <div class="layout">
+      <div class="shot">
+        <img id="shot" alt="" src="shots/01-login-desktop.png">
+      </div>
+      <div class="copy">
+        <p class="step-label" id="stepLabel">Step 1 of 7</p>
+        <h2 id="title">Sign in</h2>
+        <p class="caption" id="caption"></p>
+        <div class="dots" id="dots"></div>
+      </div>
+    </div>
+  </section>
+</div>
+<div class="player">
+  <div class="player-inner">
+    <div>
+      <div class="track" aria-hidden="true"><span id="bar"></span></div>
+      <div class="controls">
+        <button class="nav" id="prev" type="button">Back</button>
+        <button class="play" id="play" type="button">Play tour</button>
+        <button class="nav" id="next" type="button">Next</button>
+      </div>
+    </div>
+    <p class="time" id="time">0:00 / 0:00</p>
+  </div>
+</div>
+<script>
+const steps = [
+  {
+    title: "Sign in",
+    image: "shots/01-login-desktop.png",
+    audio: "audio/01.wav",
+    caption: "Sign in to Parrot Canada. Open the staff sign-in page, type your email or username and your password, then tap Log in."
+  },
+  {
+    title: "Open Add student",
+    image: "shots/02-open-add-student.png",
+    audio: "audio/02.wav",
+    caption: "After you sign in, open All university admissions in the green menu, then tap Add student. The agent card must show your signed-in name and email. That account is the agent on the application."
+  },
+  {
+    title: "Study destination",
+    image: "shots/03-destination.png",
+    audio: "audio/03.wav",
+    caption: "Choose the study destination. Open the list and tap a region, such as Canada. You can select more than one. A chip confirms each choice."
+  },
+  {
+    title: "University",
+    image: "shots/04-university.png",
+    audio: "audio/04.wav",
+    caption: "Choose the university. Open the list and tap the school. It is added immediately. There is no Add university button."
+  },
+  {
+    title: "Programs",
+    image: "shots/05-programs.png",
+    audio: "audio/05.wav",
+    caption: "On the programs card, choose the level and the program. The university is already filled in. Add another program if the student needs more than one."
+  },
+  {
+    title: "Documents",
+    image: "shots/06-documents.png",
+    audio: "audio/06.wav",
+    caption: "Drop the student's documents here. Passport, latest transcripts, and CV work best together. Personal details are read from these files. You do not type them by hand."
+  },
+  {
+    title: "Create student",
+    image: "shots/07-create.png",
+    audio: "audio/07.wav",
+    caption: "Read the summary of the destination, university, and programs. When it is correct, tap Create student. That is the final click. The application is saved, and the student receives the portal email."
+  }
+];
+
+const shot = document.getElementById("shot");
+const title = document.getElementById("title");
+const caption = document.getElementById("caption");
+const stepLabel = document.getElementById("stepLabel");
+const dots = document.getElementById("dots");
+const bar = document.getElementById("bar");
+const time = document.getElementById("time");
+const playBtn = document.getElementById("play");
+const prevBtn = document.getElementById("prev");
+const nextBtn = document.getElementById("next");
+const audio = new Audio();
+audio.preload = "auto";
+audio.setAttribute("playsinline", "");
+
+let index = 0;
+let touring = false;
+
+function fmt(sec) {
+  if (!Number.isFinite(sec)) return "0:00";
+  const s = Math.max(0, Math.floor(sec));
+  return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+}
+
+function paint(i) {
+  const step = steps[i];
+  shot.src = step.image;
+  shot.alt = step.title;
+  title.textContent = step.title;
+  caption.textContent = step.caption;
+  stepLabel.textContent = "Step " + (i + 1) + " of " + steps.length;
+  [...dots.children].forEach((btn, n) => {
+    btn.setAttribute("aria-current", n === i ? "step" : "false");
+  });
+  prevBtn.disabled = i === 0;
+  nextBtn.disabled = i === steps.length - 1;
+}
+
+function show(i, autoplay) {
+  index = (i + steps.length) % steps.length;
+  paint(index);
+  bar.style.width = "0%";
+  audio.src = steps[index].audio;
+  audio.load();
+  if (autoplay) {
+    const pending = audio.play();
+    if (pending && pending.catch) {
+      pending.catch(() => {
+        touring = false;
+        playBtn.textContent = "Play tour";
+        playBtn.classList.remove("is-on");
+      });
+    }
+  }
+}
+
+steps.forEach((step, n) => {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = String(n + 1);
+  btn.setAttribute("aria-label", "Step " + (n + 1) + ": " + step.title);
+  btn.addEventListener("click", () => show(n, touring));
+  dots.appendChild(btn);
+});
+
+playBtn.addEventListener("click", () => {
+  if (audio.paused) {
+    touring = true;
+    playBtn.textContent = "Pause";
+    playBtn.classList.add("is-on");
+    if (!audio.getAttribute("src") || audio.ended) {
+      const next = audio.ended && index === steps.length - 1 ? 0 : index;
+      show(next, true);
+    } else {
+      audio.play();
+    }
+  } else {
+    touring = false;
+    audio.pause();
+    playBtn.textContent = "Play tour";
+    playBtn.classList.remove("is-on");
+  }
+});
+
+prevBtn.addEventListener("click", () => { if (index > 0) show(index - 1, touring); });
+nextBtn.addEventListener("click", () => { if (index < steps.length - 1) show(index + 1, touring); });
+
+audio.addEventListener("timeupdate", () => {
+  const d = audio.duration;
+  bar.style.width = (d ? (audio.currentTime / d) * 100 : 0) + "%";
+  time.textContent = fmt(audio.currentTime) + " / " + fmt(d);
+});
+audio.addEventListener("loadedmetadata", () => {
+  time.textContent = fmt(audio.currentTime) + " / " + fmt(audio.duration);
+});
+audio.addEventListener("ended", () => {
+  bar.style.width = "100%";
+  if (touring && index < steps.length - 1) {
+    show(index + 1, true);
+    return;
+  }
+  touring = false;
+  playBtn.textContent = "Play again";
+  playBtn.classList.remove("is-on");
+});
+
+let touchX = 0;
+shot.addEventListener("touchstart", (e) => { touchX = e.changedTouches[0].clientX; }, { passive: true });
+shot.addEventListener("touchend", (e) => {
+  const dx = e.changedTouches[0].clientX - touchX;
+  if (Math.abs(dx) < 48) return;
+  if (dx < 0 && index < steps.length - 1) show(index + 1, touring);
+  if (dx > 0 && index > 0) show(index - 1, touring);
+}, { passive: true });
+
+paint(0);
+caption.textContent = steps[0].caption;
+</script>
+</body>
+</html>

@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 
-if (!isset($_SESSION['admin_id'])) {
+if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
     exit('Unauthorized access');
 }
+pcvc_require_francophonie_mobility($conn);
 
 fm_contract_ensure_schema($conn);
 
@@ -17,6 +19,10 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
+$variant = fm_contract_normalize_variant($_GET['variant'] ?? 'standard');
+$isSpecial = $variant === 'special';
+$listUrl = 'admin-fm-contracts.php' . ($isSpecial ? '?variant=special' : '');
+$issueUrl = 'admin-generate-fm-contract.php' . ($isSpecial ? '?variant=special' : '');
 $showSuccess = isset($_GET['sent']) && $_GET['sent'] == '1';
 $showDeleted = isset($_GET['deleted']) && $_GET['deleted'] == '1';
 $showError = isset($_GET['error']) && !empty($_GET['error']);
@@ -37,19 +43,23 @@ $sql = "
     FROM fm_mobility_contracts c
     LEFT JOIN francophonie_mobility_applications a ON a.id = c.application_id
     WHERE c.status = 'signed'
+      AND c.contract_variant = ?
     ORDER BY c.id DESC
 ";
 
-$result = $conn->query($sql);
-if (!$result) {
+$stmt = $conn->prepare($sql);
+if (!$stmt) {
     die('An error occurred while fetching contracts.');
 }
+$stmt->bind_param('s', $variant);
+$stmt->execute();
+$result = $stmt->get_result();
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Signed Mobility Contracts | Parrot Canada Visa Consultant</title>
+<title><?= $isSpecial ? 'Signed Special Mobility Contracts' : 'Signed Mobility Contracts' ?> | Parrot Canada Visa Consultant</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 :root {
@@ -93,9 +103,9 @@ tr:hover { background: #fafbfe; }
 <body>
 <div class="container">
   <div class="header">
-    <h1>🍁 Signed Francophonie Mobility Contracts</h1>
+    <h1><?= $isSpecial ? 'Special Francophone Mobility Contracts' : '🍁 Signed Francophonie Mobility Contracts' ?></h1>
     <div style="display:flex;gap:10px;">
-      <a class="issue-btn" href="admin-generate-fm-contract.php">+ Issue Contract</a>
+      <a class="issue-btn" href="<?= htmlspecialchars($issueUrl) ?>"><?= $isSpecial ? '+ Issue Special Contract' : '+ Issue Contract' ?></a>
       <a class="back-btn" href="admin-dashboard.php">← Dashboard</a>
     </div>
   </div>
@@ -125,7 +135,7 @@ tr:hover { background: #fafbfe; }
       </thead>
       <tbody>
         <?php if ($result->num_rows === 0): ?>
-          <tr><td colspan="7" class="empty-state">No signed mobility contracts yet.</td></tr>
+          <tr><td colspan="7" class="empty-state">No signed <?= $isSpecial ? 'special ' : '' ?>mobility contracts yet.</td></tr>
         <?php else: ?>
           <?php while ($row = $result->fetch_assoc()): ?>
             <?php
@@ -149,6 +159,7 @@ tr:hover { background: #fafbfe; }
                   <form class="send-form" method="post" action="admin-send-fm-contract.php" style="display:inline;">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                     <input type="hidden" name="contract_id" value="<?= (int) $row['contract_id'] ?>">
+                    <input type="hidden" name="variant" value="<?= htmlspecialchars($variant) ?>">
                     <button class="btn <?= $row['sent_at'] ? 'btn-resend' : 'btn-send' ?>" type="button" onclick="sendContract(this)">
                       <?= $row['sent_at'] ? 'Resend' : 'Email' ?>
                     </button>
@@ -156,6 +167,7 @@ tr:hover { background: #fafbfe; }
                   <form method="post" action="admin-delete-fm-contract.php" style="display:inline;" onsubmit="return confirm('Delete this contract permanently?');">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                     <input type="hidden" name="contract_id" value="<?= (int) $row['contract_id'] ?>">
+                    <input type="hidden" name="variant" value="<?= htmlspecialchars($variant) ?>">
                     <button class="btn btn-del" type="submit">Delete</button>
                   </form>
                 </div>
@@ -178,7 +190,7 @@ function sendContract(btn) {
     .then(r => r.json())
     .then(data => {
       if (data.success) {
-        window.location.href = 'admin-fm-contracts.php?sent=1';
+        window.location.href = <?= json_encode($listUrl . (str_contains($listUrl, '?') ? '&' : '?') . 'sent=1') ?>;
       } else {
         alert(data.error || 'Failed to send email.');
         btn.disabled = false;

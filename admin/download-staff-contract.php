@@ -16,8 +16,10 @@ if ($viewerId <= 0) {
 $staffId = (int) ($_GET['staff_id'] ?? $viewerId);
 $type = ($_GET['type'] ?? 'signed') === 'source' ? 'source' : 'signed';
 $format = strtolower(trim((string) ($_GET['format'] ?? '')));
-if ($format === '') {
-    $format = ($type === 'signed' && pcvc_staff_contract_use_docx_preview()) ? 'docx' : 'pdf';
+if ($type === 'signed') {
+    $format = 'pdf';
+} elseif ($format === '') {
+    $format = pcvc_staff_contract_use_docx_preview() ? 'docx' : 'pdf';
 }
 $isSuper = pcvc_current_user_is_superadmin($conn);
 
@@ -64,6 +66,10 @@ if ($safe === '') {
     $safe = 'staff_contract';
 }
 $filename = $safe . ($type === 'signed' ? '_signed_contract.' : '_contract.') . $ext;
+
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
 
 header('Content-Type: ' . $mime);
 header('Content-Disposition: attachment; filename="' . $filename . '"');

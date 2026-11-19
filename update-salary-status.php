@@ -1,7 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
-if (!isset($_SESSION['role']) || ($_SESSION['role'] !== "superadmin" && $_SESSION['role'] !== "hr")) {
+if (!isset($_SESSION['role']) || (!pcvc_is_superadmin_role($_SESSION['role']) && $_SESSION['role'] !== "hr")) {
     $_SESSION['error'] = "Unauthorized action.";
     header("Location: salary-report.php");
     exit;

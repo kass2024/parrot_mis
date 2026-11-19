@@ -52,6 +52,10 @@ if (!is_file($abs)) {
 
 pcvc_staff_contract_patch_docx_layout($abs);
 
+while (ob_get_level() > 0) {
+    ob_end_clean();
+}
+
 header('Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 header('Content-Disposition: inline; filename="staff-contract.docx"');
 header('Content-Length: ' . (string) filesize($abs));

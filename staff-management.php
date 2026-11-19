@@ -4,6 +4,11 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/secure_file.php';
+require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/staff_self_register.php';
+require_once __DIR__ . '/helpers/staff_contract_schema.php';
+pcvc_ensure_staff_account_columns($conn);
+pcvc_ensure_director_role($conn);
 $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
 /* ============================================================
    SECURITY CHECK 
@@ -13,23 +18,44 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role'])) {
     exit('Access denied. Please log in.');
 }
 
-$isSuperAdmin = ($_SESSION['role'] === 'superadmin');
+$isSuperAdmin = pcvc_is_superadmin_role($_SESSION['role'] ?? '');
 $currentUserId = $_SESSION['id'];
+if (empty($_SESSION['staff_csrf'])) {
+    $_SESSION['staff_csrf'] = bin2hex(random_bytes(16));
+}
 
 /* ============================================================
    DELETE STAFF (SUPERADMIN ONLY)
 ============================================================ */
-if (isset($_GET['delete']) && $isSuperAdmin) {
-    $id = intval($_GET['delete']);
-    
-    // Prevent self-deletion
-    if ($id == $currentUserId) {
-        $_SESSION['error'] = "You cannot delete your own account";
+if (
+    $isSuperAdmin
+    && (
+        (isset($_GET['delete']) && $_SERVER['REQUEST_METHOD'] !== 'POST')
+        || ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_account']))
+    )
+) {
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $postedToken = (string) ($_POST['csrf_token'] ?? '');
+        if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
+            $_SESSION['error'] = 'This request expired. Refresh the page and try again.';
+            header('Location: staff-management.php');
+            exit;
+        }
+        $id = (int) ($_POST['id'] ?? 0);
     } else {
-        $conn->query("DELETE FROM admins WHERE id = $id");
-        $_SESSION['success'] = "Staff member deleted successfully";
+        $id = (int) ($_GET['delete'] ?? 0);
     }
-    header("Location: staff-management.php");
+    if ($id < 1 || $id === (int) $currentUserId) {
+        $_SESSION['error'] = 'You cannot delete your own account.';
+    } else {
+        $deleted = pcvc_delete_admin_account($conn, $id);
+        if (!empty($deleted['ok'])) {
+            $_SESSION['success'] = 'Account deleted.';
+        } else {
+            $_SESSION['error'] = (string) ($deleted['error'] ?? 'That account could not be deleted.');
+        }
+    }
+    header('Location: staff-management.php');
     exit;
 }
 
@@ -46,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff']) && $i
 
     $salary    = floatval($_POST['salary_per_minute']);
     $monthly   = ($_POST['monthly_salary'] !== '' ? floatval($_POST['monthly_salary']) : null);
-    $currency  = $_POST['salary_currency'] ?? 'USD';
+    $currency  = $_POST['salary_currency'] ?? 'RWF';
     $break     = intval($_POST['allowed_break_minutes']);
     $days      = intval($_POST['work_days_per_week']);
     $sheet     = trim($_POST['sheet_id'] ?? '');
@@ -54,11 +80,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff']) && $i
     $officeId  = ($_POST['office_id'] !== '' ? intval($_POST['office_id']) : null);
 
     // Role update (superadmin only can change roles)
-    $role = $_POST['role'] ?? 'staff';
+    $role = trim((string) ($_POST['role'] ?? 'staff'));
+    if (!in_array($role, ['superadmin', 'director', 'secretary', 'admin', 'staff', 'accountant', 'agent'], true)) {
+        $role = 'staff';
+    }
 
     // HR / CONTRACT FIELDS
     $position     = trim($_POST['position'] ?? '');
-    $empType      = trim($_POST['employment_type'] ?? '');
+    $empType      = pcvc_staff_employment_type_store(trim((string) ($_POST['employment_type'] ?? '')));
     $startDate    = $_POST['employment_start_date'] ?: null;
     $nid          = trim($_POST['national_id'] ?? '');
     $address      = trim($_POST['address'] ?? '');
@@ -167,7 +196,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff']) && $i
     );
 
     if ($stmt->execute()) {
-        $_SESSION['success'] = 'Staff information updated successfully';
+        if (isset($_POST['account_type']) && function_exists('pcvc_admin_has_column') && pcvc_admin_has_column($conn, 'company_name')) {
+            $cType = strtolower(trim((string) ($_POST['account_type'] ?? 'personal')));
+            if ($cType !== 'company') {
+                $cType = 'personal';
+            }
+            $cName = trim((string) ($_POST['company_name'] ?? ''));
+            $cReg = trim((string) ($_POST['company_registration'] ?? ''));
+            $cAddr = trim((string) ($_POST['company_address'] ?? ''));
+            $cPhone = trim((string) ($_POST['company_phone'] ?? ''));
+            $cWeb = trim((string) ($_POST['company_website_url'] ?? ''));
+            $cUp = $conn->prepare('UPDATE admins SET account_type = ?, company_name = ?, company_registration = ?, company_address = ?, company_phone = ?, company_website_url = ? WHERE id = ? LIMIT 1');
+            if ($cUp) {
+                $cUp->bind_param('ssssssi', $cType, $cName, $cReg, $cAddr, $cPhone, $cWeb, $id);
+                $cUp->execute();
+                $cUp->close();
+            }
+        }
+        $_SESSION['success'] = 'Account updated.';
+        require_once __DIR__ . '/helpers/staff_contract_witness.php';
+        try {
+            pcvc_staff_contract_sync_employment_status($conn, (int) $id);
+        } catch (Throwable $e) {
+            // The account save already succeeded. A missing contract file must not block it.
+        }
 
         if (!empty($_FILES['profile_photo']['name']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
             $uploadDir = __DIR__ . '/uploads/';
@@ -221,12 +273,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSu
     $usernameIn = trim((string) ($_POST['username'] ?? ''));
     $passwordIn = (string) ($_POST['password'] ?? '');
     $role       = trim((string) ($_POST['role'] ?? 'staff'));
-    if (!in_array($role, ['superadmin', 'admin', 'staff', 'agent'], true)) {
+    if (!in_array($role, ['superadmin', 'director', 'secretary', 'admin', 'staff', 'accountant', 'agent'], true)) {
         $role = 'staff';
     }
 
     $position    = trim((string) ($_POST['position'] ?? ''));
-    $empType     = trim((string) ($_POST['employment_type'] ?? ''));
+    $empType     = pcvc_staff_employment_type_store(trim((string) ($_POST['employment_type'] ?? '')));
     $startDate   = trim((string) ($_POST['employment_start_date'] ?? '')) ?: null;
     $nid         = trim((string) ($_POST['national_id'] ?? ''));
     $address     = trim((string) ($_POST['address'] ?? ''));
@@ -237,9 +289,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSu
 
     $salary   = ($_POST['salary_per_minute'] !== '' ? floatval($_POST['salary_per_minute']) : 0.0);
     $monthly  = ($_POST['monthly_salary'] !== '' ? floatval($_POST['monthly_salary']) : null);
-    $currency = trim((string) ($_POST['salary_currency'] ?? 'USD'));
-    if (!in_array($currency, ['KES', 'RWF', 'USD'], true)) {
-        $currency = 'USD';
+    $currency = trim((string) ($_POST['salary_currency'] ?? 'RWF'));
+    if (!in_array($currency, ['RWF', 'KES', 'USD'], true)) {
+        $currency = 'RWF';
     }
     $break    = ($_POST['allowed_break_minutes'] !== '' ? intval($_POST['allowed_break_minutes']) : 60);
     $days     = ($_POST['work_days_per_week'] !== '' ? intval($_POST['work_days_per_week']) : 5);
@@ -247,7 +299,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSu
     $link     = trim((string) ($_POST['sheet_link'] ?? ''));
     $officeId = (isset($_POST['office_id']) && $_POST['office_id'] !== '' ? intval($_POST['office_id']) : null);
 
-    if ($empType !== '' && !in_array($empType, ['Full-time', 'Part-time', 'Contract'], true)) {
+    if ($empType !== '' && pcvc_staff_employment_type_normalize($empType) === '' && strcasecmp($empType, 'Contract') !== 0) {
         $empType = '';
     }
     if ($marital !== null && !in_array($marital, ['Single', 'Married', 'Divorced', 'Widowed'], true)) {
@@ -391,21 +443,171 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSu
 }
 
 /* ============================================================
+   RESET STAFF PASSWORD (SUPERADMIN ONLY)
+============================================================ */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_staff_password']) && $isSuperAdmin) {
+    $postedToken = (string) ($_POST['csrf_token'] ?? '');
+    if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
+        $_SESSION['error'] = 'The reset request expired. Refresh the page and try again.';
+        header('Location: staff-management.php');
+        exit;
+    }
+
+    $id = (int) ($_POST['id'] ?? 0);
+    $newPassword = trim((string) ($_POST['new_password'] ?? ''));
+    if ($id < 1 || strlen($newPassword) < 8) {
+        $_SESSION['error'] = 'Enter a new password of at least 8 characters.';
+        header('Location: staff-management.php');
+        exit;
+    }
+
+    $lookup = $conn->prepare('SELECT id, username, full_name, first_name, last_name FROM admins WHERE id = ? LIMIT 1');
+    if (!$lookup) {
+        $_SESSION['error'] = 'Could not load that staff account.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $lookup->bind_param('i', $id);
+    $lookup->execute();
+    $staff = $lookup->get_result()->fetch_assoc();
+    $lookup->close();
+    if (!$staff || trim((string) ($staff['username'] ?? '')) === '') {
+        $_SESSION['error'] = 'That staff account has no username.';
+        header('Location: staff-management.php');
+        exit;
+    }
+
+    $passwordHash = password_hash($newPassword, PASSWORD_DEFAULT);
+    $update = $conn->prepare('UPDATE admins SET password_hash = ? WHERE id = ? LIMIT 1');
+    if (!$update) {
+        $_SESSION['error'] = 'Could not reset the password.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $update->bind_param('si', $passwordHash, $id);
+    $saved = $update->execute();
+    $update->close();
+    if (!$saved) {
+        $_SESSION['error'] = 'Could not reset the password.';
+        header('Location: staff-management.php');
+        exit;
+    }
+
+    $loginUrl = rtrim(pcvc_public_base_url(), '/') . '/admin-login.php';
+    $display = trim((string) ($staff['full_name'] ?? ''));
+    if ($display === '') {
+        $display = trim((string) (($staff['first_name'] ?? '') . ' ' . ($staff['last_name'] ?? '')));
+    }
+    $_SESSION['reset_credentials'] = [
+        'name' => $display !== '' ? $display : (string) $staff['username'],
+        'username' => (string) $staff['username'],
+        'password' => $newPassword,
+        'login' => $loginUrl,
+    ];
+    $_SESSION['success'] = 'Password reset for ' . $staff['username'] . '. Copy the credentials below before you leave this page.';
+    header('Location: staff-management.php');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_account']) && $isSuperAdmin) {
+    $postedToken = (string) ($_POST['csrf_token'] ?? '');
+    if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
+        $_SESSION['error'] = 'This approval request expired. Refresh the page and try again.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $result = pcvc_approve_staff_account($conn, (int) ($_POST['id'] ?? 0));
+    if (!empty($result['ok'])) {
+        $_SESSION['success'] = 'Approved ' . (string) ($result['name'] ?? 'the account') . '. The sign-in email was sent to ' . (string) ($result['email'] ?? 'the new agent') . '.';
+    } else {
+        $_SESSION['error'] = (string) ($result['error'] ?? 'Approval failed.');
+    }
+    header('Location: staff-management.php');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account']) && $isSuperAdmin) {
+    $postedToken = (string) ($_POST['csrf_token'] ?? '');
+    if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
+        $_SESSION['error'] = 'This request expired. Refresh the page and try again.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $id = (int) ($_POST['id'] ?? 0);
+    if ($id < 1 || $id === (int) $currentUserId) {
+        $_SESSION['error'] = 'You cannot deactivate your own account.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $inactive = 'inactive';
+    $st = $conn->prepare('UPDATE admins SET account_status = ? WHERE id = ? LIMIT 1');
+    if ($st) {
+        $st->bind_param('si', $inactive, $id);
+        $st->execute();
+        $st->close();
+        $_SESSION['success'] = 'Account deactivated. They can no longer sign in.';
+    } else {
+        $_SESSION['error'] = 'Could not deactivate that account.';
+    }
+    header('Location: staff-management.php');
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reactivate_account']) && $isSuperAdmin) {
+    $postedToken = (string) ($_POST['csrf_token'] ?? '');
+    if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
+        $_SESSION['error'] = 'This request expired. Refresh the page and try again.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $id = (int) ($_POST['id'] ?? 0);
+    $active = 'active';
+    $onlyInactive = 'inactive';
+    $st = $conn->prepare('UPDATE admins SET account_status = ? WHERE id = ? AND account_status = ? LIMIT 1');
+    if ($st && $id > 0) {
+        $st->bind_param('sis', $active, $id, $onlyInactive);
+        $st->execute();
+        $changed = $st->affected_rows > 0;
+        $st->close();
+        $_SESSION['success'] = $changed ? 'Account reactivated. They can sign in again.' : 'That account was not inactive.';
+    } else {
+        $_SESSION['error'] = 'Could not reactivate that account.';
+    }
+    header('Location: staff-management.php');
+    exit;
+}
+
+/* ============================================================
    FETCH ADMINS + OFFICES
 ============================================================ */
 $admins  = $conn->query("SELECT * FROM admins ORDER BY 
     CASE 
-        WHEN role = 'superadmin' THEN 1
+        WHEN role IN ('superadmin', 'director', 'secretary') THEN 1
         WHEN role = 'admin' THEN 2
         ELSE 3
     END, created_at DESC");
     
 $offices = $conn->query("SELECT id, office_name FROM offices ORDER BY office_name ASC");
+$pendingAccounts = [];
+$pendingRes = $conn->query(
+    "SELECT id, full_name, first_name, last_name, email, phone_number, account_type, company_name,
+            company_registration, company_address, company_phone, company_website_url, created_at
+     FROM admins
+     WHERE account_status = 'pending'
+     ORDER BY created_at ASC"
+);
+if ($pendingRes) {
+    while ($pendingRow = $pendingRes->fetch_assoc()) {
+        $pendingAccounts[] = $pendingRow;
+    }
+    $pendingRes->free();
+}
 
 // Get success/error messages
 $success = $_SESSION['success'] ?? null;
 $error = $_SESSION['error'] ?? null;
-unset($_SESSION['success'], $_SESSION['error']);
+$resetCredentials = $_SESSION['reset_credentials'] ?? null;
+unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
 ?>
 
 <!DOCTYPE html>
@@ -413,7 +615,7 @@ unset($_SESSION['success'], $_SESSION['error']);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parrot Canada Visa — Staff Management</title>
+    <title>Parrot Canada Visa — Accounts management</title>
     
     <!-- Brand color variables -->
     <style>
@@ -992,6 +1194,255 @@ unset($_SESSION['success'], $_SESSION['error']);
         tbody tr[data-role] td {
             background: transparent;
         }
+
+        .pending-board {
+            margin: 0 0 18px;
+            background: #fff;
+            border: 1px solid #d9e6d4;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(47, 90, 38, 0.06);
+        }
+        .pending-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            padding: 16px 18px;
+            background: #f4faf3;
+            border-bottom: 1px solid #d9e6d4;
+        }
+        .pending-head h2 { margin: 0; font-size: 1.05rem; }
+        .pending-head p { margin: 4px 0 0; color: var(--text-muted); font-size: .85rem; }
+        .pending-count {
+            min-width: 36px;
+            height: 36px;
+            border-radius: 999px;
+            display: grid;
+            place-items: center;
+            background: #427431;
+            color: #fff;
+            font-weight: 700;
+        }
+        .pending-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            padding: 14px;
+        }
+        @media (min-width: 800px) {
+            .pending-grid { grid-template-columns: 1fr 1fr; }
+        }
+        .pending-card {
+            border: 1px solid var(--border-light);
+            border-radius: 14px;
+            padding: 14px;
+            background: #fff;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .pending-card strong { font-size: 1rem; }
+        .pending-meta { color: var(--text-muted); font-size: .84rem; line-height: 1.45; }
+        .kind-pill {
+            display: inline-block;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: .72rem;
+            font-weight: 700;
+            letter-spacing: .03em;
+            text-transform: uppercase;
+            background: #eef6ea;
+            color: #2f5a26;
+        }
+        .kind-pill.is-company { background: #e8f0fe; color: #3661B9; }
+        .approve-btn {
+            margin-top: 6px;
+            border: 0;
+            border-radius: 10px;
+            background: #427431;
+            color: #fff;
+            font-weight: 700;
+            padding: 10px 12px;
+        }
+        .approve-btn:hover { background: #356a2a; }
+        .status-wait {
+            display: inline-block;
+            margin-left: 6px;
+            border-radius: 999px;
+            background: #fff7ed;
+            color: #c2410c;
+            font-size: .68rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            vertical-align: middle;
+        }
+        .account-list {
+            flex: 1;
+            min-height: 0;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-bottom: 18px;
+        }
+        .account-fold {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .04);
+        }
+        .account-fold.is-inactive { background: #f8fafc; }
+        .account-fold summary {
+            list-style: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+        }
+        .account-fold summary::-webkit-details-marker { display: none; }
+        .fold-main { min-width: 0; flex: 1; }
+        .fold-name { font-weight: 700; font-size: 1rem; }
+        .fold-sub { color: var(--text-muted); font-size: .84rem; margin-top: 2px; }
+        .fold-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .fold-tag {
+            border-radius: 999px;
+            background: #eef6ea;
+            color: #2f5a26;
+            font-size: .72rem;
+            font-weight: 700;
+            padding: 3px 8px;
+        }
+        .fold-tag.is-company { background: #e8f0fe; color: #1d4ed8; }
+        .fold-tag.is-wait { background: #fff7ed; color: #c2410c; }
+        .fold-tag.is-off { background: #f1f5f9; color: #64748b; }
+        .fold-chevron { color: #94a3b8; transition: transform .15s ease; }
+        .account-fold[open] .fold-chevron { transform: rotate(180deg); }
+        .summary-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+        .deactivate-btn, .reactivate-btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: .82rem;
+        }
+        .deactivate-btn { background: #fff1f2; color: #be123c; }
+        .reactivate-btn { background: #ecfdf3; color: #166534; }
+        .fold-body { padding: 0 16px 16px; }
+        .company-panel {
+            background: #f8fbff;
+            border: 1px solid #dbe7ff;
+            border-radius: 14px;
+            padding: 14px;
+            margin-bottom: 14px;
+        }
+        .company-panel h3 { margin: 0 0 10px; font-size: 1rem; color: #1e3a8a; }
+        .fold-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+        }
+        @media (min-width: 800px) {
+            .fold-grid { grid-template-columns: 1fr 1fr; }
+            .fold-grid .span-2 { grid-column: 1 / -1; }
+        }
+        .fold-grid label { font-size: .75rem; font-weight: 700; color: #475569; }
+        .fold-grid input, .fold-grid select {
+            margin-top: 4px;
+            width: 100%;
+            border: 1px solid #d5e0d8;
+            border-radius: 10px;
+            padding: 8px 10px;
+            font: inherit;
+            font-size: .92rem;
+        }
+        .fold-section { margin-top: 14px; }
+        .fold-section h3 { margin: 0 0 8px; font-size: .95rem; color: #2f5a26; }
+        .fold-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+        .account-fold summary { flex-wrap: wrap; }
+        .account-fold summary::marker { content: ''; }
+        .account-fold .profile-upload-wrap,
+        .account-fold .profile-upload-wrap .profile-img-container,
+        .account-fold .profile-upload-wrap .profile-placeholder {
+            width: 48px;
+            height: 48px;
+            margin: 0;
+        }
+        .account-fold .profile-placeholder { font-size: 18px; }
+        .fold-photo-btn {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 10px;
+            background: #eef6ea;
+            color: #2f5a26;
+            font-weight: 700;
+            font-size: .82rem;
+            padding: 8px 12px;
+            cursor: pointer;
+        }
+        .company-kicker {
+            font-size: .72rem;
+            font-weight: 800;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #3661B9;
+        }
+        .company-facts {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px 16px;
+            margin: 12px 0 0;
+        }
+        @media (min-width: 700px) {
+            .company-facts { grid-template-columns: 1fr 1fr; }
+            .company-facts .wide { grid-column: 1 / -1; }
+        }
+        .company-facts dt {
+            font-size: .72rem;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        .company-facts dd {
+            margin: 2px 0 0;
+            color: #0f172a;
+            font-weight: 600;
+            word-break: break-word;
+        }
+        .company-facts a { color: #1d4ed8; }
+        .delete-btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 8px 12px;
+            font-weight: 700;
+            font-size: .82rem;
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        @media (max-width: 760px) {
+            body { overflow: auto; }
+            .brand-payroll-header { display: none; }
+            .main-container {
+                height: auto;
+                min-height: 100%;
+                padding: 12px 12px 24px;
+            }
+            .page-header, .stats-container, .summary-actions {
+                flex-wrap: wrap;
+                width: 100%;
+            }
+            .page-header { align-items: flex-start; gap: 10px; }
+            .page-title { font-size: 1.25rem; }
+            .search-wrapper { min-width: 0; flex: 1 1 100%; }
+            .filters-section { gap: 8px; padding: 12px; }
+            .filter-badge { padding: 6px 8px; }
+            .account-fold summary { align-items: flex-start; }
+            .fold-sub { overflow-wrap: anywhere; }
+            .fold-actions .btn { flex: 1 1 auto; }
+            .modal-dialog { margin: 8px; max-width: calc(100% - 16px); }
+        }
     </style>
 </head>
 
@@ -1007,7 +1458,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div class="header-container">
         <div class="logo-container">
             <div class="logo-main"><?= htmlspecialchars($companyBrandName) ?></div>
-            <div class="logo-subtitle">Staff management</div>
+            <div class="logo-subtitle">Accounts management</div>
         </div>
     </div>
 </div>
@@ -1018,7 +1469,7 @@ unset($_SESSION['success'], $_SESSION['error']);
     <div class="page-header">
         <h1 class="page-title">
             <i class="bi bi-people-fill"></i>
-            Staff Management
+            Accounts management
         </h1>
         
         <div class="stats-container">
@@ -1037,18 +1488,8 @@ unset($_SESSION['success'], $_SESSION['error']);
                     <i class="bi bi-star-fill"></i>
                 </div>
                 <div class="stat-info">
-                    <h3>
-                        <?php 
-                        $admins->data_seek(0);
-                        $superadminCount = 0;
-                        while($row = $admins->fetch_assoc()) {
-                            if($row['role'] === 'superadmin') $superadminCount++;
-                        }
-                        $admins->data_seek(0);
-                        echo $superadminCount;
-                        ?>
-                    </h3>
-                    <p>Super</p>
+                    <h3><?= count($pendingAccounts) ?></h3>
+                    <p>Waiting</p>
                 </div>
             </div>
         </div>
@@ -1068,7 +1509,80 @@ unset($_SESSION['success'], $_SESSION['error']);
         <?= htmlspecialchars($error) ?>
     </div>
     <?php endif; ?>
+
+    <?php if (is_array($resetCredentials)): ?>
+    <?php
+        $credentialText = "Login link: " . $resetCredentials['login'] . "\n"
+            . "Username: " . $resetCredentials['username'] . "\n"
+            . "Password: " . $resetCredentials['password'];
+    ?>
+    <div class="alert alert-warning" id="credentialBox">
+        <strong>New login for <?= htmlspecialchars((string) $resetCredentials['name'], ENT_QUOTES, 'UTF-8') ?></strong>
+        <div style="margin-top:8px;font-size:14px;">Username: <code><?= htmlspecialchars((string) $resetCredentials['username'], ENT_QUOTES, 'UTF-8') ?></code></div>
+        <div style="font-size:14px;">Password: <code><?= htmlspecialchars((string) $resetCredentials['password'], ENT_QUOTES, 'UTF-8') ?></code></div>
+        <div style="font-size:14px;word-break:break-all;">Login link: <code><?= htmlspecialchars((string) $resetCredentials['login'], ENT_QUOTES, 'UTF-8') ?></code></div>
+        <textarea id="credentialText" readonly style="position:absolute;left:-9999px;"><?= htmlspecialchars($credentialText, ENT_QUOTES, 'UTF-8') ?></textarea>
+        <button type="button" class="btn btn-dark btn-sm" style="margin-top:10px;" onclick="copyStaffCredentials()">
+            <i class="bi bi-clipboard"></i> Copy credentials
+        </button>
+    </div>
+    <?php endif; ?>
     
+    <!-- Waiting for approval -->
+    <?php if ($isSuperAdmin): ?>
+    <section class="pending-board">
+        <div class="pending-head">
+            <div>
+                <h2>Waiting for approval</h2>
+                <p>Approve an account to email the sign-in link and password. Company accounts also receive the document request.</p>
+            </div>
+            <div class="pending-count"><?= count($pendingAccounts) ?></div>
+        </div>
+        <?php if ($pendingAccounts === []): ?>
+            <p class="pending-meta" style="padding:14px 18px;">No new accounts are waiting.</p>
+        <?php else: ?>
+        <div class="pending-grid">
+            <?php foreach ($pendingAccounts as $pending):
+                $pendingName = trim((string) ($pending['full_name'] ?? ''));
+                if ($pendingName === '') {
+                    $pendingName = trim((string) (($pending['first_name'] ?? '') . ' ' . ($pending['last_name'] ?? '')));
+                }
+                $isCompanyAccount = strtolower((string) ($pending['account_type'] ?? '')) === 'company'
+                    || trim((string) ($pending['company_name'] ?? '')) !== '';
+            ?>
+            <article class="pending-card">
+                <div>
+                    <span class="kind-pill<?= $isCompanyAccount ? ' is-company' : '' ?>"><?= $isCompanyAccount ? 'Company' : 'Personal' ?></span>
+                </div>
+                <strong><?= htmlspecialchars($pendingName !== '' ? $pendingName : 'New account', ENT_QUOTES, 'UTF-8') ?></strong>
+                <div class="pending-meta">
+                    <?= htmlspecialchars((string) ($pending['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                    <?php if (trim((string) ($pending['phone_number'] ?? '')) !== ''): ?>
+                        <br><?= htmlspecialchars((string) $pending['phone_number'], ENT_QUOTES, 'UTF-8') ?>
+                    <?php endif; ?>
+                    <?php if ($isCompanyAccount): ?>
+                        <br><strong><?= htmlspecialchars((string) ($pending['company_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                        <?php if (trim((string) ($pending['company_registration'] ?? '')) !== ''): ?>
+                            · <?= htmlspecialchars((string) $pending['company_registration'], ENT_QUOTES, 'UTF-8') ?>
+                        <?php endif; ?>
+                        <?php if (trim((string) ($pending['company_address'] ?? '')) !== ''): ?>
+                            <br><?= htmlspecialchars((string) $pending['company_address'], ENT_QUOTES, 'UTF-8') ?>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+                <form method="post">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                    <input type="hidden" name="approve_account" value="1">
+                    <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
+                    <button type="submit" class="approve-btn">Approve and email sign-in</button>
+                </form>
+            </article>
+            <?php endforeach; ?>
+        </div>
+        <?php endif; ?>
+    </section>
+    <?php endif; ?>
+
     <!-- Search and Filters - Compact -->
     <div class="filters-section">
         <div class="search-wrapper">
@@ -1082,11 +1596,29 @@ unset($_SESSION['success'], $_SESSION['error']);
         <div class="filter-badge" onclick="filterByRole('superadmin', this)">
             <i class="bi bi-star-fill"></i> Super
         </div>
+        <div class="filter-badge" onclick="filterByRole('director', this)">
+            <i class="bi bi-star"></i> Director
+        </div>
+        <div class="filter-badge" onclick="filterByRole('secretary', this)">
+            <i class="bi bi-star"></i> Secretary
+        </div>
         <div class="filter-badge" onclick="filterByRole('admin', this)">
             <i class="bi bi-shield"></i> Admin
         </div>
         <div class="filter-badge" onclick="filterByRole('staff', this)">
             <i class="bi bi-person-badge"></i> Staff
+        </div>
+        <div class="filter-badge" onclick="filterByRole('accountant', this)">
+            <i class="bi bi-calculator"></i> Accountant
+        </div>
+        <div class="filter-badge" onclick="filterByRole('pending', this)">
+            <i class="bi bi-hourglass-split"></i> Waiting
+        </div>
+        <div class="filter-badge" onclick="filterByRole('company', this)">
+            <i class="bi bi-building"></i> Company
+        </div>
+        <div class="filter-badge" onclick="filterByRole('inactive', this)">
+            <i class="bi bi-person-x"></i> Inactive
         </div>
         <div class="filter-badge" onclick="filterByRole('agent', this)">
             <i class="bi bi-person-workspace"></i> Agent
@@ -1099,274 +1631,307 @@ unset($_SESSION['success'], $_SESSION['error']);
         <?php endif; ?>
     </div>
     
-    <!-- Staff Table Card - Full Width -->
-    <div class="table-card">
-        <div class="table-responsive">
-            <table class="table" id="staffTable">
-                <thead>
-                    <tr>
-                        <th style="min-width: 40px;">#</th>
-                        <th style="min-width: 60px;">Profile</th>
-                        <th onclick="sortTable(2)" style="cursor: pointer; min-width: 150px;">
-                            Name <i class="bi bi-arrow-down-up"></i>
-                        </th>
-                        <th style="min-width: 180px;">Email</th>
-                        <th style="min-width: 120px;">Phone</th>
-                        <th style="min-width: 120px;">Username</th>
-                        <th style="min-width: 100px;">Role</th>
-                        <th style="min-width: 120px;">Position</th>
-                        <th style="min-width: 100px;">Emp Type</th>
-                        <th style="min-width: 100px;">Start Date</th>
-                        <th style="min-width: 100px;">DOB</th>
-                        <th style="min-width: 80px;">Marital</th>
-                        <th style="min-width: 120px;">Nationality</th>
-                        <th style="min-width: 120px;">Birth Place</th>
-                        <th style="min-width: 150px;">National ID</th>
-                        <th style="min-width: 150px;">Address</th>
-                        <th style="min-width: 120px;">Office</th>
-                        <th style="min-width: 90px;">Salary/Min</th>
-                        <th style="min-width: 100px;">Monthly</th>
-                        <th style="min-width: 60px;">Curr</th>
-                        <th style="min-width: 70px;">Break</th>
-                        <th style="min-width: 70px;">Days</th>
-                        <th style="min-width: 120px;">Sheet ID</th>
-                        <th style="min-width: 150px;">Sheet Link</th>
-                        <th style="min-width: 100px;">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php 
-                    $counter = 1;
-                    $admins->data_seek(0);
-                    while($row = $admins->fetch_assoc()): 
-                        $isOwnProfile = ($row['id'] == $currentUserId);
-                        $displayName = trim((string) ($row['full_name'] ?? ''));
-                        if ($displayName === '') {
-                            $displayName = trim((string) (($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')));
-                        }
-                        if ($displayName === '') {
-                            $displayName = (string) ($row['username'] ?? '');
-                        }
-                        $searchBlob = implode(' ', array_filter([
-                            $displayName,
-                            $row['first_name'] ?? '',
-                            $row['last_name'] ?? '',
-                            $row['email'] ?? '',
-                            $row['phone_number'] ?? '',
-                            $row['username'] ?? '',
-                            $row['role'] ?? '',
-                            $row['position'] ?? '',
-                            $row['employment_type'] ?? '',
-                            $row['nationality'] ?? '',
-                            $row['place_of_birth'] ?? '',
-                            $row['national_id'] ?? '',
-                            $row['address'] ?? '',
-                        ], static fn($v) => trim((string) $v) !== ''));
+    <div class="account-list" id="accountList">
+        <?php
+        $admins->data_seek(0);
+        $foldCount = 0;
+        while ($row = $admins->fetch_assoc()):
+            $foldCount++;
+            $isOwnProfile = ((int) $row['id'] === (int) $currentUserId);
+            $displayName = trim((string) ($row['full_name'] ?? ''));
+            if ($displayName === '') {
+                $displayName = trim((string) (($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')));
+            }
+            if ($displayName === '') {
+                $displayName = (string) ($row['username'] ?? '');
+            }
+            $accountStatus = strtolower(trim((string) ($row['account_status'] ?? 'active')));
+            if ($accountStatus === '') {
+                $accountStatus = 'active';
+            }
+            $isCompanyAccount = strtolower((string) ($row['account_type'] ?? '')) === 'company'
+                || trim((string) ($row['company_name'] ?? '')) !== '';
+            $companyTitle = trim((string) ($row['company_name'] ?? ''));
+            $searchBlob = implode(' ', array_filter([
+                $displayName,
+                $row['first_name'] ?? '',
+                $row['last_name'] ?? '',
+                $row['email'] ?? '',
+                $row['phone_number'] ?? '',
+                $row['username'] ?? '',
+                $row['role'] ?? '',
+                $row['position'] ?? '',
+                $companyTitle,
+                $row['company_registration'] ?? '',
+                $row['company_address'] ?? '',
+                $row['company_phone'] ?? '',
+                $row['company_website_url'] ?? '',
+                $row['nationality'] ?? '',
+                $row['address'] ?? '',
+            ], static fn($v) => trim((string) $v) !== ''));
+            $esc = static function ($value): string {
+                return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+            };
+            $ro = $isSuperAdmin ? '' : 'readonly';
+            $dis = $isSuperAdmin ? '' : 'disabled';
+            $dateField = static function ($value): string {
+                $value = trim((string) $value);
+                if ($value === '' || strncmp($value, '0000', 4) === 0) {
+                    return '';
+                }
+                return substr($value, 0, 10);
+            };
+        ?>
+        <details class="account-fold<?= $accountStatus === 'inactive' ? ' is-inactive' : '' ?>"
+                 data-role="<?= $esc($row['role'] ?? 'staff') ?>"
+                 data-status="<?= $esc($accountStatus) ?>"
+                 data-kind="<?= $isCompanyAccount ? 'company' : 'personal' ?>"
+                 data-search="<?= $esc($searchBlob) ?>">
+            <summary>
+                <div class="profile-upload-wrap" data-staff-id="<?= (int) $row['id'] ?>">
+                    <?php if (!empty($row['profile_photo'])): ?>
+                    <div class="profile-img-container">
+                        <img src="<?= $esc(pcvc_profile_photo_url($row['profile_photo'] ?? '')) ?>" alt="" class="profile-img profile-preview">
+                    </div>
+                    <?php else: ?>
+                    <div class="profile-placeholder profile-preview"><?= $esc(strtoupper(substr($displayName !== '' ? $displayName : 'U', 0, 1))) ?></div>
+                    <?php endif; ?>
+                </div>
+                <div class="fold-main">
+                    <div class="fold-name"><?= $esc($isCompanyAccount && $companyTitle !== '' ? $companyTitle : $displayName) ?></div>
+                    <div class="fold-sub">
+                        <?= $esc($displayName) ?>
+                        <?php if (trim((string) ($row['email'] ?? '')) !== ''): ?> · <?= $esc($row['email']) ?><?php endif; ?>
+                        <?php if (trim((string) ($row['phone_number'] ?? '')) !== ''): ?> · <?= $esc($row['phone_number']) ?><?php endif; ?>
+                    </div>
+                    <div class="fold-tags">
+                        <span class="fold-tag<?= $isCompanyAccount ? ' is-company' : '' ?>"><?= $isCompanyAccount ? 'Company' : 'Personal' ?></span>
+                        <span class="fold-tag"><?= $esc(ucfirst((string) ($row['role'] ?? 'staff'))) ?></span>
+                        <?php if ($accountStatus === 'pending'): ?><span class="fold-tag is-wait">Waiting</span><?php endif; ?>
+                        <?php if ($accountStatus === 'inactive'): ?><span class="fold-tag is-off">Inactive</span><?php endif; ?>
+                    </div>
+                </div>
+                <span class="summary-actions" onclick="event.stopPropagation();">
+                    <?php if ($isSuperAdmin && !$isOwnProfile && $accountStatus !== 'inactive'): ?>
+                    <button type="submit" class="deactivate-btn" form="deact-<?= (int) $row['id'] ?>" onclick="return confirm('Deactivate this account? They will not be able to sign in.');">Deactivate</button>
+                    <?php elseif ($isSuperAdmin && $accountStatus === 'inactive'): ?>
+                    <button type="submit" class="reactivate-btn" form="react-<?= (int) $row['id'] ?>">Reactivate</button>
+                    <?php endif; ?>
+                    <?php if ($isSuperAdmin && !$isOwnProfile): ?>
+                    <button type="submit" class="delete-btn" form="del-<?= (int) $row['id'] ?>" onclick="return confirm('Delete this account permanently?');">Delete</button>
+                    <?php endif; ?>
+                </span>
+                <i class="bi bi-chevron-down fold-chevron"></i>
+            </summary>
+            <div class="fold-body">
+                <?php if ($isCompanyAccount): ?>
+                <section class="company-panel">
+                    <div class="company-kicker">Company</div>
+                    <h3><?= $esc($companyTitle !== '' ? $companyTitle : 'Company account') ?></h3>
+                    <?php
+                    $companyWeb = trim((string) ($row['company_website_url'] ?? ''));
+                    $companyWebHref = $companyWeb;
+                    if ($companyWebHref !== '' && !preg_match('#^https?://#i', $companyWebHref)) {
+                        $companyWebHref = 'https://' . $companyWebHref;
+                    }
+                    $fact = static function (string $value) use ($esc): string {
+                        $value = trim($value);
+                        return $value === '' ? '<span class="fold-sub">Not provided</span>' : $esc($value);
+                    };
                     ?>
-                    <tr class="staff-data-row" data-role="<?= htmlspecialchars($row['role'] ?? 'staff', ENT_QUOTES, 'UTF-8') ?>"
-                        data-search="<?= htmlspecialchars($searchBlob, ENT_QUOTES, 'UTF-8') ?>">
-                        <form method="post" enctype="multipart/form-data" class="staff-form" data-id="<?= $row['id'] ?>">
-                            <td class="text-center"><?= $counter++ ?></td>
-                            <input type="hidden" name="id" value="<?= $row['id'] ?>">
-                            
-                            <td class="text-center">
-                                <div class="profile-upload-wrap" data-staff-id="<?= (int) $row['id'] ?>">
-                                    <?php if (!empty($row['profile_photo'])): ?>
-                                    <div class="profile-img-container">
-                                        <img src="<?= htmlspecialchars(pcvc_profile_photo_url($row['profile_photo'] ?? '')) ?>"
-                                             alt="Profile" class="profile-img profile-preview">
-                                    </div>
-                                    <?php else: ?>
-                                    <div class="profile-placeholder profile-preview">
-                                        <?= strtoupper(substr($row['first_name'] ?? $row['username'] ?? 'U', 0, 1)) ?>
-                                    </div>
-                                    <?php endif; ?>
-                                    <?php if ($isSuperAdmin): ?>
-                                    <label class="profile-upload-btn" title="Upload or change photo">
-                                        <input type="file" name="profile_photo" accept="image/jpeg,image/png,image/gif,image/webp"
-                                               class="profile-photo-input" data-staff-id="<?= (int) $row['id'] ?>" hidden>
-                                        <i class="bi bi-camera-fill"></i>
-                                    </label>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                            
-                            <td>
-                                <?php if ($isSuperAdmin): ?>
-                                <input type="text" name="full_name" class="staff-cell-input" required
-                                       value="<?= htmlspecialchars($displayName, ENT_QUOTES, 'UTF-8') ?>"
-                                       placeholder="Full name" autocomplete="name">
-                                <?php else: ?>
-                                <?= htmlspecialchars($displayName !== '' ? $displayName : 'N/A', ENT_QUOTES, 'UTF-8') ?>
-                                <?php endif; ?>
-                            </td>
+                    <dl class="company-facts">
+                        <div>
+                            <dt>Registration</dt>
+                            <dd><?= $fact((string) ($row['company_registration'] ?? '')) ?></dd>
+                        </div>
+                        <div>
+                            <dt>Company phone</dt>
+                            <dd><?= $fact((string) ($row['company_phone'] ?? '')) ?></dd>
+                        </div>
+                        <div class="wide">
+                            <dt>Address</dt>
+                            <dd><?= $fact((string) ($row['company_address'] ?? '')) ?></dd>
+                        </div>
+                        <div class="wide">
+                            <dt>Website</dt>
+                            <dd><?php if ($companyWeb === ''): ?><span class="fold-sub">Not provided</span><?php else: ?><a href="<?= $esc($companyWebHref) ?>" target="_blank" rel="noopener"><?= $esc($companyWeb) ?></a><?php endif; ?></dd>
+                        </div>
+                        <div>
+                            <dt>Person who signs in</dt>
+                            <dd><?= $esc($displayName) ?></dd>
+                        </div>
+                        <div>
+                            <dt>Sign-in email</dt>
+                            <dd><?= $fact((string) ($row['email'] ?? '')) ?></dd>
+                        </div>
+                        <div>
+                            <dt>Personal phone</dt>
+                            <dd><?= $fact((string) ($row['phone_number'] ?? '')) ?></dd>
+                        </div>
+                        <div>
+                            <dt>Username</dt>
+                            <dd><?= $fact((string) ($row['username'] ?? '')) ?></dd>
+                        </div>
+                    </dl>
+                </section>
+                <?php endif; ?>
 
-                            <td>
-                                <?php if ($isSuperAdmin): ?>
-                                <input type="email" name="email" class="staff-cell-input" required
-                                       value="<?= htmlspecialchars($row['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                       placeholder="email@…" autocomplete="email">
-                                <?php else: ?>
-                                <?= htmlspecialchars($row['email'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($isSuperAdmin): ?>
-                                <input type="text" name="phone_number" class="staff-cell-input"
-                                       value="<?= htmlspecialchars($row['phone_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                       placeholder="Phone / MoMo" inputmode="tel" autocomplete="tel">
-                                <?php else: ?>
-                                <?= htmlspecialchars($row['phone_number'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                                <?php endif; ?>
-                            </td>
-                            <td>
-                                <?php if ($isSuperAdmin): ?>
-                                <input type="text" name="username" class="staff-cell-input" required
-                                       value="<?= htmlspecialchars($row['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                       placeholder="Username" autocomplete="username">
-                                <?php else: ?>
-                                <?= htmlspecialchars($row['username'] ?? '', ENT_QUOTES, 'UTF-8') ?>
-                                <?php endif; ?>
-                            </td>
-                            
-                            <!-- Role Selector -->
-                            <td>
-                                <?php if ($isSuperAdmin): ?>
-                                <select name="role" class="form-select form-select-sm">
-                                    <option value="superadmin" <?= ($row['role'] ?? '') == 'superadmin' ? 'selected' : '' ?> 
-                                            <?= ($row['role'] ?? '') == 'superadmin' ? 'disabled' : '' ?>>Super</option>
-                                    <option value="admin" <?= ($row['role'] ?? '') == 'admin' ? 'selected' : '' ?>>Admin</option>
-                                    <option value="staff" <?= ($row['role'] ?? '') == 'staff' ? 'selected' : '' ?>>Staff</option>
-                                    <option value="agent" <?= ($row['role'] ?? '') == 'agent' ? 'selected' : '' ?>>Agent</option>
+                <form method="post" enctype="multipart/form-data" class="staff-form" data-id="<?= (int) $row['id'] ?>">
+                    <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                    <input type="hidden" name="account_type" value="<?= $isCompanyAccount ? 'company' : 'personal' ?>">
+
+                    <?php if ($isCompanyAccount): ?>
+                    <div class="fold-section">
+                        <h3>Company details</h3>
+                        <div class="fold-grid">
+                            <label class="span-2">Company name<input name="company_name" value="<?= $esc($row['company_name'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Registration number<input name="company_registration" value="<?= $esc($row['company_registration'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Company phone<input name="company_phone" value="<?= $esc($row['company_phone'] ?? '') ?>" <?= $ro ?>></label>
+                            <label class="span-2">Company address<input name="company_address" value="<?= $esc($row['company_address'] ?? '') ?>" <?= $ro ?>></label>
+                            <label class="span-2">Website<input name="company_website_url" value="<?= $esc($row['company_website_url'] ?? '') ?>" <?= $ro ?>></label>
+                        </div>
+                    </div>
+                    <?php else: ?>
+                    <input type="hidden" name="company_name" value="">
+                    <input type="hidden" name="company_registration" value="">
+                    <input type="hidden" name="company_phone" value="">
+                    <input type="hidden" name="company_address" value="">
+                    <input type="hidden" name="company_website_url" value="">
+                    <?php endif; ?>
+
+                    <div class="fold-section">
+                        <h3><?= $isCompanyAccount ? 'Person who signs in' : 'Account' ?></h3>
+                        <div class="fold-grid">
+                            <label>Full name<input name="full_name" required value="<?= $esc($displayName) ?>" <?= $ro ?>></label>
+                            <label>Email<input type="email" name="email" required value="<?= $esc($row['email'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Phone<input name="phone_number" value="<?= $esc($row['phone_number'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Username<input name="username" required value="<?= $esc($row['username'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Role
+                                <select name="role" <?= $dis ?>>
+                                    <option value="superadmin" <?= ($row['role'] ?? '') === 'superadmin' ? 'selected' : '' ?>>Superadmin</option>
+                                    <option value="director" <?= ($row['role'] ?? '') === 'director' ? 'selected' : '' ?>>Director</option>
+                                    <option value="secretary" <?= ($row['role'] ?? '') === 'secretary' ? 'selected' : '' ?>>Secretary</option>
+                                    <option value="admin" <?= ($row['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Admin</option>
+                                    <option value="staff" <?= ($row['role'] ?? '') === 'staff' ? 'selected' : '' ?>>Staff</option>
+                                    <option value="accountant" <?= ($row['role'] ?? '') === 'accountant' ? 'selected' : '' ?>>Accountant</option>
+                                    <option value="agent" <?= ($row['role'] ?? '') === 'agent' ? 'selected' : '' ?>>Agent</option>
                                 </select>
-                                <?php else: ?>
-                                <span class="role-badge role-<?= $row['role'] ?? 'staff' ?>">
-                                    <?= ucfirst($row['role'] ?? 'Staff') ?>
-                                </span>
-                                <?php endif; ?>
-                            </td>
-                            
-                            <td><input name="position" value="<?= htmlspecialchars($row['position'] ?? '', ENT_QUOTES, 'UTF-8') ?>"
-                                       class="form-control form-control-sm staff-cell-input" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td>
-                                <select name="employment_type" class="form-select form-select-sm" <?= !$isSuperAdmin ? 'disabled' : '' ?>>
+                            </label>
+                            <label>Position<input name="position" value="<?= $esc($row['position'] ?? '') ?>" <?= $ro ?>></label>
+                        </div>
+                    </div>
+
+                    <div class="fold-section">
+                        <h3>Work and personal</h3>
+                        <div class="fold-grid">
+                            <label>Employment
+                                <select name="employment_type" <?= $dis ?>>
                                     <option value="">--</option>
-                                    <option <?= ($row['employment_type'] ?? '') == 'Full-time' ? 'selected' : '' ?>>Full-time</option>
-                                    <option <?= ($row['employment_type'] ?? '') == 'Part-time' ? 'selected' : '' ?>>Part-time</option>
-                                    <option <?= ($row['employment_type'] ?? '') == 'Contract' ? 'selected' : '' ?>>Contract</option>
-                                </select>
-                            </td>
-                            
-                            <td><input type="date" name="employment_start_date" 
-                                       value="<?= htmlspecialchars($row['employment_start_date'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input type="date" name="date_of_birth" 
-                                       value="<?= htmlspecialchars($row['date_of_birth'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td>
-                                <select name="marital_status" class="form-select form-select-sm" <?= !$isSuperAdmin ? 'disabled' : '' ?>>
-                                    <option value="">--</option>
-                                    <?php foreach(['Single','Married','Divorced','Widowed'] as $m): ?>
-                                    <option <?= ($row['marital_status'] ?? '') == $m ? 'selected' : '' ?>><?= $m ?></option>
+                                    <?php
+                                    $employmentCurrent = (string) ($row['employment_type'] ?? '');
+                                    $employmentSelected = pcvc_staff_employment_type_normalize($employmentCurrent);
+                                    if ($employmentSelected === '') {
+                                        $employmentSelected = $employmentCurrent;
+                                    }
+                                    foreach (pcvc_staff_employment_type_choices($employmentCurrent) as $emp):
+                                    ?>
+                                    <option value="<?= $esc($emp) ?>" <?= $employmentSelected === $emp ? 'selected' : '' ?>><?= $esc($emp) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                            </td>
-                            
-                            <td><input name="nationality" value="<?= htmlspecialchars($row['nationality'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input name="place_of_birth" value="<?= htmlspecialchars($row['place_of_birth'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input name="national_id" value="<?= htmlspecialchars($row['national_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input name="address" value="<?= htmlspecialchars($row['address'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td>
-                                <select name="office_id" class="form-select form-select-sm" <?= !$isSuperAdmin ? 'disabled' : '' ?>>
+                            </label>
+                            <label>Start date<input type="date" name="employment_start_date" value="<?= $esc($dateField($row['employment_start_date'] ?? '')) ?>" <?= $ro ?>></label>
+                            <label>Date of birth<input type="date" name="date_of_birth" value="<?= $esc($dateField($row['date_of_birth'] ?? '')) ?>" <?= $ro ?>></label>
+                            <label>Marital status
+                                <select name="marital_status" <?= $dis ?>>
                                     <option value="">--</option>
-                                    <?php 
-                                    $offices->data_seek(0); 
-                                    while($o = $offices->fetch_assoc()): 
+                                    <?php foreach (['Single', 'Married', 'Divorced', 'Widowed'] as $maritalOpt): ?>
+                                    <option value="<?= $esc($maritalOpt) ?>" <?= ($row['marital_status'] ?? '') === $maritalOpt ? 'selected' : '' ?>><?= $esc($maritalOpt) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </label>
+                            <label>Nationality<input name="nationality" value="<?= $esc($row['nationality'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Place of birth<input name="place_of_birth" value="<?= $esc($row['place_of_birth'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>National ID<input name="national_id" value="<?= $esc($row['national_id'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Address<input name="address" value="<?= $esc($row['address'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Office
+                                <select name="office_id" <?= $dis ?>>
+                                    <option value="">--</option>
+                                    <?php if ($offices): $offices->data_seek(0); while ($office = $offices->fetch_assoc()): ?>
+                                    <option value="<?= (int) $office['id'] ?>" <?= (string) ($row['office_id'] ?? '') === (string) $office['id'] ? 'selected' : '' ?>><?= $esc($office['office_name'] ?? '') ?></option>
+                                    <?php endwhile; endif; ?>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="fold-section">
+                        <h3>Pay</h3>
+                        <div class="fold-grid">
+                            <label>Salary per minute<input type="number" step="0.01" name="salary_per_minute" value="<?= $esc($row['salary_per_minute'] ?? 8.33) ?>" <?= $ro ?>></label>
+                            <label>Monthly salary<input type="number" step="0.01" name="monthly_salary" value="<?= $esc($row['monthly_salary'] ?? '') ?>" <?= $ro ?>></label>
+                            <label>Currency
+                                <select name="salary_currency" <?= $dis ?>>
+                                    <?php
+                                    $payCurrency = strtoupper(trim((string) ($row['salary_currency'] ?? '')));
+                                    if (!in_array($payCurrency, ['RWF', 'KES', 'USD'], true)) {
+                                        $payCurrency = 'RWF';
+                                    }
+                                    foreach (['RWF' => 'RWF — Rwandan francs', 'KES' => 'KES', 'USD' => 'USD'] as $cur => $curLabel):
                                     ?>
-                                    <option value="<?= $o['id'] ?>" <?= ($row['office_id'] ?? '') == $o['id'] ? 'selected' : '' ?>>
-                                        <?= htmlspecialchars($o['office_name'], ENT_QUOTES, 'UTF-8') ?>
-                                    </option>
-                                    <?php endwhile; ?>
+                                    <option value="<?= $cur ?>" <?= $payCurrency === $cur ? 'selected' : '' ?>><?= $esc($curLabel) ?></option>
+                                    <?php endforeach; ?>
                                 </select>
-                            </td>
-                            
-                            <td><input type="number" step="0.01" name="salary_per_minute" 
-                                       value="<?= htmlspecialchars($row['salary_per_minute'] ?? 8.33) ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input type="number" step="0.01" name="monthly_salary" 
-                                       value="<?= htmlspecialchars($row['monthly_salary'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td>
-                                <select name="salary_currency" class="form-select form-select-sm" <?= !$isSuperAdmin ? 'disabled' : '' ?>>
-                                    <option <?= ($row['salary_currency'] ?? 'USD') == 'KES' ? 'selected' : '' ?>>KES</option>
-                                    <option <?= ($row['salary_currency'] ?? 'USD') == 'RWF' ? 'selected' : '' ?>>RWF</option>
-                                    <option <?= ($row['salary_currency'] ?? 'USD') == 'USD' ? 'selected' : '' ?>>USD</option>
-                                </select>
-                            </td>
-                            
-                            <td><input type="number" name="allowed_break_minutes" 
-                                       value="<?= htmlspecialchars($row['allowed_break_minutes'] ?? 60) ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input type="number" name="work_days_per_week" 
-                                       value="<?= htmlspecialchars($row['work_days_per_week'] ?? 6) ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input name="sheet_id" value="<?= htmlspecialchars($row['sheet_id'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td><input name="sheet_link" value="<?= htmlspecialchars($row['sheet_link'] ?? '', ENT_QUOTES, 'UTF-8') ?>" 
-                                       class="form-control form-control-sm" <?= !$isSuperAdmin ? 'readonly' : '' ?>></td>
-                            
-                            <td>
-                                <div class="action-group">
-                                    <?php if ($isSuperAdmin): ?>
-                                    <button type="submit" name="update_staff" class="btn btn-success btn-sm" 
-                                            onclick="return confirmUpdate()">
-                                        <i class="bi bi-check-lg"></i>
-                                    </button>
-                                    <?php if (!$isOwnProfile): ?>
-                                    <a href="?delete=<?= $row['id'] ?>" class="btn btn-danger btn-sm" 
-                                       onclick="return confirmDelete()">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                    <?php endif; ?>
-                                    <?php else: ?>
-                                    <span class="text-muted" data-tooltip="View only">👁️</span>
-                                    <?php endif; ?>
-                                </div>
-                            </td>
-                        </form>
-                    </tr>
-                    <?php endwhile; ?>
-                    
-                    <?php if ($admins->num_rows == 0): ?>
-                    <tr>
-                        <td colspan="26" class="text-center py-5">
-                            <div class="empty-state">
-                                <div class="empty-icon">👥</div>
-                                <div class="empty-title">No Staff Members Found</div>
-                            </div>
-                        </td>
-                    </tr>
+                            </label>
+                            <label>Break minutes<input type="number" name="allowed_break_minutes" value="<?= $esc($row['allowed_break_minutes'] ?? 60) ?>" <?= $ro ?>></label>
+                            <label>Work days / week<input type="number" name="work_days_per_week" value="<?= $esc($row['work_days_per_week'] ?? 6) ?>" <?= $ro ?>></label>
+                            <label>Sheet ID<input name="sheet_id" value="<?= $esc($row['sheet_id'] ?? '') ?>" <?= $ro ?>></label>
+                            <label class="span-2">Sheet link<input name="sheet_link" value="<?= $esc($row['sheet_link'] ?? '') ?>" <?= $ro ?>></label>
+                        </div>
+                    </div>
+
+                    <?php if ($isSuperAdmin): ?>
+                    <div class="fold-actions">
+                        <label class="fold-photo-btn" title="Change photo">
+                            <input type="file" name="profile_photo" accept="image/jpeg,image/png,image/gif,image/webp" class="profile-photo-input" data-staff-id="<?= (int) $row['id'] ?>" hidden>
+                            Change photo
+                        </label>
+                        <button type="submit" name="update_staff" class="btn btn-success btn-sm" onclick="return confirmUpdate()">Save</button>
+                        <button type="button" class="btn btn-warning btn-sm" onclick="openResetPassword(<?= (int) $row['id'] ?>, <?= htmlspecialchars(json_encode((string) ($row['username'] ?? '')), ENT_QUOTES, 'UTF-8') ?>, <?= htmlspecialchars(json_encode($displayName), ENT_QUOTES, 'UTF-8') ?>)">Reset password</button>
+                        <?php if (!$isOwnProfile): ?>
+                        <button type="submit" class="delete-btn" form="del-<?= (int) $row['id'] ?>" onclick="return confirm('Delete this account permanently?');">Delete</button>
+                        <?php endif; ?>
+                    </div>
                     <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+                </form>
+
+                <?php if ($isSuperAdmin && !$isOwnProfile): ?>
+                <form method="post" id="del-<?= (int) $row['id'] ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $esc($_SESSION['staff_csrf']) ?>">
+                    <input type="hidden" name="delete_account" value="1">
+                    <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                </form>
+                <?php endif; ?>
+                <?php if ($isSuperAdmin && !$isOwnProfile && $accountStatus !== 'inactive'): ?>
+                <form method="post" id="deact-<?= (int) $row['id'] ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $esc($_SESSION['staff_csrf']) ?>">
+                    <input type="hidden" name="deactivate_account" value="1">
+                    <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                </form>
+                <?php elseif ($isSuperAdmin && $accountStatus === 'inactive'): ?>
+                <form method="post" id="react-<?= (int) $row['id'] ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $esc($_SESSION['staff_csrf']) ?>">
+                    <input type="hidden" name="reactivate_account" value="1">
+                    <input type="hidden" name="id" value="<?= (int) $row['id'] ?>">
+                </form>
+                <?php endif; ?>
+            </div>
+        </details>
+        <?php endwhile; ?>
+        <?php if ($foldCount === 0): ?>
+        <div class="empty-state"><div class="empty-title">No accounts found</div></div>
+        <?php endif; ?>
     </div>
+    <div class="empty-state" id="filterEmpty" style="display:none"><div class="empty-title">No accounts match this view</div></div>
 </div>
 
 <?php if ($isSuperAdmin): ?>
@@ -1413,9 +1978,12 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <label class="form-label">Role</label>
                             <select name="role" class="form-select">
                                 <option value="staff" selected>Staff</option>
+                                <option value="accountant">Accountant</option>
                                 <option value="admin">Admin</option>
                                 <option value="agent">Agent</option>
                                 <option value="superadmin">Super</option>
+                                <option value="director">Director</option>
+                                <option value="secretary">Secretary</option>
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -1431,9 +1999,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                             <label class="form-label">Employment type</label>
                             <select name="employment_type" class="form-select">
                                 <option value="">--</option>
-                                <option>Full-time</option>
-                                <option>Part-time</option>
-                                <option>Contract</option>
+                                <?php foreach (pcvc_staff_employment_type_options() as $emp): ?>
+                                <option value="<?= $esc($emp) ?>"><?= $esc($emp) ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-4">
@@ -1501,9 +2069,9 @@ unset($_SESSION['success'], $_SESSION['error']);
                         <div class="col-md-2">
                             <label class="form-label">Currency</label>
                             <select name="salary_currency" class="form-select">
-                                <option value="USD" selected>USD</option>
+                                <option value="RWF" selected>RWF — Rwandan francs</option>
                                 <option value="KES">KES</option>
-                                <option value="RWF">RWF</option>
+                                <option value="USD">USD</option>
                             </select>
                         </div>
                         <div class="col-md-1">
@@ -1538,6 +2106,34 @@ unset($_SESSION['success'], $_SESSION['error']);
 <?php endif; ?>
 
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<div class="modal fade" id="resetPasswordModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <form method="post" class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-key me-2"></i>Reset password</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="id" id="resetStaffId" value="">
+                <p class="mb-3">Reset the password for <strong id="resetStaffName"></strong>.</p>
+                <label class="form-label" for="resetStaffUsername">Current username</label>
+                <input type="text" id="resetStaffUsername" class="form-control mb-3" readonly>
+                <label class="form-label" for="resetStaffPassword">New password</label>
+                <div class="input-group">
+                    <input type="text" name="new_password" id="resetStaffPassword" class="form-control" minlength="8" required autocomplete="new-password">
+                    <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('resetStaffPassword').value = suggestStaffPassword()">New password</button>
+                </div>
+                <p class="text-muted mt-2 mb-0" style="font-size:13px;">The new password is saved hashed. It is shown once, in plain text, so you can copy it.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" name="reset_staff_password" class="btn btn-warning">Reset password</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
@@ -1560,7 +2156,7 @@ $(function() {
         if (!file) return;
 
         const staffId = input.dataset.staffId;
-        const wrap = input.closest('.profile-upload-wrap');
+        const wrap = input.closest('.profile-upload-wrap') || document.querySelector('.profile-upload-wrap[data-staff-id="' + staffId + '"]');
         const preview = wrap ? wrap.querySelector('.profile-preview') : null;
 
         const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -1633,11 +2229,17 @@ function applyStaffFilters() {
     const query = (document.getElementById('searchBox')?.value || '').trim();
     const norm = pcvcNormalizeSearchStr(query);
     const tokens = norm.split(/[^a-z0-9]+/i).filter(function(t) { return t.length > 0; });
-    const rows = document.querySelectorAll('#staffTable tbody tr.staff-data-row');
+    const rows = document.querySelectorAll('.account-fold');
 
     rows.forEach(function(row) {
         const rowRole = row.getAttribute('data-role') || '';
-        const roleOk = currentRoleFilter === 'all' || rowRole === currentRoleFilter;
+        const rowStatus = row.getAttribute('data-status') || 'active';
+        const rowKind = row.getAttribute('data-kind') || 'personal';
+        const roleOk = currentRoleFilter === 'all'
+            || (currentRoleFilter === 'pending' ? rowStatus === 'pending'
+            : currentRoleFilter === 'inactive' ? rowStatus === 'inactive'
+            : currentRoleFilter === 'company' ? rowKind === 'company'
+            : rowRole === currentRoleFilter);
 
         let searchOk = true;
         if (tokens.length > 0) {
@@ -1652,6 +2254,11 @@ function applyStaffFilters() {
 
         row.style.display = (roleOk && searchOk) ? '' : 'none';
     });
+    const empty = document.getElementById('filterEmpty');
+    if (empty) {
+        const any = Array.prototype.some.call(rows, function(row) { return row.style.display !== 'none'; });
+        empty.style.display = any ? 'none' : '';
+    }
 }
 
 const searchBox = document.getElementById('searchBox');
@@ -1679,6 +2286,15 @@ function filterByRole(role, el) {
 }
 
 applyStaffFilters();
+
+document.querySelectorAll('.account-fold').forEach(function(fold) {
+    fold.addEventListener('toggle', function() {
+        if (!fold.open) return;
+        document.querySelectorAll('.account-fold[open]').forEach(function(other) {
+            if (other !== fold) other.removeAttribute('open');
+        });
+    });
+});
 
 // Sort table by column
 function sortTable(columnIndex) {
@@ -1716,6 +2332,50 @@ function confirmDelete() {
 // Confirm update
 function confirmUpdate() {
     return confirm('Save changes?');
+}
+
+function suggestStaffPassword() {
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+    let password = 'Parrot-';
+    for (let i = 0; i < 8; i++) {
+        password += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return password;
+}
+
+function openResetPassword(id, username, name) {
+    document.getElementById('resetStaffId').value = id;
+    document.getElementById('resetStaffName').textContent = name || username;
+    document.getElementById('resetStaffUsername').value = username;
+    document.getElementById('resetStaffPassword').value = suggestStaffPassword();
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('resetPasswordModal')).show();
+}
+
+function copyStaffCredentials() {
+    const box = document.getElementById('credentialText');
+    const text = box ? box.value : '';
+    const done = function () {
+        const button = document.querySelector('#credentialBox button');
+        if (!button) return;
+        const original = button.innerHTML;
+        button.innerHTML = '<i class="bi bi-check"></i> Copied';
+        setTimeout(function () { button.innerHTML = original; }, 1600);
+    };
+    if (navigator.clipboard && text) {
+        navigator.clipboard.writeText(text).then(done).catch(function () {
+            box.focus();
+            box.select();
+            document.execCommand('copy');
+            done();
+        });
+        return;
+    }
+    if (box) {
+        box.focus();
+        box.select();
+        document.execCommand('copy');
+        done();
+    }
 }
 
 // Keyboard shortcuts

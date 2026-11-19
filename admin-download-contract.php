@@ -35,19 +35,54 @@ $stmt->execute();
 $row = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-if (!$row || empty($row['pdf_path'])) {
+if (!$row) {
     http_response_code(404);
     exit("PDF not found");
 }
 
-$pdfPath = $row['pdf_path'];
+$pdfPath = trim((string) ($row['pdf_path'] ?? ''));
+$storedPdf = $pdfPath;
+try {
+    require_once __DIR__ . '/helpers/student_contract_pdf.php';
+    $freshPdf = pcvc_generate_student_contract_pdf($conn, $contractId);
+    if ($freshPdf !== '' && is_file($freshPdf)) {
+        $pdfPath = $freshPdf;
+        if ($pdfPath !== $storedPdf) {
+            $update = $conn->prepare('UPDATE student_contracts SET pdf_path = ? WHERE id = ?');
+            if ($update) {
+                $update->bind_param('si', $pdfPath, $contractId);
+                $update->execute();
+                $update->close();
+            }
+        }
+    }
+} catch (Throwable $e) {
+    $pdfPath = $storedPdf;
+}
+unset($storedPdf, $freshPdf);
+/* pcvc_notice_rebuild */
 
-/* ===============================
-   FILE SAFETY
-================================ */
-if (!file_exists($pdfPath)) {
+if ($pdfPath === '' || !is_file($pdfPath)) {
+    require_once __DIR__ . '/helpers/student_contract_pdf.php';
+    try {
+        $pdfPath = pcvc_generate_student_contract_pdf($conn, $contractId);
+    } catch (Throwable $e) {
+        http_response_code(404);
+        exit("PDF not found");
+    }
+    if ($pdfPath !== '' && is_file($pdfPath)) {
+        $update = $conn->prepare('UPDATE student_contracts SET pdf_path = ? WHERE id = ?');
+        if ($update) {
+            $update->bind_param('si', $pdfPath, $contractId);
+            $update->execute();
+            $update->close();
+        }
+    }
+}
+
+if ($pdfPath === '' || !is_file($pdfPath)) {
     http_response_code(404);
-    exit("File missing on server");
+    exit("PDF not found");
 }
 
 /* ===============================

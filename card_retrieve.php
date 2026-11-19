@@ -24,8 +24,16 @@ if ($card === 'noble_education') {
     require_once __DIR__ . '/helpers/noble_education_schema.php';
     neg_ensure_schema($conn);
 }
+if ($card === 'canada_workers') {
+    require_once __DIR__ . '/helpers/canada_workers_schema.php';
+    cuw_ensure_schema($conn);
+}
+if ($card === 'eci_malta') {
+    require_once __DIR__ . '/helpers/eci_malta_schema.php';
+    eci_ensure_schema($conn);
+}
 
-$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie', 'employment', 'korea_event', 'noble_education'];
+$allowedCards = ['admissions', 'scholarships', 'i20', 'credit', 'visa', 'jobs', 'medical', 'francophonie', 'employment', 'korea_event', 'noble_education', 'canada_workers', 'eci_malta'];
 if (!in_array($card, $allowedCards, true)) {
     echo json_encode(['status' => 'error', 'message' => 'Unknown service.']);
     exit;
@@ -44,6 +52,8 @@ $cardSearchConfig = [
     'employment'   => ['table' => 'employment_opportunities_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
     'korea_event'  => ['table' => 'korea_event_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
     'noble_education' => ['table' => 'noble_education_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'canada_workers' => ['table' => 'canada_workers_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
+    'eci_malta' => ['table' => 'eci_malta_applications', 'order' => 'created_at DESC, id DESC', 'has_submitted_at' => false, 'created_col' => 'created_at'],
 ];
 
 if ($action === 'search') {
@@ -345,6 +355,50 @@ switch ($card) {
         }
         $redirect = 'noble-education-request.php?id=' . rawurlencode($userId);
         $summary  = $name !== '' ? $name : $userId;
+        break;
+
+    case 'canada_workers':
+        $st = $conn->prepare('SELECT user_id, first_name, last_name, email FROM canada_workers_applications WHERE user_id = ? OR reference_id = ? LIMIT 1');
+        if (!$st) {
+            echo json_encode(['status' => 'error', 'message' => 'Search unavailable.']);
+            exit;
+        }
+        $st->bind_param('ss', $userId, $userId);
+        $st->execute();
+        $r = $st->get_result()->fetch_assoc();
+        $st->close();
+        if (!$r) {
+            echo json_encode(['status' => 'error', 'message' => 'No Canada Unskilled Workers Recruitment application found for this user ID.']);
+            exit;
+        }
+        $storedUserId = (string) ($r['user_id'] ?? $userId);
+        $redirect = 'canada-workers-request.php?id=' . rawurlencode($storedUserId);
+        $summary  = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+        if ($summary === '') {
+            $summary = $storedUserId;
+        }
+        break;
+
+    case 'eci_malta':
+        $st = $conn->prepare('SELECT user_id, first_name, last_name, email FROM eci_malta_applications WHERE user_id = ? OR reference_id = ? LIMIT 1');
+        if (!$st) {
+            echo json_encode(['status' => 'error', 'message' => 'Search unavailable.']);
+            exit;
+        }
+        $st->bind_param('ss', $userId, $userId);
+        $st->execute();
+        $r = $st->get_result()->fetch_assoc();
+        $st->close();
+        if (!$r) {
+            echo json_encode(['status' => 'error', 'message' => 'No ECI Malta application found for this user ID.']);
+            exit;
+        }
+        $storedUserId = (string) ($r['user_id'] ?? $userId);
+        $redirect = 'eci-malta-application.php?id=' . rawurlencode($storedUserId);
+        $summary  = trim(($r['first_name'] ?? '') . ' ' . ($r['last_name'] ?? ''));
+        if ($summary === '') {
+            $summary = $storedUserId;
+        }
         break;
 }
 

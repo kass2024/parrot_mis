@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 
-if (!isset($_SESSION['admin_id'])) {
+if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
     exit('Unauthorized');
 }
+pcvc_require_francophonie_mobility($conn);
 
 fm_contract_ensure_schema($conn);
 

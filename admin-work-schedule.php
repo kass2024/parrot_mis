@@ -12,7 +12,7 @@ $role_stmt->bind_result($role);
 $role_stmt->fetch();
 $role_stmt->close();
 
-if ($role !== 'superadmin') exit("❌ Access denied. Superadmin only.");
+if (!pcvc_is_superadmin_role($role)) exit("❌ Access denied. Superadmin only.");
 
 // Track success
 $success_message = "";

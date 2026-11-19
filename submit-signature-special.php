@@ -101,6 +101,10 @@ if (
     fail("Missing required fields: " . implode(', ', $missing), 400, ["missing" => $missing]);
 }
 
+if ($pkgCode === 'p71') {
+    fail("Study in the USA (Loan-Based) is no longer offered. Choose a package without a loan. Canada loan packages are still available.", 400);
+}
+
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     fail("Invalid email address", 400);
 }

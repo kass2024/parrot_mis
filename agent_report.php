@@ -30,7 +30,7 @@ $fullName = $admin['full_name'] ?? 'Admin';
   <a href="admin-dashboard.php" class="btn btn-secondary mb-3">← Back to Dashboard</a>
 
 <?php
-if ($role === 'superadmin') {
+if (pcvc_is_superadmin_role($role)) {
     // Get agents (exclude Catholic university)
     $agents = mysqli_query($conn, "
         SELECT email, full_name
@@ -70,7 +70,7 @@ WHERE 1 = 1
 ";
 
 // If superadmin → exclude Catholic university students
-if ($role === 'superadmin') {
+if (pcvc_is_superadmin_role($role)) {
     $query .= " AND (a.role NOT IN ('Catholic university of America') OR a.role IS NULL) ";
 }
 

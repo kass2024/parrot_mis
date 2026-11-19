@@ -325,7 +325,7 @@ function prepare_attachments(array $files, ?string $pdfPath, int $capMB, int $re
 function build_smtp_config(): array {
     $host  = envn(['SMTP_HOST','MAIL_HOST'], 'visaconsultantcanada.com');
     $user  = envn(['SMTP_USER','MAIL_USERNAME'], 'admission@visaconsultantcanada.com');
-    $pass  = envn(['SMTP_PASSWORD','MAIL_PASSWORD'], 'Petero@1981');
+    $pass  = envn(['SMTP_PASSWORD','MAIL_PASSWORD'], 'Parrot@2026');
     $port  = (int)(envn(['SMTP_PORT','MAIL_PORT'], '465') ?? 465);
     $enc   = strtolower(envn(['SMTP_SECURE','MAIL_ENCRYPTION'], 'ssl') ?? 'ssl');
 

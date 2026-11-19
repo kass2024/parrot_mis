@@ -271,6 +271,8 @@ body{
   align-items:center;
   margin-bottom:24px;
 }
+.header-links{display:flex;gap:16px;align-items:center;}
+.header-links a{color:var(--primary);font-weight:700;text-decoration:none;}
 
 .job-list{
   background:var(--card);
@@ -455,7 +457,12 @@ button{
 
 <div class="header">
   <h2>📋 Job To-Do List</h2>
-  <a href="admin-dashboard.php">⬅ Dashboard</a>
+  <div class="header-links">
+    <?php if ($isSuperadmin): ?>
+    <a href="staff_daily_report.php">Daily team report</a>
+    <?php endif; ?>
+    <a href="admin-dashboard.php">⬅ Dashboard</a>
+  </div>
 </div>
 
 <div class="job-list">

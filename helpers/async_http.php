@@ -6,6 +6,10 @@ declare(strict_types=1);
  */
 function pcvc_finish_http_response(string $body, int $statusCode = 200): void
 {
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
     if (!headers_sent()) {
         http_response_code($statusCode);
         header('Content-Type: application/json; charset=utf-8');
@@ -21,16 +25,13 @@ function pcvc_finish_http_response(string $body, int $statusCode = 200): void
     }
 
     ignore_user_abort(true);
-
-    while (ob_get_level() > 0) {
-        ob_end_flush();
-    }
-
     flush();
 
     if (session_status() === PHP_SESSION_ACTIVE) {
         session_write_close();
     }
+
+    ini_set('display_errors', '0');
 }
 
 /**

@@ -16,7 +16,7 @@ header('Content-Type: application/json; charset=utf-8');
 ===================================================== */
 if (
     !isset($_SESSION['admin_id'], $_SESSION['role']) ||
-    $_SESSION['role'] !== 'superadmin'
+    !pcvc_is_superadmin_role($_SESSION['role'] ?? '')
 ) {
     echo json_encode([
         'success' => false,

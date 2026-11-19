@@ -18,7 +18,8 @@ if (!$admin_id || !isset($_SESSION['role'])) {
 $role = $_SESSION['role'];
 $allowed_roles = ['superadmin', 'staff'];
 if (!in_array($role, $allowed_roles)) {
-    header("Location: admin-dashboard.php");
+    if (!function_exists('pcvc_deny_page')) { require_once __DIR__ . '/helpers/role.php'; }
+    pcvc_deny_page();
     exit;
 }
 

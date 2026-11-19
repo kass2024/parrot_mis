@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/country_flag.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
 /**
  * 0. Safety check: DB connection
@@ -54,6 +55,7 @@ if (!$contract) {
  * 4. Contract state flag (DO NOT EXIT)
  */
 $isSigned = ($contract['status'] === 'signed');
+$selectedPackageCode = trim((string)($contract['selected_package_code'] ?? ''));
 
 // Load student signature (stored as data URL) when signed
 $studentSignatureData = null;
@@ -587,6 +589,17 @@ body {
   margin-right: 10px;
 }
 
+.country-flag {
+  display: inline-block;
+  width: 22px;
+  height: 16px;
+  margin: 0 6px 2px 0;
+  vertical-align: -3px;
+  border-radius: 2px;
+  object-fit: cover;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.18);
+}
+
 .package-details {
   display: none;
   margin-top: 10pt;
@@ -594,6 +607,31 @@ body {
   font-size: 11.6pt;
   line-height: 1.7;
   color: var(--muted);
+}
+
+.package-notes {
+  margin-top: 12pt;
+  padding: 10pt 12pt;
+  border-left: 4px solid #2e7d32;
+  border-radius: 0 6px 6px 0;
+  background: #eef8f0;
+  font-size: 10.8pt;
+  line-height: 1.6;
+}
+
+.package-notes > strong {
+  color: #1b5e20;
+  letter-spacing: .03em;
+}
+
+.package-notes ol {
+  margin: 4pt 0 0 20pt;
+  padding: 0;
+}
+
+.package-notes li {
+  padding-left: 3pt;
+  margin-bottom: 2pt;
 }
 
 /* =====================================================
@@ -1033,7 +1071,7 @@ button {
     of this Agreement by the Consultant
   </li>
 </ul>
-<input type="hidden" id="selected_package_code" value="">
+<input type="hidden" id="selected_package_code" value="<?= htmlspecialchars($selectedPackageCode) ?>">
 <!-- ============================
      ARTICLE 7 – FEES & PAYMENT TERMS
 ============================ -->
@@ -1059,20 +1097,22 @@ button {
         value="p70"
         data-label="7.1 FEES PAID BY STUDENTS FOR OUR PARTNER UNIVERSITIES, COMPANIES, AND SOME TARGETED COUNTRIES"
         onclick="showPkg('p70')"
+        required
       >
       7.1 FEES PAID BY STUDENTS FOR OUR PARTNER UNIVERSITIES, COMPANIES, AND SOME TARGETED COUNTRIES
     </label>
     <div id="p70" class="package-details">
-      ➤ USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)<br>
-      ➤ Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)<br>
-      ➤ Europe – Registration and Application Fee: USD 150 (Paid before starting application)<br>
-      ➤ South Korea – Registration and Application Fee: USD 250 (Paid before starting application)<br>
+      ➤ <?= pcvc_country_flag('us') ?> USA – Registration and Application Fee: USD 150 (Paid once offer of admission is out)<br>
+      ➤ <?= pcvc_country_flag('ca') ?> Canada – Registration and Application Fee: CAD 225 (Paid once offer of admission is out)<br>
+      ➤ <?= pcvc_country_flag('eu') ?> Europe – Registration and Application Fee: USD 150 (Paid before starting application)<br>
+      ➤ <?= pcvc_country_flag('kr') ?> South Korea – Registration and Application Fee: USD 250 (Paid before starting application)<br>
       <em>Note: Students are responsible for all additional costs associated with their visa application and immigration process, including any fees charged by embassies, visa application centers, government agencies, medical institutions, or other relevant authorities.</em>
     </div>
   </div>
 
+  <?php if ($selectedPackageCode === 'p71'): ?>
   <!-- =========================
-       7.2 USA – Loan-Based
+       7.2 USA – Loan-Based (kept only for contracts that already selected it)
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1080,11 +1120,10 @@ button {
         type="radio"
         name="package"
         value="p71"
-        data-label="7.2 🇺🇸 Study in the USA (Loan-Based)"
+        data-label="7.2 Study in the USA (Loan-Based)"
         onclick="showPkg('p71')"
-        required
       >
-      7.2 🇺🇸 Study in the USA (Loan-Based)
+      7.2 <?= pcvc_country_flag('us') ?>  Study in the USA (Loan-Based)
     </label>
     <div id="p71" class="package-details">
       ✔ Admission Support<br>
@@ -1095,9 +1134,10 @@ button {
       <strong>🔥 Total Package: USD 3,000</strong>
     </div>
   </div>
+  <?php endif; ?>
 
   <!-- =========================
-       7.3 USA – Without Loan
+       7.2 USA – Without Loan
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1105,10 +1145,10 @@ button {
         type="radio"
         name="package"
         value="p72"
-        data-label="7.3 🇺🇸 Study in the USA (Without Loan-Based)"
+        data-label="7.2 Study in the USA (Without Loan-Based)"
         onclick="showPkg('p72')"
       >
-      7.3 🇺🇸 Study in the USA (Without Loan-Based)
+      7.2 <?= pcvc_country_flag('us') ?>  Study in the USA (Without Loan-Based)
     </label>
     <div id="p72" class="package-details">
       ✔ Admission Support<br>
@@ -1120,7 +1160,7 @@ button {
   </div>
 
   <!-- =========================
-       7.4 Europe – Without Loan
+       7.3 Europe – Without Loan
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1128,21 +1168,21 @@ button {
         type="radio"
         name="package"
         value="p73"
-        data-label="7.4 🇪🇺 Study in Europe (Without Loan-Based)"
+        data-label="7.3 Study in Europe (Without Loan-Based)"
         onclick="showPkg('p73')"
       >
-      7.4 🇪🇺 Study in Europe (Without Loan-Based)
+      7.3 <?= pcvc_country_flag('eu') ?>  Study in Europe (Without Loan-Based)
     </label>
     <div id="p73" class="package-details">
-      ➤ Registration & Application Fee: USD 250 (Refundable if admission is not secured within 4 months)<br>
-      ➤ Fees payable before visa application: USD 250<br>
-      ➤ Service Fees (payable after visa approval): USD 1,500<br>
-      <strong>🔥 Total Package: USD 2,000</strong>
+      ➤ Registration & Application Fee: EUR 250 (Refundable if admission is not secured within 4 months)<br>
+      ➤ Fees payable before visa application: EUR 250<br>
+      ➤ Service Fees (payable after visa approval): EUR 1,500<br>
+      <strong>🔥 Total Package: EUR 2,000</strong>
     </div>
   </div>
 
   <!-- =========================
-       7.5 Canada – Loan-Based
+       7.4 Canada – Loan-Based
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1150,21 +1190,27 @@ button {
         type="radio"
         name="package"
         value="p74"
-        data-label="7.5 🇨🇦 Study in Canada (Loan-Based)"
+        data-label="7.4 Study in Canada (Loan-Based)"
         onclick="showPkg('p74')"
       >
-      7.5 🇨🇦 Study in Canada (Loan-Based)
+      7.4 <?= pcvc_country_flag('ca') ?>  Study in Canada (Loan-Based)
     </label>
     <div id="p74" class="package-details">
       ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
       ➤ Service Fees (payable after visa approval): CAD 3,050<br>
-      <strong>🔥 Total Package: CAD 3,500</strong><br>
-      <em>Note: Canadian institutions may require a tuition deposit ranging from CAD 500 to CAD 5,000, payable directly by the Student.</em>
+      <strong>🔥 Total Package: CAD 3,500</strong>
+      <div class="package-notes">
+        <strong>NOTE:</strong>
+        <ol>
+          <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+          <li>Each dependent pays CAD 1,000 after visa approval.</li>
+        </ol>
+      </div>
     </div>
   </div>
 
   <!-- =========================
-       7.6 Canada – Without Loan
+       7.5 Canada – Without Loan
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1172,20 +1218,27 @@ button {
         type="radio"
         name="package"
         value="p75"
-        data-label="7.6 🇨🇦 Study in Canada (Without Loan-Based)"
+        data-label="7.5 Study in Canada (Without Loan-Based)"
         onclick="showPkg('p75')"
       >
-      7.6 🇨🇦 Study in Canada (Without Loan-Based)
+      7.5 <?= pcvc_country_flag('ca') ?>  Study in Canada (Without Loan-Based)
     </label>
     <div id="p75" class="package-details">
       ➤ Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months)<br>
       ➤ After Visa Approval: CAD 2,050<br>
       <strong>🔥 Your Complete Visa Support Package: CAD 2,500</strong>
+      <div class="package-notes">
+        <strong>NOTE:</strong>
+        <ol>
+          <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+          <li>Each dependent pays CAD 1,000 after visa approval.</li>
+        </ol>
+      </div>
     </div>
   </div>
 
   <!-- =========================
-       7.7 Canada – High School Graduate
+       7.6 Canada – High School Graduate
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1193,10 +1246,10 @@ button {
         type="radio"
         name="package"
         value="p76"
-        data-label="7.7 🇨🇦 Canada – High School Graduate (Loan-Based)"
+        data-label="7.6 Canada – High School Graduate (Loan-Based)"
         onclick="showPkg('p76')"
       >
-      7.7 🇨🇦 Canada – High School Graduate (Loan-Based)
+      7.6 <?= pcvc_country_flag('ca') ?>  Canada – High School Graduate (Loan-Based)
     </label>
     <div id="p76" class="package-details">
       ➤ Registration & Application Fee: CAD 450<br>
@@ -1207,11 +1260,18 @@ button {
       ➤ Loan Approval Fees (payable after visa approval): CAD 1,000<br>
       ➤ Service Fees (payable after visa approval): CAD 1,933<br>
       <strong>🔥 Total Package: CAD 4,000</strong>
+      <div class="package-notes">
+        <strong>NOTE:</strong>
+        <ol>
+          <li>Tuition deposit: CAD 500–5,000 payable directly by the Student.</li>
+          <li>Each dependent pays CAD 1,000 after visa approval.</li>
+        </ol>
+      </div>
     </div>
   </div>
 
   <!-- =========================
-       7.8 South Korea – Study
+       7.7 South Korea – Study
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1219,10 +1279,10 @@ button {
         type="radio"
         name="package"
         value="p77"
-        data-label="7.8 🇰🇷 Study in South Korea (Self-Sponsored)"
+        data-label="7.7 Study in South Korea (Self-Sponsored)"
         onclick="showPkg('p77')"
       >
-      7.8 🇰🇷 Study in South Korea (Self-Sponsored)
+      7.7 <?= pcvc_country_flag('kr') ?>  Study in South Korea (Self-Sponsored)
     </label>
     <div id="p77" class="package-details">
       ➤ Registration & Application Fee: USD 500 (Refundable if admission is not secured)<br>
@@ -1236,7 +1296,7 @@ button {
   </div>
 
   <!-- =========================
-       7.9 South Korea – Visit Visa
+       7.8 South Korea – Visit Visa
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1244,10 +1304,10 @@ button {
         type="radio"
         name="package"
         value="p78"
-        data-label="7.9 🇰🇷 South Korea Visitor Visa"
+        data-label="7.8 South Korea Visitor Visa"
         onclick="showPkg('p78')"
       >
-      7.9 🇰🇷 South Korea Visitor Visa
+      7.8 <?= pcvc_country_flag('kr') ?>  South Korea Visitor Visa
     </label>
     <div id="p78" class="package-details">
       ➤ Registration & Application Fee: USD 500<br>
@@ -1257,7 +1317,7 @@ button {
   </div>
 
   <!-- =========================
-       7.10 Credit Transfer
+       7.9 Credit Transfer
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1265,10 +1325,10 @@ button {
         type="radio"
         name="package"
         value="p79"
-        data-label="7.10 Credit Transfer (Bachelor, Masters & PhD)"
+        data-label="7.9 Credit Transfer (Bachelor, Masters & PhD)"
         onclick="showPkg('p79')"
       >
-      7.10 Credit Transfer (Bachelor, Masters & PhD)
+      7.9 Credit Transfer (Bachelor, Masters & PhD)
     </label>
     <div id="p79" class="package-details">
       ➤ Bachelor: USD 920<br>
@@ -1278,7 +1338,7 @@ button {
   </div>
 
   <!-- =========================
-       7.11 Canada Visit Visa
+       7.10 Canada Visit Visa
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1286,10 +1346,10 @@ button {
         type="radio"
         name="package"
         value="p710"
-        data-label="7.11 🇨🇦 Canada Visit Visa"
+        data-label="7.10 Canada Visit Visa"
         onclick="showPkg('p710')"
       >
-      7.11 🇨🇦 Canada Visit Visa
+      7.10 <?= pcvc_country_flag('ca') ?>  Canada Visit Visa
     </label>
     <div id="p710" class="package-details">
       ➤ Documents Preparation & Invitation Letter: USD 1,000<br>
@@ -1300,7 +1360,7 @@ button {
   </div>
 
   <!-- =========================
-       7.12 USA Visit Visa
+       7.11 USA Visit Visa
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1308,10 +1368,10 @@ button {
         type="radio"
         name="package"
         value="p711"
-        data-label="7.12 🇺🇸 USA Visit Visa"
+        data-label="7.11 USA Visit Visa"
         onclick="showPkg('p711')"
       >
-      7.12 🇺🇸 USA Visit Visa
+      7.11 <?= pcvc_country_flag('us') ?>  USA Visit Visa
     </label>
     <div id="p711" class="package-details">
       ➤ Documents Preparation & Invitation Letter: USD 1,000<br>
@@ -1321,7 +1381,7 @@ button {
   </div>
 
   <!-- =========================
-       7.13 Europe Visit Visa
+       7.12 Europe Visit Visa
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1329,10 +1389,10 @@ button {
         type="radio"
         name="package"
         value="p712"
-        data-label="7.13 🇪🇺 Europe Visit Visa"
+        data-label="7.12 Europe Visit Visa"
         onclick="showPkg('p712')"
       >
-      7.13 🇪🇺 Europe Visit Visa
+      7.12 <?= pcvc_country_flag('eu') ?>  Europe Visit Visa
     </label>
     <div id="p712" class="package-details">
       ➤ Documents Preparation & Invitation Letter: EUR 600<br>
@@ -1342,7 +1402,7 @@ button {
   </div>
 
   <!-- =========================
-       7.14 Asia Visit Visa
+       7.13 Asia Visit Visa
   ========================== -->
   <div class="package-item">
     <label class="package-label">
@@ -1350,10 +1410,10 @@ button {
         type="radio"
         name="package"
         value="p713"
-        data-label="7.14 Asia Visit Visa"
+        data-label="7.13 Asia Visit Visa"
         onclick="showPkg('p713')"
       >
-      7.14 Asia Visit Visa
+      7.13 Asia Visit Visa
     </label>
     <div id="p713" class="package-details">
       ➤ Documents Preparation & Invitation Letter: USD 800<br>

@@ -35,16 +35,32 @@ if ($contract['status'] !== 'signed') {
 $contractId = (int) $contract['id'];
 $pdfPath = trim((string) ($contract['pdf_path'] ?? ''));
 
-if ($pdfPath === '' || !is_file($pdfPath)) {
-    require_once __DIR__ . '/generate-contract-pdf.php';
-
-    if (!function_exists('generateContractPDF')) {
-        http_response_code(500);
-        exit('PDF generator unavailable.');
+$storedPdf = $pdfPath;
+try {
+    require_once __DIR__ . '/helpers/student_contract_pdf.php';
+    $freshPdf = pcvc_generate_student_contract_pdf($conn, $contractId);
+    if ($freshPdf !== '' && is_file($freshPdf)) {
+        $pdfPath = $freshPdf;
+        if ($pdfPath !== $storedPdf) {
+            $updateFresh = $conn->prepare('UPDATE student_contracts SET pdf_path = ? WHERE id = ?');
+            if ($updateFresh) {
+                $updateFresh->bind_param('si', $pdfPath, $contractId);
+                $updateFresh->execute();
+                $updateFresh->close();
+            }
+        }
     }
+} catch (Throwable $e) {
+    $pdfPath = $storedPdf;
+}
+/* pcvc_notice_rebuild */
+
+
+if ($pdfPath === '' || !is_file($pdfPath)) {
+    require_once __DIR__ . '/helpers/student_contract_pdf.php';
 
     try {
-        $pdfPath = generateContractPDF($contractId);
+        $pdfPath = pcvc_generate_student_contract_pdf($conn, $contractId);
     } catch (Throwable $e) {
         http_response_code(500);
         exit('Unable to generate signed PDF.');

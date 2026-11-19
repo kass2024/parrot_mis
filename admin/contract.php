@@ -12,7 +12,7 @@ if ($adminId <= 0) {
     exit('Unauthorized');
 }
 
-$stmt = $conn->prepare('SELECT id, full_name, email, role, position FROM admins WHERE id = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, full_name, email, role, position, address, phone_number FROM admins WHERE id = ? LIMIT 1');
 $stmt->bind_param('i', $adminId);
 $stmt->execute();
 $admin = $stmt->get_result()->fetch_assoc();
@@ -111,19 +111,12 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
         <?php endif; ?>
       </div>
     </div>
-    <?php if ($useDocxPreview): ?>
-    <div class="contract-toolbar">
-      <button type="button" class="btn btn-outline-primary" id="printContractBtn">
-        <i class="bi bi-printer me-1"></i> Print / Save as PDF
-      </button>
-    </div>
-    <?php endif; ?>
-    <iframe id="contractFrame" class="<?= $useDocxPreview ? 'docx-frame' : 'pdf-frame' ?>" scrolling="yes"
-      src="<?= $useDocxPreview ? 'contract-docx-viewer.php?type=signed&ts=' . time() : 'view-staff-contract-pdf.php?type=signed#toolbar=1' ?>"></iframe>
+    <iframe id="contractFrame" class="pdf-frame" scrolling="yes"
+      src="view-staff-contract-pdf.php?type=signed&ts=<?= time() ?>#toolbar=1"></iframe>
     <div class="mt-3 text-end">
-      <a href="download-staff-contract.php?type=signed<?= $useDocxPreview ? '&format=docx' : '' ?>" target="_blank"
+      <a href="download-staff-contract.php?type=signed&format=pdf" target="_blank"
         class="btn btn-primary btn-lg">
-        <i class="bi bi-download me-1"></i> Download signed contract
+        <i class="bi bi-download me-1"></i> Download signed PDF
       </a>
     </div>
   </div>
@@ -165,7 +158,7 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     <div class="col-lg-4">
       <div class="panel sign-box">
         <h6 class="fw-bold mb-3"><i class="bi bi-pen me-1"></i> E-Sign contract</h6>
-        <p class="small text-muted">Read the auto-filled contract on the left, then sign below.</p>
+        <p class="small text-muted">Read the contract on the left. Enter the date, time, and place yourself, then sign.</p>
 
         <label class="form-label small fw-semibold">Full legal name</label>
         <input type="text" id="typedName" class="form-control mb-3"
@@ -177,8 +170,14 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
           <button type="button" class="btn btn-outline-secondary btn-sm" id="clearSig">Clear</button>
         </div>
 
-        <label class="form-label small fw-semibold">Signing date</label>
-        <input type="date" id="signedDate" class="form-control mb-3" value="<?= date('Y-m-d') ?>">
+        <label class="form-label small fw-semibold">Date of signing</label>
+        <input type="date" id="signedDate" class="form-control mb-3" required>
+
+        <label class="form-label small fw-semibold">Time of signing</label>
+        <input type="time" id="signedTime" class="form-control mb-3" required>
+
+        <label class="form-label small fw-semibold">Place of signing</label>
+        <input type="text" id="signingPlace" class="form-control mb-3" required placeholder="Where you are signing">
 
         <button type="button" class="btn btn-success w-100 btn-lg" id="signBtn">
           <i class="bi bi-check2-circle me-1"></i> Sign & save contract
@@ -268,6 +267,8 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
   document.getElementById('signBtn').addEventListener('click', function () {
     const typedName = document.getElementById('typedName').value.trim();
     const signedDate = document.getElementById('signedDate').value;
+    const signedTime = document.getElementById('signedTime').value;
+    const signingPlace = document.getElementById('signingPlace').value.trim();
     if (!typedName || typedName.length < 2) {
       alert('Please enter your full name.');
       return;
@@ -278,6 +279,14 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
     }
     if (!signedDate) {
       alert('Please choose the signing date.');
+      return;
+    }
+    if (!signedTime) {
+      alert('Please enter the signing time.');
+      return;
+    }
+    if (!signingPlace) {
+      alert('Please enter the place of signing.');
       return;
     }
 
@@ -291,6 +300,8 @@ if ($hasContract && !$isSigned && trim((string) ($contract['source_docx_path'] ?
       body: JSON.stringify({
         typed_name: typedName,
         signed_date: signedDate,
+        signed_time: signedTime,
+        signing_place: signingPlace,
         signature: canvas.toDataURL('image/png')
       })
     })

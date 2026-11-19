@@ -1,6 +1,12 @@
 <?php
 if (session_status() === PHP_SESSION_NONE) session_start();
-if (!isset($_SESSION['admin_id'])) {
+if (empty($_SESSION['admin_id']) && !empty($_SESSION['id'])) {
+    $_SESSION['admin_id'] = $_SESSION['id'];
+}
+if (empty($_SESSION['id']) && !empty($_SESSION['admin_id'])) {
+    $_SESSION['id'] = $_SESSION['admin_id'];
+}
+if (empty($_SESSION['admin_id'])) {
     header("Location: admin-login.php");
     exit;
 }

@@ -59,7 +59,7 @@ function pcvc_attendance_derived_work_minutes(array $row): int
  */
 function pcvc_sql_attendance_work_minutes_expr(): string
 {
-    return "CASE
+    return "LEAST(480, GREATEST(0, CASE
         WHEN COALESCE(`total_work_minutes`, 0) > 0 THEN COALESCE(`total_work_minutes`, 0)
         WHEN `check_in_time` IS NOT NULL AND `check_out_time` IS NOT NULL
           THEN GREATEST(
@@ -68,7 +68,7 @@ function pcvc_sql_attendance_work_minutes_expr(): string
               - COALESCE(`break_duration_minutes`, 0)
           )
         ELSE 0
-      END";
+      END))";
 }
 
 /**

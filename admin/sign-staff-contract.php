@@ -7,6 +7,7 @@ require_once __DIR__ . '/../helpers/staff_contract_schema.php';
 require_once __DIR__ . '/../helpers/staff_contract_word.php';
 require_once __DIR__ . '/../helpers/staff_contract_pdf.php';
 require_once __DIR__ . '/../helpers/contract_signature_image.php';
+require_once __DIR__ . '/../helpers/staff_contract_witness.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -34,7 +35,9 @@ if (!is_array($data)) {
 
 $typedName = trim((string) ($data['typed_name'] ?? ''));
 $signature = trim((string) ($data['signature'] ?? ''));
-$signedDate = trim((string) ($data['signed_date'] ?? date('Y-m-d')));
+$signedDate = trim((string) ($data['signed_date'] ?? ''));
+$signedTime = trim((string) ($data['signed_time'] ?? ''));
+$signingPlace = trim((string) ($data['signing_place'] ?? ''));
 
 if ($typedName === '' || strlen($typedName) < 2) {
     echo json_encode(['success' => false, 'message' => 'Please enter your full name']);
@@ -44,17 +47,26 @@ if ($signature === '' || contract_signature_raw_bytes($signature) === null) {
     echo json_encode(['success' => false, 'message' => 'Please draw your signature']);
     exit;
 }
-if ($signedDate === '') {
+if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $signedDate)) {
     echo json_encode(['success' => false, 'message' => 'Please choose the signing date']);
     exit;
 }
+if (!preg_match('/^\d{2}:\d{2}$/', $signedTime)) {
+    echo json_encode(['success' => false, 'message' => 'Please enter the signing time']);
+    exit;
+}
+if ($signingPlace === '') {
+    echo json_encode(['success' => false, 'message' => 'Please enter the place of signing']);
+    exit;
+}
+$signedDate = $signedDate . ' ' . $signedTime;
 
 $contract = pcvc_staff_contract_for_admin($conn, $adminId);
 if (!$contract) {
     echo json_encode(['success' => false, 'message' => 'No contract assigned to you yet']);
     exit;
 }
-if (($contract['status'] ?? '') === 'signed') {
+if (($contract['status'] ?? '') === 'signed' || trim((string) ($contract['signed_at'] ?? '')) !== '') {
     echo json_encode(['success' => false, 'message' => 'Contract already signed']);
     exit;
 }
@@ -70,7 +82,8 @@ try {
             $contract,
             $signature,
             $typedName,
-            $signedDate
+            $signedDate,
+            $signingPlace
         );
         $signedRel = $signed['pdf'] ?? '';
         $signedDocxRel = $signed['docx'];
@@ -127,11 +140,12 @@ try {
         }
     }
 
+    $message = 'Contract signed successfully. You can download your signed copy now.';
+
     echo json_encode([
         'success' => true,
-        'message' => 'Contract signed successfully. You can download your signed copy now.',
-        'download_url' => 'download-staff-contract.php?type=signed'
-            . (pcvc_staff_contract_use_docx_preview() ? '&format=docx' : ''),
+        'message' => $message,
+        'download_url' => 'download-staff-contract.php?type=signed&format=pdf',
     ]);
 } catch (Throwable $e) {
     echo json_encode(['success' => false, 'message' => $e->getMessage()]);

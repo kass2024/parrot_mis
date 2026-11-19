@@ -4,9 +4,9 @@
  * so they appear in Record Payment, invoices, and online payment.
  *
  * Packages:
- *   - p77loa       7.8  Study in Canada having LOA (Without Lawyer Consultation)
- *   - p77loalawyer 7.9  Study in Canada having LOA (Lawyer Consultation)
- *   - p710promo    7.15 Visit Canada with Invitation on Promotion
+ *   - p77loa       7.7  Study in Canada having LOA (Without Lawyer Consultation)
+ *   - p77loalawyer 7.8  Study in Canada having LOA (Lawyer Consultation)
+ *   - p710promo    7.14 Visit Canada with Invitation on Promotion
  *
  * Removes retired package p77ca (Own Admission Letter) from fee_packages.
  *
@@ -34,27 +34,28 @@ function out(string $line): void
 function fee_package_titles(): array
 {
     return [
-        'p71'         => '7.1 Study in the USA (Loan-Based)',
+        'p71'         => 'Study in the USA (Loan-Based)',
         'p72'         => '7.2 Study in the USA (Without Loan)',
         'p73'         => '7.3 Study in Europe (Without Loan)',
         'p74'         => '7.4 Study in Canada (Loan-Based)',
-        'p75'         => '7.6 Study in Canada (Without Loan)',
-        'p76'         => '7.7 Canada – High School Graduate (Loan-Based)',
-        'p77loa'      => '7.8 Study in Canada having LOA (Without Lawyer Consultation)',
-        'p77loalawyer'=> '7.9 Study in Canada having LOA (Lawyer Consultation)',
-        'p77'         => '7.10 Study in South Korea (Self-Sponsored)',
-        'p78'         => '7.11 South Korea Visitor Visa',
-        'p79'         => '7.12 Credit Transfer (Bachelor, Masters, PhD)',
-        'p710'        => '7.13 Canada Visit Visa',
-        'p710b'       => '7.14 Canada Visit Visa – With Invitation Letter',
-        'p710promo'   => '7.15 Visit Canada with Invitation on Promotion',
-        'p711'        => '7.16 USA Visit Visa',
-        'p712'        => '7.17 Europe Visit Visa',
-        'p713'        => '7.18 Asia Visit Visa',
-        'p714'        => '7.19 SHORT COURSES-CANADA',
-        'p715'        => '7.20 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
-        'p716'        => '7.21 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
-        'p717'        => '7.22 GUARANTEED EVALUATION SUPPORT!',
+        'p75'         => '7.5 Study in Canada (Without Loan)',
+        'p76'         => '7.6 Canada – High School Graduate (Loan-Based)',
+        'p77loa'      => '7.7 Study in Canada having LOA (Without Lawyer Consultation)',
+        'p77loalawyer'=> '7.8 Study in Canada having LOA (Lawyer Consultation)',
+        'p77'         => '7.9 Study in South Korea (Self-Sponsored)',
+        'p78'         => '7.10 South Korea Visitor Visa',
+        'p79'         => '7.11 Credit Transfer (Bachelor, Masters, PhD)',
+        'p710'        => '7.12 Canada Visit Visa',
+        'p710b'       => '7.13 Canada Visit Visa – With Invitation Letter',
+        'p710promo'   => '7.14 Visit Canada with Invitation on Promotion',
+        'p711'        => '7.15 USA Visit Visa',
+        'p712'        => '7.16 Europe Visit Visa',
+        'p713'        => '7.17 Asia Visit Visa',
+        'p714'        => '7.18 SHORT COURSES-CANADA',
+        'p715'        => '7.19 STUDY PhD IN CANADA-USA-EUROPE & ASIA',
+        'p716'        => '7.20 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
+        'p717'        => '7.21 GUARANTEED EVALUATION SUPPORT!',
+        'p718'        => '7.22 Study Professional Courses in Malta – European Schengen Country',
     ];
 }
 
@@ -122,6 +123,14 @@ function packages_to_seed(): array
             'items' => [
                 ['name' => 'Registration & Application Fee for Canada', 'amount' => 500.00],
                 ['name' => 'After Visa Approval for Canada', 'amount' => 5000.00],
+            ],
+        ],
+        'p718' => [
+            'currency' => 'EUR',
+            'total' => 2000.00,
+            'items' => [
+                ['name' => 'Registration & Application Fee', 'amount' => 250.00],
+                ['name' => 'After Visa Approval', 'amount' => 1750.00],
             ],
         ],
         'p717' => [

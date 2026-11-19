@@ -19,6 +19,9 @@ require_once __DIR__ . '/helpers/korea_event_schema.php';
 kep_ensure_schema($conn);
 require_once __DIR__ . '/helpers/noble_education_schema.php';
 neg_ensure_schema($conn);
+require_once __DIR__ . '/helpers/canada_workers_schema.php';
+require_once __DIR__ . '/helpers/malta_courses_schema.php';
+cuw_ensure_schema($conn);
 require_once __DIR__ . '/includes/testimonials_lib.php';
 $home_testimonials = pcvc_get_published_testimonials($conn, 6);
 
@@ -214,7 +217,7 @@ $index_translations = [
         'resume_use' => 'Use',
         
         // Card 1: Study & Work Abroad
-        'card1_title' => 'Study & Work Abroad',
+        'card1_title' => 'Study Abroad',
         'card1_subtitle' => 'Universities, jobs, visas – all in one place',
         'card1_description' => 'Comprehensive support for your international education and career journey.',
         'card1_point1' => 'University applications',
@@ -306,6 +309,29 @@ $index_translations = [
         'card11_point2' => 'High school certificate upload',
         'card11_point3' => 'Transcripts and supporting documents',
         'card11_point4' => 'Email confirmation with reference ID',
+
+        // Card 12: Canada unskilled / general workers recruitment
+        'card12_title' => 'CANADA UNSKILLED WORKERS RECRUITMENT',
+        'card12_subtitle' => 'General and entry-level jobs in Canada',
+        'card12_description' => 'Apply for available general worker positions in Canada. Submit your details together with your passport, résumé, and photograph.',
+        'card12_point1' => 'Passport data page',
+        'card12_point2' => 'Updated résumé / CV',
+        'card12_point3' => 'Passport-sized photograph',
+        'card12_point4' => 'Email confirmation with reference ID',
+        'card13_title' => 'STUDY PROFESSIONAL COURSES IN MALTA',
+        'card13_subtitle' => 'A Schengen country',
+        'card13_description' => 'Practical professional training in Malta, with passport, CV, and academic documents.',
+        'card13_point1' => 'Passport',
+        'card13_point2' => 'CV',
+        'card13_point3' => 'Academic documents',
+        'card13_point4' => 'Job assistance after graduation — employment is not guaranteed',
+        'card14_title' => 'ECI — STUDY IN MALTA',
+        'card14_subtitle' => 'European College of Innovation student application',
+        'card14_description' => 'Complete the ECI student application: course, personal details, qualifications, declaration, and supporting documents.',
+        'card14_point1' => 'Course, personal details, and qualifications',
+        'card14_point2' => 'Passport, transcripts, CV, and photo',
+        'card14_point3' => 'Declaration and signature',
+        'card14_point4' => 'Email confirmation with reference ID',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -504,7 +530,7 @@ $index_translations = [
         'resume_use' => 'Utiliser',
         
         // Card 1: Study & Work Abroad
-        'card1_title' => 'Étudier & Travailler à l\'Étranger',
+        'card1_title' => 'Étudier à l\'étranger',
         'card1_subtitle' => 'Universités, emplois, visas – tout au même endroit',
         'card1_description' => 'Soutien complet pour votre parcours international.',
         'card1_point1' => 'Candidatures universitaires',
@@ -596,6 +622,29 @@ $index_translations = [
         'card11_point2' => 'Certificat d\'études secondaires',
         'card11_point3' => 'Relevés de notes et documents complémentaires',
         'card11_point4' => 'Confirmation par e-mail avec référence',
+
+        // Card 12: Canada unskilled / general workers recruitment
+        'card12_title' => 'RECRUTEMENT DE TRAVAILLEURS NON QUALIFIÉS — CANADA',
+        'card12_subtitle' => 'Emplois généraux et de premier niveau au Canada',
+        'card12_description' => 'Postulez aux postes de travailleurs généraux disponibles au Canada. Envoyez vos informations, votre passeport, votre CV et votre photo.',
+        'card12_point1' => 'Page de données du passeport',
+        'card12_point2' => 'CV / résumé à jour',
+        'card12_point3' => 'Photo récente format passeport',
+        'card12_point4' => 'Confirmation par e-mail avec référence',
+        'card13_title' => 'FORMATIONS PROFESSIONNELLES À MALTE',
+        'card13_subtitle' => 'Un pays Schengen',
+        'card13_description' => 'Formations pratiques à Malte. Passeport, CV et documents académiques.',
+        'card13_point1' => 'Passeport',
+        'card13_point2' => 'CV',
+        'card13_point3' => 'Documents académiques',
+        'card13_point4' => 'Aide à l’emploi après la formation — emploi non garanti',
+        'card14_title' => 'ECI — ÉTUDES À MALTE',
+        'card14_subtitle' => 'Formulaire étudiant European College of Innovation',
+        'card14_description' => 'Complétez le formulaire ECI : cours, informations personnelles, qualifications, déclaration et documents.',
+        'card14_point1' => 'Cours, informations personnelles et qualifications',
+        'card14_point2' => 'Passeport, relevés, CV et photo',
+        'card14_point3' => 'Déclaration et signature',
+        'card14_point4' => 'Confirmation par e-mail avec référence',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -617,7 +666,7 @@ function it($key) {
 // Per-card retrieval metadata (table + placeholder + example) consumed by the Retrieve Application modal.
 $cardRetrievalMeta = [
     'admissions' => [
-        'service'     => $current_lang === 'fr' ? 'Études & Travail à l\'étranger' : 'Study & Work Abroad',
+        'service'     => $current_lang === 'fr' ? 'Étudier à l\'étranger' : 'Study Abroad',
         'table_label' => 'student_applications',
         'placeholder' => 'user_…',
         'example'     => 'user_1b69091a796e',
@@ -681,6 +730,24 @@ $cardRetrievalMeta = [
         'table_label' => 'noble_education_applications',
         'placeholder' => 'neg_…',
         'example'     => 'neg_a1b2c3d4e5f6_1719150000',
+    ],
+    'canada_workers' => [
+        'service'     => $current_lang === 'fr' ? 'Recrutement travailleurs généraux — Canada' : 'Canada Unskilled Workers Recruitment',
+        'table_label' => 'canada_workers_applications',
+        'placeholder' => 'cuw_…',
+        'example'     => 'cuw_a1b2c3d4e5f6_1719150000',
+    ],
+    'malta_courses' => [
+        'service'     => 'Malta professional courses',
+        'table_label' => 'malta_courses_applications',
+        'placeholder' => 'mlt_…',
+        'example'     => 'mlt_a1b2c3d4e5f6_1719150000',
+    ],
+    'eci_malta' => [
+        'service'     => 'ECI study in Malta',
+        'table_label' => 'eci_malta_applications',
+        'placeholder' => 'eci_…',
+        'example'     => 'eci_a1b2c3d4e5f6_1719150000',
     ],
 ];
 
@@ -813,6 +880,51 @@ $cards = [
         ],
         'form' => 'noble-education-request.php',
         'color' => '#0B3D2E'
+    ],
+    [
+        'id' => 'canada_workers',
+        'icon' => '👷',
+        'title_key' => 'card12_title',
+        'subtitle_key' => 'card12_subtitle',
+        'description_key' => 'card12_description',
+        'points_keys' => [
+            'card12_point1',
+            'card12_point2',
+            'card12_point3',
+            'card12_point4',
+        ],
+        'form' => 'canada-workers-request.php',
+        'color' => '#0B3A5B'
+    ],
+    [
+        'id' => 'malta_courses',
+        'icon' => '🇲🇹',
+        'title_key' => 'card13_title',
+        'subtitle_key' => 'card13_subtitle',
+        'description_key' => 'card13_description',
+        'points_keys' => [
+            'card13_point1',
+            'card13_point2',
+            'card13_point3',
+            'card13_point4',
+        ],
+        'form' => 'malta-courses-request.php',
+        'color' => '#1e4d2b'
+    ],
+    [
+        'id' => 'eci_malta',
+        'icon' => '🎓',
+        'title_key' => 'card14_title',
+        'subtitle_key' => 'card14_subtitle',
+        'description_key' => 'card14_description',
+        'points_keys' => [
+            'card14_point1',
+            'card14_point2',
+            'card14_point3',
+            'card14_point4',
+        ],
+        'form' => 'eci-malta-application.php',
+        'color' => '#111111'
     ]
 ];
 
@@ -2004,6 +2116,7 @@ body.card-only-mode {
         <?php endforeach; ?>
       </ul>
       <div class="card-actions">
+        <?php if ($c['id'] !== 'admissions'): ?>
         <button type="button" class="card-button apply-button">
           <i class="fas fa-paper-plane"></i>
           <?php echo htmlspecialchars(it('card_apply')); ?>
@@ -2012,6 +2125,7 @@ body.card-only-mode {
           <i class="fas fa-link"></i>
           <?php echo htmlspecialchars(it('card_copy')); ?>
         </button>
+        <?php endif; ?>
         <button type="button" class="card-button resume-button" title="<?php echo htmlspecialchars(it('card_continue_hint')); ?>">
           <i class="fas fa-search"></i>
           <?php echo htmlspecialchars(it('card_continue')); ?>
@@ -2409,6 +2523,9 @@ body.card-only-mode {
         case 'employment':
         case 'korea_event':
         case 'noble_education':
+        case 'canada_workers':
+        case 'malta_courses':
+        case 'eci_malta':
           targetUrl = form;
           break;
         default:

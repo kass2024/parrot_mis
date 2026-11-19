@@ -3,13 +3,15 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 
-if (!isset($_SESSION['admin_id'])) {
+if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
     exit('Unauthorized access.');
 }
+pcvc_require_francophonie_mobility($conn);
 
 if (!isset($conn) || $conn->connect_error) {
     http_response_code(500);
@@ -24,6 +26,8 @@ $host     = $_SERVER['HTTP_HOST'];
 $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 $contractPage = $basePath . '/fm-mobility-contract.php';
 $baseUrl      = "{$scheme}://{$host}{$contractPage}";
+$variant      = fm_contract_normalize_variant($_POST['variant'] ?? $_GET['variant'] ?? 'standard');
+$isSpecial    = $variant === 'special';
 
 $contractLink = null;
 $message      = null;
@@ -64,11 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SELECT contract_token
                 FROM fm_mobility_contracts
                 WHERE application_id = ?
+                  AND contract_variant = ?
                   AND status IN ('draft','signed')
                 ORDER BY id DESC
                 LIMIT 1
             ");
-            $stmt->bind_param('i', $applicationId);
+            $stmt->bind_param('is', $applicationId, $variant);
             $stmt->execute();
             $existing = $stmt->get_result()->fetch_assoc();
             $stmt->close();
@@ -112,17 +117,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $stmt = $conn->prepare("
             INSERT INTO fm_mobility_contracts
-            (contract_token, application_id, status,
+            (contract_token, application_id, status, contract_variant,
              external_client_name, external_client_email, external_client_phone,
              external_client_dob, external_client_nationality, external_client_passport,
              external_client_address, created_at)
-            VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, NOW())
+            VALUES (?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
         ");
         $appIdForBind = $applicationId;
         $stmt->bind_param(
-            'sisssssss',
+            'sissssssss',
             $contractToken,
             $appIdForBind,
+            $variant,
             $extName,
             $extEmail,
             $extPhone,
@@ -136,8 +142,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $contractLink = $baseUrl . '?token=' . $contractToken;
         $message = $linkedApplicant
-            ? 'New contract issued and linked to applicant ' . htmlspecialchars($linkedApplicant['first_name'] . ' ' . $linkedApplicant['last_name'])
-            : 'New contract issued successfully.';
+            ? 'New ' . ($isSpecial ? 'special ' : '') . 'contract issued and linked to applicant ' . htmlspecialchars($linkedApplicant['first_name'] . ' ' . $linkedApplicant['last_name'])
+            : 'New ' . ($isSpecial ? 'special ' : '') . 'contract issued successfully.';
     }
 }
 ?>
@@ -325,11 +331,12 @@ h1 {
         <button class="btn btn-back" type="button">← Back to Dashboard</button>
     </a>
 
-    <div class="header-badge">🍁 Francophonie Mobility Program</div>
-    <h1>Issue E-Sign Contract</h1>
+    <div class="header-badge"><?= $isSpecial ? 'Special fee schedule · CAD 10,000' : '🍁 Francophonie Mobility Program' ?></div>
+    <h1><?= $isSpecial ? 'Issue Special E-Sign Contract' : 'Issue E-Sign Contract' ?></h1>
     <p class="subtitle">
-        Generate a secure signing link for a Francophonie Mobility applicant.
-        Optionally link to an existing application for auto-fill of client details.
+        <?= $isSpecial
+            ? 'Generate a signing link for the special Francophone Mobility agreement: CAD 5,000 before services start, and CAD 5,000 after work-permit approval. This link is separate from the standard CAD 8,000 contract.'
+            : 'Generate a secure signing link for a Francophonie Mobility applicant. Optionally link to an existing application for auto-fill of client details.' ?>
     </p>
 
     <?php if ($message): ?>
@@ -337,6 +344,7 @@ h1 {
     <?php endif; ?>
 
     <form method="post">
+        <input type="hidden" name="variant" value="<?= htmlspecialchars($variant) ?>">
         <div class="form-group">
             <label for="application_id">Link to Mobility Applicant (optional)</label>
             <select name="application_id" id="application_id">

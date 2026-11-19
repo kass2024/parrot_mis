@@ -3,7 +3,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['role']) || $_SESSION['role'] !== 'superadmin') {
+if (!isset($_SESSION['role']) || !pcvc_is_superadmin_role($_SESSION['role'])) {
   echo json_encode(['ok' => false, 'msg' => 'Unauthorized']);
   exit;
 }

@@ -38,3 +38,41 @@ function xander_ensure_form17_submitted_at_column(mysqli $conn): void
         error_log('form_17_applications submitted_at migration: ' . $conn->error);
     }
 }
+
+/**
+ * Visit and study visa statuses, including the student visa board.
+ *
+ * @return array<string, string>
+ */
+function xander_visa_application_process_statuses(): array
+{
+    return [
+        'submitted' => 'Submitted',
+        'under_review' => 'Under review',
+        'waiting_decision' => 'Waiting for decision',
+        'final_decision' => 'Final decision available',
+        'visa_application_done' => 'Visa application done',
+        'visa_approved' => 'Visa approved',
+        'waiting_for_visa_application' => 'Waiting for visa application',
+        'waiting_for_caq' => 'Waiting for CAQ',
+        'waiting_for_deferral' => 'Waiting for deferral',
+        'intake_changed' => 'Intake changed',
+        'intake_changed_waiting_documents' => 'Intake changed — waiting for documents',
+        'names_changed_waiting_documents' => 'Names changed — waiting for documents',
+        'waiting_for_letters_and_visa' => 'Waiting for letters and visa application',
+        'visit_visa' => 'Visit visa',
+        'closed' => 'Closed',
+        'rejected' => 'Rejected',
+    ];
+}
+
+function xander_is_valid_visa_process_status(string $key): bool
+{
+    return array_key_exists($key, xander_visa_application_process_statuses());
+}
+
+function xander_normalize_visa_process_status(?string $raw): string
+{
+    $s = strtolower(trim((string) $raw));
+    return xander_is_valid_visa_process_status($s) ? $s : 'submitted';
+}

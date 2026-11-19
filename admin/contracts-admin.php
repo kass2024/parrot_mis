@@ -166,10 +166,10 @@ foreach ($staffRows as $row) {
                 : 'view-staff-contract-pdf.php?staff_id=' . $staffId . '&type=source&ts=' . time() ?>"
               title="Preview before staff signs (no employee signature)">View filled <?= $useDocxPreview ? 'Word' : 'PDF' ?></a>
             <?php endif; ?>
-            <?php if ($status['code'] === 'signed' && $useDocxPreview): ?>
+            <?php if ($status['code'] === 'signed'): ?>
             <a class="btn btn-outline-success btn-sm mb-1" target="_blank"
-              href="contract-docx-viewer.php?staff_id=<?= $staffId ?>&type=signed&ts=<?= time() ?>"
-              title="Full signed contract with employee signature">View signed Word</a>
+              href="view-staff-contract-pdf.php?staff_id=<?= $staffId ?>&type=signed&ts=<?= time() ?>"
+              title="Signed contract PDF with the employee signature">View signed PDF</a>
             <?php endif; ?>
             <button type="button" class="btn btn-outline-secondary btn-sm mb-1 btn-regenerate-contract"
               data-staff-id="<?= $staffId ?>"
@@ -199,7 +199,7 @@ foreach ($staffRows as $row) {
               <i class="bi bi-arrow-repeat"></i> Regenerate signed
             </button>
             <a class="btn btn-primary btn-sm mb-1" target="_blank"
-              href="download-staff-contract.php?staff_id=<?= $staffId ?>&type=signed<?= $useDocxPreview ? '&format=docx' : '' ?>">Download signed</a>
+              href="download-staff-contract.php?staff_id=<?= $staffId ?>&type=signed&format=pdf">Download signed PDF</a>
           <?php endif; ?>
         </div>
       </div>

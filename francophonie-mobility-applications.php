@@ -6,15 +6,19 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
+require_once __DIR__ . '/helpers/francophonie_invoice.php';
 require_once __DIR__ . '/helpers/env_load.php';
 fm_ensure_schema($conn);
+fm_invoice_ensure_schema($conn);
 xander_load_env_file();
 
-if (empty($_SESSION['id']) || !in_array($_SESSION['role'] ?? '', ['superadmin', 'staff'], true)) {
+if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
     header('Location: admin-login.php');
     exit;
 }
+pcvc_require_francophonie_mobility($conn);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -50,6 +54,8 @@ if ($params) {
 $stmt->execute();
 $apps = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+$fmPaidMap = fm_invoice_paid_totals_map($conn);
+$fmProgramTotal = fm_invoice_program_total();
 
 $counts = ['pending' => 0, 'under_review' => 0, 'approved' => 0, 'rejected' => 0, 'total' => 0];
 $cr = $conn->query('SELECT status, COUNT(*) c FROM francophonie_mobility_applications GROUP BY status');
@@ -162,13 +168,23 @@ function fm_status_badge(string $s): string
                 <div class="meta mb-2">
                     <?= htmlspecialchars($a['email']) ?><br>
                     <?= htmlspecialchars($a['profession']) ?> · <?= date('M j, Y', strtotime($a['created_at'])) ?>
+                    <?php
+                        $fmPaid = $fmPaidMap[(int) $a['id']] ?? 0.0;
+                        $fmLeft = max(0, $fmProgramTotal - $fmPaid);
+                    ?>
+                    <br><span class="<?= $fmLeft <= 0 ? 'text-success' : '' ?>">Paid CAD <?= number_format($fmPaid, 0) ?> / <?= number_format($fmProgramTotal, 0) ?></span>
                     <?php if (!empty($a['video_file']) || !empty($a['video_pcloud_link'])): ?>
                     <br><span class="badge text-bg-danger mt-1"><i class="fas fa-video me-1"></i>Video</span>
                     <?php endif; ?>
                 </div>
-                <button class="btn btn-outline-primary btn-sm w-100" onclick="viewApp(<?= (int)$a['id'] ?>)">
-                    <i class="fas fa-eye me-1"></i> View &amp; manage
-                </button>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary btn-sm" onclick="viewApp(<?= (int)$a['id'] ?>)">
+                        <i class="fas fa-eye me-1"></i> View &amp; manage
+                    </button>
+                    <a class="btn btn-success btn-sm" href="francophonie-record-invoice.php?application_id=<?= (int)$a['id'] ?>">
+                        <i class="fas fa-file-invoice-dollar me-1"></i> Record invoice
+                    </a>
+                </div>
             </div>
         <?php endforeach; endif; ?>
     </div>
@@ -196,6 +212,11 @@ function fm_status_badge(string $s): string
                         <td>
                             <div class="fw-semibold"><?= htmlspecialchars(trim($a['first_name'].' '.$a['last_name'])) ?></div>
                             <div class="small text-muted"><?= htmlspecialchars($a['email']) ?></div>
+                            <?php
+                                $fmPaid = $fmPaidMap[(int) $a['id']] ?? 0.0;
+                                $fmLeft = max(0, $fmProgramTotal - $fmPaid);
+                            ?>
+                            <div class="small <?= $fmLeft <= 0 ? 'text-success' : 'text-muted' ?>">Paid CAD <?= number_format($fmPaid, 0) ?> / <?= number_format($fmProgramTotal, 0) ?></div>
                             <?php if (!empty($a['video_file']) || !empty($a['video_pcloud_link'])): ?>
                             <span class="badge text-bg-danger mt-1"><i class="fas fa-video me-1"></i>Video</span>
                             <?php endif; ?>
@@ -207,6 +228,9 @@ function fm_status_badge(string $s): string
                             <button class="btn btn-sm btn-outline-primary" onclick="viewApp(<?= (int)$a['id'] ?>)">
                                 <i class="fas fa-eye"></i> View
                             </button>
+                            <a class="btn btn-sm btn-success" href="francophonie-record-invoice.php?application_id=<?= (int)$a['id'] ?>" title="Record invoice">
+                                <i class="fas fa-file-invoice-dollar"></i>
+                            </a>
                             <?php if (empty($a['video_file']) && empty($a['video_pcloud_link'])): ?>
                             <button class="btn btn-sm btn-outline-danger" title="Video invite link"
                                     onclick="createVideoInvite(<?= (int)$a['id'] ?>)">

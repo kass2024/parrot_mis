@@ -108,7 +108,7 @@ $today = date('Y-m-d');
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Francophonie Mobility Service Agreement | Parrot Canada Visa Consultant</title>
+<title>Francophone Mobility Client Service Agreement | Parrot Canada Visa Consultant</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 :root {
@@ -333,6 +333,12 @@ ul.contract-list li { margin-bottom: 6px; }
 .fee-card ul { margin: 10px 0 0; padding-left: 16px; font-size: 12px; color: var(--muted); }
 .fee-card ul li { margin-bottom: 4px; }
 
+.fee-table { width: 100%; border-collapse: collapse; margin: 16px 0 8px; font-size: 14px; }
+.fee-table th, .fee-table td { border: 1px solid var(--border); padding: 10px 12px; text-align: left; vertical-align: top; }
+.fee-table th { background: var(--soft); color: var(--primary); font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+.fee-table td.amt { font-weight: 700; color: var(--primary); white-space: nowrap; }
+.compliance-note { background: #fff8eb; border: 1px solid #f5d48a; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #7c4a03; }
+
 .total-fee {
   text-align: center;
   background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
@@ -412,9 +418,9 @@ ul.contract-list li { margin-bottom: 6px; }
 
 <div class="contract-wrap">
   <div class="contract-header">
-    <div class="badge">🍁 FRANCOPHONIE MOBILITY PROGRAM</div>
+    <div class="badge"><?= (($contract['contract_variant'] ?? 'standard') === 'special') ? 'SPECIAL FEE SCHEDULE · CAD 10,000' : '🍁 FRANCOPHONIE MOBILITY PROGRAM' ?></div>
     <h1>PARROT CANADA VISA CONSULTANT CO. LTD.</h1>
-    <h2>Francophonie Mobility (Mobilité Francophone) Service Agreement</h2>
+    <h2>Francophone Mobility Client Service Agreement</h2>
   </div>
 
   <div class="contract-body">
@@ -428,6 +434,7 @@ ul.contract-list li { margin-bottom: 6px; }
     <p><strong>Agreement Date:</strong>
       <input type="date" id="agreement_date" value="<?= htmlspecialchars($agreementDate ?: $today) ?>" <?= $isSigned ? 'readonly' : '' ?> style="border:none;border-bottom:1px solid #ccc;padding:2px 6px;font-size:14px;">
     </p>
+    <p><strong>Agreement reference:</strong> <?= htmlspecialchars($referenceId !== '' ? $referenceId : $contract['contract_token']) ?></p>
 
     <p>This Service Agreement ("Agreement") is entered into on the date indicated above between:</p>
 
@@ -495,146 +502,94 @@ ul.contract-list li { margin-bottom: 6px; }
     <p>(Hereinafter referred to as "the Client")</p>
     <p>The Company and the Client shall collectively be referred to as "the Parties."</p>
 
-    <div class="section-title">1. PURPOSE OF THE AGREEMENT</div>
-    <p>The purpose of this Agreement is to establish the terms and conditions under which PARROT CANADA VISA CONSULTANT CO. LTD. shall provide professional recruitment, employment support, and immigration assistance to the Client for obtaining employment in Canada through the Francophone Mobility (Mobilité francophone) Program.</p>
+    <div class="section-title">1. PURPOSE</div>
+    <p>This agreement records the scope and proposed fee schedule for services relating to the Client's exploration of employment in Canada through the Francophone Mobility program. It also explains the job-matching process that begins after the Client successfully passes the pre-assessment. Immigration approval and entry into Canada remain decisions of the competent Canadian authorities.</p>
 
     <div class="section-title">2. SCOPE OF SERVICES</div>
-    <p>The Company agrees to provide the following professional services:</p>
+    <p>Subject to legal authorization and the Client's separate written instructions, services may include eligibility screening, CV review, profile organization, language-test guidance, interview preparation, administrative document organization, job-matching coordination, and general follow-up. Canadian immigration advice or representation, where required, will be provided only by an authorized Canadian representative under an appropriate retainer.</p>
+
+    <div class="section-title">2.1 Job offer search after successful pre-assessment</div>
+    <p>Once the Client successfully passes the pre-assessment, Parrot Canada Visa Consultant Co. Ltd. confirms that its Canadian partner will accept the Client into the active job-matching process and will actively work to secure a suitable Canadian job offer for the Client.</p>
+    <p>The Canadian partner will present the Client's profile to suitable employers, coordinate employer communication, and continue reasonable job-search and matching efforts while the Client remains eligible, provides all required documents, responds promptly, and satisfies applicable language and employer requirements.</p>
+    <p>Parrot Canada Visa Consultant Co. Ltd. is confident in its Canadian partner's ability to obtain a suitable job offer for a Client who passes the pre-assessment and cooperates fully. However, the final job offer must be issued and signed by an independent Canadian employer. Therefore, neither Parrot Canada Visa Consultant Co. Ltd. nor its Canadian partner can legally guarantee the employer's final hiring decision, the timing of an offer, or immigration approval.</p>
+
+    <div class="section-title">3. RESPONSIBILITIES</div>
+    <p><strong>Client:</strong> Provide genuine documents and accurate information, attend agreed appointments, meet applicable language and program requirements, cooperate with interviews and employer requests, and promptly notify the Company of changes.</p>
+    <p><strong>Company:</strong> Act professionally, protect personal information, communicate material updates, conduct or coordinate the pre-assessment, begin job-matching coordination after a successful pre-assessment, and identify which services can lawfully be provided and charged to the Client.</p>
+
+    <div class="section-title">4. PROPOSED FEES AND PAYMENT MILESTONES</div>
+    <p>The parties propose the following total and timing, subject to confirmation that each charge is lawful, itemized, and relates solely to client-payable services.</p>
+
+    <?php $feeSchedule = fm_contract_fee_schedule((string) ($contract['contract_variant'] ?? 'standard')); ?>
+    <table class="fee-table">
+      <thead>
+        <tr>
+          <th>Payment</th>
+          <th>Trigger</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php foreach ($feeSchedule['rows'] as $feeRow): ?>
+        <tr>
+          <td><?= htmlspecialchars($feeRow[0]) ?></td>
+          <td><?= htmlspecialchars($feeRow[1]) ?></td>
+          <td class="amt"><?= htmlspecialchars($feeRow[2]) ?></td>
+        </tr>
+        <?php endforeach; ?>
+        <tr>
+          <td><strong>Total</strong></td>
+          <td></td>
+          <td class="amt"><?= htmlspecialchars($feeSchedule['total']) ?></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p class="compliance-note"><strong>Compliance condition:</strong> No amount is due for recruiting a foreign worker, securing a job offer, employer-side LMIA or employer-compliance costs, or other expenses that the law requires an employer or recruiter to bear. Any unlawful or prohibited charge is void and must not be collected. The parties must revise this schedule before signing if the stated amounts cannot lawfully be charged.</p>
+
+    <div class="section-title">5. THIRD PARTY EXPENSES</div>
+    <p>Government application fees, biometrics, medical examinations, language tests, translations, and travel expenses are separate unless specifically included in a written schedule. Each cost must be allocated in accordance with applicable law. No employer-payable cost may be transferred to the Client.</p>
+
+    <div class="section-title">6. REFUNDS AND CANCELLATION</div>
+    <p>The Company will provide the Client with a written description of each chargeable service, the work completed, and the applicable refund conditions before accepting payment.</p>
+    <p>If the work-permit application is refused directly and solely because of a documented error, omission, negligence, or failure by the Company or its Canadian partner, all service fees paid by the Client will be refunded, excluding:</p>
     <ul class="contract-list">
-      <li>Assessment of the Client's eligibility for the Francophone Mobility Program.</li>
-      <li>Professional review and optimization of the Client's CV according to Canadian standards.</li>
-      <li>Evaluation of the Client's qualifications and work experience.</li>
-      <li>Registration of the Client's profile within the Company's recruitment network.</li>
-      <li>Matching the Client with suitable Canadian employers.</li>
-      <li>Communication and follow-up with prospective employers.</li>
-      <li>Guidance regarding French language requirements.</li>
-      <li>Assistance with interview preparation.</li>
-      <li>Assistance with employment documentation.</li>
-      <li>Guidance in preparing the Canadian work permit application.</li>
-      <li>General support throughout the recruitment and immigration process.</li>
+      <li>Government application and biometric fees;</li>
+      <li>Medical-examination fees;</li>
+      <li>Language-test fees;</li>
+      <li>Administrative fees for work already completed;</li>
+      <li>Translation, notarization, courier, and document-processing expenses; and</li>
+      <li>Other non-refundable third-party costs already incurred for the Client.</li>
     </ul>
-
-    <div class="section-title">3. CLIENT RESPONSIBILITIES</div>
-    <p>The Client agrees to:</p>
+    <p>No refund will be provided when the refusal results wholly or partly from the Client’s actions, omissions, personal circumstances, or ineligibility, including:</p>
     <ul class="contract-list">
-      <li>Provide complete, truthful, and accurate information.</li>
-      <li>Submit genuine and valid documents.</li>
-      <li>Cooperate throughout the recruitment process.</li>
-      <li>Attend interviews requested by employers.</li>
-      <li>Complete any required French language assessment or training.</li>
-      <li>Respond promptly to requests from the Company.</li>
-      <li>Respect all payment obligations under this Agreement.</li>
-      <li>Immediately inform the Company of any change affecting their application.</li>
+      <li>Hiding or failing to disclose a previous visa or immigration refusal from Canada, the United States, or any other country;</li>
+      <li>Providing false, misleading, incomplete, inconsistent, or fraudulent information or documents;</li>
+      <li>Failing to disclose immigration history, criminal history, employment history, family information, or other material facts;</li>
+      <li>A medical condition, medical inadmissibility finding, or failure to complete a required medical examination;</li>
+      <li>Criminal inadmissibility, security concerns, or previous immigration violations;</li>
+      <li>Failure to meet the required French-language, employment, education, work-experience, or program requirements;</li>
+      <li>Failure to provide requested documents, attend appointments, or respond within the required time;</li>
+      <li>Withdrawal, cancellation, or abandonment of the process by the Client; or</li>
+      <li>Any decision or circumstance outside the reasonable control of the Company or its Canadian partner.</li>
     </ul>
+    <p>The second installment will not become payable if the work permit is refused before the payment milestone is reached.</p>
+    <p>Either party may terminate this Agreement by written notice, subject to applicable law, services already completed, and non-refundable costs already incurred. Any refund due under this section shall be calculated and explained to the Client in writing.</p>
 
-    <div class="section-title">4. COMPANY RESPONSIBILITIES</div>
-    <p>PARROT CANADA VISA CONSULTANT CO. LTD. agrees to:</p>
-    <ul class="contract-list">
-      <li>Act honestly, professionally, and ethically.</li>
-      <li>Protect the confidentiality of the Client's information.</li>
-      <li>Maintain communication with the Client throughout the process.</li>
-      <li>Promote the Client's profile to suitable Canadian employers.</li>
-      <li>Assist with employment documentation.</li>
-      <li>Provide guidance during the work permit application process.</li>
-      <li>Continue providing professional support until the agreed services under this Agreement have been completed.</li>
-    </ul>
+    <div class="section-title">7. CONFIDENTIALITY AND CONSENT</div>
+    <p>Personal information may be used for agreed services and disclosed to appropriate institutions, prospective employers, Canadian partners, or authorized representatives only with valid consent or where required by law.</p>
 
-    <div class="section-title">5. SERVICE COMMITMENT &amp; PAYMENT TERMS</div>
-    <p>PARROT CANADA VISA CONSULTANT CO. LTD. is committed to providing professional recruitment and immigration support services throughout the Client's participation in the Francophone Mobility (Mobilité francophone) Program.</p>
-    <p>The Company shall use its professional expertise, recruitment network, and employer partnerships to assist the Client in securing a valid employment opportunity in Canada and to provide guidance through the work permit application process.</p>
-    <p>The total professional service fee for this program is:</p>
+    <div class="section-title">8. JOB MATCHING COMMITMENT AND NO IMMIGRATION GUARANTEE</div>
+    <p>After a successful pre-assessment, the Canadian partner commits to actively undertake the job-matching and job-offer search described in section 2.1. The final hiring decision and issuance of a job offer belong exclusively to the employer. Immigration decisions belong to Immigration, Refugees and Citizenship Canada. Processing times, work-permit approval, and entry into Canada are not guaranteed.</p>
+    <p>Applicable federal and provincial recruitment, consumer-protection, employment, and immigration laws prevail over any conflicting contract term.</p>
 
-    <div class="total-fee">Eight Thousand Canadian Dollars (CAD $8,000)</div>
+    <div class="section-title">9. CLIENT ACKNOWLEDGMENT</div>
+    <p>By signing, the Client confirms that the Client understands: (a) successful pre-assessment leads to active job matching by the Canadian partner; (b) Parrot Canada Visa Consultant Co. Ltd. is confident that the Canadian partner will work to obtain a suitable job offer; (c) the employer alone makes the final hiring decision; and (d) no promise of work-permit approval or entry into Canada is made.</p>
 
-    <p>The fee shall be paid in three (3) installments as follows:</p>
-
-    <div class="fee-grid">
-      <div class="fee-card">
-        <div class="label">First Installment</div>
-        <div class="amount">CAD $850</div>
-        <p style="font-size:12px;margin:0;">Payable before the commencement of the recruitment process.</p>
-        <ul>
-          <li>File opening</li>
-          <li>Eligibility assessment</li>
-          <li>Professional CV review</li>
-          <li>Canadian CV optimization</li>
-          <li>Profile registration</li>
-          <li>Interview preparation</li>
-          <li>Recruitment process initiation</li>
-          <li>Securing a valid Canadian job offer</li>
-          <li>Work permit application preparation</li>
-        </ul>
-      </div>
-      <div class="fee-card">
-        <div class="label">Second Installment</div>
-        <div class="amount">CAD $3,150</div>
-        <p style="font-size:12px;margin:0;">Payable immediately once the Canadian Embassy requests you to complete a medical examination.</p>
-        <p style="font-size:12px;margin:8px 0 0;"><strong>Note:</strong> In this case, the visa approval rate is over 98%</p>
-        <ul>
-          <li>Work permit application flow up</li>
-          <li>Employer communication</li>
-          <li>Employment documentation</li>
-          <li>Employer support services</li>
-        </ul>
-      </div>
-      <div class="fee-card">
-        <div class="label">Third Installment</div>
-        <div class="amount">CAD $4,000</div>
-        <ul>
-          <li>Payable after visa approval by IRCC.</li>
-          <li>Must be paid before departure for Canada.</li>
-          <li>Airport pickup upon arrival in Canada.</li>
-          <li>Orientation and settlement support to help you become familiar with life in Canada.</li>
-          <li>Assistance in finding suitable rental accommodation.</li>
-        </ul>
-      </div>
-    </div>
-
-    <p>Failure to pay any installment when due may result in suspension of services until payment has been received.</p>
-
-    <div class="section-title">6. COMPANY COMMITMENT</div>
-    <p>PARROT CANADA VISA CONSULTANT CO. LTD. commits to:</p>
-    <ul class="contract-list">
-      <li>Conducting a professional assessment of the Client's profile.</li>
-      <li>Promoting the Client's qualifications to suitable Canadian employers.</li>
-      <li>Assisting with interview preparation.</li>
-      <li>Providing guidance regarding the Francophone Mobility Program.</li>
-      <li>Assisting with employment-related documentation.</li>
-      <li>Guiding the Client through the Canadian work permit application process after a valid employment offer has been obtained.</li>
-      <li>Providing continuous professional support until the completion of the agreed services under this Agreement.</li>
-    </ul>
-    <p>The Client understands that hiring decisions are made solely by Canadian employers and that work permit decisions are made exclusively by Immigration, Refugees and Citizenship Canada (IRCC).</p>
-
-    <div class="section-title">7. REFUND POLICY</div>
-    <p>The Client acknowledges and agrees that:</p>
-    <ul class="contract-list">
-      <li>The CAD $850 first installment is non-refundable once recruitment services have commenced. (Are refundable when Parrot failed to get job offer for client)</li>
-      <li>The CAD $3,150 second installment becomes payable immediately once the Canadian Embassy requests the Client to complete a medical examination.</li>
-      <li>The CAD $4,000 final installment becomes payable only after approval of the Client's Canadian work permit.</li>
-      <li>Government fees, biometrics fees, medical examination fees, language test fees, courier charges, translation costs, travel expenses, and any other third-party expenses are not included in this Agreement unless expressly stated.</li>
-    </ul>
-
-    <div class="section-title">8. TERMINATION</div>
-    <p>Either Party may terminate this Agreement by providing written notice.</p>
-    <p>Termination shall not affect payment obligations for services already rendered.</p>
-
-    <div class="section-title">9. CONFIDENTIALITY</div>
-    <p>The Company agrees to keep all personal information and documents confidential and shall not disclose such information to any third party except:</p>
-    <ul class="contract-list">
-      <li>Where required by law;</li>
-      <li>With the Client's written consent;</li>
-      <li>For legitimate recruitment or immigration processing purposes.</li>
-    </ul>
-
-    <div class="section-title">10. GOVERNING LAW</div>
-    <p>This Agreement shall be governed by international laws and the applicable federal laws of Canada.</p>
-
-    <div class="section-title">11. ENTIRE AGREEMENT</div>
-    <p>This Agreement constitutes the complete understanding between the Parties and supersedes all prior discussions, representations, or agreements relating to the services described herein.</p>
-    <p>Any amendment to this Agreement shall be made in writing and signed by both Parties.</p>
-
-    <div class="section-title">DECLARATION</div>
-    <p>The Client confirms that they have carefully read and understood this Agreement and voluntarily accept all of its terms and conditions.</p>
+    <div class="section-title">10. SIGNATURES</div>
+    <p><strong>For Parrot Canada Visa Consultant Co. Ltd.</strong><br>
+    Name: Dr. Jean Pierre Twajamahoro, Managing Director</p>
+    <p>The Client signs below.</p>
 
     <div class="sign-section">
       <h3>SIGNED BY THE CLIENT</h3>

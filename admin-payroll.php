@@ -145,11 +145,10 @@ foreach ($admins as $aid => &$admin) {
             continue;
         }
         $mins = (int) ($rec['minutes'] ?? 0);
-        $stored = (float) ($rec['stored_daily_pay'] ?? 0);
         $rate = $admin['rate'];
         $calculated = (int) round($rate * $mins);
-        // Prefer amount saved at checkout (matches attendance rules); else rate × minutes
-        $salary = ((int) round($stored)) > 0 ? (int) round($stored) : $calculated;
+        // Always use the current rate so salary settings apply to existing attendance.
+        $salary = $calculated;
 
         $admin['days'][$date]['minutes'] = $mins;
         $admin['days'][$date]['salary']  = (float) $salary;

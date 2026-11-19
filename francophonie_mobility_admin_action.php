@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_files.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
@@ -14,6 +15,8 @@ require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 fm_ensure_schema($conn);
 
 header('Content-Type: application/json; charset=utf-8');
+
+pcvc_require_francophonie_mobility($conn, true);
 
 if (empty($_SESSION['id']) || empty($_POST['csrf_token'])
     || !hash_equals((string) ($_SESSION['csrf_token'] ?? ''), (string) $_POST['csrf_token'])) {

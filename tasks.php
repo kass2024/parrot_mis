@@ -15,7 +15,7 @@ $platforms = $conn->query("
 $admins = $conn->query("
     SELECT id, full_name, role, email 
     FROM admins 
-    WHERE role IN ('staff','superadmin') 
+    WHERE role IN ('staff','accountant','superadmin','director','secretary') 
     ORDER BY full_name ASC
 ");
 

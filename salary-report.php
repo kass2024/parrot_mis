@@ -13,7 +13,7 @@ if (!isset($_SESSION['id']) || !isset($_SESSION['role'])) {
     exit("Unauthorized access.");
 }
 
-$isSuperAdmin = ($_SESSION['role'] === "superadmin" || $_SESSION['role'] === "hr");
+$isSuperAdmin = (pcvc_is_superadmin_role($_SESSION['role'] ?? '') || $_SESSION['role'] === "hr");
 
 if (!$isSuperAdmin) {
     http_response_code(403);

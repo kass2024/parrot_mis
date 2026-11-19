@@ -134,6 +134,10 @@ if (
     fail("Missing required fields: " . implode(', ', $missing), 400, ["missing" => $missing]);
 }
 
+if ($pkgCode === 'p71') {
+    fail("Study in the USA (Loan-Based) is no longer offered. Choose a package without a loan. Canada loan packages are still available.", 400);
+}
+
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     fail("Invalid email address", 400);
 }
@@ -315,13 +319,8 @@ $pdfPath = null;
 $pdfError = null;
 
 try {
-    require_once __DIR__ . '/generate-contract-pdf.php';
-
-    if (!function_exists('generateContractPDF')) {
-        throw new RuntimeException('PDF generator missing');
-    }
-
-    $pdfPath = generateContractPDF($contractId);
+    require_once __DIR__ . '/helpers/student_contract_pdf.php';
+    $pdfPath = pcvc_generate_student_contract_pdf($conn, $contractId);
 
     if (!$pdfPath || !file_exists($pdfPath)) {
         throw new RuntimeException('PDF file was not created');

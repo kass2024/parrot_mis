@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
 require_once __DIR__ . '/PHPMailer/src/SMTP.php';
@@ -15,11 +16,12 @@ header('Content-Type: application/json');
 
 fm_contract_ensure_schema($conn);
 
-if (!isset($_SESSION['admin_id'])) {
+if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;
 }
+pcvc_require_francophonie_mobility($conn, true);
 
 if (empty($_POST['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token'])) {
     http_response_code(403);
@@ -73,7 +75,7 @@ try {
     $mail->Host       = 'visaconsultantcanada.com';
     $mail->SMTPAuth   = true;
     $mail->Username   = 'admission@visaconsultantcanada.com';
-    $mail->Password   = 'Petero@1981';
+    $mail->Password   = 'Parrot@2026';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port       = 465;
     $mail->CharSet    = 'UTF-8';

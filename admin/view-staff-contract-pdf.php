@@ -32,7 +32,17 @@ $rel = $type === 'signed'
     ? pcvc_staff_contract_signed_path($contract)
     : trim((string) ($contract['source_pdf_path'] ?? ''));
 
-if ($rel === '' && pcvc_staff_contract_use_docx_preview()) {
+if ($rel === '' && $type === 'signed') {
+    @set_time_limit(300);
+    try {
+        $rel = pcvc_staff_contract_ensure_signed_pdf($conn, $staffId, $contract);
+    } catch (Throwable $e) {
+        http_response_code(503);
+        exit('Signed PDF not ready: ' . $e->getMessage());
+    }
+}
+
+if ($rel === '' && $type !== 'signed' && pcvc_staff_contract_use_docx_preview()) {
     http_response_code(404);
     exit('PDF not used on this server — open the Word contract viewer instead.');
 }
@@ -60,6 +70,10 @@ $abs = pcvc_staff_contract_abs_path($rel);
 if (!is_file($abs)) {
     http_response_code(404);
     exit('PDF file missing');
+}
+
+while (ob_get_level() > 0) {
+    ob_end_clean();
 }
 
 header('Content-Type: application/pdf');

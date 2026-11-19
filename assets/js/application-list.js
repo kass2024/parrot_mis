@@ -218,6 +218,14 @@ function loadStudents() {
 
             studentListEl.innerHTML = "";
 
+            if (res.meta && res.meta.scope === "own") {
+                const banner = document.getElementById("agentEmailFilterBanner");
+                if (banner) {
+                    banner.classList.add("hidden");
+                    banner.textContent = "";
+                }
+            }
+
             if (!res?.success || !Array.isArray(res.data) || !res.data.length) {
                 const emptyMsg = agentEmail
                     ? "No applications found for this agent."
@@ -227,9 +235,13 @@ function loadStudents() {
                 return;
             }
 
-            res.data.forEach(app => {
-                studentListEl.appendChild(renderStudentItem(app));
-            });
+            if (res.meta && res.meta.group_by_agent) {
+                renderAgentGroups(res.data);
+            } else {
+                res.data.forEach(app => {
+                    studentListEl.appendChild(renderStudentItem(app));
+                });
+            }
             refreshTimeAgoLabels();
         })
         .catch(err => {
@@ -298,14 +310,19 @@ const studyLine = [
 
     const unreadHtml =
         Number(meta.is_read) === 0
-            ? `<span class="unread-dot w-2 h-2 shrink-0 bg-blue-600 rounded-full mt-1.5" aria-label="Unread"></span>`
+            ? `<span class="unread-dot" aria-label="Unopened"></span>`
             : "";
+    const isNew = applicationIsNew(app);
+    if (isNew) {
+        li.classList.add("pcvc-app-new");
+    }
+    const newPill = isNew ? `<span class="pcvc-new-pill">New</span>` : "";
 
     li.innerHTML = `
         <div class="min-w-0 flex flex-col gap-0.5">
             <div class="flex items-start justify-between gap-2 w-full">
                 <div class="pcvc-sidebar-name font-semibold text-sm break-words min-w-0 flex-1 leading-snug">
-                    ${escapeHTML(fullName)}
+                    ${escapeHTML(fullName)}${newPill}
                 </div>
                 ${unreadHtml}
             </div>
@@ -336,6 +353,112 @@ const studyLine = [
 
     return li;
 }
+
+function applicationIsNew(app) {
+    const created = Date.parse(app?.meta?.created_at || "");
+    if (!Number.isFinite(created)) return false;
+    return Date.now() - created < 24 * 60 * 60 * 1000;
+}
+
+function chargeKindLabel(kind) {
+    if (kind === "company") return "Company";
+    if (kind === "agent") return "Agent";
+    if (kind === "unassigned") return "Unassigned";
+    return "Staff";
+}
+
+function renderAgentGroups(apps) {
+    const groups = new Map();
+    apps.forEach((app) => {
+        const charge = app.charge || null;
+        let key;
+        let name;
+        let email;
+        let kind;
+        if (charge && charge.key) {
+            key = String(charge.key);
+            name = String(charge.name || "Unassigned");
+            email = String(charge.email || "").trim();
+            kind = String(charge.kind || "staff");
+        } else {
+            const agent = app.agent || {};
+            email = String(agent.email || "").trim();
+            name = [agent.first_name, agent.last_name].filter(Boolean).join(" ").trim();
+            key = email.toLowerCase() || name.toLowerCase() || "unassigned";
+            name = name || (email ? email : "Unassigned");
+            kind = key === "unassigned" ? "unassigned" : "agent";
+        }
+        if (!groups.has(key)) {
+            groups.set(key, {
+                name: name,
+                email: email,
+                kind: kind,
+                items: [],
+            });
+        }
+        groups.get(key).items.push(app);
+    });
+
+    const ordered = [...groups.values()].sort((a, b) => {
+        const aNew = a.items.some(applicationIsNew) ? 0 : 1;
+        const bNew = b.items.some(applicationIsNew) ? 0 : 1;
+        if (aNew !== bNew) return aNew - bNew;
+        if (a.kind === "unassigned") return 1;
+        if (b.kind === "unassigned") return -1;
+        return a.name.localeCompare(b.name);
+    });
+
+    ordered.forEach((group) => {
+        const storageKey = "pcvcChargeFold:" + group.kind + ":" + group.name + ":" + group.email;
+        let open = false;
+        try { open = sessionStorage.getItem(storageKey) === "1"; } catch (e) { open = false; }
+        const newCount = group.items.filter(applicationIsNew).length;
+        const countLabel = group.items.length === 1 ? "1 application" : group.items.length + " applications";
+        const emailLine = group.kind !== "unassigned" && group.email && group.email.toLowerCase() !== group.name.toLowerCase()
+            ? `<span class="pcvc-charge-email">${escapeHTML(group.email)}</span>`
+            : "";
+        const nameLine = group.kind === "unassigned"
+            ? ""
+            : `<span class="pcvc-charge-name">${escapeHTML(group.name)}</span>`;
+        const badge = newCount ? `<span class="pcvc-new-badge">${newCount} new</span>` : "";
+
+        const fold = document.createElement("li");
+        fold.className = "pcvc-charge-fold";
+
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "pcvc-charge-toggle" + (newCount ? " has-new" : "");
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        toggle.innerHTML = `
+            <span class="pcvc-charge-chevron" aria-hidden="true">${open ? "▾" : "▸"}</span>
+            <span class="pcvc-charge-copy">
+                <span class="pcvc-charge-kind">${chargeKindLabel(group.kind)}</span>
+                ${nameLine}
+                ${emailLine}
+                <span class="pcvc-charge-count">${countLabel}</span>
+            </span>
+            ${badge}
+        `;
+
+        const body = document.createElement("ul");
+        body.className = "pcvc-charge-body" + (open ? "" : " is-collapsed");
+        const items = [...group.items].sort((a, b) => Number(applicationIsNew(b)) - Number(applicationIsNew(a)));
+        items.forEach((app) => body.appendChild(renderStudentItem(app)));
+
+        toggle.addEventListener("click", () => {
+            const collapsed = body.classList.toggle("is-collapsed");
+            toggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+            const chevron = toggle.querySelector(".pcvc-charge-chevron");
+            if (chevron) chevron.textContent = collapsed ? "▸" : "▾";
+            try { sessionStorage.setItem(storageKey, collapsed ? "0" : "1"); } catch (e) {}
+        });
+
+        fold.appendChild(toggle);
+        fold.appendChild(body);
+        studentListEl.appendChild(fold);
+    });
+}
+
 /**
  * =====================================================
  * AI FETCH UTILITIES (REQUIRED)
@@ -2471,19 +2594,10 @@ async function submitAddStudyChoice() {
                     window.location.href = "job_todo_list.php";
                 }, "Study choices");
             } else {
-                showToast(
-                    msg +
-                        (d.student_notified
-                            ? " Student notified by email."
-                            : " Student email not sent (missing or invalid address)."),
-                    undefined,
-                    "Study choices"
-                );
+                showToast(msg, undefined, "Study choices");
             }
             if (status) {
-                status.textContent = d.student_notified
-                    ? "Saved and student notified."
-                    : "Saved. Email not sent (check student email).";
+                status.textContent = "Saved.";
             }
         }
 

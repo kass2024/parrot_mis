@@ -50,9 +50,18 @@ $contractId = (int) $_POST['contract_id'];
    LOAD CONTRACT
 ===================================================== */
 $stmt = $conn->prepare("
-    SELECT c.pdf_path, s.email, s.first_name, s.last_name
+    SELECT
+        c.pdf_path,
+        COALESCE(NULLIF(s.email, ''), sig.student_email) AS email,
+        COALESCE(NULLIF(TRIM(CONCAT(COALESCE(s.first_name, ''), ' ', COALESCE(s.last_name, ''))), ''), sig.student_name, '') AS student_name
     FROM student_contracts c
-    JOIN student_applications s ON s.id = c.student_id
+    LEFT JOIN student_applications s ON s.id = c.student_id
+    LEFT JOIN student_signatures sig
+        ON sig.id = (
+            SELECT MAX(ss.id)
+            FROM student_signatures ss
+            WHERE ss.contract_id = c.id
+        )
     WHERE c.id = ? AND c.status = 'signed'
     LIMIT 1
 ");
@@ -71,8 +80,8 @@ if (empty($row['pdf_path']) || !file_exists($row['pdf_path'])) {
     exit;
 }
 
-$studentEmail = trim($row['email']);
-$studentName  = trim($row['first_name'] . ' ' . $row['last_name']);
+$studentEmail = trim((string) ($row['email'] ?? ''));
+$studentName  = trim((string) ($row['student_name'] ?? ''));
 
 if (!filter_var($studentEmail, FILTER_VALIDATE_EMAIL)) {
     echo json_encode(['success' => false, 'error' => 'Invalid student email']);
@@ -89,7 +98,7 @@ try {
     $mail->Host       = 'visaconsultantcanada.com';
     $mail->SMTPAuth   = true;
     $mail->Username   = 'admission@visaconsultantcanada.com';
-    $mail->Password   = 'Petero@1981';
+    $mail->Password   = 'Parrot@2026';
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS;
     $mail->Port       = 465;
 

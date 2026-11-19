@@ -90,3 +90,39 @@ function pcvc_sql_max_effective_status(string $tableAlias = 'sa'): string
 {
     return 'MAX(' . pcvc_sql_case_effective_status($tableAlias) . ')';
 }
+
+/**
+ * Same student buckets as the dashboard KPIs.
+ * Submitted, admitted, and visa approved count everyone who has reached that stage.
+ *
+ * @return list<string>
+ */
+function pcvc_agent_pipeline_stages(): array
+{
+    return ['allocated', 'submitted', 'admit', 'visa_approved', 'enrolled'];
+}
+
+function pcvc_agent_pipeline_expr(string $stage, string $alias = 'sa'): string
+{
+    $a = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?? '';
+    if ($a === '') {
+        $a = 'sa';
+    }
+    $flag = static function (string $col) use ($a): string {
+        $col = preg_replace('/[^a-zA-Z0-9_]/', '', $col) ?? '';
+
+        return 'IFNULL(`' . $a . '`.`' . $col . '`, 0) = 1';
+    };
+    $any = static function (array $cols) use ($flag): string {
+        return '(' . implode(' OR ', array_map($flag, $cols)) . ')';
+    };
+
+    return match ($stage) {
+        'allocated' => '1 = 1',
+        'submitted' => $any(['submitted', 'app_paid', 'admit', 'i20_sent', 'sevis_paid', 'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny']),
+        'admit' => $any(['admit', 'i20_sent', 'sevis_paid', 'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc']),
+        'visa_approved' => $any(['visa_approved', 'enrolled']),
+        'enrolled' => $flag('enrolled'),
+        default => '',
+    };
+}

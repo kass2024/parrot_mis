@@ -12,6 +12,82 @@ require_once __DIR__ . '/../helpers/application_documents_admin.php';
 
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 
+function pcvc_require_visible_application(mysqli $conn, int $applicationId): void
+{
+    if ($applicationId < 1) {
+        jsonResponse('Application not found', false, 404);
+    }
+    $viewer = pcvc_application_report_viewer($conn);
+    if ($viewer['id'] < 1) {
+        jsonResponse('Please sign in.', false, 401);
+    }
+    if ($viewer['scope'] === 'own' && !pcvc_viewer_can_see_application($conn, $applicationId, $viewer)) {
+        jsonResponse('Application not found', false, 404);
+    }
+}
+
+function pcvc_application_charge_from_row(array $r): array
+{
+    $assignedId = (int) ($r['assigned_to_admin_id'] ?? 0);
+    $assigneeType = strtolower(trim((string) ($r['assignee_account_type'] ?? '')));
+    $assigneeCompany = trim((string) ($r['assignee_company_name'] ?? ''));
+    $assigneeName = trim((string) ($r['assigned_person_name'] ?? ''));
+    $assigneeEmail = strtolower(trim((string) ($r['assignee_email'] ?? '')));
+    $assigneeRole = (string) ($r['assignee_role'] ?? '');
+    $agentEmail = strtolower(trim((string) ($r['agent_email'] ?? '')));
+    $agentName = trim(trim((string) ($r['agent_first_name'] ?? '')) . ' ' . trim((string) ($r['agent_last_name'] ?? '')));
+    $agentType = strtolower(trim((string) ($r['agent_account_type'] ?? '')));
+    $agentCompany = trim((string) ($r['agent_company_name'] ?? ''));
+    $agentRole = (string) ($r['agent_admin_role'] ?? '');
+
+    if ($assignedId > 0) {
+        $kind = pcvc_charge_kind($assigneeType, $assigneeRole, $assigneeCompany);
+        $name = $kind === 'company' && $assigneeCompany !== ''
+            ? $assigneeCompany
+            : ($assigneeName !== '' ? $assigneeName : ($assigneeEmail !== '' ? $assigneeEmail : ('Staff #' . $assignedId)));
+
+        return [
+            'key' => 'staff:' . $assignedId,
+            'name' => $name,
+            'email' => $assigneeEmail,
+            'kind' => $kind,
+        ];
+    }
+
+    if ($agentEmail !== '' || $agentName !== '') {
+        $kind = pcvc_charge_kind($agentType, $agentRole, $agentCompany);
+        $name = $kind === 'company' && $agentCompany !== ''
+            ? $agentCompany
+            : ($agentName !== '' ? $agentName : $agentEmail);
+
+        return [
+            'key' => $agentEmail !== '' ? ('agent:' . $agentEmail) : ('agent-name:' . strtolower($name)),
+            'name' => $name,
+            'email' => $agentEmail,
+            'kind' => $kind,
+        ];
+    }
+
+    return [
+        'key' => 'unassigned',
+        'name' => 'Unassigned',
+        'email' => '',
+        'kind' => 'unassigned',
+    ];
+}
+
+function pcvc_charge_kind(string $accountType, string $role, string $companyName): string
+{
+    if ($accountType === 'company') {
+        return 'company';
+    }
+    if (pcvc_is_agent_role($role)) {
+        return 'agent';
+    }
+
+    return 'staff';
+}
+
 /**
  * ======================================================
  * FILTER OPTIONS (staff list + status labels for dashboards)
@@ -95,6 +171,7 @@ if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($applicationId <= 0) {
         jsonResponse('Invalid application id', false, 400);
     }
+    pcvc_require_visible_application($conn, $applicationId);
 
     $stmt = $conn->prepare('SELECT id FROM student_applications WHERE id = ? LIMIT 1');
     if (!$stmt) {
@@ -150,14 +227,7 @@ if ($action === 'add_study_choice' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($assigneeId > 0) {
             $jobsCreated = pcvc_ensure_assignment_jobs_for_application($conn, $applicationId, $assigneeId);
         }
-        $notified = pcvc_notify_student_study_choice_added(
-            $conn,
-            $applicationId,
-            $regionId,
-            $universityId,
-            $levelId,
-            $programId
-        );
+        $notified = false;
     }
 
     $studyChoices = pcvc_fetch_study_choices_for_admin_view($conn, $applicationId);
@@ -207,6 +277,15 @@ if ($action === 'approve_study_choice_suggestion' && $_SERVER['REQUEST_METHOD'] 
         jsonResponse('Invalid suggestion id', false, 400);
     }
 
+    $ownSt = $conn->prepare('SELECT application_id FROM application_study_choice_suggestions WHERE id = ? LIMIT 1');
+    if ($ownSt) {
+        $ownSt->bind_param('i', $suggestionId);
+        $ownSt->execute();
+        $ownRow = $ownSt->get_result()->fetch_assoc();
+        $ownSt->close();
+        pcvc_require_visible_application($conn, (int) ($ownRow['application_id'] ?? 0));
+    }
+
     $notifyStudent = !isset($_POST['notify_student']) || (string) $_POST['notify_student'] !== '0';
     $out = pcvc_approve_study_choice_suggestion($conn, $suggestionId, $adminId, $notifyStudent);
     if (!$out['ok']) {
@@ -232,19 +311,20 @@ if ($action === 'reject_study_choice_suggestion' && $_SERVER['REQUEST_METHOD'] =
         jsonResponse('Invalid suggestion id', false, 400);
     }
 
+    $ownSt = $conn->prepare('SELECT application_id FROM application_study_choice_suggestions WHERE id = ? LIMIT 1');
+    $applicationId = 0;
+    if ($ownSt) {
+        $ownSt->bind_param('i', $suggestionId);
+        $ownSt->execute();
+        $ownRow = $ownSt->get_result()->fetch_assoc();
+        $ownSt->close();
+        $applicationId = (int) ($ownRow['application_id'] ?? 0);
+        pcvc_require_visible_application($conn, $applicationId);
+    }
+
     $out = pcvc_reject_study_choice_suggestion($conn, $suggestionId, $adminId);
     if (!$out['ok']) {
         jsonResponse($out['msg'], false, 422);
-    }
-
-    $applicationId = 0;
-    $st = $conn->prepare('SELECT application_id FROM application_study_choice_suggestions WHERE id = ? LIMIT 1');
-    if ($st) {
-        $st->bind_param('i', $suggestionId);
-        $st->execute();
-        $r = $st->get_result()->fetch_assoc();
-        $st->close();
-        $applicationId = (int) ($r['application_id'] ?? 0);
     }
 
     jsonResponse([
@@ -277,6 +357,7 @@ if ($action === 'replace_document' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($applicationId <= 0 || $docKey === '') {
         jsonResponse('Invalid request', false, 400);
     }
+    pcvc_require_visible_application($conn, $applicationId);
     if (empty($_FILES['file'])) {
         jsonResponse('No file uploaded', false, 400);
     }
@@ -312,6 +393,9 @@ if ($action === 'notify_missing_documents' && $_SERVER['REQUEST_METHOD'] === 'PO
 
     $applicationId = (int) ($_POST['application_id'] ?? 0);
     $rawKeys         = $_POST['missing_keys'] ?? [];
+    if ($applicationId > 0) {
+        pcvc_require_visible_application($conn, $applicationId);
+    }
     if (is_string($rawKeys)) {
         $decoded = json_decode($rawKeys, true);
         $rawKeys = is_array($decoded) ? $decoded : array_filter(array_map('trim', explode(',', $rawKeys)));
@@ -360,7 +444,7 @@ if ($action === 'notify_missing_documents' && $_SERVER['REQUEST_METHOD'] === 'PO
 
 /**
  * ======================================================
- * UPDATE ASSIGNED STAFF (superadmin only — Student Application Report)
+ * UPDATE ASSIGNED STAFF (superadmin or username Robert — Student Application Report)
  * ======================================================
  */
 if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -390,12 +474,7 @@ if ($action === 'update_assignment' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         jsonResponse('Unauthorized', false, 401);
     }
 
-    $dbRole = (string) ($roleRow['role'] ?? '');
-    $sessionRole = (string) ($_SESSION['role'] ?? '');
-    if (
-        !pcvc_is_superadmin_role($dbRole)
-        && !pcvc_is_superadmin_role($sessionRole)
-    ) {
+    if (!pcvc_can_assign_application_staff($conn)) {
         jsonResponse('Forbidden', false, 403);
     }
 
@@ -933,7 +1012,13 @@ if (!empty($_GET['program_level_id'])) {
     $values[] = (int)$_GET['program_level_id'];
 }
 
-if ($hasAssignedCol && isset($_GET['assigned_to']) && (string)$_GET['assigned_to'] !== '') {
+/** Filter by recruiting agent. Superadmin sees every file. Everyone else is limited below. */
+$reportViewer = pcvc_application_report_viewer($conn);
+if ($reportViewer['id'] < 1) {
+    jsonResponse('Please sign in.', false, 401);
+}
+
+if ($reportViewer['scope'] === 'all' && $hasAssignedCol && isset($_GET['assigned_to']) && (string)$_GET['assigned_to'] !== '') {
     $ato = trim((string)$_GET['assigned_to']);
     if ($ato === '-1') {
         $where[] = 'sa.assigned_to_admin_id IS NULL';
@@ -947,8 +1032,22 @@ if ($hasAssignedCol && isset($_GET['assigned_to']) && (string)$_GET['assigned_to
     }
 }
 
-/** Filter by recruiting agent (student_applications.agent_email), case-insensitive */
-if (!empty($_GET['agent_email'])) {
+if ($reportViewer['scope'] === 'own') {
+    $ownEmail = strtolower(trim($reportViewer['email']));
+    $ownId = (int) $reportViewer['id'];
+    $ownParts = [];
+    if ($hasAssignedCol && $ownId > 0) {
+        $ownParts[] = 'sa.assigned_to_admin_id = ?';
+        $types .= 'i';
+        $values[] = $ownId;
+    }
+    if ($ownEmail !== '') {
+        $ownParts[] = "LOWER(TRIM(COALESCE(sa.agent_email, ''))) = ?";
+        $types .= 's';
+        $values[] = $ownEmail;
+    }
+    $where[] = $ownParts !== [] ? '(' . implode(' OR ', $ownParts) . ')' : '1 = 0';
+} elseif (!empty($_GET['agent_email'])) {
     $aeNorm = strtolower(trim((string) $_GET['agent_email']));
     if ($aeNorm !== '') {
         $where[] = 'LOWER(TRIM(COALESCE(sa.agent_email, \'\'))) = ?';
@@ -981,17 +1080,39 @@ if (!empty($_GET['application_status']) && in_array((string)$_GET['application_s
         OR sa.payment_proof IS NOT NULL
     )";
 
+    $adminCols = [];
+    $colRes = $conn->query('SHOW COLUMNS FROM admins');
+    if ($colRes) {
+        while ($col = $colRes->fetch_assoc()) {
+            $adminCols[strtolower((string) ($col['Field'] ?? ''))] = true;
+        }
+        $colRes->free();
+    }
+    $hasAccountType = isset($adminCols['account_type']);
+    $hasCompanyName = isset($adminCols['company_name']);
+
     $assignedSelectSql = $hasAssignedCol
-        ? "MAX(COALESCE(
+        ? "MAX(sa.assigned_to_admin_id) AS assigned_to_admin_id,
+        MAX(COALESCE(
             NULLIF(TRIM(assign_ast.full_name), ''),
             TRIM(CONCAT(COALESCE(assign_ast.first_name, ''), ' ', COALESCE(assign_ast.last_name, '')))
-        )) AS assigned_person_name"
-        : "NULL AS assigned_person_name";
+        )) AS assigned_person_name,
+        MAX(assign_ast.email) AS assignee_email,
+        MAX(assign_ast.role) AS assignee_role,
+        " . ($hasAccountType ? "MAX(assign_ast.account_type) AS assignee_account_type" : "NULL AS assignee_account_type") . ",
+        " . ($hasCompanyName ? "MAX(assign_ast.company_name) AS assignee_company_name" : "NULL AS assignee_company_name")
+        : "NULL AS assigned_to_admin_id, NULL AS assigned_person_name, NULL AS assignee_email, NULL AS assignee_role, NULL AS assignee_account_type, NULL AS assignee_company_name";
 
     $assignedJoinSql = $hasAssignedCol
         ? "LEFT JOIN admins assign_ast ON assign_ast.id = sa.assigned_to_admin_id
 "
         : "";
+
+    $agentAdminSelectSql = "MAX(agent_admin.role) AS agent_admin_role,\n        "
+        . ($hasAccountType ? "MAX(agent_admin.account_type) AS agent_account_type" : "NULL AS agent_account_type")
+        . ",\n        "
+        . ($hasCompanyName ? "MAX(agent_admin.company_name) AS agent_company_name" : "NULL AS agent_company_name");
+    $agentAdminJoinSql = "LEFT JOIN admins agent_admin ON LOWER(TRIM(agent_admin.email)) = LOWER(TRIM(sa.agent_email))\n";
 
     $maxEffSql = pcvc_sql_max_effective_status('sa');
 
@@ -1005,6 +1126,10 @@ $sql = "
         sa.phone_number,
         sa.created_at,
         sa.is_read,
+        MAX(sa.agent_email) AS agent_email,
+        MAX(sa.agent_first_name) AS agent_first_name,
+        MAX(sa.agent_last_name) AS agent_last_name,
+        {$agentAdminSelectSql},
         {$assignedSelectSql},
         {$maxEffSql} AS effective_status,
 
@@ -1017,6 +1142,7 @@ GROUP_CONCAT(DISTINCT c.name ORDER BY c.name SEPARATOR ' · ') AS countries
     FROM student_applications sa
 
     {$assignedJoinSql}
+    {$agentAdminJoinSql}
     LEFT JOIN application_study_choices ascx
         ON ascx.application_id = sa.id
 
@@ -1078,11 +1204,20 @@ $data = array_map(function ($r) {
             "effective_status" => isset($r["effective_status"]) && $r["effective_status"] !== null && $r["effective_status"] !== ''
                 ? (string)$r["effective_status"]
                 : null,
-        ]
+        ],
+        "agent" => [
+            "email" => trim((string) ($r["agent_email"] ?? '')),
+            "first_name" => trim((string) ($r["agent_first_name"] ?? '')),
+            "last_name" => trim((string) ($r["agent_last_name"] ?? '')),
+        ],
+        "charge" => pcvc_application_charge_from_row($r),
     ];
 }, $rows);
 
-jsonResponse($data);
+jsonResponse($data, true, 200, [
+    'scope' => $reportViewer['scope'],
+    'group_by_agent' => $reportViewer['scope'] === 'all',
+]);
 exit;
 
 
@@ -1097,6 +1232,7 @@ exit;
 if ($action === 'view' && !empty($_GET['id'])) {
 
     $id = (int)$_GET['id'];
+    pcvc_require_visible_application($conn, $id);
 
     // mark as read
     $stmt = $conn->prepare("UPDATE student_applications SET is_read = 1 WHERE id = ?");
@@ -1241,7 +1377,7 @@ if ($action === 'view' && !empty($_GET['id'])) {
             }
         }
     }
-    $canEditAssignmentMeta = $hasAssignColForMeta && $canDeleteApplicationMeta;
+    $canEditAssignmentMeta = $hasAssignColForMeta && pcvc_can_assign_application_staff($conn);
 
     /**
      * ==================================================
@@ -1334,6 +1470,7 @@ if ($action === 'view' && !empty($_GET['id'])) {
 if ($action === 'journey' && !empty($_GET['id'])) {
 
     $applicationId = (int)$_GET['id'];
+    pcvc_require_visible_application($conn, $applicationId);
 
     $stmt = $conn->prepare("
         SELECT

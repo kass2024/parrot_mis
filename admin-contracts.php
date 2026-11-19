@@ -32,6 +32,16 @@ $showError = isset($_GET['error']) && !empty($_GET['error']);
 /* =====================================================
    5. FETCH SIGNED CONTRACTS
 ===================================================== */
+$hasLanguage = false;
+$languageColumn = $conn->query("SHOW COLUMNS FROM student_contracts LIKE 'contract_language'");
+if ($languageColumn && $languageColumn->num_rows > 0) {
+    $hasLanguage = true;
+}
+if ($languageColumn) {
+    $languageColumn->free();
+}
+$languageSelect = $hasLanguage ? "c.contract_language" : "'en' AS contract_language";
+
 $sql = "
     SELECT
         c.id AS contract_id,
@@ -39,12 +49,21 @@ $sql = "
         c.status,
         c.signed_at,
         c.sent_at,
+        {$languageSelect},
         s.first_name,
         s.last_name,
-        s.email
+        s.email AS application_email,
+        sig.student_name,
+        sig.student_email
     FROM student_contracts c
     LEFT JOIN student_applications s
         ON s.id = c.student_id
+    LEFT JOIN student_signatures sig
+        ON sig.id = (
+            SELECT MAX(ss.id)
+            FROM student_signatures ss
+            WHERE ss.contract_id = c.id
+        )
     WHERE c.status = 'signed'
     ORDER BY c.id DESC
 ";
@@ -375,6 +394,7 @@ tr:last-child td {
     <th>#</th>
     <th>Student</th>
     <th>Email</th>
+    <th>Language</th>
     <th>Status</th>
     <th>Signed At</th>
     <th>Actions</th>
@@ -384,7 +404,7 @@ tr:last-child td {
 
 <?php if ($result->num_rows === 0): ?>
 <tr>
-    <td colspan="6" class="empty-state">
+    <td colspan="7" class="empty-state">
         <div>📭 No signed contracts found</div>
         <p>Contracts will appear here once students sign them</p>
     </td>
@@ -394,13 +414,22 @@ tr:last-child td {
 <?php $i = 1; while ($row = $result->fetch_assoc()): ?>
 <?php 
     $fullName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
-    $fullName = !empty($fullName) ? $fullName : 'Unknown Student';
+    if ($fullName === '' || strcasecmp($fullName, 'Not provided') === 0) {
+        $fullName = trim((string) ($row['student_name'] ?? ''));
+    }
+    $fullName = $fullName !== '' ? $fullName : 'Unknown Student';
+    $email = trim((string) ($row['application_email'] ?? ''));
+    if ($email === '') {
+        $email = trim((string) ($row['student_email'] ?? ''));
+    }
+    $isFrench = strtolower(trim((string) ($row['contract_language'] ?? 'en'))) === 'fr';
     $hasBeenSent = !empty($row['sent_at']);
 ?>
 <tr>
     <td><?= $i++ ?></td>
     <td><?= htmlspecialchars($fullName) ?></td>
-    <td><?= htmlspecialchars($row['email'] ?? '—') ?></td>
+    <td><?= htmlspecialchars($email !== '' ? $email : '—') ?></td>
+    <td><?= $isFrench ? 'French' : 'English' ?></td>
     <td><span class="status signed">SIGNED</span></td>
     <td><?= htmlspecialchars(date('Y-m-d H:i', strtotime($row['signed_at'] ?? 'now'))) ?></td>
     <td class="actions">

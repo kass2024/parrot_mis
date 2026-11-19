@@ -27,6 +27,12 @@ if ($adminPk > 0) {
 }
 // Superadmin if either session or DB matches (delete API still enforces DB)
 $canDeleteApplication = xander_is_superadmin_role($dbRole) || xander_is_superadmin_role($sessionRole);
+$reportViewer = pcvc_application_report_viewer($conn);
+$canAssignStaff = pcvc_can_assign_application_staff($conn);
+$seesAllApplications = ($reportViewer['scope'] ?? '') === 'all';
+$listSubtitle = $seesAllApplications
+    ? 'All applications, grouped by the staff, agent, or company in charge'
+    : 'Students assigned to you, and students you added';
 
 $appRoot = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
 ?>
@@ -226,6 +232,118 @@ aside p {
     box-sizing: border-box;
 }
 
+#studentList li.pcvc-charge-fold {
+    display: block;
+    padding: 0;
+    cursor: default;
+    background: #fff;
+    gap: 0;
+}
+#studentList li.pcvc-charge-fold:hover {
+    background: #fff;
+    transform: none;
+}
+.pcvc-charge-toggle {
+    width: 100%;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: 1px solid #e2e8f0;
+    background: #f8fafc;
+    text-align: left;
+    cursor: pointer;
+}
+.pcvc-charge-toggle.has-new {
+    background: #ecfdf5;
+    box-shadow: inset 3px 0 0 #16a34a;
+}
+.pcvc-charge-chevron {
+    width: 16px;
+    margin-top: 2px;
+    color: #047857;
+    font-size: 12px;
+    line-height: 1.4;
+    flex: 0 0 16px;
+}
+.pcvc-charge-copy {
+    min-width: 0;
+    flex: 1;
+}
+.pcvc-charge-kind {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: #065f46;
+}
+.pcvc-charge-name {
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    color: #0f172a;
+    word-break: break-word;
+}
+.pcvc-charge-email,
+.pcvc-charge-count {
+    display: block;
+    font-size: 11px;
+    color: #64748b;
+    word-break: break-word;
+}
+.pcvc-new-badge,
+.pcvc-new-pill {
+    display: inline-flex;
+    align-items: center;
+    background: #16a34a;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    border-radius: 999px;
+    padding: 2px 7px;
+    line-height: 1.4;
+    flex: 0 0 auto;
+}
+.pcvc-new-pill {
+    margin-left: 6px;
+    vertical-align: middle;
+}
+.unread-dot {
+    width: 12px;
+    height: 12px;
+    min-width: 12px;
+    border-radius: 999px;
+    background: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .18);
+    margin-top: 4px;
+    flex: 0 0 auto;
+}
+.pcvc-charge-body {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.pcvc-charge-body.is-collapsed {
+    display: none;
+}
+#studentList li.pcvc-app-new {
+    background: #f0fdf4;
+    box-shadow: inset 3px 0 0 #22c55e;
+}
+#studentList li.pcvc-app-new:hover {
+    background: #dcfce7;
+}
+#studentList li.pcvc-app-new.active,
+#studentList li.pcvc-app-new.active:hover {
+    background: linear-gradient(90deg, var(--primary), #6366f1);
+    box-shadow: none;
+    color: #fff;
+}
+
 /* =====================================================
    CARDS (CONTENT ZONE)
    ===================================================== */
@@ -367,7 +485,7 @@ th {
     <aside class="w-96 flex min-h-0 min-w-0 flex-col overflow-hidden border-r border-slate-800">
         <div class="px-6 py-5 border-b">
             <h2 class="text-lg font-bold">Applications</h2>
-            <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') ?> · All student submissions</p>
+            <p class="text-xs text-gray-500 mt-1"><?= htmlspecialchars(PCVC_COMPANY_DISPLAY_NAME, ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars($listSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
         </div>
 
         <div class="p-4 border-b">
@@ -385,11 +503,13 @@ th {
         <div id="agentEmailFilterBanner" class="hidden mx-4 mb-2 rounded-lg border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-900" role="status"></div>
 
         <div class="px-4 pb-3 space-y-2 border-b border-slate-200 bg-slate-50/80">
-            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Track by assignee &amp; status</div>
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500"><?= $seesAllApplications ? 'Track by assignee &amp; status' : 'Track by status' ?></div>
+            <?php if ($seesAllApplications): ?>
             <select id="filterAssignedStaff" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white">
                 <option value="">All staff</option>
                 <option value="-1">Unassigned</option>
             </select>
+            <?php endif; ?>
             <select id="filterAppStatus" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm text-slate-900 bg-white">
                 <option value="">All statuses</option>
             </select>
@@ -484,12 +604,12 @@ th {
                         </div>
                     </section>
 
-                    <?php if ($canDeleteApplication): ?>
-                    <!-- Superadmin only: reassignment + notify (enforced in api/applications.php) -->
+                    <?php if ($canAssignStaff): ?>
+                    <!-- Superadmin and username Robert: reassignment + notify (enforced in api/applications.php) -->
                     <section id="assignmentEditorPanel" class="card p-6 hidden" aria-labelledby="assignmentEditorHeading">
                         <div id="assignmentEditorHeading" class="section-title">Assign to staff</div>
                         <p class="text-xs text-slate-600 mb-4 leading-snug">
-                            Only a superadmin can change who owns this file. After you save, the newly assigned person (staff or superadmin) is notified by email and by WhatsApp when their number and Meta templates are configured.
+                            After you save, the newly assigned person (staff or superadmin) is notified by email and by WhatsApp when their number and Meta templates are configured.
                         </p>
                         <div class="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                             <label class="block min-w-[220px] flex-1">
@@ -670,7 +790,7 @@ th {
                                         class="w-full shrink-0 rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-45 sm:w-auto sm:min-w-[14rem]"
                                         disabled
                                     >
-                                        Add &amp; notify student
+                                        Add
                                     </button>
                                 </div>
                             </div>

@@ -1,6 +1,74 @@
 <?php
 declare(strict_types=1);
 
+/**
+ * Employment status choices printed on the staff contract.
+ *
+ * @return list<string>
+ */
+function pcvc_staff_employment_type_options(): array
+{
+    return ['Full-Time', 'Part-Time', 'Fixed-Term', 'Indefinite-Term'];
+}
+
+function pcvc_staff_employment_type_normalize(string $value): string
+{
+    $key = strtolower(trim($value));
+    $key = str_replace(['_', ' '], '-', $key);
+    $map = [
+        'full-time' => 'Full-Time',
+        'fulltime' => 'Full-Time',
+        'part-time' => 'Part-Time',
+        'parttime' => 'Part-Time',
+        'fixed-term' => 'Fixed-Term',
+        'fixedterm' => 'Fixed-Term',
+        'indefinite-term' => 'Indefinite-Term',
+        'indefinite' => 'Indefinite-Term',
+        'indefiniteterm' => 'Indefinite-Term',
+    ];
+    if (isset($map[$key])) {
+        return $map[$key];
+    }
+    foreach (pcvc_staff_employment_type_options() as $option) {
+        if (strcasecmp($option, trim($value)) === 0) {
+            return $option;
+        }
+    }
+
+    return '';
+}
+
+/**
+ * Value stored on the profile. Known aliases become the contract label.
+ */
+function pcvc_staff_employment_type_store(string $value): string
+{
+    $canonical = pcvc_staff_employment_type_normalize($value);
+    if ($canonical !== '') {
+        return $canonical;
+    }
+    $value = trim($value);
+    if (strcasecmp($value, 'Contract') === 0) {
+        return 'Contract';
+    }
+
+    return '';
+}
+
+/**
+ * @return list<string>
+ */
+function pcvc_staff_employment_type_choices(string $current): array
+{
+    $options = pcvc_staff_employment_type_options();
+    $current = trim($current);
+    if ($current !== '' && pcvc_staff_employment_type_normalize($current) === '' && !in_array($current, $options, true)) {
+        array_unshift($options, $current);
+    }
+
+    return $options;
+}
+
 function pcvc_staff_contract_upload_dir(): string
 {
     return dirname(__DIR__) . '/uploads/staff_contracts';
@@ -101,6 +169,15 @@ function pcvc_staff_contract_ensure_schema(mysqli $conn): void
         'uploaded_at' => "DATETIME NULL AFTER uploaded_by",
         'field_layout' => "LONGTEXT NULL AFTER signed_ip",
         'updated_at' => "TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        'witness_email' => "VARCHAR(190) NULL",
+        'witness_token' => "VARCHAR(64) NULL",
+        'witness_name' => "VARCHAR(255) NULL",
+        'witness_national_id' => "VARCHAR(120) NULL",
+        'witness_contact' => "VARCHAR(190) NULL",
+        'witness_place' => "VARCHAR(190) NULL",
+        'witness_signature_file' => "VARCHAR(500) NULL",
+        'witness_signed_at' => "DATETIME NULL",
+        'witness_signed_ip' => "VARCHAR(64) NULL",
     ];
 
     $existing = [];
@@ -217,6 +294,9 @@ function pcvc_staff_contract_docx_is_corrupt(string $docxAbs): bool
     }
     if (strlen($xml) < 50000) {
         return true;
+    }
+    if (strpos($xml, 'Employee notice details') !== false || strpos($xml, 'WITNESS FOR THE EMPLOYEE') !== false) {
+        return false;
     }
     if (strpos($xml, 'EMPLOYEE PROBATION AGREEMENT') === false) {
         return true;

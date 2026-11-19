@@ -1,5 +1,29 @@
 <?php
 session_start();
+require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
+
+$loggedInAgent = (isset($conn) && $conn instanceof mysqli) ? pcvc_logged_in_admin_profile($conn) : null;
+if (
+    !$loggedInAgent
+    || $loggedInAgent['first_name'] === ''
+    || $loggedInAgent['email'] === ''
+    || !filter_var($loggedInAgent['email'], FILTER_VALIDATE_EMAIL)
+) {
+    $returnQuery = [];
+    $resumeId = isset($_GET['id']) && is_string($_GET['id']) ? preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['id']) : '';
+    if ($resumeId !== '') {
+        $returnQuery['id'] = $resumeId;
+    }
+    $langQuery = isset($_GET['lang']) && is_string($_GET['lang']) ? $_GET['lang'] : '';
+    if (in_array($langQuery, ['en', 'fr'], true)) {
+        $returnQuery['lang'] = $langQuery;
+    }
+    $returnTarget = 'student-application.php' . ($returnQuery !== [] ? '?' . http_build_query($returnQuery) : '');
+    header('Location: admin-login.php?return=' . rawurlencode($returnTarget));
+    exit;
+}
+
 if (!empty($_GET['id']) && is_string($_GET['id'])) {
     $rid = preg_replace('/[^a-zA-Z0-9_\-]/', '', $_GET['id']);
     if ($rid !== '') {
@@ -58,7 +82,7 @@ if (in_array($lang, ['en', 'fr'])) {
 // Bilingual text arrays - ONLY for UI elements, not form field names
 $text = [
     'en' => [
-        'title' => 'Student Application Form',
+        'title' => 'Add student',
         'next' => 'Next',
         'prev' => 'Back',
         'step1_title' => 'Choice of Studies',
@@ -67,25 +91,25 @@ $text = [
         'step1_flow_2' => 'University',
         'step1_flow_3' => 'Level',
         'step1_flow_4' => 'Program',
-        'step1_regions_label' => 'Study areas',
+        'step1_regions_label' => 'Study destination',
         'step1_regions_placeholder' => 'Select one or more regions',
         'step1_regions_help' => 'Start by choosing where you want to study. You can select several regions.',
-        'step1_add_panel_title' => 'Add a university',
-        'step1_add_panel_help' => 'Pick a university from your selected regions, then click Add. Repeat to apply to more than one university.',
+        'step1_add_panel_title' => 'University',
+        'step1_add_panel_help' => 'Choose a university and it is added immediately. Repeat to apply to more than one.',
         'step1_add_university_btn' => 'Add university',
         'step1_pick_university' => 'Choose a university…',
         'step1_add_level' => 'Add another program level',
         'step1_remove_row' => 'Remove this row',
         'step1_remove_uni' => 'Remove university',
-        'step1_choices_heading' => 'Your universities & programs',
+        'step1_choices_heading' => 'Programs',
         'step1_filter_summary' => 'Filter list (optional)',
         'step1_search_label' => 'Narrow your list (optional)',
         'step1_search_placeholder' => 'Search university or program name…',
         'step1_clear' => 'Clear',
-        'step1_empty_no_region' => 'Select at least one region above to continue.',
-        'step1_empty_add_uni' => 'Use “Add a university” below to choose your institutions. You can add multiple universities and several programs per university.',
+        'step1_empty_no_region' => 'Choose a study destination to continue.',
+        'step1_empty_add_uni' => 'Choose a university above. It is added as soon as you select it.',
         'step1_cart_title' => 'Your selections',
-        'step1_cart_help' => 'Summarizes universities where you have chosen at least one program.',
+        'step1_cart_help' => 'Check this summary, then click Create student.',
         'step1_university' => 'University',
         'step1_level' => 'Program level',
         'step1_program' => 'Programs',
@@ -108,11 +132,11 @@ $text = [
         'smart_autofill_title' => 'Smart AI autofill',
         'smart_autofill_desc' => 'After choosing your study choice, upload passport, CV, transcripts, degree, birth certificate, or other supporting documents. AI will extract student details and route each recognized file into the existing attachment fields automatically.',
         'smart_autofill_button' => 'Add documents',
-        'smart_autofill_start_button' => 'Start analysis',
-        'smart_autofill_formats' => 'Supported formats: PDF, DOCX, JPG, JPEG, PNG, WEBP',
-        'smart_autofill_hint' => 'Best results: upload passport, CV, and your latest academic documents together.',
-        'smart_autofill_gate' => 'Choose at least one study program first. Then add the documents you want to analyze.',
-        'smart_autofill_ready' => 'Study choice selected. Add one document now, then add more later before starting the analysis manually.',
+        'smart_autofill_start_button' => 'Create student',
+        'smart_autofill_formats' => 'PDF, DOCX, JPG, PNG, WEBP',
+        'smart_autofill_hint' => 'Passport, CV, and the latest academic documents give the best result.',
+        'smart_autofill_gate' => 'Choose a destination, university, and program, then add the documents.',
+        'smart_autofill_ready' => 'Add the documents, then create the student in one click.',
         'smart_autofill_processing' => 'Analyzing your documents and extracting student details…',
         'smart_autofill_uploading' => 'Applying extracted details and attaching the recognized documents…',
         'smart_autofill_success' => 'Autofill complete. Please review the fields before continuing.',
@@ -121,8 +145,8 @@ $text = [
         'smart_autofill_need_draft' => 'Please save your draft first so uploaded documents can be attached to this application.',
         'smart_autofill_queue_title' => 'Queued documents',
         'smart_autofill_queue_empty' => 'No documents selected yet. Add one or more files, then start the analysis when you are ready.',
-        'smart_autofill_queue_ready' => 'Documents are queued. Click Start analysis when you are ready to continue until final submission.',
-        'smart_autofill_queue_count' => 'document(s) ready for analysis',
+        'smart_autofill_queue_ready' => 'Documents are ready. Review the summary, then click Create student.',
+        'smart_autofill_queue_count' => 'document(s) ready',
         'smart_autofill_results_title' => 'Recognized documents',
         'smart_autofill_warnings_title' => 'Warnings',
         'smart_autofill_existing_note' => 'These files are not stored in a new place. They are routed into the existing document attachment fields below.',
@@ -271,7 +295,7 @@ $text = [
         'save_error_ok' => 'OK',
     ],
     'fr' => [
-        'title' => 'Formulaire de Demande d\'Étudiant',
+        'title' => 'Ajouter un étudiant',
         'next' => 'Suivant',
         'prev' => 'Retour',
         'step1_title' => 'Choix d\'études',
@@ -280,25 +304,25 @@ $text = [
         'step1_flow_2' => 'Université',
         'step1_flow_3' => 'Niveau',
         'step1_flow_4' => 'Programme',
-        'step1_regions_label' => 'Zones d\'études',
+        'step1_regions_label' => 'Destination d\'études',
         'step1_regions_placeholder' => 'Sélectionnez une ou plusieurs régions',
         'step1_regions_help' => 'Commencez par indiquer où vous souhaitez étudier. Plusieurs régions sont possibles.',
-        'step1_add_panel_title' => 'Ajouter une université',
-        'step1_add_panel_help' => 'Choisissez une université parmi les régions sélectionnées, puis cliquez sur Ajouter. Répétez pour plusieurs universités.',
+        'step1_add_panel_title' => 'Université',
+        'step1_add_panel_help' => 'Choisissez une université : elle est ajoutée tout de suite. Répétez pour en ajouter d\'autres.',
         'step1_add_university_btn' => 'Ajouter',
         'step1_pick_university' => 'Choisir une université…',
         'step1_add_level' => 'Ajouter un autre niveau',
         'step1_remove_row' => 'Retirer cette ligne',
         'step1_remove_uni' => 'Retirer l\'université',
-        'step1_choices_heading' => 'Vos universités et programmes',
+        'step1_choices_heading' => 'Programmes',
         'step1_filter_summary' => 'Filtrer la liste (facultatif)',
         'step1_search_label' => 'Filtrer la liste (facultatif)',
         'step1_search_placeholder' => 'Rechercher une université ou un programme…',
         'step1_clear' => 'Effacer',
-        'step1_empty_no_region' => 'Sélectionnez au moins une région ci-dessus pour continuer.',
-        'step1_empty_add_uni' => 'Utilisez « Ajouter une université » ci-dessous pour choisir vos établissements. Vous pouvez en ajouter plusieurs et plusieurs programmes par université.',
+        'step1_empty_no_region' => 'Choisissez une destination d\'études pour continuer.',
+        'step1_empty_add_uni' => 'Choisissez une université ci-dessus. Elle est ajoutée dès la sélection.',
         'step1_cart_title' => 'Vos choix',
-        'step1_cart_help' => 'Récapitule les universités pour lesquelles au moins un programme est sélectionné.',
+        'step1_cart_help' => 'Vérifiez ce résumé, puis cliquez sur Créer l\'étudiant.',
         'step1_university' => 'Université',
         'step1_level' => 'Niveau du programme',
         'step1_program' => 'Programmes',
@@ -321,11 +345,11 @@ $text = [
         'smart_autofill_title' => 'Remplissage intelligent par IA',
         'smart_autofill_desc' => 'Après avoir choisi vos études, téléchargez le passeport, le CV, les relevés, le diplôme, le certificat de naissance ou d\'autres documents utiles. L\'IA extrait les informations de l\'étudiant puis route chaque fichier reconnu vers les champs de pièces jointes existants.',
         'smart_autofill_button' => 'Ajouter des documents',
-        'smart_autofill_start_button' => 'Lancer l analyse',
-        'smart_autofill_formats' => 'Formats supportés : PDF, DOCX, JPG, JPEG, PNG, WEBP',
-        'smart_autofill_hint' => 'Meilleurs résultats : téléchargez ensemble le passeport, le CV et les derniers documents académiques.',
-        'smart_autofill_gate' => 'Choisissez d abord au moins un programme d etudes. Ensuite, ajoutez les documents a analyser.',
-        'smart_autofill_ready' => 'Choix d etudes selectionne. Ajoutez un document maintenant puis d autres plus tard avant de lancer l analyse manuellement.',
+        'smart_autofill_start_button' => 'Créer l\'étudiant',
+        'smart_autofill_formats' => 'PDF, DOCX, JPG, PNG, WEBP',
+        'smart_autofill_hint' => 'Le passeport, le CV et les derniers documents académiques donnent le meilleur résultat.',
+        'smart_autofill_gate' => 'Choisissez la destination, l\'université et le programme, puis ajoutez les documents.',
+        'smart_autofill_ready' => 'Ajoutez les documents, puis créez l\'étudiant en un clic.',
         'smart_autofill_processing' => 'Analyse des documents et extraction des informations de l\'étudiant…',
         'smart_autofill_uploading' => 'Application des données extraites et rattachement des documents reconnus…',
         'smart_autofill_success' => 'Remplissage terminé. Vérifiez les champs avant de continuer.',
@@ -334,8 +358,8 @@ $text = [
         'smart_autofill_need_draft' => 'Veuillez d\'abord enregistrer le brouillon afin que les documents soient rattachés à cette demande.',
         'smart_autofill_queue_title' => 'Documents en attente',
         'smart_autofill_queue_empty' => 'Aucun document selectionne pour le moment. Ajoutez un ou plusieurs fichiers puis lancez l analyse quand vous etes pret.',
-        'smart_autofill_queue_ready' => 'Les documents sont en attente. Cliquez sur Lancer l analyse quand vous etes pret a aller jusqu a la soumission finale.',
-        'smart_autofill_queue_count' => 'document(s) pret(s) pour l analyse',
+        'smart_autofill_queue_ready' => 'Les documents sont prêts. Vérifiez le résumé, puis cliquez sur Créer l\'étudiant.',
+        'smart_autofill_queue_count' => 'document(s) prêt(s)',
         'smart_autofill_results_title' => 'Documents reconnus',
         'smart_autofill_warnings_title' => 'Avertissements',
         'smart_autofill_existing_note' => 'Ces fichiers ne sont pas stockés dans un nouvel endroit. Ils sont routés vers les champs de pièces jointes existants ci-dessous.',
@@ -713,10 +737,20 @@ body {
   overflow: hidden;
 }
 
-/* Options list */
-.select2-container--bootstrap-5 .select2-results__options {
-  max-height: 240px;
+/* One scrollbar: the outer list only. Nested region groups must not scroll too. */
+.select2-container--bootstrap-5 .select2-results {
+  max-height: none;
+  overflow: visible;
+}
+.select2-container--bootstrap-5 .select2-results__options,
+.select2-container--bootstrap-5 .select2-results__options--nested {
+  max-height: none;
+  overflow: visible;
+}
+.select2-container--bootstrap-5 .select2-results > .select2-results__options {
+  max-height: 280px;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Option */
@@ -2197,24 +2231,443 @@ body {
 </style>
 <!-- ✅ Mobile-only overrides MUST be last -->
 <link rel="stylesheet" href="mobile-study-selection.css">
+<style>
+body.pcvc-simple {
+  --pcvc-green: #427431;
+  --pcvc-green-dark: #2f5a26;
+  --pcvc-navy: #0b3c5d;
+  --pcvc-red: #E21D1E;
+  --pcvc-ink: #1e3a2f;
+  --pcvc-muted: #5c6f64;
+  margin: 0;
+  background: #eef2f7;
+  color: var(--pcvc-ink);
+  font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+body.pcvc-simple .container,
+body.pcvc-simple .container.my-5 {
+  max-width: none !important;
+  width: 100% !important;
+  padding: 16px 20px 28px;
+  margin: 0 !important;
+}
+body.pcvc-simple .container > .card,
+body.pcvc-simple .container > .card > .card-body {
+  background: transparent;
+  border: 0;
+  box-shadow: none !important;
+  padding: 0;
+  width: 100%;
+}
+body.pcvc-simple .pcvc-legacy-hide,
+body.pcvc-simple .study-flow-timeline,
+body.pcvc-simple .study-filter-details,
+body.pcvc-simple .study-panel-badge {
+  display: none !important;
+}
+body.pcvc-simple .pcvc-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+  gap: 18px;
+  align-items: stretch;
+  margin: 0 0 16px;
+  padding: 22px 24px 20px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+  position: relative;
+  overflow: hidden;
+}
+body.pcvc-simple .pcvc-hero::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 5px;
+  background: linear-gradient(90deg, #427431, #0b3c5d);
+}
+body.pcvc-simple .pcvc-kicker {
+  margin: 6px 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--pcvc-green);
+}
+body.pcvc-simple .pcvc-hero h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.7rem, 2.4vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--pcvc-navy);
+}
+body.pcvc-simple .pcvc-hero-main p {
+  margin: 0;
+  max-width: 46rem;
+  color: var(--pcvc-muted);
+  line-height: 1.5;
+  font-size: 15px;
+}
+body.pcvc-simple .pcvc-hero-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+}
+body.pcvc-simple .language-switcher {
+  position: static;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  z-index: 1;
+}
+body.pcvc-simple .language-btn {
+  border-radius: 999px;
+  border: 1px solid #d5e0d8;
+  background: #fff;
+  color: var(--pcvc-ink);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+}
+body.pcvc-simple .language-btn.active,
+body.pcvc-simple .language-btn.active:hover {
+  background: var(--pcvc-green);
+  border-color: var(--pcvc-green);
+  color: #fff;
+}
+body.pcvc-simple .pcvc-agent-pill {
+  background: #f4f8f2;
+  border: 1px solid #d5e4cc;
+  border-left: 5px solid var(--pcvc-green);
+  border-radius: 14px;
+  padding: 12px 14px 12px 16px;
+}
+body.pcvc-simple .pcvc-agent-pill span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--pcvc-green);
+}
+body.pcvc-simple .pcvc-agent-pill strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 1.15rem;
+  line-height: 1.25;
+  color: var(--pcvc-navy);
+}
+body.pcvc-simple .pcvc-agent-pill small {
+  display: block;
+  margin-top: 2px;
+  color: #3d5348;
+  font-size: 0.92rem;
+}
+body.pcvc-simple .step-section {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+body.pcvc-simple .step-section::before { display: none; }
+body.pcvc-simple .study-selection-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: 16px;
+  align-items: start;
+  width: 100%;
+}
+body.pcvc-simple #regionStep { grid-column: 1; grid-row: 1; }
+body.pcvc-simple #studyAddUniversityPanel { grid-column: 1; grid-row: 2; }
+body.pcvc-simple .study-choices-section { grid-column: 2; grid-row: 1 / span 2; min-height: 100%; }
+body.pcvc-simple #studyCart,
+body.pcvc-simple #pcvcDocs { grid-column: 1 / -1; }
+body.pcvc-simple #step1AgentReferralPanel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+body.pcvc-simple .study-panel,
+body.pcvc-simple .study-choices-section,
+body.pcvc-simple .study-choice,
+body.pcvc-simple .study-summary-card,
+body.pcvc-simple .smart-autofill-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+  padding: 16px 18px 18px;
+  width: 100%;
+}
+body.pcvc-simple .study-choice { box-shadow: none; }
+body.pcvc-simple .study-empty { color: var(--pcvc-muted); }
+body.pcvc-simple .pcvc-num {
+  display: inline-grid;
+  place-items: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  margin-right: 0.55rem;
+  border-radius: 999px;
+  background: var(--pcvc-green);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+body.pcvc-simple #study-regions-label,
+body.pcvc-simple #study-add-uni-label,
+body.pcvc-simple #study-choices-heading,
+body.pcvc-simple .pcvc-docs-head h2 {
+  display: flex;
+  align-items: center;
+  font-size: 1.05rem;
+  color: var(--pcvc-navy);
+}
+body.pcvc-simple .region-badge,
+body.pcvc-simple .select2-container--bootstrap-5 .select2-selection__choice,
+body.pcvc-simple .select2-selection__choice {
+  background: var(--pcvc-green) !important;
+  border-color: var(--pcvc-green) !important;
+  color: #fff !important;
+}
+body.pcvc-simple .select2-container { width: 100% !important; }
+body.pcvc-simple #studyAddUniversityPanel { position: relative; overflow: visible; }
+body.pcvc-simple .regions-picker-face {
+  border: 1px solid #c9d7cc !important;
+  border-radius: 12px !important;
+  min-height: 48px;
+  background: #fff !important;
+  color: #1e3a2f !important;
+  box-shadow: none !important;
+}
+body.pcvc-simple .regions-picker-face:focus {
+  border-color: #427431 !important;
+  box-shadow: 0 0 0 3px rgba(66, 116, 49, 0.18) !important;
+}
+body.pcvc-simple .regions-dropdown-menu {
+  border: 1px solid #d5e0d8 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 16px 40px rgba(11, 60, 93, 0.14) !important;
+  padding: 6px !important;
+  max-height: 280px !important;
+}
+body.pcvc-simple .region-dropdown-item {
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 10px 12px !important;
+  font-size: 14px !important;
+  color: #1e3a2f !important;
+}
+body.pcvc-simple .region-dropdown-item.is-on {
+  background: #eef6ea !important;
+  color: #2f5a26 !important;
+  font-weight: 700;
+}
+body.pcvc-simple #selectedRegionsContainer {
+  background: transparent !important;
+  border: 0 !important;
+  min-height: 0 !important;
+  padding: 10px 0 0 !important;
+}
+body.pcvc-simple #selectedRegionsContainer.is-empty { display: none !important; }
+body.pcvc-simple .region-tab {
+  background: #427431 !important;
+  box-shadow: none !important;
+  border-radius: 999px !important;
+}
+body.pcvc-simple .select2-dropdown,
+body.pcvc-simple .select2-container--bootstrap-5 .select2-dropdown,
+body.pcvc-simple .select2-container--default .select2-dropdown {
+  border: 1px solid #d5e0d8 !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+  box-shadow: 0 16px 40px rgba(11, 60, 93, 0.14) !important;
+  z-index: 2000;
+}
+body.pcvc-simple .select2-search--dropdown { padding: 8px !important; background: #f7faf6 !important; }
+body.pcvc-simple .select2-search--dropdown .select2-search__field {
+  border: 1px solid #d5e0d8 !important;
+  border-radius: 10px !important;
+  height: 40px !important;
+  padding: 6px 12px !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+body.pcvc-simple .select2-results,
+body.pcvc-simple .select2-results__options,
+body.pcvc-simple .select2-results__options--nested {
+  max-height: none !important;
+  overflow: visible !important;
+}
+body.pcvc-simple .select2-results > .select2-results__options {
+  max-height: 280px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+body.pcvc-simple .select2-results__option { padding: 10px 14px !important; }
+body.pcvc-simple .select2-container--bootstrap-5 .select2-results__option--highlighted,
+body.pcvc-simple .select2-container--default .select2-results__option--highlighted,
+body.pcvc-simple .select2-results__option--highlighted {
+  background: #427431 !important;
+  color: #fff !important;
+}
+body.pcvc-simple .select2-results__group {
+  color: #427431 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.08em;
+}
+body.pcvc-simple .select2-container--bootstrap-5 .select2-selection {
+  border: 1px solid #c9d7cc !important;
+  border-radius: 12px !important;
+  min-height: 48px !important;
+}
+body.pcvc-simple .select2-container--bootstrap-5.select2-container--focus .select2-selection,
+body.pcvc-simple .select2-container--bootstrap-5.select2-container--open .select2-selection {
+  border-color: #427431 !important;
+  box-shadow: 0 0 0 3px rgba(66, 116, 49, 0.18) !important;
+}
+body.pcvc-simple .form-control:focus,
+body.pcvc-simple .form-select:focus {
+  border-color: var(--pcvc-green);
+  box-shadow: 0 0 0 0.2rem rgba(66, 116, 49, 0.18);
+}
+body.pcvc-simple #pcvcDocs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: stretch;
+}
+body.pcvc-simple #pcvcDocs .study-summary-aside {
+  order: 0;
+  margin: 0;
+}
+body.pcvc-simple .pcvc-docs-head { grid-column: 1 / -1; }
+body.pcvc-simple .pcvc-docs-head p {
+  margin: 6px 0 0 2.15rem;
+  color: var(--pcvc-muted);
+  font-size: 0.95rem;
+}
+body.pcvc-simple #smartAutofillStatus,
+body.pcvc-simple #smartAutofillQueueWrap,
+body.pcvc-simple #smartAutofillProgressWrap,
+body.pcvc-simple #smartAutofillPanels { grid-column: 1 / -1; }
+body.pcvc-simple .pcvc-drop {
+  width: 100%;
+  min-height: 92px;
+  border: 1.5px dashed #9fbfa6;
+  background: #f7faf6;
+  border-radius: 16px;
+  padding: 18px 16px;
+  text-align: center;
+  color: var(--pcvc-ink);
+  cursor: pointer;
+}
+body.pcvc-simple .pcvc-drop strong,
+body.pcvc-simple .pcvc-drop span { display: block; }
+body.pcvc-simple .pcvc-drop span { margin-top: 4px; color: var(--pcvc-muted); font-size: 0.88rem; }
+body.pcvc-simple .pcvc-drop.is-ready:hover,
+body.pcvc-simple .pcvc-drop.is-hot {
+  border-color: var(--pcvc-green);
+  background: #eef6ea;
+}
+body.pcvc-simple .pcvc-drop:disabled { cursor: not-allowed; opacity: 0.7; }
+body.pcvc-simple .pcvc-help { margin: 0; color: var(--pcvc-muted); font-size: 0.92rem; }
+body.pcvc-simple .pcvc-create {
+  width: 100%;
+  border: 0;
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--pcvc-green);
+  color: #fff;
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+body.pcvc-simple .pcvc-create:hover:not(:disabled) { background: var(--pcvc-green-dark); }
+body.pcvc-simple .pcvc-create:disabled { background: #c5d0c2; cursor: not-allowed; }
+body.pcvc-simple .pcvc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+body.pcvc-simple .btn-primary {
+  --bs-btn-bg: #427431;
+  --bs-btn-border-color: #427431;
+  --bs-btn-hover-bg: #2f5a26;
+  --bs-btn-hover-border-color: #2f5a26;
+  --bs-btn-active-bg: #2f5a26;
+  --bs-btn-color: #fff;
+}
+body.pcvc-simple .btn-outline-primary {
+  --bs-btn-bg: transparent;
+  --bs-btn-color: #427431;
+  --bs-btn-border-color: #427431;
+  --bs-btn-hover-bg: #427431;
+  --bs-btn-hover-border-color: #427431;
+  --bs-btn-hover-color: #fff;
+}
+body.pcvc-simple .btn-remove,
+body.pcvc-simple .text-danger { color: var(--pcvc-red) !important; }
+@media (max-width: 980px) {
+  body.pcvc-simple .pcvc-hero,
+  body.pcvc-simple .study-selection-stack,
+  body.pcvc-simple #pcvcDocs {
+    grid-template-columns: 1fr;
+  }
+  body.pcvc-simple #regionStep,
+  body.pcvc-simple #studyAddUniversityPanel,
+  body.pcvc-simple .study-choices-section,
+  body.pcvc-simple #pcvcDocs,
+  body.pcvc-simple #studyCart {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  body.pcvc-simple .language-switcher { justify-content: flex-start; }
+}
+</style>
 </head>
 
-<body>
-<!-- Language Switcher -->
-<div class="language-switcher">
-    <button class="language-btn <?php echo $lang === 'en' ? 'active' : ''; ?>" data-lang="en">
-        <span>🇺🇸</span> English
-    </button>
-    <button class="language-btn <?php echo $lang === 'fr' ? 'active' : ''; ?>" data-lang="fr">
-        <span>🇫🇷</span> Français
-    </button>
-</div>
-
+<body class="pcvc-simple">
 <div class="container my-5">
 <div class="card shadow-sm">
 <div class="card-body">
+<header class="pcvc-hero">
+  <div class="pcvc-hero-main">
+    <p class="pcvc-kicker">Parrot Canada · <?php echo $lang === 'en' ? 'Add student' : 'Ajouter un étudiant'; ?></p>
+    <h1><?php echo $lang === 'en' ? 'Create an application' : 'Créer une demande'; ?></h1>
+    <p><?php echo $lang === 'en'
+      ? 'Choose the destination, university, and program. Upload the documents. One click reads the student details and submits the application.'
+      : 'Choisissez la destination, l\'université et le programme. Téléversez les documents. Un clic lit les informations de l\'étudiant et soumet la demande.'; ?></p>
+  </div>
+  <div class="pcvc-hero-side">
+    <div class="language-switcher">
+      <button class="language-btn <?php echo $lang === 'en' ? 'active' : ''; ?>" data-lang="en" type="button">
+        <span>🇺🇸</span> English
+      </button>
+      <button class="language-btn <?php echo $lang === 'fr' ? 'active' : ''; ?>" data-lang="fr" type="button">
+        <span>🇫🇷</span> Français
+      </button>
+    </div>
+    <div class="pcvc-agent-pill">
+      <span><?php echo $lang === 'en' ? 'Agent' : 'Agent'; ?></span>
+      <strong><?php echo htmlspecialchars($loggedInAgent['full_name'], ENT_QUOTES, 'UTF-8'); ?></strong>
+      <small><?php echo htmlspecialchars($loggedInAgent['email'], ENT_QUOTES, 'UTF-8'); ?></small>
+    </div>
+  </div>
+</header>
 <!-- SMART APPLICATION RETRIEVAL -->
-<div class="card mb-3 border-primary">
+<div class="card mb-3 border-primary pcvc-legacy-hide">
 <div class="card-body">
 
 <strong>Resume Incomplete Application</strong>
@@ -2232,12 +2685,12 @@ class="list-group mt-2 d-none"></div>
 
 </div>
 </div>
-<h4 class="fw-semibold mb-3"><?php echo $t['title']; ?></h4>
+<h4 class="fw-semibold mb-3 pcvc-legacy-hide"><?php echo $t['title']; ?></h4>
 
 <!-- ===============================
      STEP PROGRESS
 =============================== -->
-<div class="progress-step mb-4">
+<div class="progress-step mb-4 pcvc-legacy-hide">
   <span class="active"></span>
   <span></span>
   <span></span>
@@ -2284,6 +2737,7 @@ class="list-group mt-2 d-none"></div>
        DOCUMENT CHECKLIST (STEP 1 ONLY)
   =============================== -->
   <div
+    class="pcvc-legacy-hide"
     style="
       background: #f6f8ff;
       border: 1px solid #c7d2fe;
@@ -2351,7 +2805,7 @@ class="list-group mt-2 d-none"></div>
   =============================== -->
   <div class="step-section study-selection">
 
-    <header class="study-selection-header mb-3 mb-lg-4">
+    <header class="study-selection-header mb-3 mb-lg-4 pcvc-legacy-hide">
       <h5 class="fw-semibold mb-2 study-step-title"><?php echo $t['step1_title']; ?></h5>
       <p class="text-muted small mb-3 mb-lg-4 study-step-lead">
         <?php echo $t['step1_desc']; ?>
@@ -2385,7 +2839,7 @@ class="list-group mt-2 d-none"></div>
           <?php echo $lang === 'en' ? 'Start here' : 'Commencez ici'; ?>
         </div>
 
-        <h2 id="study-regions-label" class="h6 fw-semibold mb-2 mb-md-3"><?php echo $t['step1_regions_label']; ?></h2>
+        <h2 id="study-regions-label" class="h6 fw-semibold mb-2 mb-md-3"><span class="pcvc-num">1</span><?php echo $t['step1_regions_label']; ?></h2>
 
         <select
           id="regions"
@@ -2399,19 +2853,17 @@ class="list-group mt-2 d-none"></div>
 
       <!-- ADD UNIVERSITY -->
       <section id="studyAddUniversityPanel" class="study-panel study-panel--soft" style="display:none;" aria-labelledby="study-add-uni-label">
-        <h2 id="study-add-uni-label" class="h6 fw-semibold mb-2 mb-md-3"><?php echo $t['step1_add_panel_title']; ?></h2>
-        <div class="row g-3 align-items-stretch align-items-md-end">
-          <div class="col-12 col-lg-8">
-            <label for="addUniversitySelect" class="form-label small text-secondary d-lg-none mb-1"><?php echo $t['step1_pick_university']; ?></label>
+        <h2 id="study-add-uni-label" class="h6 fw-semibold mb-2 mb-md-3"><span class="pcvc-num">2</span><?php echo $t['step1_add_panel_title']; ?></h2>
+        <div class="row g-3">
+          <div class="col-12">
+            <label for="addUniversitySelect" class="visually-hidden"><?php echo $t['step1_pick_university']; ?></label>
             <select id="addUniversitySelect" class="form-select rounded-3 study-touch-control study-select-fullwidth" data-placeholder="<?php echo htmlspecialchars($t['step1_pick_university'], ENT_QUOTES, 'UTF-8'); ?>">
               <option value=""><?php echo $t['step1_pick_university']; ?></option>
             </select>
           </div>
-          <div class="col-12 col-lg-4">
-            <button type="button" id="btnAddUniversity" class="btn btn-primary w-100 rounded-3 fw-semibold study-touch-btn">
-              <?php echo $t['step1_add_university_btn']; ?>
-            </button>
-          </div>
+          <button type="button" id="btnAddUniversity" class="d-none" hidden tabindex="-1" aria-hidden="true">
+            <?php echo $t['step1_add_university_btn']; ?>
+          </button>
         </div>
         <p class="form-text mb-0 mt-2 small"><?php echo $t['step1_add_panel_help']; ?></p>
       </section>
@@ -2461,7 +2913,7 @@ class="list-group mt-2 d-none"></div>
       <!-- USER CARDS + EMPTY -->
       <section class="study-choices-section" aria-labelledby="study-choices-heading">
         <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 mb-md-3">
-          <h2 id="study-choices-heading" class="h6 fw-semibold mb-0"><?php echo $t['step1_choices_heading']; ?></h2>
+          <h2 id="study-choices-heading" class="h6 fw-semibold mb-0"><span class="pcvc-num">3</span><?php echo $t['step1_choices_heading']; ?></h2>
         </div>
         <div id="studyChoices" class="study-choices"></div>
 
@@ -2475,19 +2927,7 @@ class="list-group mt-2 d-none"></div>
         </div>
       </section>
 
-      <!-- SUMMARY LAST -->
-      <aside id="studyCart" class="study-summary-card study-summary-aside" style="display:none;" aria-labelledby="study-cart-title">
-        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
-          <h2 id="study-cart-title" class="h6 fw-semibold mb-0"><?php echo $t['step1_cart_title']; ?></h2>
-          <span class="badge rounded-pill study-summary-pill">
-            <?php echo $lang === 'en' ? 'Summary' : 'Résumé'; ?>
-          </span>
-        </div>
-        <div class="list-group list-group-flush small study-cart-list"></div>
-        <p class="form-text mt-2 mb-0 small"><?php echo $t['step1_cart_help']; ?></p>
-      </aside>
-
-      <!-- Referral + agent (before Smart AI autofill so routing happens after consultant is set) -->
+      <!-- SUMMARY is placed above Create student -->
       <section
         class="study-panel study-panel--soft mt-4"
         id="step1AgentReferralPanel"
@@ -2495,50 +2935,17 @@ class="list-group mt-2 d-none"></div>
       >
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
           <div>
-            <h2 id="step1-agent-heading" class="h6 fw-semibold mb-1"><?php echo htmlspecialchars($t['step1_agent_panel_title'], ENT_QUOTES, 'UTF-8'); ?></h2>
-            <p class="form-text small mb-0"><?php echo htmlspecialchars($t['step1_agent_panel_desc'], ENT_QUOTES, 'UTF-8'); ?></p>
+            <h2 id="step1-agent-heading" class="h6 fw-semibold mb-1"><?php echo $lang === 'en' ? 'Agent' : 'Agent'; ?></h2>
+            <p class="form-text small mb-0"><?php echo $lang === 'en'
+                ? 'This application is filed under your signed-in staff account. Your name and email are the agent on the form.'
+                : 'Cette demande est enregistrée sous votre compte personnel connecté. Votre nom et votre e-mail sont l\'agent du formulaire.'; ?></p>
           </div>
         </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold" for="referral_source">
-            <?php echo $t['referral_title']; ?> <span class="text-danger">*</span>
-          </label>
-          <select
-            id="referral_source"
-            name="referral_source"
-            class="form-select rounded-3 study-touch-control"
-            required
-          >
-            <option value=""><?php echo $lang === 'en' ? 'Select an option' : 'Sélectionnez une option'; ?></option>
-            <?php foreach ($t['referral_options'] as $option): ?>
-            <option value="<?php echo htmlspecialchars($option['value'], ENT_QUOTES, 'UTF-8'); ?>"><?php echo htmlspecialchars($option['text'], ENT_QUOTES, 'UTF-8'); ?></option>
-            <?php endforeach; ?>
-          </select>
-          <div class="form-text"><?php echo $t['referral_help']; ?></div>
-        </div>
+        <input type="hidden" id="referral_source" name="referral_source" value="agent">
 
-        <div id="agentSection" style="display:none;">
-          <div id="agentSearchWrap" class="position-relative mb-2">
-            <label class="form-label small fw-semibold" for="agent_search"><?php echo $lang === 'en' ? 'Find a team member' : 'Trouver un membre de l\'équipe'; ?></label>
-            <input
-              type="text"
-              id="agent_search"
-              class="form-control rounded-3 study-touch-control mb-0"
-              placeholder="<?php echo htmlspecialchars($t['agent_search_placeholder'], ENT_QUOTES, 'UTF-8'); ?>"
-              autocomplete="off"
-              spellcheck="false"
-            >
-            <div
-              id="agentResults"
-              class="list-group position-absolute w-100 d-none shadow-sm border rounded-3 mt-1 overflow-auto agent-results-dropdown"
-              style="z-index: 1050; max-height: 260px;"
-              role="listbox"
-              aria-label="<?php echo $lang === 'en' ? 'Search results' : 'Résultats de recherche'; ?>"
-            ></div>
-          </div>
-
-          <div class="row mt-3 g-2">
+        <div id="agentSection" data-locked-agent="1">
+          <div class="row mt-1 g-2">
             <div class="col-md-4">
               <label class="form-label small fw-semibold" for="agent_first_name"><?php echo $t['agent_first']; ?></label>
               <input
@@ -2546,7 +2953,7 @@ class="list-group mt-2 d-none"></div>
                 class="form-control rounded-3"
                 name="agent_first_name"
                 id="agent_first_name"
-                placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
+                value="<?php echo htmlspecialchars($loggedInAgent['first_name'], ENT_QUOTES, 'UTF-8'); ?>"
                 readonly
                 required
               >
@@ -2558,7 +2965,7 @@ class="list-group mt-2 d-none"></div>
                 class="form-control rounded-3"
                 name="agent_last_name"
                 id="agent_last_name"
-                placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
+                value="<?php echo htmlspecialchars($loggedInAgent['last_name'], ENT_QUOTES, 'UTF-8'); ?>"
                 readonly
                 required
               >
@@ -2570,13 +2977,13 @@ class="list-group mt-2 d-none"></div>
                 class="form-control rounded-3"
                 name="agent_email"
                 id="agent_email"
-                placeholder="<?php echo $lang === 'en' ? 'Auto-filled' : 'Rempli automatiquement'; ?>"
+                value="<?php echo htmlspecialchars($loggedInAgent['email'], ENT_QUOTES, 'UTF-8'); ?>"
                 readonly
                 required
               >
             </div>
           </div>
-          <div class="form-text mt-2"><?php echo $t['agent_help']; ?></div>
+          <div class="form-text mt-2"><?php echo htmlspecialchars($loggedInAgent['full_name'] . ' · ' . $loggedInAgent['email'], ENT_QUOTES, 'UTF-8'); ?></div>
         </div>
 
         <div class="mt-4 pt-3 border-top border-secondary-subtle">
@@ -2611,37 +3018,29 @@ class="list-group mt-2 d-none"></div>
         </div>
       </section>
 
-      <div class="smart-autofill-card mt-4">
-        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-          <div>
-            <span class="smart-autofill-pill">AI</span>
-            <h6 class="fw-semibold mt-2 mb-2"><?php echo htmlspecialchars($t['smart_autofill_title'], ENT_QUOTES, 'UTF-8'); ?></h6>
-            <p class="text-muted small mb-2"><?php echo htmlspecialchars($t['smart_autofill_desc'], ENT_QUOTES, 'UTF-8'); ?></p>
-            <div class="form-text"><?php echo htmlspecialchars($t['smart_autofill_existing_note'], ENT_QUOTES, 'UTF-8'); ?></div>
-          </div>
-
-          <div class="text-lg-end">
-            <div class="smart-autofill-actions">
-              <button type="button" class="btn btn-outline-primary px-4" id="smartAutofillTrigger" disabled>
-                <?php echo htmlspecialchars($t['smart_autofill_button'], ENT_QUOTES, 'UTF-8'); ?>
-              </button>
-              <button type="button" class="btn btn-primary px-4" id="smartAutofillStart" disabled>
-                <?php echo htmlspecialchars($t['smart_autofill_start_button'], ENT_QUOTES, 'UTF-8'); ?>
-              </button>
-            </div>
-            <input
-              type="file"
-              id="smartAutofillInput"
-              class="d-none"
-              multiple
-              accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
-            >
-            <div id="smartAutofillHelp" class="form-text mt-2">
-              <?php echo htmlspecialchars($t['smart_autofill_gate'], ENT_QUOTES, 'UTF-8'); ?><br>
-              <?php echo htmlspecialchars($t['smart_autofill_formats'], ENT_QUOTES, 'UTF-8'); ?><br>
-              <?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?>
-            </div>
-          </div>
+      <div class="smart-autofill-card mt-4 pcvc-docs" id="pcvcDocs">
+        <div class="pcvc-docs-head">
+          <h2 class="h6 fw-semibold mb-1"><span class="pcvc-num">4</span><?php echo $lang === 'en' ? 'Documents' : 'Documents'; ?></h2>
+          <p class="mb-0"><?php echo $lang === 'en'
+            ? 'Passport, transcripts, CV, and any other files. AI reads the student details from these. Nothing else is typed by hand.'
+            : 'Passeport, relevés, CV et autres fichiers. L\'IA lit les informations de l\'étudiant. Rien d\'autre n\'est saisi à la main.'; ?></p>
+        </div>
+        <button type="button" id="pcvcDrop" class="pcvc-drop" disabled>
+          <strong><?php echo $lang === 'en' ? 'Drop documents here' : 'Déposez les documents ici'; ?></strong>
+          <span><?php echo htmlspecialchars($t['smart_autofill_formats'], ENT_QUOTES, 'UTF-8'); ?></span>
+        </button>
+        <button type="button" class="pcvc-sr" id="smartAutofillTrigger" disabled>
+          <?php echo htmlspecialchars($t['smart_autofill_button'], ENT_QUOTES, 'UTF-8'); ?>
+        </button>
+        <input
+          type="file"
+          id="smartAutofillInput"
+          class="d-none"
+          multiple
+          accept=".pdf,.docx,.jpg,.jpeg,.png,.webp"
+        >
+        <div id="smartAutofillHelp" class="pcvc-help">
+          <?php echo htmlspecialchars($t['smart_autofill_gate'], ENT_QUOTES, 'UTF-8'); ?>
         </div>
 
         <div id="smartAutofillStatus" class="alert d-none mt-3 mb-0" role="status" aria-live="polite"></div>
@@ -2686,6 +3085,21 @@ class="list-group mt-2 d-none"></div>
             <ul id="smartAutofillWarnings" class="smart-autofill-results"></ul>
           </div>
         </div>
+
+        <aside id="studyCart" class="study-summary-card study-summary-aside" style="display:none;" aria-labelledby="study-cart-title">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+            <h2 id="study-cart-title" class="h6 fw-semibold mb-0"><?php echo $t['step1_cart_title']; ?></h2>
+            <span class="badge rounded-pill study-summary-pill">
+              <?php echo $lang === 'en' ? 'Summary' : 'Résumé'; ?>
+            </span>
+          </div>
+          <div class="list-group list-group-flush small study-cart-list"></div>
+          <p class="form-text mt-2 mb-0 small"><?php echo $t['step1_cart_help']; ?></p>
+        </aside>
+
+        <button type="button" class="pcvc-create" id="smartAutofillStart" disabled>
+          <?php echo htmlspecialchars($t['smart_autofill_start_button'], ENT_QUOTES, 'UTF-8'); ?>
+        </button>
 
       </div>
 
@@ -3680,7 +4094,7 @@ class="list-group mt-2 d-none"></div>
 </div>
 
 <!-- ================= NAVIGATION ================= -->
-<div class="d-flex justify-content-between mt-4">
+<div class="d-flex justify-content-between mt-4 pcvc-legacy-hide">
   <button type="button" class="btn btn-secondary" id="prevBtn"><?php echo $t['prev']; ?></button>
   <button type="button" class="btn btn-primary" id="nextBtn"><?php echo $t['next']; ?></button>
 </div>
@@ -3758,8 +4172,8 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <!-- Your existing JavaScript files -->
-<script src="application.js"></script>
-<script src="study-search.js"></script>
+<script src="application.js?v=20261023d"></script>
+<script src="study-search.js?v=20261023c"></script>
 
 <!-- Your existing inline scripts (keep them as they are - they don't need translation) -->
 <script>
@@ -4569,7 +4983,7 @@ function startValidationSimulation(progress) {
     if (!pendingFiles.length) {
       queueHint.textContent = texts.queueEmpty;
     } else {
-      queueHint.textContent = `${pendingFiles.length} ${texts.queueCount}. ${texts.queueReady}`;
+      queueHint.textContent = `${pendingFiles.length} ${texts.queueCount}.`;
       pendingFiles.forEach(file => {
         const li = document.createElement("li");
         li.className = "smart-autofill-queue-item";
@@ -4597,6 +5011,11 @@ function startValidationSimulation(progress) {
     const ready = hasSelectedPrograms();
     trigger.disabled = !ready || isProcessing;
     startButton.disabled = !ready || isProcessing || !pendingFiles.length;
+    const dropZone = document.getElementById("pcvcDrop");
+    if (dropZone) {
+      dropZone.disabled = trigger.disabled;
+      dropZone.classList.toggle("is-ready", ready && !isProcessing);
+    }
     if (helpEl) {
       helpEl.innerHTML = `${ready ? texts.ready : texts.gate}<br><?php echo htmlspecialchars($t['smart_autofill_formats'], ENT_QUOTES, 'UTF-8'); ?><br><?php echo htmlspecialchars($t['smart_autofill_hint'], ENT_QUOTES, 'UTF-8'); ?>`;
     }
@@ -5214,7 +5633,6 @@ function startValidationSimulation(progress) {
     clearPanels();
     resetProgress();
     setStatus("info", texts.queueReady);
-    setStage("queue", texts.queueReady, "info", `${pendingFiles.length} ${texts.queueCount}`);
     updateSmartAutofillAvailability();
   });
 
@@ -5282,14 +5700,14 @@ function startValidationSimulation(progress) {
 
       if (!hasCoreApplicantInfo(mergedFields)) {
         setAutofillProgress(100, texts.draftOnly);
-        setStage("save", texts.draftOnly, "warning", "You can add more documents later and run the analysis again.");
+        setStage("save", texts.draftOnly, "warning", "You can add more documents, then click Create student again.");
         return;
       }
 
       if (typeof collectStudyChoices === "function" && collectStudyChoices().length === 0) {
         setStage(
           "submit",
-          "Select at least one study program on step 1, then run Start analysis again to submit.",
+          "Choose at least one program, then click Create student again.",
           "warning",
           "Study choice is required before final submission."
         );
@@ -5365,6 +5783,34 @@ function startValidationSimulation(progress) {
   resetProgress();
   renderQueue();
   setTimeout(updateSmartAutofillAvailability, 300);
+
+  const dropZone = document.getElementById("pcvcDrop");
+  if (dropZone) {
+    dropZone.addEventListener("click", () => {
+      if (!trigger.disabled) trigger.click();
+    });
+    ["dragenter", "dragover"].forEach(name => {
+      dropZone.addEventListener(name, event => {
+        event.preventDefault();
+        if (!trigger.disabled) dropZone.classList.add("is-hot");
+      });
+    });
+    ["dragleave", "drop"].forEach(name => {
+      dropZone.addEventListener(name, event => {
+        event.preventDefault();
+        dropZone.classList.remove("is-hot");
+      });
+    });
+    dropZone.addEventListener("drop", event => {
+      if (trigger.disabled || isProcessing) return;
+      const dropped = Array.from(event.dataTransfer?.files || []);
+      if (!dropped.length) return;
+      const transfer = new DataTransfer();
+      dropped.forEach(file => transfer.items.add(file));
+      input.files = transfer.files;
+      input.dispatchEvent(new Event("change"));
+    });
+  }
 })();
 </script>
 
@@ -6040,11 +6486,10 @@ document.addEventListener("DOMContentLoaded", () => {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    min-height: 40px;
-    padding: 8px;
-    background: #f8fafc;
-    border-radius: 8px;
-    border: 1px solid #e2e8f0;
+    min-height: 0;
+    padding: 0;
+    background: transparent;
+    border: 0;
   `;
   
   // Insert the container after the regions select
@@ -6065,7 +6510,7 @@ document.addEventListener("DOMContentLoaded", () => {
       border-radius: 20px;
       font-size: 13px;
       font-weight: 600;
-      box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2);
+      box-shadow: none;
       transition: all 0.2s ease;
       cursor: default;
     `;
@@ -6093,12 +6538,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // Add hover effects
     tab.addEventListener('mouseenter', () => {
       tab.style.transform = 'translateY(-1px)';
-      tab.style.boxShadow = '0 4px 8px rgba(13, 110, 253, 0.3)';
+      tab.style.boxShadow = 'none';
     });
     
     tab.addEventListener('mouseleave', () => {
       tab.style.transform = 'translateY(0)';
-      tab.style.boxShadow = '0 2px 4px rgba(13, 110, 253, 0.2)';
+      tab.style.boxShadow = 'none';
     });
     
     // Add close functionality
@@ -6145,13 +6590,11 @@ document.addEventListener("DOMContentLoaded", () => {
     selectedRegionsContainer.innerHTML = '';
     
     if (selectedRegions.length === 0) {
-      selectedRegionsContainer.innerHTML = `
-        <div style="color: #64748b; font-size: 13px; font-style: italic;">
-          No regions selected. Select regions above to see them here.
-        </div>
-      `;
+      selectedRegionsContainer.classList.add("is-empty");
+      selectedRegionsContainer.innerHTML = "";
       return;
     }
+    selectedRegionsContainer.classList.remove("is-empty");
     
     // Add tabs for each selected region
     selectedRegions.forEach(regionId => {
@@ -6280,7 +6723,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (option.value) {
         hasOptions = true;
         const item = document.createElement("div");
-        item.className = "region-dropdown-item";
+        item.className = "region-dropdown-item" + (( $(regionsSelect).val() || []).map(String).includes(String(option.value)) ? " is-on" : "");
         item.style.cssText = `
           padding: 8px 12px;
           cursor: pointer;
@@ -6292,7 +6735,7 @@ document.addEventListener("DOMContentLoaded", () => {
         item.dataset.value = option.value;
         
         item.addEventListener('mouseenter', () => {
-          item.style.backgroundColor = '#f8fafc';
+          if (!item.classList.contains("is-on")) item.style.backgroundColor = '#eef6ea';
         });
         
         item.addEventListener('mouseleave', () => {
@@ -6918,6 +7361,9 @@ document.addEventListener("DOMContentLoaded", () => {
   =============================== */
 
   referralSelect.addEventListener("change", async () => {
+    if (agentSection.dataset.lockedAgent === "1") {
+      return;
+    }
 
     clearAgentFields();
 
@@ -7330,6 +7776,17 @@ window.restoreUploadedDocuments(data);
 
 if (typeof window.restorePhoneInputsFromData === "function") {
 window.restorePhoneInputsFromData(data);
+}
+
+if (document.getElementById("agentSection")?.dataset.lockedAgent === "1") {
+  const lockedReferral = document.getElementById("referral_source");
+  const lockedFirst = document.getElementById("agent_first_name");
+  const lockedLast = document.getElementById("agent_last_name");
+  const lockedEmail = document.getElementById("agent_email");
+  if (lockedReferral) lockedReferral.value = "agent";
+  if (lockedFirst) lockedFirst.value = lockedFirst.defaultValue;
+  if (lockedLast) lockedLast.value = lockedLast.defaultValue;
+  if (lockedEmail) lockedEmail.value = lockedEmail.defaultValue;
 }
 
 }

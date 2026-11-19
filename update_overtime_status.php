@@ -26,7 +26,7 @@ if (!isset($_SESSION['admin_id'], $_SESSION['role'])) {
 /* -------------------------------------------------
    ROLE VALIDATION (MATCHES YOUR DB)
 ------------------------------------------------- */
-if ($_SESSION['role'] !== 'superadmin') {
+if (!pcvc_is_superadmin_role($_SESSION['role'] ?? '')) {
     echo json_encode([
         'success' => false,
         'message' => 'Unauthorized action.'

@@ -16,39 +16,86 @@ require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/admin_password_reset.php';
 
 xander_ensure_admin_password_reset_columns($conn);
+pcvc_ensure_account_status_column($conn);
 
 $error = '';
+$returnTo = pcvc_student_application_return_target((string) ($_POST['return'] ?? $_GET['return'] ?? ''));
+$loginValue = '';
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $loginValue = trim((string) ($_GET['email'] ?? $_GET['username'] ?? ''));
+    if (strlen($loginValue) > 190) {
+        $loginValue = '';
+    }
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $username = trim($_POST['username'] ?? '');
-    $password = $_POST['password'] ?? '';
+    $password = (string) ($_POST['password'] ?? '');
+    $loginValue = $username;
 
+    if ($username === '' || $password === '') {
+        $error = "Invalid email, username, or password.";
+    } else {
+
+    $hasAccountStatus = false;
+    $statusCol = @$conn->query("SHOW COLUMNS FROM admins LIKE 'account_status'");
+    if ($statusCol && $statusCol->num_rows > 0) {
+        $hasAccountStatus = true;
+    }
+    if ($statusCol) {
+        $statusCol->free();
+    }
+    $statusSelect = $hasAccountStatus ? ', account_status' : '';
     $stmt = $conn->prepare(
-        "SELECT id, password_hash, full_name, role
+        "SELECT id, username, password_hash, full_name, role{$statusSelect}
          FROM admins
-         WHERE username = ?"
+         WHERE username = ? OR email = ?
+         LIMIT 8"
     );
 
     if (!$stmt) {
         $error = "System error. Please contact administrator.";
     } else {
 
-        $stmt->bind_param("s", $username);
+        $stmt->bind_param("ss", $username, $username);
         $stmt->execute();
         $result = $stmt->get_result();
-        $admin  = $result->fetch_assoc();
+        $admin = null;
+        $emailMatch = null;
+        while ($row = $result->fetch_assoc()) {
+            if (!password_verify($password, (string) ($row['password_hash'] ?? ''))) {
+                continue;
+            }
+            if (strcasecmp((string) ($row['username'] ?? ''), $username) === 0) {
+                $admin = $row;
+                break;
+            }
+            if ($emailMatch === null) {
+                $emailMatch = $row;
+            }
+        }
+        if ($admin === null) {
+            $admin = $emailMatch;
+        }
         $stmt->close();
 
-        if ($admin && password_verify($password, $admin['password_hash'])) {
+        if ($admin) {
+            $accountStatus = strtolower(trim((string) ($admin['account_status'] ?? 'active')));
+            if ($accountStatus === 'pending') {
+                $error = "Your account is waiting for approval. You can sign in after a superadmin approves it.";
+            } elseif ($accountStatus === 'inactive') {
+                $error = "This account has been deactivated. Contact a superadmin if you still work here.";
+            } else {
 
             session_regenerate_id(true);
 
             $_SESSION['id']        = $admin['id'];
             $_SESSION['admin_id'] = $admin['id'];
-            $_SESSION['username'] = $username;
+            $_SESSION['username'] = (string) ($admin['username'] ?? $username);
             $_SESSION['name']     = $admin['full_name'];
             $_SESSION['role']     = pcvc_normalize_role_string($admin['role'] ?? '');
+            pcvc_ensure_director_role($conn);
 
             $clr = $conn->prepare('UPDATE admins SET password_reset_token = NULL, password_reset_expires = NULL WHERE id = ?');
             if ($clr) {
@@ -58,12 +105,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $clr->close();
             }
 
-            header("Location: admin-dashboard.php");
+            header('Location: ' . ($returnTo !== '' ? $returnTo : 'admin-dashboard.php'));
             exit;
 
+            }
         } else {
-            $error = "Invalid username or password.";
+            $error = "Invalid email, username, or password.";
         }
+    }
     }
 }
 ?>
@@ -443,6 +492,19 @@ body::before {
   border: 1px solid #fecaca;
 }
 
+.register-note {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--pcv-text-muted);
+}
+.register-note a {
+  color: var(--pcv-green);
+  font-weight: 700;
+  text-decoration: none;
+}
+.register-note a:hover { text-decoration: underline; }
+
 .footer-note {
   margin-top: 28px;
   padding-top: 20px;
@@ -496,18 +558,21 @@ body::before {
       <?php endif; ?>
 
       <form method="post" id="loginForm" autocomplete="off" novalidate>
+        <?php if ($returnTo !== ''): ?>
+          <input type="hidden" name="return" value="<?= htmlspecialchars($returnTo, ENT_QUOTES, 'UTF-8') ?>">
+        <?php endif; ?>
         <div class="form-group">
-          <label for="username">Email address</label>
+          <label for="username">Email or username</label>
           <div class="input-shell">
             <input
               type="text"
               id="username"
               name="username"
-              placeholder="admission@visaconsultantcanada.com"
+              placeholder="Email or username"
               required
               autocomplete="username"
               autofocus
-              inputmode="email"
+              value="<?= htmlspecialchars($loginValue, ENT_QUOTES, 'UTF-8') ?>"
               aria-label="Email address or username"
             >
           </div>
@@ -541,6 +606,8 @@ body::before {
 
         <button type="submit" class="btn-login" id="submitBtn">Log in</button>
       </form>
+
+      <p class="register-note">New staff member? <a href="register.php">Create an account</a></p>
 
       <div class="footer-note">
         Secure admin access · © <?= date('Y') ?> Parrot Canada Visa Consultant

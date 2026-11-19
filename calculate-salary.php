@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/includes/payroll_helpers.php';
 // JSON header
 header("Content-Type: application/json");
 
@@ -27,9 +28,13 @@ if (empty($_POST['month'])) {
 }
 
 $month = $_POST['month']; // YYYY-MM
+if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+    echo json_encode(["error" => "Invalid month"]);
+    exit;
+}
 
 /* ===========================================================
-   FETCH STAFF SALARY RATE
+   FETCH STAFF SALARY RATE (fallback when daily pay not stored)
 =========================================================== */
 $stmt = $conn->prepare("
     SELECT salary_per_minute 
@@ -53,35 +58,32 @@ if (!$salary_per_minute || $salary_per_minute <= 0) {
 
 /* ===========================================================
    FETCH ATTENDANCE FOR THE SELECTED MONTH
+
+   One row per calendar day. Prefer checkout-stored daily pay
+   (daily_salary_rwf / total_payment_rwf) so salary requests
+   match attendance records; fall back to rate x minutes.
 =========================================================== */
-$stmt2 = $conn->prepare("
-    SELECT total_work_minutes, daily_salary_rwf
-    FROM attendance
-    WHERE admin_id = ?
-      AND DATE_FORMAT(date, '%Y-%m') = ?
-");
-$stmt2->bind_param("is", $admin_id, $month);
-$stmt2->execute();
-$result = $stmt2->get_result();
+$startMonth = $month . '-01';
+$endMonth   = date('Y-m-t', strtotime($startMonth));
+$byAdmin    = pcvc_payroll_load_attendance_by_admin($conn, $startMonth, $endMonth);
+$days       = $byAdmin[$admin_id] ?? [];
 
 $total_minutes = 0;
 $total_salary  = 0;
+$rate          = (float) $salary_per_minute;
 
-/* ===========================================================
-   SUM VALUES
-=========================================================== */
-while ($row = $result->fetch_assoc()) {
+foreach ($days as $row) {
+    $worked_minutes   = max(0, (int) ($row['minutes'] ?? 0));
+    $billable_minutes = min($worked_minutes, 480);
+    $storedPay        = (float) ($row['stored_daily_pay'] ?? 0);
 
-    if (isset($row['total_work_minutes'])) {
-        $total_minutes += intval($row['total_work_minutes']);
-    }
-
-    if (isset($row['daily_salary_rwf'])) {
-        $total_salary += intval($row['daily_salary_rwf']);
+    $total_minutes += $billable_minutes;
+    if ($storedPay > 0) {
+        $total_salary += (int) round($storedPay);
+    } else {
+        $total_salary += (int) round($billable_minutes * $rate);
     }
 }
-
-$stmt2->close();
 
 /* ===========================================================
    ALWAYS RETURN CLEAN JSON

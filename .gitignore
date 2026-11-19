@@ -55,6 +55,11 @@
 
 *.log
 error_log
+/logs/*
+!/logs/.htaccess
+/payments/mopay/logs/
+/payments/mopay/storage/
+/payments/storage/fx_cache.json
 
 # ================================
 
@@ -80,6 +85,12 @@ error_log
 /contracts/
 /images/
 /signatures/
+/receipts/*.pdf
+*.bak
+*.bak-*
+/scripts/set_delphine_daily_pay.php
+/scripts/update_delphine_salary_request.php
+/scripts/_tmp_verify_delphine_pay.php
 
 # ================================
 
