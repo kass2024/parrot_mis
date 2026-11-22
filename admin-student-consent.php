@@ -23,6 +23,8 @@ $csrf = $_SESSION['student_consent_csrf'];
 $language = ($_GET['lang'] ?? '') === 'fr' ? 'fr' : 'en';
 $languageName = $language === 'fr' ? 'French' : 'English';
 $signedView = ($_GET['view'] ?? '') === 'signed';
+$signedScope = 'signed_at IS NOT NULL AND (issued_by = ? OR ? = 1)';
+$requestedPage = filter_var($_GET['page'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
 $pageTitle = $signedView ? 'Signed Student Consents' : 'Student Consent (' . $languageName . ')';
 $issuerPath = 'admin-student-consent.php' . ($language === 'fr' ? '?lang=fr' : '');
 $h = 'student_consent_escape';
@@ -31,14 +33,26 @@ $search = '';
 $matches = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    if ($signedView) {
-        http_response_code(405);
-        header('Allow: GET, HEAD');
-        exit;
-    }
     if (!is_string($_POST['csrf_token'] ?? null) || !hash_equals($csrf, $_POST['csrf_token'])) {
         http_response_code(403);
         exit('Reload the form and try again.');
+    }
+
+    if ($signedView) {
+        $consentId = filter_var($_POST['consent_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if (($_POST['action'] ?? '') !== 'delete' || !$consentId) {
+            http_response_code(400);
+            exit('Invalid request.');
+        }
+        $stmt = $conn->prepare('DELETE FROM student_consent_authorizations WHERE id = ? AND ' . $signedScope);
+        $stmt->bind_param('iii', $consentId, $adminId, $superadmin);
+        $stmt->execute();
+        $_SESSION['student_consent_notice'] = $stmt->affected_rows === 1
+            ? 'Signed consent deleted.'
+            : 'Signed consent could not be found.';
+        $stmt->close();
+        header('Location: admin-student-consent.php?view=signed&page=' . $requestedPage, true, 303);
+        exit;
     }
 
     if (($_POST['action'] ?? '') === 'search') {
@@ -124,20 +138,22 @@ if ($issuedId) {
 }
 
 $signedRecords = [];
+$notice = '';
 $page = $pageCount = 1;
 if ($signedView) {
+    $notice = $_SESSION['student_consent_notice'] ?? '';
+    unset($_SESSION['student_consent_notice']);
     $pageSize = 25;
-    $where = 'WHERE signed_at IS NOT NULL AND (issued_by = ? OR ? = 1)';
+    $where = 'WHERE ' . $signedScope;
     $count = $conn->prepare('SELECT COUNT(*) FROM student_consent_authorizations ' . $where);
     $count->bind_param('ii', $adminId, $superadmin);
     $count->execute();
     $total = (int) $count->get_result()->fetch_row()[0];
     $count->close();
     $pageCount = max(1, (int) ceil($total / $pageSize));
-    $requestedPage = filter_var($_GET['page'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-    $page = min($requestedPage ?: 1, $pageCount);
+    $page = min($requestedPage, $pageCount);
     $offset = ($page - 1) * $pageSize;
-    $stmt = $conn->prepare("SELECT contract_token, language, signed_at, signing_date,
+    $stmt = $conn->prepare("SELECT id, contract_token, language, signed_at, signing_date,
         JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.student_name')) AS student_name
         FROM student_consent_authorizations " . $where . ' ORDER BY signed_at DESC, id DESC LIMIT ? OFFSET ?');
     $stmt->bind_param('iiii', $adminId, $superadmin, $pageSize, $offset);
@@ -170,6 +186,9 @@ label { display: block; margin: 0 0 6px; font-weight: 600; }
 .notice { padding: 12px; background: #f8f1f2; border: 1px solid #e9cfd2; border-radius: 6px; }
 .record { padding: 8px 0; border-bottom: 1px solid #e2e4e8; }
 .record span { overflow-wrap: anywhere; }
+.delete-consent { margin: 0; }
+.delete-consent button { padding: 3px 8px; border: 1px solid #e9cfd2; background: #fff; color: #911423; }
+.delete-consent button:hover { background: #f8f1f2; }
 small { color: #4c5562; }
 </style>
 </head>
@@ -181,6 +200,7 @@ small { color: #4c5562; }
     <a href="admin-student-consent.php?lang=fr" <?= !$signedView && $language === 'fr' ? 'aria-current="page"' : '' ?>>French</a>
     <a href="admin-student-consent.php?view=signed" <?= $signedView ? 'aria-current="page"' : '' ?>>View Signed Consents</a>
   </nav>
+  <?php if ($notice !== ''): ?><p class="notice" role="status"><?= $h($notice) ?></p><?php endif; ?>
   <?php if (!$signedView): ?>
   <?php if ($error !== ''): ?><p class="notice" role="alert"><?= $h($error) ?></p><?php endif; ?>
   <?php if ($issuedLink !== ''): ?>
@@ -233,6 +253,12 @@ small { color: #4c5562; }
       </span>
       <a href="<?= $h($url) ?>" target="_blank" rel="noopener noreferrer">View signed form</a>
       <a href="<?= $h($url . '&download=1') ?>">Download PDF</a>
+      <form method="post" action="?view=signed&amp;page=<?= $page ?>" class="delete-consent"
+        onsubmit="return confirm('Permanently delete this signed consent? Its signing link will stop working.')">
+        <input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
+        <input type="hidden" name="consent_id" value="<?= (int) $record['id'] ?>">
+        <button type="submit" name="action" value="delete">Delete</button>
+      </form>
     </div>
   <?php endforeach; ?>
   <?php elseif ($signedView): ?>
