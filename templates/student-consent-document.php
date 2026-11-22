@@ -52,8 +52,14 @@ $field = static function (string $name, string $type, int $length) use ($copy, $
 
   <div class="consent-agency">
     <h2><?= $h($copy['agency']) ?></h2>
-    <p class="consent-line"><?= $h($copy['representative']) ?>: <span class="consent-underline">&nbsp;</span></p>
-    <p class="consent-line"><?= $h($copy['agency_signature']) ?>: <span class="consent-underline">&nbsp;</span></p>
+    <p class="consent-line"><?= $h($copy['representative']) ?>: <?= $h(AGENT_CONTRACT_COMPANY_SIGNER) ?></p>
+    <p class="consent-line"><?= $h($copy['agency_signature']) ?>:
+      <time datetime="<?= $h($date) ?>"><?= $h($date) ?></time>
+    </p>
+    <div class="consent-agency-images">
+      <img src="<?= $h($agencySignature) ?>" alt="<?= $h($copy['representative']) ?>">
+      <img class="consent-agency-stamp" src="<?= $h($agencyStamp) ?>" alt="<?= $h($copy['agency_stamp']) ?>">
+    </div>
   </div>
   <img class="consent-letter-footer" src="<?= $h($letterFooter) ?>" alt="Providing Best Study and Travel Abroad Services">
 </article>

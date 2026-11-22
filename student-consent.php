@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/student_consent.php';
+require_once __DIR__ . '/helpers/agent_contract_senegal.php';
 
 header('Cache-Control: private, no-store');
 header('Referrer-Policy: no-referrer');
@@ -35,6 +36,8 @@ $h = 'student_consent_escape';
 $error = '';
 $letterhead = 'assets/student-consent/letterhead.png';
 $letterFooter = 'assets/student-consent/letter-footer.png';
+$agencySignature = 'admin/signature-manager.png';
+$agencyStamp = 'admin/employer-signature.png';
 
 if (($_GET['download'] ?? '') === '1') {
     if ($editable) {
@@ -42,8 +45,11 @@ if (($_GET['download'] ?? '') === '1') {
         exit('Sign the consent form to download it.');
     }
     require_once __DIR__ . '/vendor/autoload.php';
-    $letterhead = 'data:image/png;base64,' . base64_encode(file_get_contents(__DIR__ . '/' . $letterhead));
-    $letterFooter = 'data:image/png;base64,' . base64_encode(file_get_contents(__DIR__ . '/' . $letterFooter));
+    $inlinePng = static fn(string $path): string => 'data:image/png;base64,' . base64_encode(file_get_contents(__DIR__ . '/' . $path));
+    $letterhead = $inlinePng($letterhead);
+    $letterFooter = $inlinePng($letterFooter);
+    $agencySignature = $inlinePng($agencySignature);
+    $agencyStamp = $inlinePng($agencyStamp);
     ob_start();
     require __DIR__ . '/templates/student-consent-document.php';
     $document = ob_get_clean();

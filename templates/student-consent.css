@@ -13,3 +13,5 @@
 .consent-underline { display: inline-block; min-width: 190pt; max-width: 100%; border-bottom: .5pt solid #000; overflow-wrap: break-word; }
 .consent-signature-image { display: inline-block; width: auto; max-width: 190pt; height: auto; max-height: 30pt; vertical-align: middle; }
 .consent-document .consent-agency { page-break-inside: avoid; }
+.consent-agency-images img { display: inline-block; max-width: 145pt; max-height: 28pt; vertical-align: middle; }
+.consent-agency-images .consent-agency-stamp { max-width: 40pt; max-height: 40pt; margin-left: 8pt; }
