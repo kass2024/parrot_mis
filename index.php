@@ -332,6 +332,13 @@ $index_translations = [
         'card14_point2' => 'Passport, transcripts, CV, and photo',
         'card14_point3' => 'Declaration and signature',
         'card14_point4' => 'Email confirmation with reference ID',
+        'card15_title' => 'REFUND REQUEST',
+        'card15_subtitle' => 'Ask for a refund of a payment you made',
+        'card15_description' => 'Submit a refund request with your name, the service you paid for, the amount, and proof of payment. Copy this card link to share the form.',
+        'card15_point1' => 'Name, email, and phone',
+        'card15_point2' => 'Service paid for and amount',
+        'card15_point3' => 'Proof of payment',
+        'card15_point4' => 'Reference number after you submit',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Your complete journey to international education and career success. Study abroad, scholarships, visas, and job opportunities.',
@@ -645,6 +652,13 @@ $index_translations = [
         'card14_point2' => 'Passeport, relevés, CV et photo',
         'card14_point3' => 'Déclaration et signature',
         'card14_point4' => 'Confirmation par e-mail avec référence',
+        'card15_title' => 'DEMANDE DE REMBOURSEMENT',
+        'card15_subtitle' => 'Demander le remboursement d’un paiement',
+        'card15_description' => 'Envoyez une demande avec votre nom, le service payé, le montant et la preuve de paiement. Copiez le lien de cette carte pour le partager.',
+        'card15_point1' => 'Nom, e-mail et téléphone',
+        'card15_point2' => 'Service payé et montant',
+        'card15_point3' => 'Preuve de paiement',
+        'card15_point4' => 'Numéro de référence après l’envoi',
         
         // Page Metadata
         'page_description' => 'Parrot Canada Visa Consultant - Votre parcours complet vers la réussite de l\'éducation internationale et de carrière.',
@@ -925,6 +939,22 @@ $cards = [
         ],
         'form' => 'eci-malta-application.php',
         'color' => '#111111'
+    ],
+    [
+        'id' => 'refund_request',
+        'icon' => '💸',
+        'title_key' => 'card15_title',
+        'subtitle_key' => 'card15_subtitle',
+        'description_key' => 'card15_description',
+        'points_keys' => [
+            'card15_point1',
+            'card15_point2',
+            'card15_point3',
+            'card15_point4',
+        ],
+        'form' => 'refund-request.php',
+        'color' => '#427431',
+        'hide_retrieve' => true,
     ]
 ];
 
@@ -2126,10 +2156,12 @@ body.card-only-mode {
           <?php echo htmlspecialchars(it('card_copy')); ?>
         </button>
         <?php endif; ?>
+        <?php if (empty($c['hide_retrieve'])): ?>
         <button type="button" class="card-button resume-button" title="<?php echo htmlspecialchars(it('card_continue_hint')); ?>">
           <i class="fas fa-search"></i>
           <?php echo htmlspecialchars(it('card_continue')); ?>
         </button>
+        <?php endif; ?>
       </div>
     </div>
     <?php endforeach; ?>
@@ -2526,6 +2558,7 @@ body.card-only-mode {
         case 'canada_workers':
         case 'malta_courses':
         case 'eci_malta':
+        case 'refund_request':
           targetUrl = form;
           break;
         default:

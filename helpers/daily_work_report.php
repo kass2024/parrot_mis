@@ -35,6 +35,61 @@ function daily_report_ensure_table(mysqli $conn): void
     if (!$conn->query($sql)) {
         throw new RuntimeException('The report table could not be prepared.');
     }
+    $addedReview = !daily_report_column_exists($conn, 'review_status');
+    $columns = [
+        'review_status' => "VARCHAR(32) NOT NULL DEFAULT 'pending_robert'",
+        'robert_decision' => 'VARCHAR(16) NULL',
+        'robert_reason' => 'VARCHAR(500) NULL',
+        'robert_reviewed_at' => 'DATETIME NULL',
+        'superior_decision' => 'VARCHAR(16) NULL',
+        'superior_reason' => 'VARCHAR(500) NULL',
+        'superior_reviewed_by' => 'INT NULL',
+        'superior_reviewed_at' => 'DATETIME NULL',
+    ];
+    foreach ($columns as $name => $definition) {
+        if (!daily_report_column_exists($conn, $name)) {
+            if (!$conn->query("ALTER TABLE daily_work_reports ADD COLUMN `$name` $definition")) {
+                throw new RuntimeException('The report review columns could not be prepared.');
+            }
+        }
+    }
+    if ($addedReview) {
+        $conn->query("UPDATE daily_work_reports
+            SET review_status = 'approved', robert_decision = 'approved',
+                robert_reason = 'Submitted before the admission-manager review was added.'
+            WHERE robert_decision IS NULL AND report_date < CURDATE()");
+    }
+    $reviewSql = "CREATE TABLE IF NOT EXISTS daily_work_report_reviews (
+        id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+        report_id INT UNSIGNED NOT NULL,
+        reviewer_id INT NOT NULL,
+        stage VARCHAR(20) NOT NULL,
+        decision VARCHAR(16) NOT NULL,
+        reason VARCHAR(500) NOT NULL DEFAULT '',
+        created_at DATETIME NOT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY report_reviewer_stage (report_id, reviewer_id, stage)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+    if (!$conn->query($reviewSql)) {
+        throw new RuntimeException('The report review table could not be prepared.');
+    }
+    $conn->query("DELETE rv FROM daily_work_report_reviews rv
+        INNER JOIN daily_work_reports d ON d.id = rv.report_id
+        WHERE d.report_date = CURDATE()
+          AND d.robert_reason = 'Submitted before the admission-manager review was added.'");
+    $conn->query("UPDATE daily_work_reports
+        SET review_status = 'pending_robert', robert_decision = NULL, robert_reason = NULL,
+            robert_reviewed_at = NULL, superior_decision = NULL, superior_reason = NULL,
+            superior_reviewed_by = NULL, superior_reviewed_at = NULL
+        WHERE report_date = CURDATE()
+          AND robert_reason = 'Submitted before the admission-manager review was added.'");
+}
+
+function daily_report_column_exists(mysqli $conn, string $column): bool
+{
+    $safe = $conn->real_escape_string($column);
+    $result = $conn->query("SHOW COLUMNS FROM daily_work_reports LIKE '{$safe}'");
+    return $result instanceof mysqli_result && $result->num_rows > 0;
 }
 
 function daily_report_h(string $value): string
@@ -299,6 +354,7 @@ function daily_report_directory(mysqli $conn): array
             $people[] = [
                 'id' => (int) $row['id'],
                 'name' => $name,
+                'username' => trim((string) ($row['username'] ?? '')),
                 'email' => trim((string) $row['email']),
                 'position' => trim((string) ($row['position'] ?? '')),
             ];
@@ -398,46 +454,159 @@ function daily_report_match_title(string $title, array $directory, int $selfId):
     return $hits;
 }
 
-function daily_report_recipients(mysqli $conn, int $adminId): array
+/**
+ * Reporting lines from the active staff list. Robert, the admission manager,
+ * reviews every report first. The keys are the supervisors who review after him.
+ *
+ * @return list<array{emails:list<string>,names:list<string>,superiors:list<string>}>
+ */
+function daily_report_org_roster(): array
 {
-    $line = daily_report_contract_line($adminId);
-    $directory = daily_report_directory($conn);
-    $people = [];
-    $unmatched = [];
-    $seen = [];
-    if ($line === '') {
-        return [
-            'contract_found' => false,
-            'contract_line' => '',
-            'people' => [],
-            'unmatched' => [],
-        ];
+    return [
+        ['emails' => ['akayezusonia@gmail.com'], 'names' => ['akayezu sonia'], 'superiors' => ['peter', 'methode']],
+        ['emails' => ['tuyizerei83@gmail.com'], 'names' => ['tuyizere innocent'], 'superiors' => ['peter', 'methode', 'sonia', 'robert']],
+        ['emails' => ['protaisbirikumana@gmail.com'], 'names' => ['protais birikumana'], 'superiors' => ['peter', 'methode', 'robert']],
+        ['emails' => ['tuyishimirerobert1@gmail.com'], 'names' => ['tuyishimire robert'], 'superiors' => ['peter', 'methode']],
+        ['emails' => ['mutwarejules6@gmail.com'], 'names' => ['mutware jules bonheur'], 'superiors' => ['sonia', 'robert']],
+        ['emails' => ['mukeshimanayvette2@gmail.com'], 'names' => ['mukeshimana yvette'], 'superiors' => ['peter', 'methode']],
+        ['emails' => ['nyirabizeyimanasandrine4@gmail.com'], 'names' => ['nyirabizeyimana sandrine'], 'superiors' => ['sonia']],
+        ['emails' => ['gladineza623@gmail.com'], 'names' => ['glad henrianne ineza', 'gladineza'], 'superiors' => ['robert']],
+        ['emails' => ['vivirako27@gmail.com'], 'names' => ['irakoze viviane'], 'superiors' => ['robert']],
+        ['emails' => ['ybienvenue1@gmail.com'], 'names' => ['ikuzwe yvone', 'yvone bienvenue'], 'superiors' => ['robert']],
+        ['emails' => ['dearingabire@gmail.com'], 'names' => ['ingabire felecite', 'ingabire felecité'], 'superiors' => ['robert']],
+        ['emails' => ['uwamahorodelphine8@gmail.com'], 'names' => ['uwamahoro delphine'], 'superiors' => ['robert']],
+        ['emails' => ['uwivette001@gmail.com'], 'names' => ['uwitonze yvette'], 'superiors' => ['robert']],
+    ];
+}
+
+function daily_report_is_robert(array $staff): bool
+{
+    return strcasecmp((string) ($staff['username'] ?? ''), 'Robert') === 0
+        || strcasecmp((string) ($staff['email'] ?? ''), 'tuyishimirerobert1@gmail.com') === 0;
+}
+
+function daily_report_find_superior(mysqli $conn, string $key): ?array
+{
+    foreach (daily_report_directory($conn) as $person) {
+        $name = ' ' . daily_report_norm($person['name']) . ' ';
+        $user = daily_report_norm((string) ($person['username'] ?? ''));
+        $email = strtolower($person['email']);
+        $position = daily_report_norm($person['position']);
+        $match = false;
+        if ($key === 'robert') {
+            $match = $user === 'robert' || $email === 'tuyishimirerobert1@gmail.com' || str_contains($name, ' tuyishimire robert ');
+        } elseif ($key === 'methode') {
+            $match = str_contains($name, ' methode ') || str_contains($name, ' ukundabarezi ') || $user === 'methode';
+        } elseif ($key === 'sonia') {
+            $match = $email === 'akayezusonia@gmail.com' || str_contains($name, ' akayezu ') || str_contains($name, ' sonia ');
+        } elseif ($key === 'peter') {
+            $match = $position === 'ceo'
+                || str_contains($name, ' twajamahoro ')
+                || str_contains($name, ' peter ')
+                || (str_contains($position, 'owner') && str_contains($position, 'managing director'));
+        }
+        if ($match) {
+            return $person;
+        }
     }
+    return null;
+}
+
+function daily_report_roster_keys(array $staff): ?array
+{
+    $email = strtolower((string) ($staff['email'] ?? ''));
+    $name = daily_report_norm((string) ($staff['name'] ?? ''));
+    foreach (daily_report_org_roster() as $row) {
+        if ($email !== '' && in_array($email, $row['emails'], true)) {
+            return $row['superiors'];
+        }
+        foreach ($row['names'] as $label) {
+            if ($name !== '' && (str_contains($name, daily_report_norm($label)) || str_contains(daily_report_norm($label), $name))) {
+                return $row['superiors'];
+            }
+        }
+    }
+    return null;
+}
+
+/**
+ * @return array{is_robert:bool,robert:?array,superiors:list<array>,line:string,unmatched:list<string>}
+ */
+function daily_report_route(mysqli $conn, int $adminId): array
+{
     $staff = daily_report_staff($conn, $adminId);
-    $matchLine = $line;
-    if (strcasecmp($staff['username'], 'Robert') === 0) {
-        $matchLine = trim($line . ' & IT Coordinator');
+    $isRobert = daily_report_is_robert($staff);
+    $robert = $isRobert ? null : daily_report_find_superior($conn, 'robert');
+    $keys = daily_report_roster_keys($staff);
+    $unmatched = [];
+    $superiors = [];
+    $seen = [];
+    if ($keys === null) {
+        $fallback = daily_report_contract_line($adminId);
+        $keys = [];
+        foreach (daily_report_split_titles($fallback) as $title) {
+            $norm = daily_report_norm($title);
+            if (str_contains($norm, 'robert')) {
+                $keys[] = 'robert';
+            } elseif (str_contains($norm, 'sonia')) {
+                $keys[] = 'sonia';
+            } elseif (str_contains($norm, 'methode') || str_contains($norm, 'operations')) {
+                $keys[] = 'methode';
+            } elseif (daily_report_is_director_title($title) || str_contains($norm, 'peter')) {
+                $keys[] = 'peter';
+            } else {
+                $unmatched[] = $title;
+            }
+        }
     }
-    foreach (daily_report_split_titles($matchLine) as $title) {
-        $matches = daily_report_match_title($title, $directory, $adminId);
-        if ($matches === []) {
-            $unmatched[] = $title;
+    foreach ($keys as $key) {
+        if ($key === 'robert') {
             continue;
         }
-        foreach ($matches as $person) {
-            if (!filter_var($person['email'], FILTER_VALIDATE_EMAIL) || isset($seen[$person['id']])) {
-                continue;
+        $person = daily_report_find_superior($conn, $key);
+        if ($person === null || $person['id'] === $adminId || isset($seen[$person['id']])) {
+            if ($person === null) {
+                $unmatched[] = $key;
             }
-            $seen[$person['id']] = true;
-            $person['matched_title'] = $title;
-            $people[] = $person;
+            continue;
         }
+        $seen[$person['id']] = true;
+        $superiors[] = $person;
+    }
+    $names = [];
+    if ($robert) {
+        $names[] = 'Robert, admission manager';
+    }
+    foreach ($superiors as $person) {
+        $names[] = $person['name'];
     }
     return [
-        'contract_found' => true,
-        'contract_line' => $line,
-        'people' => $people,
+        'is_robert' => $isRobert,
+        'robert' => $robert,
+        'superiors' => $superiors,
+        'line' => $names === [] ? '' : implode('; ', $names),
         'unmatched' => $unmatched,
+    ];
+}
+
+function daily_report_recipients(mysqli $conn, int $adminId): array
+{
+    $route = daily_report_route($conn, $adminId);
+    $people = [];
+    if (!$route['is_robert'] && is_array($route['robert'])) {
+        $robert = $route['robert'];
+        $robert['matched_title'] = 'Admission manager — reviews first';
+        $people[] = $robert;
+    }
+    foreach ($route['superiors'] as $person) {
+        $person['matched_title'] = 'Supervisor — reviews after Robert approves';
+        $people[] = $person;
+    }
+    return [
+        'contract_found' => $people !== [],
+        'contract_line' => $route['line'],
+        'people' => $people,
+        'unmatched' => $route['unmatched'],
     ];
 }
 
@@ -780,6 +949,233 @@ function daily_report_can_view_all(mysqli $conn, int $adminId): bool
     $role = strtolower($staff['role'] ?? '');
     $position = strtolower($staff['position'] ?? '');
     return str_contains($role, 'superadmin') || str_contains($role, 'owner') || $position === 'ceo';
+}
+
+function daily_report_is_superior_viewer(mysqli $conn, int $adminId): bool
+{
+    $staff = daily_report_staff($conn, $adminId);
+    if (daily_report_is_robert($staff) || daily_report_can_view_all($conn, $adminId)) {
+        return true;
+    }
+    foreach (['peter', 'methode', 'sonia'] as $key) {
+        $person = daily_report_find_superior($conn, $key);
+        if ($person && (int) $person['id'] === $adminId) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function daily_report_date_bounds(string $range, string $from, string $to): array
+{
+    $today = date('Y-m-d');
+    $valid = static function (string $value) use ($today): string {
+        $date = DateTime::createFromFormat('Y-m-d', $value);
+        return $date && $date->format('Y-m-d') === $value ? $value : $today;
+    };
+    if ($range === 'today') {
+        return [$today, $today, 'today'];
+    }
+    if ($range === 'week') {
+        return [date('Y-m-d', strtotime('monday this week')), $today, 'week'];
+    }
+    if ($range === 'custom') {
+        $start = $valid($from);
+        $end = $valid($to);
+        if ($start > $end) {
+            [$start, $end] = [$end, $start];
+        }
+        return [$start, $end, 'custom'];
+    }
+    return [date('Y-m-01'), $today, 'month'];
+}
+
+function daily_report_status_label(array $row): string
+{
+    $status = (string) ($row['review_status'] ?? '');
+    if ($status === 'pending_robert') {
+        return 'Waiting for Robert';
+    }
+    if ($status === 'awaiting_superiors') {
+        return 'Approved by Robert, waiting for the other supervisors';
+    }
+    if ($status === 'approved') {
+        return 'Approved';
+    }
+    if ($status === 'rejected') {
+        $reason = trim((string) ($row['robert_decision'] ?? '') === 'rejected'
+            ? (string) ($row['robert_reason'] ?? '')
+            : (string) ($row['superior_reason'] ?? ''));
+        return 'Rejected' . ($reason !== '' ? ' — ' . $reason : '');
+    }
+    return (string) ($row['mail_status'] ?? '') === 'sent' ? 'Emailed' : 'Saved';
+}
+
+function daily_report_list(mysqli $conn, int $adminId, string $scope, string $from, string $to): array
+{
+    $sql = "SELECT r.id, r.admin_id, r.report_date, r.mail_status, r.created_at, r.review_status,
+            r.robert_decision, r.robert_reason, r.superior_decision, r.superior_reason, r.body_html, r.recipients_json,
+            COALESCE(NULLIF(TRIM(a.full_name), ''), a.username, 'Staff') AS staff_name
+        FROM daily_work_reports r
+        LEFT JOIN admins a ON a.id = r.admin_id
+        WHERE r.report_date BETWEEN ? AND ?";
+    if ($scope === 'own') {
+        $sql .= ' AND r.admin_id = ?';
+    } elseif ($scope === 'superior') {
+        $sql .= " AND (r.review_status IN ('awaiting_superiors', 'approved')
+            OR (r.review_status = 'rejected' AND r.robert_decision = 'approved'))";
+    }
+    $sql .= ' ORDER BY r.report_date DESC, r.id DESC LIMIT 300';
+    $stmt = $conn->prepare($sql);
+    if ($scope === 'own') {
+        $stmt->bind_param('ssi', $from, $to, $adminId);
+    } else {
+        $stmt->bind_param('ss', $from, $to);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+    $stmt->close();
+    return $rows;
+}
+
+function daily_report_load(mysqli $conn, int $reportId): ?array
+{
+    $stmt = $conn->prepare("SELECT r.*, COALESCE(NULLIF(TRIM(a.full_name), ''), a.username, 'Staff') AS staff_name
+        FROM daily_work_reports r
+        LEFT JOIN admins a ON a.id = r.admin_id
+        WHERE r.id = ? LIMIT 1");
+    $stmt->bind_param('i', $reportId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $row ?: null;
+}
+
+function daily_report_can_read(mysqli $conn, int $adminId, array $report): bool
+{
+    if ((int) $report['admin_id'] === $adminId || daily_report_can_view_all($conn, $adminId)) {
+        return true;
+    }
+    $staff = daily_report_staff($conn, $adminId);
+    if (daily_report_is_robert($staff)) {
+        return true;
+    }
+    $status = (string) ($report['review_status'] ?? '');
+    if (!daily_report_is_superior_viewer($conn, $adminId)) {
+        return false;
+    }
+    if (in_array($status, ['awaiting_superiors', 'approved'], true)) {
+        return true;
+    }
+    return $status === 'rejected' && (string) ($report['robert_decision'] ?? '') === 'approved';
+}
+
+function daily_report_reviews_for(mysqli $conn, int $reportId): array
+{
+    $stmt = $conn->prepare('SELECT reviewer_id, stage, decision, reason, created_at FROM daily_work_report_reviews WHERE report_id = ? ORDER BY id ASC');
+    $stmt->bind_param('i', $reportId);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rows = [];
+    while ($row = $result->fetch_assoc()) {
+        $rows[] = $row;
+    }
+    $stmt->close();
+    return $rows;
+}
+
+function daily_report_remaining_ids(mysqli $conn, array $report): array
+{
+    $route = daily_report_route($conn, (int) $report['admin_id']);
+    $ids = [];
+    foreach ($route['superiors'] as $person) {
+        $ids[] = (int) $person['id'];
+    }
+    return $ids;
+}
+
+function daily_report_apply_review(mysqli $conn, int $reviewerId, array $report, string $decision, string $reason): array
+{
+    $reviewer = daily_report_staff($conn, $reviewerId);
+    $status = (string) ($report['review_status'] ?? 'pending_robert');
+    $now = date('Y-m-d H:i:s');
+    $reason = mb_substr(trim($reason), 0, 500);
+    if ($decision === 'rejected' && $reason === '') {
+        return ['ok' => false, 'message' => 'Write the reason for the rejection.'];
+    }
+    if (!in_array($decision, ['approved', 'rejected'], true)) {
+        return ['ok' => false, 'message' => 'Choose approve or reject.'];
+    }
+    $reportId = (int) $report['id'];
+    if (daily_report_is_robert($reviewer) && $status === 'pending_robert' && (int) $report['admin_id'] !== $reviewerId) {
+        $next = 'rejected';
+        if ($decision === 'approved') {
+            $remaining = daily_report_remaining_ids($conn, $report);
+            $next = $remaining === [] ? 'approved' : 'awaiting_superiors';
+        }
+        $stmt = $conn->prepare('UPDATE daily_work_reports
+            SET review_status = ?, robert_decision = ?, robert_reason = ?, robert_reviewed_at = ?
+            WHERE id = ? AND review_status = \'pending_robert\'');
+        $stmt->bind_param('ssssi', $next, $decision, $reason, $now, $reportId);
+        $stmt->execute();
+        $changed = $stmt->affected_rows > 0;
+        $stmt->close();
+        if (!$changed) {
+            return ['ok' => false, 'message' => 'This report was already reviewed.'];
+        }
+        $stage = 'robert';
+        $ins = $conn->prepare('INSERT INTO daily_work_report_reviews (report_id, reviewer_id, stage, decision, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+        $ins->bind_param('iissss', $reportId, $reviewerId, $stage, $decision, $reason, $now);
+        $ins->execute();
+        $ins->close();
+        return ['ok' => true, 'status' => $next, 'stage' => 'robert'];
+    }
+    $remaining = daily_report_remaining_ids($conn, $report);
+    $canSuperior = in_array($reviewerId, $remaining, true)
+        || (daily_report_can_view_all($conn, $reviewerId) && $remaining !== []);
+    if ($canSuperior && in_array($status, ['awaiting_superiors'], true)) {
+        $stage = 'superior';
+        $ins = $conn->prepare('INSERT INTO daily_work_report_reviews (report_id, reviewer_id, stage, decision, reason, created_at) VALUES (?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE decision = VALUES(decision), reason = VALUES(reason), created_at = VALUES(created_at)');
+        $ins->bind_param('iissss', $reportId, $reviewerId, $stage, $decision, $reason, $now);
+        $ins->execute();
+        $ins->close();
+        if ($decision === 'rejected') {
+            $next = 'rejected';
+            $stmt = $conn->prepare('UPDATE daily_work_reports SET review_status = ?, superior_decision = ?, superior_reason = ?, superior_reviewed_by = ?, superior_reviewed_at = ? WHERE id = ?');
+            $stmt->bind_param('sssisi', $next, $decision, $reason, $reviewerId, $now, $reportId);
+            $stmt->execute();
+            $stmt->close();
+            return ['ok' => true, 'status' => $next, 'stage' => 'superior'];
+        }
+        $done = $conn->prepare("SELECT reviewer_id FROM daily_work_report_reviews WHERE report_id = ? AND stage = 'superior' AND decision = 'approved'");
+        $done->bind_param('i', $reportId);
+        $done->execute();
+        $approvedBy = [];
+        $result = $done->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $approvedBy[(int) $row['reviewer_id']] = true;
+        }
+        $done->close();
+        $allDone = true;
+        foreach ($remaining as $id) {
+            if (!isset($approvedBy[$id])) {
+                $allDone = false;
+                break;
+            }
+        }
+        $next = $allDone ? 'approved' : 'awaiting_superiors';
+        $stmt = $conn->prepare('UPDATE daily_work_reports SET review_status = ?, superior_decision = ?, superior_reason = ?, superior_reviewed_by = ?, superior_reviewed_at = ? WHERE id = ?');
+        $stmt->bind_param('sssisi', $next, $decision, $reason, $reviewerId, $now, $reportId);
+        $stmt->execute();
+        $stmt->close();
+        return ['ok' => true, 'status' => $next, 'stage' => 'superior'];
+    }
+    return ['ok' => false, 'message' => 'You cannot review this report at this step.'];
 }
 
 function daily_report_signed_today(mysqli $conn, int $adminId): ?array

@@ -480,12 +480,12 @@ $csrfToken = pcvc_csrf_token();
           <div class="refund-field">
             <i class="fas fa-user field-icon" aria-hidden="true"></i>
             <label class="refund-label" for="firstName">First name *</label>
-            <input type="text" class="refund-input" id="firstName" name="first_name" required maxlength="100" placeholder="Jean">
+            <input type="text" class="refund-input" id="firstName" name="first_name" required maxlength="100" placeholder="First name">
           </div>
           <div class="refund-field">
             <i class="fas fa-user field-icon" aria-hidden="true"></i>
             <label class="refund-label" for="lastName">Last name *</label>
-            <input type="text" class="refund-input" id="lastName" name="last_name" required maxlength="100" placeholder="Mukamana">
+            <input type="text" class="refund-input" id="lastName" name="last_name" required maxlength="100" placeholder="Last name">
           </div>
           <div class="refund-field">
             <i class="fas fa-envelope field-icon" aria-hidden="true"></i>

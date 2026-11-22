@@ -147,6 +147,65 @@ function pcvc_roster_resolved(mysqli $conn): array
 }
 
 /**
+ * Contract roster plus every active accountant login, so the performance
+ * report includes the accountant even when they are not on the contract list.
+ *
+ * @return list<array{name:string,email:string,position:string,admin_id:int,db_name:string,db_email:string,db_position:string}>
+ */
+function pcvc_roster_report_people(mysqli $conn): array
+{
+    $people = pcvc_roster_resolved($conn);
+    $seen = [];
+    foreach ($people as $person) {
+        if ($person['admin_id'] > 0) {
+            $seen[$person['admin_id']] = true;
+        }
+    }
+
+    $res = $conn->query(
+        "SELECT id,
+                COALESCE(NULLIF(TRIM(full_name), ''), TRIM(CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')))) AS full_name,
+                LOWER(TRIM(COALESCE(email, ''))) AS email,
+                COALESCE(position, '') AS position,
+                LOWER(TRIM(COALESCE(account_status, 'active'))) AS account_status
+         FROM admins
+         WHERE LOWER(TRIM(COALESCE(role, ''))) = 'accountant'"
+    );
+    if (!$res) {
+        return $people;
+    }
+    while ($row = $res->fetch_assoc()) {
+        $id = (int) ($row['id'] ?? 0);
+        $status = (string) ($row['account_status'] ?? 'active');
+        if ($id <= 0 || isset($seen[$id]) || in_array($status, ['inactive', 'disabled', 'deleted', 'pending'], true)) {
+            continue;
+        }
+        $seen[$id] = true;
+        $name = trim((string) ($row['full_name'] ?? ''));
+        $email = trim((string) ($row['email'] ?? ''));
+        $position = trim((string) ($row['position'] ?? ''));
+        if ($name === '') {
+            $name = 'Accountant';
+        }
+        if ($position === '') {
+            $position = 'Accountant';
+        }
+        $people[] = [
+            'name' => $name,
+            'email' => $email,
+            'position' => $position,
+            'admin_id' => $id,
+            'db_name' => $name,
+            'db_email' => $email,
+            'db_position' => $position,
+        ];
+    }
+    $res->free();
+
+    return $people;
+}
+
+/**
  * @return array<int, true>
  */
 function pcvc_roster_admin_ids(mysqli $conn): array
@@ -175,7 +234,7 @@ function pcvc_roster_daily_report(mysqli $conn, string $date): array
         $date = (new DateTime('now', new DateTimeZone('Africa/Kigali')))->format('Y-m-d');
     }
 
-    $people = pcvc_roster_resolved($conn);
+    $people = pcvc_roster_report_people($conn);
     $ids = [];
     foreach ($people as $person) {
         if ($person['admin_id'] > 0) {

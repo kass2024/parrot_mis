@@ -31,10 +31,10 @@ if (isset($_GET['download'])) {
     $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc();
     $stmt->close();
-    $isOwner = $row && ((int) $row['admin_id'] === $adminId || pcvc_current_user_is_superadmin($conn));
-    $file = $row ? basename((string) $row['pdf_file']) : '';
+    $report = $row ? daily_report_load($conn, $reportId) : null;
+    $file = $report ? basename((string) $report['pdf_file']) : '';
     $path = $file !== '' ? daily_report_private_dir() . '/' . $file : '';
-    if (!$isOwner || !is_file($path)) {
+    if (!$report || !daily_report_can_read($conn, $adminId, $report) || !is_file($path)) {
         http_response_code(404);
         echo 'Report not found.';
         exit;
@@ -94,20 +94,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         if (!preg_match('#^data:image/png;base64,[A-Za-z0-9+/=\r\n]+$#', $signature) || strlen($signature) > 400000) {
             daily_report_json(['ok' => false, 'message' => 'Sign the report before you submit it.']);
         }
-        $people = $recipients['people'];
-        if ($people === []) {
-            daily_report_json(['ok' => false, 'message' => 'No supervisor with an email could be read from your contract, so the report was not sent.']);
+        $route = daily_report_route($conn, $adminId);
+        if (!$route['is_robert'] && !is_array($route['robert'])) {
+            daily_report_json(['ok' => false, 'message' => 'Robert, the admission manager, could not be found, so the report was not submitted.']);
+        }
+        if ($route['is_robert'] && $route['superiors'] === []) {
+            daily_report_json(['ok' => false, 'message' => 'No supervisor with an email could be found, so the report was not submitted.']);
         }
         $file = 'report-' . $adminId . '-' . date('Ymd-His') . '-' . bin2hex(random_bytes(4)) . '.pdf';
         $path = daily_report_private_dir() . '/' . $file;
+        $noticePeople = $route['is_robert'] ? $route['superiors'] : [$route['robert']];
         try {
-            daily_report_pdf($path, $staff, $dateLabel, $body, $signature, $people);
+            daily_report_pdf($path, $staff, $dateLabel, $body, $signature, $recipients['people']);
         } catch (Throwable $e) {
             daily_report_json(['ok' => false, 'message' => $e->getMessage()]);
         }
         $today = date('Y-m-d');
         $now = date('Y-m-d H:i:s');
-        $recipientJson = json_encode($people, JSON_UNESCAPED_UNICODE);
+        $recipientJson = json_encode($recipients['people'], JSON_UNESCAPED_UNICODE);
         $contractLine = mb_substr($recipients['contract_line'], 0, 500);
         $status = 'saved';
         $stmt = $conn->prepare('INSERT INTO daily_work_reports
@@ -117,16 +121,24 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $stmt->execute();
         $reportId = (int) $stmt->insert_id;
         $stmt->close();
-
-        $to = $people[0]['email'];
-        $cc = [];
-        for ($i = 1, $n = count($people); $i < $n; $i++) {
-            $cc[] = $people[$i]['email'];
+        if ($route['is_robert']) {
+            $waiting = 'awaiting_superiors';
+            $updStatus = $conn->prepare('UPDATE daily_work_reports SET review_status = ? WHERE id = ?');
+            $updStatus->bind_param('si', $waiting, $reportId);
+            $updStatus->execute();
+            $updStatus->close();
         }
-        $subject = 'Daily work report — ' . $staff['name'] . ' — ' . date('j M Y');
-        $mailHtml = '<p>Please find attached the daily work report for <strong>'
-            . daily_report_h($staff['name']) . '</strong> for ' . daily_report_h($dateLabel) . '.</p>'
-            . '<p>The staff member signed this report in the MIS. The PDF is the copy to keep.</p>';
+        $to = $noticePeople[0]['email'];
+        $cc = [];
+        for ($i = 1, $n = count($noticePeople); $i < $n; $i++) {
+            if (filter_var($noticePeople[$i]['email'], FILTER_VALIDATE_EMAIL)) {
+                $cc[] = $noticePeople[$i]['email'];
+            }
+        }
+        $subject = 'Daily work report to review — ' . $staff['name'] . ' — ' . date('j M Y');
+        $mailHtml = '<p><strong>' . daily_report_h($staff['name']) . '</strong> signed a daily work report for '
+            . daily_report_h($dateLabel) . '.</p>'
+            . '<p>Read it in Report Daily work and approve it, or reject it with a reason. The PDF is attached.</p>';
         $reply = filter_var($staff['email'], FILTER_VALIDATE_EMAIL) ? $staff['email'] : null;
         try {
             $sent = sendSMTPMailDetailed(
@@ -148,24 +160,95 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         $upd->bind_param('ssi', $mailStatus, $mailError, $reportId);
         $upd->execute();
         $upd->close();
-        $names = array_map(static fn (array $person): string => $person['name'] . ' <' . $person['email'] . '>', $people);
         daily_report_json([
             'ok' => true,
             'mailed' => $mailStatus === 'sent',
             'download' => 'daily-work-report.php?download=' . $reportId,
-            'recipients' => $names,
-            'message' => $mailStatus === 'sent'
-                ? 'The report was signed, saved as a PDF, and emailed.'
-                : 'The PDF was saved. The email could not be sent, so download the PDF and send it if you still need to.',
+            'message' => $route['is_robert']
+                ? 'The report was signed and sent to your supervisors.'
+                : 'The report was signed and sent to Robert for review. The other supervisors see it after he approves.',
         ]);
+    }
+    if ($action === 'review') {
+        $reportId = (int) ($_POST['report_id'] ?? 0);
+        $decision = (string) ($_POST['decision'] ?? '');
+        $reason = (string) ($_POST['reason'] ?? '');
+        $report = daily_report_load($conn, $reportId);
+        if (!$report || !daily_report_can_read($conn, $adminId, $report)) {
+            daily_report_json(['ok' => false, 'message' => 'That report could not be found.']);
+        }
+        $result = daily_report_apply_review($conn, $adminId, $report, $decision, $reason);
+        if (empty($result['ok'])) {
+            $_SESSION['daily_report_flash'] = (string) ($result['message'] ?? 'The review could not be saved.');
+            header('Location: daily-work-report.php?range=' . urlencode((string) ($_POST['range'] ?? 'month')));
+            exit;
+        }
+        $fresh = daily_report_load($conn, $reportId);
+        $author = daily_report_staff($conn, (int) $report['admin_id']);
+        $pdf = daily_report_private_dir() . '/' . basename((string) $report['pdf_file']);
+        $reply = filter_var($author['email'], FILTER_VALIDATE_EMAIL) ? $author['email'] : null;
+        try {
+            if (($result['stage'] ?? '') === 'robert' && ($result['status'] ?? '') === 'rejected' && $reply) {
+                sendSMTPMailDetailed($reply, 'Daily work report rejected — ' . $report['report_date'],
+                    '<p>Robert, the admission manager, rejected your daily work report for ' . daily_report_h((string) $report['report_date']) . '.</p><p>Reason: ' . daily_report_h($reason) . '</p>');
+            }
+            if (($result['stage'] ?? '') === 'robert' && ($result['status'] ?? '') !== 'rejected' && $fresh) {
+                $route = daily_report_route($conn, (int) $report['admin_id']);
+                if ($route['superiors'] !== [] && is_file($pdf)) {
+                    $to = $route['superiors'][0]['email'];
+                    $cc = [];
+                    for ($i = 1, $n = count($route['superiors']); $i < $n; $i++) {
+                        $cc[] = $route['superiors'][$i]['email'];
+                    }
+                    sendSMTPMailDetailed(
+                        $to,
+                        'Daily work report approved by Robert — ' . $author['name'] . ' — ' . $report['report_date'],
+                        '<p>Robert approved the daily work report for <strong>' . daily_report_h($author['name']) . '</strong> (' . daily_report_h((string) $report['report_date']) . ').</p><p>Please read it and approve it, or reject it with a reason.</p>',
+                        [['path' => $pdf, 'name' => 'Daily-work-report.pdf']],
+                        [],
+                        null,
+                        $cc,
+                        $reply
+                    );
+                }
+            }
+            if (($result['stage'] ?? '') === 'superior' && ($result['status'] ?? '') === 'rejected' && $reply) {
+                sendSMTPMailDetailed($reply, 'Daily work report rejected — ' . $report['report_date'],
+                    '<p>A supervisor rejected your daily work report for ' . daily_report_h((string) $report['report_date']) . ' after Robert had approved it.</p><p>Reason: ' . daily_report_h($reason) . '</p>');
+            }
+        } catch (Throwable $e) {
+            error_log('daily report review mail failed: ' . $e->getMessage());
+        }
+        $_SESSION['daily_report_flash'] = $decision === 'approved' ? 'The report was approved.' : 'The report was rejected.';
+        header('Location: daily-work-report.php?range=' . urlencode((string) ($_POST['range'] ?? 'month')) . '&read=' . $reportId);
+        exit;
     }
     daily_report_json(['ok' => false, 'message' => 'Unknown action.']);
 }
 
 $signedToday = daily_report_signed_today($conn, $adminId);
 $canViewAll = daily_report_can_view_all($conn, $adminId);
-$history = daily_report_history($conn, $adminId, false);
-$allReports = $canViewAll ? daily_report_history($conn, $adminId, true) : [];
+$isRobert = daily_report_is_robert($staff);
+$isSuperior = daily_report_is_superior_viewer($conn, $adminId);
+[$filterFrom, $filterTo, $filterRange] = daily_report_date_bounds(
+    (string) ($_GET['range'] ?? 'month'),
+    (string) ($_GET['from'] ?? ''),
+    (string) ($_GET['to'] ?? '')
+);
+$history = daily_report_list($conn, $adminId, 'own', $filterFrom, $filterTo);
+$reviewRows = [];
+if ($isRobert || $canViewAll) {
+    $reviewRows = daily_report_list($conn, $adminId, 'all', $filterFrom, $filterTo);
+} elseif ($isSuperior) {
+    $reviewRows = daily_report_list($conn, $adminId, 'superior', $filterFrom, $filterTo);
+}
+$reading = null;
+if (isset($_GET['read'])) {
+    $candidate = daily_report_load($conn, (int) $_GET['read']);
+    if ($candidate && daily_report_can_read($conn, $adminId, $candidate)) {
+        $reading = $candidate;
+    }
+}
 $doneCount = 0;
 foreach ($jobs as $job) {
     if ($job['status'] === 'completed') {
@@ -226,13 +309,35 @@ $openCount = count($jobs) - $doneCount;
   .result { display: none; margin-top: 12px; padding: 12px; border-radius: 12px; background: #d8f3dc; color: #1b4332; }
   .history a { color: var(--green-2); }
   .history li { margin: 6px 0; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: end; margin: 0 0 16px; }
+  .filters a, .filters button { text-decoration: none; }
+  .filters .on { background: var(--green); color: #fff; }
+  .filters label { font-size: 12px; color: #5c564c; display: flex; flex-direction: column; gap: 4px; }
+  .filters input { border: 1px solid var(--line); border-radius: 8px; padding: 7px; font: inherit; }
+  .review { border-top: 1px solid #eee; padding: 10px 0; }
+  .review form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+  .review textarea { width: 100%; min-height: 64px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; }
+  .readbox { background: var(--paper); border: 1px solid #efe6d6; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
   @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } .sheet { padding: 18px; } }
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>Report Daily work</h1>
-  <p class="lead"><?= daily_report_h($staff['name']) ?> · <?= daily_report_h($dateLabel) ?>. Today’s job list fills the follow-up form. Edit any cell, then sign and send it.</p>
+  <?php if (!empty($_SESSION['daily_report_flash'])): ?>
+    <div class="result" style="display:block"><?= daily_report_h((string) $_SESSION['daily_report_flash']) ?></div>
+    <?php unset($_SESSION['daily_report_flash']); ?>
+  <?php endif; ?>
+  <p class="lead"><?= daily_report_h($staff['name']) ?> · <?= daily_report_h($dateLabel) ?>. Robert, the admission manager, reads each report first. He approves it or rejects it with a reason. The other supervisors see it only after he approves, and they approve it later.</p>
+  <form class="filters" method="get">
+    <a class="linkbtn <?= $filterRange === 'today' ? 'on' : 'ghost' ?>" href="?range=today">Today</a>
+    <a class="linkbtn <?= $filterRange === 'week' ? 'on' : 'ghost' ?>" href="?range=week">This week</a>
+    <a class="linkbtn <?= $filterRange === 'month' ? 'on' : 'ghost' ?>" href="?range=month">This month</a>
+    <label>From<input type="date" name="from" value="<?= daily_report_h($filterFrom) ?>"></label>
+    <label>To<input type="date" name="to" value="<?= daily_report_h($filterTo) ?>"></label>
+    <input type="hidden" name="range" value="custom">
+    <button class="primary" type="submit">Date range</button>
+  </form>
   <div class="grid">
     <div>
       <div class="card">
@@ -255,20 +360,17 @@ $openCount = count($jobs) - $doneCount;
         <?php endif; ?>
       </div>
       <div class="card" style="margin-top:16px">
-        <h2>Report to</h2>
+        <h2>Who reviews this</h2>
         <?php if (!$recipients['contract_found']): ?>
-          <p class="warn">Your staff contract has no “Reports to” line, so this report cannot be emailed yet.</p>
+          <p class="warn">Robert or your supervisor could not be matched to a staff profile, so this report cannot be submitted yet.</p>
         <?php else: ?>
-          <p style="font-size:13px;color:#5c564c">From your contract: <?= daily_report_h($recipients['contract_line']) ?></p>
+          <p style="font-size:13px;color:#5c564c"><?= daily_report_h($recipients['contract_line']) ?></p>
           <?php foreach ($recipients['people'] as $person): ?>
             <div class="person">
               <b><?= daily_report_h($person['name']) ?></b>
-              <span><?= daily_report_h($person['email']) ?></span>
+              <span><?= daily_report_h($person['matched_title'] ?? '') ?></span>
               <?php if ($person['position'] !== ''): ?><span><?= daily_report_h($person['position']) ?></span><?php endif; ?>
             </div>
-          <?php endforeach; ?>
-          <?php foreach ($recipients['unmatched'] as $title): ?>
-            <p class="warn"><?= daily_report_h($title) ?> is on your contract, and no staff profile uses that position, so that role is not emailed.</p>
           <?php endforeach; ?>
         <?php endif; ?>
       </div>
@@ -299,6 +401,62 @@ $openCount = count($jobs) - $doneCount;
       </div>
       <div class="result" id="result"></div>
       <?php endif; ?>
+      <?php if ($reading): ?>
+        <?php
+          $readRemaining = daily_report_remaining_ids($conn, $reading);
+          $readAsRobert = $isRobert && (string) $reading['review_status'] === 'pending_robert' && (int) $reading['admin_id'] !== $adminId;
+          $readAsSuperior = (string) $reading['review_status'] === 'awaiting_superiors' && (in_array($adminId, $readRemaining, true) || $canViewAll);
+        ?>
+        <div class="readbox">
+          <h2 style="margin-top:0;color:#1b4332">Reading <?= daily_report_h((string) ($reading['staff_name'] ?? 'Staff')) ?> · <?= daily_report_h((string) $reading['report_date']) ?></h2>
+          <p><?= daily_report_h(daily_report_status_label($reading)) ?></p>
+          <?= (string) $reading['body_html'] ?>
+          <p><a href="daily-work-report.php?download=<?= (int) $reading['id'] ?>">Open the PDF</a></p>
+          <?php if ($readAsRobert || $readAsSuperior): ?>
+            <form method="post">
+              <input type="hidden" name="csrf" value="<?= daily_report_h($csrf) ?>">
+              <input type="hidden" name="action" value="review">
+              <input type="hidden" name="report_id" value="<?= (int) $reading['id'] ?>">
+              <input type="hidden" name="range" value="<?= daily_report_h($filterRange) ?>">
+              <textarea name="reason" placeholder="Reason, required if you reject"></textarea>
+              <div style="margin-top:8px">
+                <button class="primary" type="submit" name="decision" value="approved">Approve</button>
+                <button class="ghost" type="submit" name="decision" value="rejected">Reject</button>
+              </div>
+            </form>
+          <?php endif; ?>
+        </div>
+      <?php endif; ?>
+      <?php if ($reviewRows !== []): ?>
+        <div class="history">
+          <h2 style="font-size:15px;color:#1b4332"><?= $isRobert ? 'Reports for Robert to review' : 'Reports approved by Robert' ?></h2>
+          <?php foreach ($reviewRows as $row): ?>
+            <?php
+              $remaining = daily_report_remaining_ids($conn, $row);
+              $canDecideRobert = $isRobert && (string) $row['review_status'] === 'pending_robert' && (int) $row['admin_id'] !== $adminId;
+              $canDecideSuperior = (string) $row['review_status'] === 'awaiting_superiors' && (in_array($adminId, $remaining, true) || $canViewAll);
+            ?>
+            <div class="review">
+              <a href="?range=<?= daily_report_h($filterRange) ?>&amp;from=<?= daily_report_h($filterFrom) ?>&amp;to=<?= daily_report_h($filterTo) ?>&amp;read=<?= (int) $row['id'] ?>"><?= daily_report_h((string) ($row['staff_name'] ?? 'Staff')) ?> · <?= daily_report_h((string) $row['report_date']) ?></a>
+              · <?= daily_report_h(daily_report_status_label($row)) ?>
+              <?php if ($canDecideRobert): ?> · <a href="?range=<?= daily_report_h($filterRange) ?>&amp;from=<?= daily_report_h($filterFrom) ?>&amp;to=<?= daily_report_h($filterTo) ?>&amp;read=<?= (int) $row['id'] ?>">Open and review</a><?php endif; ?>
+              <?php if ($canDecideRobert || $canDecideSuperior): ?>
+                <form method="post">
+                  <input type="hidden" name="csrf" value="<?= daily_report_h($csrf) ?>">
+                  <input type="hidden" name="action" value="review">
+                  <input type="hidden" name="report_id" value="<?= (int) $row['id'] ?>">
+                  <input type="hidden" name="range" value="<?= daily_report_h($filterRange) ?>">
+                  <textarea name="reason" placeholder="Reason, required if you reject"></textarea>
+                  <button class="primary" type="submit" name="decision" value="approved">Approve</button>
+                  <button class="ghost" type="submit" name="decision" value="rejected">Reject</button>
+                </form>
+              <?php endif; ?>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php elseif ($isRobert || $isSuperior || $canViewAll): ?>
+        <div class="history"><p>No reports in this date range.</p></div>
+      <?php endif; ?>
       <?php if ($history !== []): ?>
         <div class="history">
           <h2 style="font-size:15px;color:#1b4332">Your reports</h2>
@@ -306,27 +464,10 @@ $openCount = count($jobs) - $doneCount;
             <?php foreach ($history as $row): ?>
               <li>
                 <a href="daily-work-report.php?download=<?= (int) $row['id'] ?>"><?= daily_report_h((string) $row['report_date']) ?></a>
-                · <?= $row['mail_status'] === 'sent' ? 'emailed' : 'saved' ?>
+                · <?= daily_report_h(daily_report_status_label($row)) ?>
               </li>
             <?php endforeach; ?>
           </ul>
-        </div>
-      <?php endif; ?>
-      <?php if ($canViewAll): ?>
-        <div class="history">
-          <h2 style="font-size:15px;color:#1b4332">All submitted reports</h2>
-          <?php if ($allReports === []): ?>
-            <p>No report has been signed yet.</p>
-          <?php else: ?>
-            <ul>
-              <?php foreach ($allReports as $row): ?>
-                <li>
-                  <a href="daily-work-report.php?download=<?= (int) $row['id'] ?>"><?= daily_report_h((string) ($row['staff_name'] ?? 'Staff')) ?> · <?= daily_report_h((string) $row['report_date']) ?></a>
-                  · <?= $row['mail_status'] === 'sent' ? 'emailed' : 'saved' ?>
-                </li>
-              <?php endforeach; ?>
-            </ul>
-          <?php endif; ?>
         </div>
       <?php endif; ?>
     </div>

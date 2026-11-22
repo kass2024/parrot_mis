@@ -776,6 +776,7 @@ $today = date('Y-m-d');
   </form>
   <script>
   document.querySelectorAll('input[type="checkbox"][name]').forEach(function (box) {
+    if (box.name === 'declare[]') return;
     box.addEventListener('change', function () {
       if (!box.checked) return;
       var group = box.form.querySelectorAll('input[type="checkbox"][name="' + box.name + '"]');
@@ -783,6 +784,19 @@ $today = date('Y-m-d');
       group.forEach(function (other) { if (other !== box) other.checked = false; });
     });
   });
+  var applicationForm = document.querySelector('form[enctype="multipart/form-data"]');
+  if (applicationForm) {
+    applicationForm.addEventListener('submit', function (event) {
+      var missing = false;
+      applicationForm.querySelectorAll('input[name="declare[]"]').forEach(function (box) {
+        if (!box.checked) missing = true;
+      });
+      if (missing) {
+        event.preventDefault();
+        window.alert('Tick every statement in the declaration before you submit.');
+      }
+    });
+  }
   var courseSelect = document.getElementById('course_title');
   if (courseSelect) {
     var syncCourseReqs = function () {
