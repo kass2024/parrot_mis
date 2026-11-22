@@ -4,6 +4,7 @@ declare(strict_types=1);
 ob_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/agent_contract_schema.php';
+require_once __DIR__ . '/helpers/agent_contract_senegal.php';
 require_once __DIR__ . '/helpers/agent_contract_admin.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
@@ -83,13 +84,13 @@ if (!str_starts_with($signature, 'data:image/') || !str_contains($signature, 'ba
     acFail('Invalid signature format', 400);
 }
 
-$stmt = $conn->prepare('SELECT id, status, admin_id, agent_type FROM agent_contracts WHERE contract_token = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, status, admin_id, contract_template FROM agent_contracts WHERE contract_token = ? LIMIT 1');
 $stmt->bind_param('s', $token);
 $stmt->execute();
 $contract = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
-if (!$contract) {
+if (!$contract || $contract['status'] === 'cancelled') {
     acFail('Contract not found', 404);
 }
 
@@ -105,6 +106,24 @@ if (empty($contract['admin_id']) && $phone === '') {
     acFail('Phone is required to create your agent account', 400);
 }
 
+$isSenegal = $contract['contract_template'] === AGENT_CONTRACT_SENEGAL;
+$signerDetails = [];
+if ($isSenegal) {
+    if ($phone === '' || !agent_contract_senegal_date($signedDate)) {
+        acFail('Renseignez votre téléphone et une date de signature valide.');
+    }
+    foreach (agent_contract_senegal_fields() as $field => [$label, $maxLength]) {
+        $value = is_string($data[$field] ?? null) ? trim($data[$field]) : '';
+        if ($value === '' || mb_strlen($value) > $maxLength) {
+            acFail('Champ obligatoire ou trop long : ' . $label);
+        }
+        $signerDetails[$field] = $value;
+    }
+    if (!agent_contract_senegal_date($dateOfBirth) || $dateOfBirth > $signedDate) {
+        acFail('Saisissez une date de naissance valide.');
+    }
+}
+
 $contractId = (int) $contract['id'];
 $accountInfo = [
     'admin_id' => 0,
@@ -116,10 +135,26 @@ $accountInfo = [
 $conn->begin_transaction();
 
 try {
-    $stmt = $conn->prepare('SELECT id FROM agent_contracts WHERE id = ? FOR UPDATE');
+    $stmt = $conn->prepare('SELECT status, admin_id, effective_date, senegal_details FROM agent_contracts WHERE id = ? FOR UPDATE');
     $stmt->bind_param('i', $contractId);
     $stmt->execute();
+    $locked = $stmt->get_result()->fetch_assoc();
     $stmt->close();
+    if (!$locked || $locked['status'] === 'cancelled') {
+        $conn->rollback();
+        acFail('Contract not found', 404);
+    }
+    if ($locked['status'] === 'signed') {
+        $conn->rollback();
+        acRespond(['success' => true, 'status' => 'already_signed']);
+    }
+    $adminId = $locked['admin_id'];
+    $senegalDetails = null;
+    if ($isSenegal) {
+        $companyDetails = agent_contract_senegal_details($locked['senegal_details']);
+        $senegalDetails = json_encode($signerDetails + $companyDetails, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
+        $effectiveDate = $locked['effective_date'];
+    }
 
     $stmt = $conn->prepare("
         INSERT INTO agent_signatures
@@ -139,30 +174,32 @@ try {
             agent_email = ?,
             agent_phone = ?,
             agent_address = ?,
-            agent_title = ?
+            agent_title = ?,
+            senegal_details = ?
         WHERE id = ?
     ");
     $stmt->bind_param(
-        'ssssssi',
+        'sssssssi',
         $effectiveDate,
         $name,
         $email,
         $phone,
         $address,
         $title,
+        $senegalDetails,
         $contractId
     );
     $stmt->execute();
     $stmt->close();
 
     $accountInfo = [
-        'admin_id' => !empty($contract['admin_id']) ? (int) $contract['admin_id'] : 0,
+        'admin_id' => (int) $adminId,
         'created'  => false,
-        'existing' => !empty($contract['admin_id']),
+        'existing' => !empty($adminId),
         'username' => '',
     ];
 
-    if (empty($contract['admin_id'])) {
+    if (empty($adminId)) {
         $accountInfo = agent_contract_ensure_admin($conn, [
             'name'                  => $name,
             'email'                 => $email,
@@ -201,7 +238,7 @@ try {
     acFail($e->getMessage(), 400);
 } catch (Throwable $e) {
     $conn->rollback();
-    acFail('Signing failed', 500, ['message' => $e->getMessage()]);
+    acFail('Signing failed', 500, ['code' => $e->getCode()]);
 }
 
 $pdfPath = null;

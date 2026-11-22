@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/agent_contract_schema.php';
+require_once __DIR__ . '/helpers/agent_contract_senegal.php';
 
 if (!isset($_SESSION['admin_id'])) {
     http_response_code(403);
@@ -28,6 +29,7 @@ if ($filter === 'all') {
             c.contract_token,
             c.status,
             c.agent_type,
+            c.contract_template,
             c.agent_name,
             c.agent_email,
             c.effective_date,
@@ -45,6 +47,7 @@ if ($filter === 'all') {
             c.contract_token,
             c.status,
             c.agent_type,
+            c.contract_template,
             c.agent_name,
             c.agent_email,
             c.effective_date,
@@ -109,6 +112,7 @@ th { background:#f0f7f0; font-size:12px; font-weight:600; text-transform:upperca
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
             <a class="back-btn" href="admin-dashboard.php">← Dashboard</a>
             <a class="issue-btn" href="admin-generate-agent-contract.php">Issue New Link</a>
+            <a class="issue-btn" href="admin-generate-agent-contract.php?template=senegal_fr">Issue Senegal Link (French)</a>
         </div>
     </div>
 
@@ -132,6 +136,7 @@ th { background:#f0f7f0; font-size:12px; font-weight:600; text-transform:upperca
                     <th>Agent / Staff</th>
                     <th>Email</th>
                     <th>Type</th>
+                    <th>Contract</th>
                     <th>Status</th>
                     <th>Signed At</th>
                     <th>Actions</th>
@@ -139,7 +144,7 @@ th { background:#f0f7f0; font-size:12px; font-weight:600; text-transform:upperca
             </thead>
             <tbody>
             <?php if ($result->num_rows === 0): ?>
-                <tr><td colspan="7" class="empty">No agent contracts yet.</td></tr>
+                <tr><td colspan="8" class="empty">No agent contracts yet.</td></tr>
             <?php else: ?>
                 <?php while ($row = $result->fetch_assoc()): ?>
                     <?php
@@ -151,6 +156,7 @@ th { background:#f0f7f0; font-size:12px; font-weight:600; text-transform:upperca
                         <td><?= htmlspecialchars((string) ($row['agent_name'] ?: '—')) ?></td>
                         <td><?= htmlspecialchars((string) ($row['agent_email'] ?: '—')) ?></td>
                         <td><?= htmlspecialchars(strtoupper((string) ($row['agent_type'] ?? ''))) ?></td>
+                        <td><?= $row['contract_template'] === AGENT_CONTRACT_SENEGAL ? 'Senegal (French)' : 'Standard' ?></td>
                         <td><span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($status) ?></span></td>
                         <td><?= htmlspecialchars((string) ($row['signed_at'] ?? '—')) ?></td>
                         <td class="actions">

@@ -7,3 +7,6 @@
     Header set Permissions-Policy "camera=(self), microphone=(self)"
   </FilesMatch>
 </IfModule>
+
+# Signed agent contracts and signatures are served through the authorized PHP endpoints.
+RedirectMatch 404 "(?i)/uploads/agent_contracts(?:/|$)"

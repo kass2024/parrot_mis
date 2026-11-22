@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/agent_contract_schema.php';
+require_once __DIR__ . '/helpers/agent_contract_senegal.php';
 require_once __DIR__ . '/helpers/mail_smtp.php';
 
 header('Content-Type: application/json');
@@ -31,7 +32,7 @@ if (!isset($_POST['contract_id']) || !ctype_digit($_POST['contract_id'])) {
 $contractId = (int) $_POST['contract_id'];
 
 $stmt = $conn->prepare("
-    SELECT pdf_path, agent_name, agent_email
+    SELECT pdf_path, agent_name, agent_email, contract_template
     FROM agent_contracts
     WHERE id = ? AND status = 'signed'
     LIMIT 1
@@ -70,12 +71,16 @@ $body = "
     <p style='margin-top:30px'>Kind regards,<br><strong>Parrot Canada Visa Consultant</strong></p>
 </div>";
 
-$sent = sendSMTPMail(
-    $clientEmail,
-    'Your Signed Agent Agreement - Parrot Canada Visa Consultant',
-    $body,
-    [['path' => $row['pdf_path'], 'name' => 'Agent_Referral_Commission_Agreement.pdf']]
-);
+$subject = 'Your Signed Agent Agreement - Parrot Canada Visa Consultant';
+$filename = 'Agent_Referral_Commission_Agreement.pdf';
+if ($row['contract_template'] === AGENT_CONTRACT_SENEGAL) {
+    $subject = 'Votre contrat d’agent individuel signé — Sénégal';
+    $filename = 'Contrat_Agent_Individuel_Senegal.pdf';
+    $body = "<p>Bonjour {$safeName},</p>
+<p>Votre contrat d’agent individuel de référencement au Sénégal a été signé. Vous trouverez le PDF signé en pièce jointe.</p>
+<p>Cordialement,<br>Parrot Canada Visa Consultant</p>";
+}
+$sent = sendSMTPMail($clientEmail, $subject, $body, [['path' => $row['pdf_path'], 'name' => $filename]]);
 
 if (!$sent) {
     echo json_encode(['success' => false, 'error' => 'Email failed to send. Check SMTP settings in .env']);

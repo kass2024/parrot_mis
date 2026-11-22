@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/agent_contract_schema.php';
+require_once __DIR__ . '/helpers/agent_contract_senegal.php';
 
 agent_contract_ensure_schema($conn);
 
@@ -14,7 +15,7 @@ if (!isset($_GET['token']) || trim($_GET['token']) === '') {
 $token = trim($_GET['token']);
 $inline = isset($_GET['inline']) && $_GET['inline'] === '1';
 
-$stmt = $conn->prepare('SELECT id, pdf_path, status FROM agent_contracts WHERE contract_token = ? LIMIT 1');
+$stmt = $conn->prepare('SELECT id, pdf_path, status, contract_template FROM agent_contracts WHERE contract_token = ? LIMIT 1');
 $stmt->bind_param('s', $token);
 $stmt->execute();
 $contract = $stmt->get_result()->fetch_assoc();
@@ -56,7 +57,9 @@ if ($pdfPath === '' || !is_file($pdfPath)) {
     exit('Signed PDF not found.');
 }
 
-$filename = 'agent_contract_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', substr($token, 0, 16)) . '.pdf';
+$filename = $contract['contract_template'] === AGENT_CONTRACT_SENEGAL
+    ? 'contrat_agent_senegal_' . $contractId . '.pdf'
+    : 'agent_contract_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', substr($token, 0, 16)) . '.pdf';
 header('Content-Type: application/pdf');
 header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . '; filename="' . $filename . '"');
 header('Content-Length: ' . (string) filesize($pdfPath));

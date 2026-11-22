@@ -457,6 +457,7 @@ $cards = [
     'icon' => 'bi-person-badge',
     'links' => [
       'admin-generate-agent-contract.php' => 'Issue agent contract link',
+      'admin-generate-agent-contract.php?template=senegal_fr' => 'Issue Senegal agent contract link (French)',
       'admin-agent-contracts.php' => 'View agent contracts',
     ]
   ],
@@ -3064,6 +3065,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             <i class="bi bi-link"></i>
             Issue agent contract link
           </a>
+          <a href="#" onclick="return loadInFrame('admin-generate-agent-contract.php?template=senegal_fr', 'Issue Senegal Agent Contract Link (French)')">
+            <i class="bi bi-link"></i>
+            Issue Senegal agent contract link (French)
+          </a>
           <a href="#" onclick="loadInFrame('admin-agent-contracts.php', 'View Agent Contracts')">
             <i class="bi bi-files"></i>
             View agent contracts
@@ -3205,7 +3210,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   window.pcvcClearanceDenied = <?= json_encode(array_values($pcvcClearanceDenied), JSON_UNESCAPED_SLASHES) ?>;
   window.pcvcClearanceIndex = <?= json_encode($pcvcClearanceIndex, JSON_UNESCAPED_SLASHES) ?>;
   window.pcvcClearanceBlocks = function (url) {
-    const keys = (window.pcvcClearanceIndex && window.pcvcClearanceIndex[url]) || [];
+    const keys = window.pcvcClearanceIndex[url] || window.pcvcClearanceIndex[url.split('?')[0]] || [];
     if (!keys.length) return false;
     return keys.every(key => window.pcvcClearanceDenied.indexOf(key) !== -1);
   };
@@ -3213,7 +3218,8 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     const match = (link.getAttribute('onclick') || '').match(/loadInFrame\('([^']+)'/);
     if (!match) return;
     const menu = (link.closest('.sidebar-submenu') || {}).id || '';
-    const key = 'sub:' + menu.replace('submenu_', '') + '|' + match[1];
+    const url = window.pcvcClearanceIndex[match[1]] ? match[1] : match[1].split('?')[0];
+    const key = 'sub:' + menu.replace('submenu_', '') + '|' + url;
     if (window.pcvcClearanceDenied.indexOf(key) !== -1) link.style.display = 'none';
   });
   document.querySelectorAll('.sidebar-submenu').forEach(menu => {

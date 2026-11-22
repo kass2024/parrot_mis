@@ -4,6 +4,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/agent_contract_schema.php';
+require_once __DIR__ . '/helpers/agent_contract_senegal.php';
 require_once __DIR__ . '/helpers/mail_smtp.php';
 
 if (!isset($_SESSION['admin_id'])) {
@@ -17,6 +18,18 @@ if (!isset($conn) || $conn->connect_error) {
 }
 
 agent_contract_ensure_schema($conn);
+
+$isSenegal = ($_GET['template'] ?? '') === AGENT_CONTRACT_SENEGAL;
+$contractTemplate = $isSenegal ? AGENT_CONTRACT_SENEGAL : 'standard';
+$pageTitle = $isSenegal ? 'Issue Senegal Agent Contract (French)' : 'Issue Agent Contract';
+if ($isSenegal) {
+    $_SESSION['csrf_token'] ??= bin2hex(random_bytes(32));
+    if ($_SERVER['REQUEST_METHOD'] === 'POST' && (!is_string($_POST['csrf_token'] ?? null)
+        || !hash_equals($_SESSION['csrf_token'], $_POST['csrf_token']))) {
+        http_response_code(403);
+        exit('Invalid form token. Reload the page and try again.');
+    }
+}
 
 $scheme   = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $host     = $_SERVER['HTTP_HOST'];
@@ -54,6 +67,7 @@ $form = [
     'agent_title'    => '',
     'agent_type'     => 'agent',
     'effective_date' => date('Y-m-d'),
+    'company_signing_place' => '',
     'send_email'     => '0',
 ];
 
@@ -69,6 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ? (string) $_POST['agent_type']
         : 'agent';
     $form['effective_date'] = trim((string) ($_POST['effective_date'] ?? date('Y-m-d')));
+    $form['company_signing_place'] = $isSenegal ? trim((string) ($_POST['company_signing_place'] ?? '')) : '';
     $form['send_email']     = !empty($_POST['send_email']) ? '1' : '0';
 
     $adminId = null;
@@ -132,24 +147,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'error';
             }
         }
-        if ($message === null && ($form['effective_date'] === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $form['effective_date']))) {
+        if ($message === null && !agent_contract_senegal_date($form['effective_date'])) {
             $message = 'Please set a valid effective date.';
+            $messageType = 'error';
+        }
+        if ($message === null && $isSenegal && ($form['company_signing_place'] === '' || mb_strlen($form['company_signing_place']) > 100)) {
+            $message = 'Enter the company signing location (up to 100 characters).';
             $messageType = 'error';
         }
     }
 
     if ($message === null) {
+        $senegalDetails = $isSenegal ? json_encode(['company_signing_place' => $form['company_signing_place']], JSON_THROW_ON_ERROR) : null;
         // Reuse latest draft for same admin or same email
         $existing = null;
         if ($adminId) {
             $stmt = $conn->prepare("
                 SELECT id, contract_token, status
                 FROM agent_contracts
-                WHERE admin_id = ? AND status IN ('draft','signed')
+                WHERE admin_id = ? AND contract_template = ? AND status IN ('draft','signed')
                 ORDER BY id DESC
                 LIMIT 1
             ");
-            $stmt->bind_param('i', $adminId);
+            $stmt->bind_param('is', $adminId, $contractTemplate);
             $stmt->execute();
             $existing = $stmt->get_result()->fetch_assoc();
             $stmt->close();
@@ -160,11 +180,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 SELECT id, contract_token, status
                 FROM agent_contracts
                 WHERE LOWER(TRIM(agent_email)) = LOWER(TRIM(?))
-                  AND status = 'draft'
+                  AND contract_template = ? AND status = 'draft'
                 ORDER BY id DESC
                 LIMIT 1
             ");
-            $stmt->bind_param('s', $emailLookup);
+            $stmt->bind_param('ss', $emailLookup, $contractTemplate);
             $stmt->execute();
             $existing = $stmt->get_result()->fetch_assoc();
             $stmt->close();
@@ -173,56 +193,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($existing && $existing['status'] === 'draft') {
             $contractId = (int) $existing['id'];
             $token = (string) $existing['contract_token'];
-            if ($adminId === null) {
-                $stmt = $conn->prepare("
-                    UPDATE agent_contracts SET
-                        admin_id = NULL,
-                        agent_type = ?,
-                        agent_name = ?,
-                        agent_email = ?,
-                        agent_phone = ?,
-                        agent_address = ?,
-                        agent_title = ?,
-                        effective_date = ?
-                    WHERE id = ?
-                ");
-                $stmt->bind_param(
-                    'sssssssi',
-                    $agentType,
-                    $form['agent_name'],
-                    $form['agent_email'],
-                    $form['agent_phone'],
-                    $form['agent_address'],
-                    $form['agent_title'],
-                    $form['effective_date'],
-                    $contractId
-                );
-            } else {
-                $stmt = $conn->prepare("
-                    UPDATE agent_contracts SET
-                        admin_id = ?,
-                        agent_type = ?,
-                        agent_name = ?,
-                        agent_email = ?,
-                        agent_phone = ?,
-                        agent_address = ?,
-                        agent_title = ?,
-                        effective_date = ?
-                    WHERE id = ?
-                ");
-                $stmt->bind_param(
-                    'isssssssi',
-                    $adminId,
-                    $agentType,
-                    $form['agent_name'],
-                    $form['agent_email'],
-                    $form['agent_phone'],
-                    $form['agent_address'],
-                    $form['agent_title'],
-                    $form['effective_date'],
-                    $contractId
-                );
-            }
+            $stmt = $conn->prepare("
+                UPDATE agent_contracts SET
+                    admin_id = ?, agent_type = ?, agent_name = ?, agent_email = ?, agent_phone = ?,
+                    agent_address = ?, agent_title = ?, effective_date = ?, senegal_details = ?
+                WHERE id = ? AND status = 'draft'
+            ");
+            $stmt->bind_param(
+                'issssssssi',
+                $adminId,
+                $agentType,
+                $form['agent_name'],
+                $form['agent_email'],
+                $form['agent_phone'],
+                $form['agent_address'],
+                $form['agent_title'],
+                $form['effective_date'],
+                $senegalDetails,
+                $contractId
+            );
             $stmt->execute();
             $stmt->close();
             $contractLink = $baseUrl . '?token=' . $token;
@@ -232,42 +221,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $message = 'This person already has a signed agent contract. Showing the existing link.';
         } else {
             $token = bin2hex(random_bytes(32));
-            if ($adminId === null) {
-                $stmt = $conn->prepare("
-                    INSERT INTO agent_contracts
-                    (contract_token, status, admin_id, agent_type, agent_name, agent_email, agent_phone, agent_address, agent_title, effective_date, created_at)
-                    VALUES (?, 'draft', NULL, ?, ?, ?, ?, ?, ?, ?, NOW())
-                ");
-                $stmt->bind_param(
-                    'ssssssss',
-                    $token,
-                    $agentType,
-                    $form['agent_name'],
-                    $form['agent_email'],
-                    $form['agent_phone'],
-                    $form['agent_address'],
-                    $form['agent_title'],
-                    $form['effective_date']
-                );
-            } else {
-                $stmt = $conn->prepare("
-                    INSERT INTO agent_contracts
-                    (contract_token, status, admin_id, agent_type, agent_name, agent_email, agent_phone, agent_address, agent_title, effective_date, created_at)
-                    VALUES (?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-                ");
-                $stmt->bind_param(
-                    'sisssssss',
-                    $token,
-                    $adminId,
-                    $agentType,
-                    $form['agent_name'],
-                    $form['agent_email'],
-                    $form['agent_phone'],
-                    $form['agent_address'],
-                    $form['agent_title'],
-                    $form['effective_date']
-                );
-            }
+            $stmt = $conn->prepare("
+                INSERT INTO agent_contracts
+                (contract_token, status, admin_id, agent_type, agent_name, agent_email, agent_phone,
+                 agent_address, agent_title, effective_date, contract_template, senegal_details, created_at)
+                VALUES (?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            ");
+            $stmt->bind_param(
+                'sisssssssss',
+                $token,
+                $adminId,
+                $agentType,
+                $form['agent_name'],
+                $form['agent_email'],
+                $form['agent_phone'],
+                $form['agent_address'],
+                $form['agent_title'],
+                $form['effective_date'],
+                $contractTemplate,
+                $senegalDetails
+            );
             $stmt->execute();
             $stmt->close();
             $contractLink = $baseUrl . '?token=' . $token;
@@ -290,11 +263,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <p style='margin-top:28px'>Kind regards,<br><strong>Parrot Canada Visa Consultant</strong></p>
 </div>";
 
-            $sent = sendSMTPMail(
-                $form['agent_email'],
-                'Please sign: Agent Referral & Commission Agreement — Parrot Canada',
-                $body
-            );
+            $subject = 'Please sign: Agent Referral & Commission Agreement — Parrot Canada';
+            if ($isSenegal) {
+                $subject = 'Signature du contrat d’agent individuel — Sénégal';
+                $body = "<p>Bonjour {$safeName},</p>
+<p>Nous vous invitons à lire et à signer électroniquement votre contrat d’agent individuel de référencement au Sénégal.</p>
+<p><a href=\"{$safeLink}\">Ouvrir et signer le contrat</a></p>
+<p>Cordialement,<br>Parrot Canada Visa Consultant</p>";
+            }
+            $sent = sendSMTPMail($form['agent_email'], $subject, $body);
 
             if ($sent) {
                 $upd = $conn->prepare("UPDATE agent_contracts SET invite_sent_at = NOW() WHERE contract_token = ?");
@@ -330,7 +307,7 @@ foreach ($staffAgents as $a) {
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Issue Agent Contract</title>
+<title><?= htmlspecialchars($pageTitle) ?></title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
 :root { --primary:#427431; --success:#28a745; --bg:#f8fafc; --card:#fff; --muted:#6c757d; --danger:#b91c1c; }
@@ -370,8 +347,10 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
 <body>
 <?php include 'header.php'; ?>
 <main class="container">
+    <?php if (!$isSenegal): ?>
     <div style="text-align:center;margin-bottom:10px;font-size:12px;font-weight:600;color:var(--primary);">AGENT REFERRAL &amp; COMMISSION</div>
-    <h1>Issue Agent Contract</h1>
+    <?php endif; ?>
+    <h1><?= htmlspecialchars($pageTitle) ?></h1>
     <p class="subtitle">Send a signing link to registered staff/agents, or issue a blank link so an unregistered person can fill in their own details and be added as an agent.</p>
 
     <?php if ($message): ?>
@@ -382,6 +361,9 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
     <?php endif; ?>
 
     <form method="post" id="issueForm">
+        <?php if ($isSenegal): ?>
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+        <?php endif; ?>
         <div class="mode-tabs">
             <label>
                 <input type="radio" name="mode" value="registered" <?= $form['mode'] === 'registered' ? 'checked' : '' ?> onchange="toggleMode()">
@@ -458,6 +440,13 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
                 <input type="date" name="effective_date" id="effective_date" required value="<?= htmlspecialchars($form['effective_date']) ?>">
             </div>
         </div>
+
+        <?php if ($isSenegal): ?>
+        <div class="form-group">
+            <label for="company_signing_place">Company signing location *</label>
+            <input type="text" name="company_signing_place" id="company_signing_place" maxlength="100" required value="<?= htmlspecialchars($form['company_signing_place']) ?>">
+        </div>
+        <?php endif; ?>
 
         <input type="hidden" name="send_email" id="send_email_flag" value="<?= $form['send_email'] === '1' ? '1' : '0' ?>">
 

@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS `agent_contracts` (
   `pdf_path` varchar(500) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `contract_template` varchar(24) NOT NULL DEFAULT 'standard',
+  `senegal_details` json DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `contract_token` (`contract_token`),
   KEY `admin_id` (`admin_id`),
