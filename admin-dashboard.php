@@ -2464,6 +2464,9 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="return loadInFrame('admin-student-consent.php?lang=fr', 'Student Consent (French)')">
             <i class="bi bi-translate"></i> Student Consent (French)
           </a>
+          <a href="#" onclick="return loadInFrame('admin-student-consent.php?view=signed', 'View Signed Consents')">
+            <i class="bi bi-files"></i> View Signed Consents
+          </a>
         </div>
         <?php endif; ?>
       </div>

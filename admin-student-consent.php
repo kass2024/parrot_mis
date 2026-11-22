@@ -22,6 +22,8 @@ $_SESSION['student_consent_csrf'] ??= bin2hex(random_bytes(32));
 $csrf = $_SESSION['student_consent_csrf'];
 $language = ($_GET['lang'] ?? '') === 'fr' ? 'fr' : 'en';
 $languageName = $language === 'fr' ? 'French' : 'English';
+$signedView = ($_GET['view'] ?? '') === 'signed';
+$pageTitle = $signedView ? 'Signed Student Consents' : 'Student Consent (' . $languageName . ')';
 $issuerPath = 'admin-student-consent.php' . ($language === 'fr' ? '?lang=fr' : '');
 $h = 'student_consent_escape';
 $error = '';
@@ -29,6 +31,11 @@ $search = '';
 $matches = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if ($signedView) {
+        http_response_code(405);
+        header('Allow: GET, HEAD');
+        exit;
+    }
     if (!is_string($_POST['csrf_token'] ?? null) || !hash_equals($csrf, $_POST['csrf_token'])) {
         http_response_code(403);
         exit('Reload the form and try again.');
@@ -100,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$issuedId = filter_var($_GET['issued'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+$issuedId = $signedView ? false : filter_var($_GET['issued'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 $issuedLink = '';
 if ($issuedId) {
     $stmt = $conn->prepare('SELECT contract_token FROM student_consent_authorizations
@@ -116,11 +123,28 @@ if ($issuedId) {
     }
 }
 
-$stmt = $conn->prepare("SELECT contract_token, signed_at, created_at,
+$listFields = "SELECT contract_token, language, signed_at, signing_date, created_at,
     JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.student_name')) AS student_name
-    FROM student_consent_authorizations WHERE language = ? AND (issued_by = ? OR ? = 1)
-    ORDER BY id DESC LIMIT 25");
-$stmt->bind_param('sii', $language, $adminId, $superadmin);
+    FROM student_consent_authorizations";
+$page = $pageCount = 1;
+if ($signedView) {
+    $pageSize = 25;
+    $where = 'WHERE signed_at IS NOT NULL AND (issued_by = ? OR ? = 1)';
+    $count = $conn->prepare('SELECT COUNT(*) FROM student_consent_authorizations ' . $where);
+    $count->bind_param('ii', $adminId, $superadmin);
+    $count->execute();
+    $total = (int) $count->get_result()->fetch_row()[0];
+    $count->close();
+    $pageCount = max(1, (int) ceil($total / $pageSize));
+    $requestedPage = filter_var($_GET['page'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    $page = min($requestedPage ?: 1, $pageCount);
+    $offset = ($page - 1) * $pageSize;
+    $stmt = $conn->prepare($listFields . ' ' . $where . ' ORDER BY signed_at DESC, id DESC LIMIT ? OFFSET ?');
+    $stmt->bind_param('iiii', $adminId, $superadmin, $pageSize, $offset);
+} else {
+    $stmt = $conn->prepare($listFields . ' WHERE language = ? AND (issued_by = ? OR ? = 1) ORDER BY id DESC LIMIT 25');
+    $stmt->bind_param('sii', $language, $adminId, $superadmin);
+}
 $stmt->execute();
 $recent = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
@@ -130,7 +154,7 @@ $stmt->close();
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Student Consent (<?= $h($languageName) ?>)</title>
+<title><?= $h($pageTitle) ?></title>
 <style>
 * { box-sizing: border-box; }
 body { margin: 0; padding: 24px 14px; background: #f4f5f7; color: #1d2633; font: 15px/1.5 system-ui, sans-serif; }
@@ -139,6 +163,7 @@ h1 { font-size: 23px; margin: 0 0 12px; }
 h2 { font-size: 17px; margin: 24px 0 10px; }
 a { color: #911423; }
 nav { display: flex; gap: 14px; margin-bottom: 18px; }
+nav[aria-label="Pagination"] { align-items: center; margin-top: 16px; }
 form { margin: 8px 0; }
 button { padding: 8px 12px; border: 0; border-radius: 6px; background: #911423; color: #fff; font: inherit; cursor: pointer; }
 input { padding: 8px; border: 1px solid #bdc3cc; border-radius: 5px; font: inherit; }
@@ -153,11 +178,13 @@ small { color: #4c5562; }
 </head>
 <body>
 <main>
-  <h1>Student Consent (<?= $h($languageName) ?>)</h1>
-  <nav aria-label="Language">
-    <a href="admin-student-consent.php" <?= $language === 'en' ? 'aria-current="page"' : '' ?>>English</a>
-    <a href="admin-student-consent.php?lang=fr" <?= $language === 'fr' ? 'aria-current="page"' : '' ?>>French</a>
+  <h1><?= $h($pageTitle) ?></h1>
+  <nav aria-label="Student consent">
+    <a href="admin-student-consent.php" <?= !$signedView && $language === 'en' ? 'aria-current="page"' : '' ?>>English</a>
+    <a href="admin-student-consent.php?lang=fr" <?= !$signedView && $language === 'fr' ? 'aria-current="page"' : '' ?>>French</a>
+    <a href="admin-student-consent.php?view=signed" <?= $signedView ? 'aria-current="page"' : '' ?>>View Signed Consents</a>
   </nav>
+  <?php if (!$signedView): ?>
   <?php if ($error !== ''): ?><p class="notice" role="alert"><?= $h($error) ?></p><?php endif; ?>
   <?php if ($issuedLink !== ''): ?>
   <section class="notice">
@@ -197,18 +224,35 @@ small { color: #4c5562; }
     <input type="hidden" name="student_id" value="0">
     <button name="action" value="issue">Issue blank link</button>
   </form>
+  <?php endif; ?>
 
   <?php if ($recent): ?>
-  <h2>Recent consent forms</h2>
+  <?php if (!$signedView): ?><h2>Recent consent forms</h2><?php endif; ?>
   <?php foreach ($recent as $record): ?>
     <?php $url = 'student-consent.php?token=' . $record['contract_token']; ?>
     <div class="row record">
-      <span><?= $h($record['student_name'] ?: 'Blank form') ?> · <?= $record['signed_at'] ? 'Signed' : 'Pending' ?>
-        <small>(<?= $h(substr($record['created_at'], 0, 10)) ?>)</small></span>
-      <a href="<?= $h($url) ?>" target="_blank" rel="noopener noreferrer">Open form</a>
-      <?php if ($record['signed_at']): ?><a href="<?= $h($url . '&download=1') ?>">Signed PDF</a><?php endif; ?>
+      <span><?= $h($record['student_name'] ?: 'Blank form') ?> ·
+        <?php if ($signedView): ?>
+          <?= $record['language'] === 'fr' ? 'French' : 'English' ?> ·
+          <small><?= $h($record['signing_date'] ?? substr($record['signed_at'], 0, 10)) ?></small>
+        <?php else: ?>
+          <?= $record['signed_at'] ? 'Signed' : 'Pending' ?>
+          <small>(<?= $h(substr($record['created_at'], 0, 10)) ?>)</small>
+        <?php endif; ?>
+      </span>
+      <a href="<?= $h($url) ?>" target="_blank" rel="noopener noreferrer"><?= $signedView ? 'View signed form' : 'Open form' ?></a>
+      <?php if ($record['signed_at']): ?><a href="<?= $h($url . '&download=1') ?>">Download PDF</a><?php endif; ?>
     </div>
   <?php endforeach; ?>
+  <?php elseif ($signedView): ?>
+  <p>No signed student consents yet.</p>
+  <?php endif; ?>
+  <?php if ($pageCount > 1): ?>
+  <nav aria-label="Pagination">
+    <?php if ($page > 1): ?><a href="?view=signed&amp;page=<?= $page - 1 ?>">Previous</a><?php endif; ?>
+    <span>Page <?= $page ?> of <?= $pageCount ?></span>
+    <?php if ($page < $pageCount): ?><a href="?view=signed&amp;page=<?= $page + 1 ?>">Next</a><?php endif; ?>
+  </nav>
   <?php endif; ?>
 </main>
 <?php if ($issuedLink !== ''): ?>
