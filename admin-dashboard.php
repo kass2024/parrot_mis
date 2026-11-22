@@ -8,8 +8,6 @@ require_once __DIR__ . '/helpers/university_admins_schema.php';
 require_once __DIR__ . '/helpers/korea_invitation_contract_schema.php';
 require_once __DIR__ . '/helpers/korea_event_schema.php';
 require_once __DIR__ . '/helpers/noble_education_schema.php';
-// Secondary database (e.g. applications from Cyprus system)
-require_once 'database.php';  // This connects to visaeofi_cyprus
 pcvc_ensure_university_admins_schema($conn);
 pcvc_ensure_account_status_column($conn);
 kic_contract_ensure_schema($conn);
@@ -589,6 +587,7 @@ $allowedDashboardCards = $allowedCardsByRole[$dashboardRoleKey] ?? ($allowedCard
 $agentsCombined = [];
 $chart_labels = [];
 $chart_data = [];
+$cyprusStatsAvailable = false;
 
 if (strtolower($role) !== 'catholic university of america') {
     $agentsQuery = "SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM admins";
@@ -647,8 +646,24 @@ if (strtolower($role) !== 'catholic university of america') {
       WHERE agent_email IS NOT NULL AND agent_email != ''
       GROUP BY agent_email
     ";
-    $res2 = mysqli_query($conn2, $cyprusQuery);
-    while ($r = mysqli_fetch_assoc($res2)) {
+    $res2 = null;
+    $cyprusConfig = __DIR__ . '/database.php';
+    if (is_file($cyprusConfig)) {
+        $driver = new mysqli_driver();
+        $reportMode = $driver->report_mode;
+        try {
+            $driver->report_mode = MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT;
+            require_once $cyprusConfig;
+            $res2 = $conn2->query($cyprusQuery);
+        } catch (mysqli_sql_exception $error) {
+            $conn2 = null;
+            error_log('Cyprus dashboard statistics unavailable (database error ' . $error->getCode() . ')');
+        } finally {
+            $driver->report_mode = $reportMode;
+        }
+    }
+    $cyprusStatsAvailable = $res2 instanceof mysqli_result;
+    while ($cyprusStatsAvailable && ($r = $res2->fetch_assoc())) {
         $email = strtolower(trim($r['agent_email']));
         $name = trim(($r['agent_first_name'] ?? '') . ' ' . ($r['agent_last_name'] ?? ''));
         if (!isset($agentsCombined[$email])) {
@@ -3312,6 +3327,9 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     <div class="content-wrapper">
       <!-- Dashboard View -->
       <div id="dashboard-view">
+        <?php if (!$isCatholicPortal && !$cyprusStatsAvailable): ?>
+        <p class="alert alert-warning" role="status">Cyprus application counts are temporarily unavailable.</p>
+        <?php endif; ?>
         <?php if ($showStaffPersonalDashboard):
             $sd = $staffDashStats;
             $attMin = (int) ($sd['attendance_minutes_month'] ?? 0);

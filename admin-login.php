@@ -11,7 +11,6 @@
 
 session_start();
 require_once __DIR__ . '/db.php';
-require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/admin_password_reset.php';
 
