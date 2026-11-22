@@ -507,7 +507,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'student_consent', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -515,7 +515,7 @@ $sidebarAccess = [
   ],
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
-    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts','jobsabrod','credit_transfer', 'visit_study_visa', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'malta_courses', 'eci_malta', 'platform', 'agent_contracts', 'german_language_contracts', 'special_contracts', 'finance'
+    'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts', 'student_consent', 'jobsabrod','credit_transfer', 'visit_study_visa', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'malta_courses', 'eci_malta', 'platform', 'agent_contracts', 'german_language_contracts', 'special_contracts', 'finance'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -2171,7 +2171,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
 
     <?php
     $pcvcSidebarGroups = [
-      'study' => ['all_admissions', 'loan_applications', 'I-20_applications', 'credit_transfer', 'german_language_contracts', 'noble_education', 'malta_courses', 'eci_malta', 'contracts'],
+      'study' => ['all_admissions', 'loan_applications', 'I-20_applications', 'credit_transfer', 'german_language_contracts', 'noble_education', 'malta_courses', 'eci_malta', 'contracts', 'student_consent'],
       'work' => ['jobsabrod', 'francophonie_mobility', 'canada_workers', 'employment_opportunities', 'employment_agreement', 'dubai_work', 'czech_work'],
       'visit' => ['visit_study_visa', 'canada_medical', 'korea_event_participation', 'korea_invitation_contracts', 'client_consent', 'immigration_records'],
       'partners' => ['staff_reporting', 'staff_attendance', 'commission_request', 'marketing', 'smart_brochure', 'meeting_invitation', 'refund_requests', 'partner_contracts', 'agent_contracts', 'special_contracts'],
@@ -2448,6 +2448,21 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="loadInFrame('admin/contract_esign.php', 'Signed PhD Contracts')">
             <i class="bi bi-file-earmark-arrow-down"></i>
             Signed PhD Contracts
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('student_consent', $allowedSidebarItems, true)): ?>
+        <a href="#student_consent" class="sidebar-link" onclick="toggleSidebarMenu('student_consent'); return false;">
+          <i class="bi bi-file-earmark-check"></i>
+          <span>Student Consent</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_student_consent">
+          <a href="#" onclick="return loadInFrame('admin-student-consent.php', 'Student Consent (English)')">
+            <i class="bi bi-link"></i> Student Consent (English)
+          </a>
+          <a href="#" onclick="return loadInFrame('admin-student-consent.php?lang=fr', 'Student Consent (French)')">
+            <i class="bi bi-translate"></i> Student Consent (French)
           </a>
         </div>
         <?php endif; ?>

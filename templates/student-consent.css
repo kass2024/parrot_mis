@@ -1,0 +1,15 @@
+@page { size: letter portrait; margin: 36pt 61.2pt; }
+
+.consent-document { color: #000; font: 10pt/12.4pt "Times New Roman", Times, serif; }
+.consent-letterhead, .consent-letter-footer { display: block; width: 468pt; max-width: 100%; height: auto; }
+.consent-letterhead { height: 61.2pt; }
+.consent-letter-footer { height: 24.35pt; }
+.consent-document h1 { margin: 12pt 0 8pt; color: #961222; font-size: 14pt; line-height: 17pt; text-align: center; }
+.consent-document h2 { margin: 8pt 0 5pt; color: #911423; font-size: 10.5pt; line-height: 12.4pt; page-break-after: avoid; }
+.consent-document p { margin: 0 0 5pt; }
+.consent-document ul { margin: 0 0 0 9pt; padding: 0; }
+.consent-document li { margin: 0 0 2pt; }
+.consent-document .consent-line { margin-bottom: 5pt; }
+.consent-underline { display: inline-block; min-width: 190pt; max-width: 100%; border-bottom: .5pt solid #000; overflow-wrap: break-word; }
+.consent-signature-image { display: inline-block; width: auto; max-width: 190pt; height: auto; max-height: 30pt; vertical-align: middle; }
+.consent-document .consent-agency { page-break-inside: avoid; }

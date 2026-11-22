@@ -60,6 +60,9 @@ function pcvc_staff_level_clearance_catalog(): array
             'admin-special-contracts.php?only=cedrick' => 'Cedrick study Canada agreement',
             'admin/contract_esign.php' => 'Signed PhD Contracts',
         ]],
+        'student_consent' => ['group' => 'Study Abroad', 'label' => 'Student Consent', 'items' => [
+            'admin-student-consent.php' => 'Issue and view student consent forms',
+        ]],
         'jobsabrod' => ['group' => 'Work Abroad', 'label' => 'International Job Applications', 'items' => [
             'job-applicant.php' => 'Check job Applicants',
             'job-applicant.php?process_status=rejected' => 'Rejected',
