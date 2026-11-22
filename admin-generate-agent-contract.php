@@ -66,7 +66,7 @@ $form = [
     'agent_address'  => '',
     'agent_title'    => '',
     'agent_type'     => 'agent',
-    'effective_date' => date('Y-m-d'),
+    'effective_date' => $isSenegal ? '' : date('Y-m-d'),
     'company_signing_place' => '',
     'send_email'     => '0',
 ];
@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['agent_type']     = in_array($_POST['agent_type'] ?? '', ['staff', 'agent', 'external'], true)
         ? (string) $_POST['agent_type']
         : 'agent';
-    $form['effective_date'] = trim((string) ($_POST['effective_date'] ?? date('Y-m-d')));
+    $form['effective_date'] = trim((string) ($_POST['effective_date'] ?? ($isSenegal ? '' : date('Y-m-d'))));
     $form['company_signing_place'] = $isSenegal ? trim((string) ($_POST['company_signing_place'] ?? '')) : '';
     $form['send_email']     = !empty($_POST['send_email']) ? '1' : '0';
 
@@ -147,17 +147,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $messageType = 'error';
             }
         }
-        if ($message === null && !agent_contract_senegal_date($form['effective_date'])) {
+        $canDefer = $isSenegal && $form['mode'] === 'external';
+        if ($message === null && (!$canDefer || $form['effective_date'] !== '')
+            && !agent_contract_senegal_date($form['effective_date'])) {
             $message = 'Please set a valid effective date.';
             $messageType = 'error';
         }
-        if ($message === null && $isSenegal && ($form['company_signing_place'] === '' || mb_strlen($form['company_signing_place']) > 100)) {
+        if ($message === null && $isSenegal && ((!$canDefer && $form['company_signing_place'] === '')
+            || mb_strlen($form['company_signing_place']) > 100)) {
             $message = 'Enter the company signing location (up to 100 characters).';
             $messageType = 'error';
         }
     }
 
     if ($message === null) {
+        $issuedEffectiveDate = $form['effective_date'] === '' ? null : $form['effective_date'];
         $senegalDetails = $isSenegal ? json_encode(['company_signing_place' => $form['company_signing_place']], JSON_THROW_ON_ERROR) : null;
         // Reuse latest draft for same admin or same email
         $existing = null;
@@ -208,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $form['agent_phone'],
                 $form['agent_address'],
                 $form['agent_title'],
-                $form['effective_date'],
+                $issuedEffectiveDate,
                 $senegalDetails,
                 $contractId
             );
@@ -237,7 +241,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $form['agent_phone'],
                 $form['agent_address'],
                 $form['agent_title'],
-                $form['effective_date'],
+                $issuedEffectiveDate,
                 $contractTemplate,
                 $senegalDetails
             );
@@ -250,7 +254,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($contractLink && $form['send_email'] === '1') {
             $safeName = htmlspecialchars($form['agent_name'] !== '' ? $form['agent_name'] : 'Agent', ENT_QUOTES, 'UTF-8');
             $safeLink = htmlspecialchars($contractLink, ENT_QUOTES, 'UTF-8');
-            $effDisp  = htmlspecialchars(date('F j, Y', strtotime($form['effective_date'])), ENT_QUOTES, 'UTF-8');
+            $effDisp  = $issuedEffectiveDate === null ? '' : htmlspecialchars(date('F j, Y', strtotime($issuedEffectiveDate)), ENT_QUOTES, 'UTF-8');
             $body = "
 <div style='font-family:Arial,sans-serif;font-size:14px;color:#222;line-height:1.6'>
     <p><strong>Parrot Canada Visa Consultant Co. Ltd.</strong></p>
@@ -360,7 +364,7 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
         <div class="alert alert-<?= str_contains($emailResult, 'failed') ? 'error' : 'success' ?>"><?= htmlspecialchars($emailResult) ?></div>
     <?php endif; ?>
 
-    <form method="post" id="issueForm">
+    <form method="post" id="issueForm" autocomplete="off">
         <?php if ($isSenegal): ?>
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
         <?php endif; ?>
@@ -396,17 +400,17 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
         </div>
 
         <p class="hint" id="externalHint" style="display:none;margin:-6px 0 16px;">
-            Leave name and contact blank if you want — they will complete everything on the signing page, including username and password. Their agent account is created when they submit. Email is only required if you click “Issue &amp; Email Link”.
+            <?= $isSenegal ? 'Copy a blank link so the agent can complete the contract and create their account. Enter an email only to send the link from here.' : 'Leave name and contact blank so the agent can complete their details and create their account on the signing page. Email is required to send the link from here.' ?>
         </p>
 
         <div class="form-row-2">
             <div class="form-group">
                 <label for="agent_name" id="label_agent_name">Full legal / business name *</label>
-                <input type="text" name="agent_name" id="agent_name" required value="<?= htmlspecialchars($form['agent_name']) ?>" placeholder="Name as it should appear on the contract">
+                <input type="text" name="agent_name" id="agent_name" <?= $form['mode'] === 'registered' ? 'required' : '' ?> value="<?= htmlspecialchars($form['agent_name']) ?>" placeholder="Name as it should appear on the contract">
             </div>
             <div class="form-group">
                 <label for="agent_email" id="label_agent_email">Email *</label>
-                <input type="email" name="agent_email" id="agent_email" required value="<?= htmlspecialchars($form['agent_email']) ?>" placeholder="signatory@email.com">
+                <input type="email" name="agent_email" id="agent_email" <?= $form['mode'] === 'registered' ? 'required' : '' ?> value="<?= htmlspecialchars($form['agent_email']) ?>" placeholder="signatory@email.com">
             </div>
         </div>
 
@@ -436,23 +440,21 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
                 </select>
             </div>
             <div class="form-group">
-                <label for="effective_date">Effective date *</label>
-                <input type="date" name="effective_date" id="effective_date" required value="<?= htmlspecialchars($form['effective_date']) ?>">
+                <label for="effective_date" id="label_effective_date">Effective date<?= !$isSenegal || $form['mode'] === 'registered' ? ' *' : ' (optional)' ?></label>
+                <input type="date" name="effective_date" id="effective_date" <?= !$isSenegal || $form['mode'] === 'registered' ? 'required' : '' ?> value="<?= htmlspecialchars($form['effective_date']) ?>">
             </div>
         </div>
 
         <?php if ($isSenegal): ?>
         <div class="form-group">
-            <label for="company_signing_place">Company signing location *</label>
-            <input type="text" name="company_signing_place" id="company_signing_place" maxlength="100" required value="<?= htmlspecialchars($form['company_signing_place']) ?>">
+            <label for="company_signing_place" id="label_company_signing_place">Company signing location<?= $form['mode'] === 'registered' ? ' *' : ' (optional)' ?></label>
+            <input type="text" name="company_signing_place" id="company_signing_place" maxlength="100" <?= $form['mode'] === 'registered' ? 'required' : '' ?> value="<?= htmlspecialchars($form['company_signing_place']) ?>">
         </div>
         <?php endif; ?>
 
-        <input type="hidden" name="send_email" id="send_email_flag" value="<?= $form['send_email'] === '1' ? '1' : '0' ?>">
-
         <div class="btn-row">
-            <button class="btn btn-secondary" type="submit" onclick="setSendEmail('0')">Issue &amp; Copy Link</button>
-            <button class="btn" type="submit" onclick="setSendEmail('1')">Issue &amp; Email Link</button>
+            <button class="btn btn-secondary" type="submit" name="send_email" value="0" onclick="setEmailRequired(false)">Issue &amp; Copy Link</button>
+            <button class="btn" type="submit" name="send_email" value="1" onclick="setEmailRequired(true)">Issue &amp; Email Link</button>
         </div>
     </form>
 
@@ -476,6 +478,14 @@ function toggleMode() {
   const hint = document.getElementById('externalHint');
   const nameLabel = document.getElementById('label_agent_name');
   const emailLabel = document.getElementById('label_agent_email');
+  const companyPlace = document.getElementById('company_signing_place');
+  if (companyPlace) {
+    const required = mode === 'registered';
+    companyPlace.required = required;
+    document.getElementById('effective_date').required = required;
+    document.getElementById('label_company_signing_place').textContent = 'Company signing location' + (required ? ' *' : ' (optional)');
+    document.getElementById('label_effective_date').textContent = 'Effective date' + (required ? ' *' : ' (optional)');
+  }
   if (mode === 'external') {
     document.getElementById('agent_type').value = 'external';
     name.required = false;
@@ -492,12 +502,11 @@ function toggleMode() {
   }
 }
 
-function setSendEmail(v) {
-  document.getElementById('send_email_flag').value = v;
+function setEmailRequired(sendEmail) {
   const mode = document.querySelector('input[name="mode"]:checked')?.value || 'registered';
   const email = document.getElementById('agent_email');
   if (mode === 'external') {
-    email.required = v === '1';
+    email.required = sendEmail;
   }
 }
 

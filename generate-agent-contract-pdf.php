@@ -15,13 +15,13 @@ function acPdfEsc(?string $v): string
     return htmlspecialchars((string) $v, ENT_QUOTES, 'UTF-8');
 }
 
-function acPdfFormatDate(?string $date, bool $french = false): string
+function acPdfFormatDate(?string $date): string
 {
     if ($date === null || trim($date) === '') {
         return '___________________________';
     }
     $ts = strtotime($date);
-    return $ts ? date($french ? 'd/m/Y' : 'F j, Y', $ts) : acPdfEsc($date);
+    return $ts ? date('F j, Y', $ts) : acPdfEsc($date);
 }
 
 function acPdfEmbedImage(string $absolutePath): string
@@ -116,28 +116,53 @@ function generateAgentContractPDF(int $contractId): string
     $companyStamp = acPdfEmbedImage(__DIR__ . '/admin/employer-signature.png');
 
     ob_start();
+    if ($isSenegal):
+        $senegalEditable = false;
+        $senegalDocument = [
+            'reference' => agent_contract_senegal_reference($contractId),
+            'effective_date' => $effectiveDate,
+            'agent_name' => $agentName,
+            'agent_email' => $agentEmail,
+            'agent_phone' => $data['agent_phone'] ?? '',
+            'agent_address' => $agentAddress,
+            'sig_agent_name' => $agentName,
+            'sig_signed_date' => $signedDate,
+            'agent_signature' => $agentSigSrc,
+            'company_signature' => $managerSignature,
+            'company_stamp' => $companyStamp,
+        ] + $senegalDetails;
     ?>
 <!DOCTYPE html>
-<html lang="<?= $isSenegal ? 'fr' : 'en' ?>">
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<style>
+<?php require __DIR__ . '/templates/agent-contract-senegal-fr.css'; ?>
+body { margin: 0; }
+.senegal-document .senegal-running-header { position: fixed; top: -11pt; left: 0; right: 0; }
+</style>
+</head>
+<body>
+<?php require __DIR__ . '/templates/agent-contract-senegal-document.php'; ?>
+</body>
+</html>
+    <?php else: ?>
+<!DOCTYPE html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <style>
 @page { size: A4; margin: 2.2cm 2.2cm 2.2cm 2.2cm; }
 body { font-family: "Times New Roman", Times, serif; font-size: 11pt; line-height: 1.55; color: #000; margin: 0; }
-<?php if ($isSenegal): ?>
-body { font-family: 'DejaVu Sans', sans-serif; font-size: 9.5pt; line-height: 1.4; }
-<?php endif; ?>
 .doc-title { text-align: center; font-size: 14pt; font-weight: bold; text-transform: uppercase; margin: 0 0 4pt; }
 .doc-subtitle { text-align: center; font-size: 12pt; font-weight: bold; margin: 0 0 16pt; }
 p { margin: 0 0 8pt; text-align: justify; }
-.section-title { font-size: 11.5pt; font-weight: bold; margin: 14pt 0 6pt; page-break-after: avoid; }
+.section-title { font-size: 11.5pt; font-weight: bold; margin: 14pt 0 6pt; }
 ul { margin: 4pt 0 10pt; padding-left: 18pt; }
 li { margin-bottom: 3pt; }
 .fee-table { width: 100%; border-collapse: collapse; margin: 8pt 0 12pt; font-size: 10pt; }
 .fee-table th, .fee-table td { border: 1px solid #333; padding: 5pt 7pt; text-align: left; }
 .fee-table th { background: #f0f0f0; }
-.fee-table thead { display: table-header-group; }
-.fee-table tr { page-break-inside: avoid; }
 .sig-grid { width: 100%; margin-top: 18pt; }
 .sig-col { width: 48%; vertical-align: top; display: inline-block; }
 .sig-col.right { margin-left: 3%; }
@@ -152,39 +177,6 @@ li { margin-bottom: 3pt; }
 </head>
 <body>
 
-<?php if ($isSenegal): ?>
-<div class="doc-title"><?= acPdfEsc(AGENT_CONTRACT_SENEGAL_TITLE) ?></div>
-<div class="doc-subtitle">PARROT CANADA VISA CONSULTANT CO.LTD</div>
-<p>Pour les personnes qui ne possèdent pas de société enregistrée et souhaitent référer des clients</p>
-<p><strong>Référence :</strong> <?= acPdfEsc(agent_contract_senegal_reference($contractId)) ?><br>
-<strong>Date d’entrée en vigueur :</strong> <?= acPdfFormatDate($effectiveDate, true) ?></p>
-
-<h3 class="section-title">1. PARTIES</h3>
-<p><strong>Société :</strong> PARROT CANADA VISA CONSULTANT CO.LTD (la « Société »)<br>
-<strong>Courriel officiel :</strong> infos@visaconsultantcanada.com<br>
-<strong>Représentant autorisé :</strong> <?= acPdfEsc(AGENT_CONTRACT_COMPANY_SIGNER) ?></p>
-<?php
-    $agentRows = [
-        "Nom complet de l'Agent" => $agentName,
-        'Date de naissance' => acPdfFormatDate($senegalDetails['date_of_birth'] ?? '', true),
-        'Nationalité' => $senegalDetails['nationality'] ?? '',
-        'CNI ou passeport' => $senegalDetails['national_id'] ?? '',
-        'Adresse au Sénégal' => $agentAddress,
-        'Ville ou région' => $senegalDetails['region'] ?? '',
-        'Courriel' => $agentEmail,
-        'Téléphone / WhatsApp' => $data['agent_phone'] ?? '',
-        "Compte de paiement au nom de l'Agent" => $senegalDetails['payment_account'] ?? '',
-    ];
-?>
-<table class="fee-table">
-  <?php foreach ($agentRows as $label => $value): ?>
-  <tr><th scope="row" style="width:40%"><?= acPdfEsc($label) ?></th><td><?= acPdfEsc($value) ?></td></tr>
-  <?php endforeach; ?>
-</table>
-<p>La Société et l'Agent sont ensemble appelés les « Parties ». L'Agent signe en son nom personnel et non au nom d'une société.</p>
-<?php require __DIR__ . '/templates/agent-contract-senegal-fr.html'; ?>
-<h3 class="section-title">SIGNATURES</h3>
-<?php else: ?>
 <div class="doc-title">Agent Referral and Commission Agreement</div>
 <div class="doc-subtitle">Parrot Canada Visa Consultant Company Ltd.</div>
 
@@ -293,45 +285,32 @@ Agent email: <?= acPdfEsc($agentEmail) ?><?php if ($agentTitle !== ''): ?><br>Ti
 
 <div class="section-title">21. Signatures</div>
 <p>The Parties confirm that they have read, understood, and agreed to the terms of this Agreement and have had the opportunity to obtain independent legal advice.</p>
-<?php endif; ?>
 
 <table class="sig-grid" style="width:100%;border-collapse:collapse;">
 <tr>
 <td style="width:48%;vertical-align:top;padding-right:12pt;">
   <div class="sig-heading">PARROT CANADA VISA CONSULTANT COMPANY LTD.</div>
-  <div class="sig-field"><span class="sig-field-label"><?= $isSenegal ? 'Représentant autorisé :' : 'Name:' ?></span><div class="sig-line"><?= acPdfEsc(AGENT_CONTRACT_COMPANY_SIGNER) ?></div></div>
-  <div class="sig-field"><span class="sig-field-label"><?= $isSenegal ? 'Fonction :' : 'Title:' ?></span><div class="sig-line"><?= $isSenegal ? acPdfEsc(AGENT_CONTRACT_COMPANY_SIGNER_TITLE_FR) : 'Owner &amp; Managing Director' ?></div></div>
+  <div class="sig-field"><span class="sig-field-label">Name:</span><div class="sig-line">Dr. Jean Pierre Twajamahoro</div></div>
+  <div class="sig-field"><span class="sig-field-label">Title:</span><div class="sig-line">Owner &amp; Managing Director</div></div>
   <div class="sig-field"><span class="sig-field-label">Signature:</span><div class="sig-line"><img src="<?= $managerSignature ?>" alt="MD Signature"></div></div>
-  <div class="sig-field"><span class="sig-field-label"><?= $isSenegal ? 'Cachet de la Société :' : 'Company Stamp:' ?></span><div class="stamp-box"><img src="<?= $companyStamp ?>" alt="Stamp"></div></div>
-  <div class="sig-field"><span class="sig-field-label">Date:</span><div class="sig-line"><?= acPdfFormatDate($effectiveDate, $isSenegal) ?></div></div>
-  <?php if ($isSenegal): ?>
-  <div class="sig-field"><span class="sig-field-label">Lieu :</span><div class="sig-line"><?= acPdfEsc($senegalDetails['company_signing_place'] ?? '') ?></div></div>
-  <?php endif; ?>
+  <div class="sig-field"><span class="sig-field-label">Company Stamp:</span><div class="stamp-box"><img src="<?= $companyStamp ?>" alt="Stamp"></div></div>
+  <div class="sig-field"><span class="sig-field-label">Date:</span><div class="sig-line"><?= acPdfFormatDate($effectiveDate) ?></div></div>
 </td>
 <td style="width:48%;vertical-align:top;padding-left:12pt;">
-  <div class="sig-heading"><?= $isSenegal ? 'AGENT INDIVIDUEL — SÉNÉGAL' : 'AGENT / STAFF' ?></div>
-  <div class="sig-field"><span class="sig-field-label"><?= $isSenegal ? 'Nom complet :' : 'Name:' ?></span><div class="sig-line"><?= acPdfEsc($agentName) ?></div></div>
-  <?php if ($isSenegal): ?>
-  <div class="sig-field"><span class="sig-field-label">CNI ou passeport :</span><div class="sig-line"><?= acPdfEsc($senegalDetails['national_id'] ?? '') ?></div></div>
-  <?php else: ?>
+  <div class="sig-heading">AGENT / STAFF</div>
+  <div class="sig-field"><span class="sig-field-label">Name:</span><div class="sig-line"><?= acPdfEsc($agentName) ?></div></div>
   <div class="sig-field"><span class="sig-field-label">Title:</span><div class="sig-line"><?= acPdfEsc($agentTitle !== '' ? $agentTitle : '___________________________') ?></div></div>
-  <?php endif; ?>
   <div class="sig-field"><span class="sig-field-label">Signature:</span><div class="sig-line"><img src="<?= is_string($agentSigSrc) && str_starts_with($agentSigSrc, 'data:') ? $agentSigSrc : str_replace('\\', '/', (string) $agentSigSrc) ?>" alt="Agent Signature"></div></div>
-  <div class="sig-field"><span class="sig-field-label">Date:</span><div class="sig-line"><?= acPdfFormatDate($signedDate, $isSenegal) ?></div></div>
-  <?php if ($isSenegal): ?>
-  <div class="sig-field"><span class="sig-field-label">Lieu :</span><div class="sig-line"><?= acPdfEsc($senegalDetails['signing_place'] ?? '') ?></div></div>
-  <?php endif; ?>
+  <div class="sig-field"><span class="sig-field-label">Date:</span><div class="sig-line"><?= acPdfFormatDate($signedDate) ?></div></div>
 </td>
 </tr>
 </table>
 
-<?php if (!$isSenegal): ?>
 <div class="footer-ref">Contract Reference: <?= acPdfEsc($data['contract_token']) ?></div>
-<?php endif; ?>
 
 </body>
 </html>
-    <?php
+    <?php endif;
     $html = ob_get_clean();
 
     $options = new Options();
@@ -342,8 +321,17 @@ Agent email: <?= acPdfEsc($agentEmail) ?><?php if ($agentTitle !== ''): ?><br>Ti
 
     $dompdf = new Dompdf($options);
     $dompdf->loadHtml($html);
-    $dompdf->setPaper('A4', 'portrait');
+    $dompdf->setPaper($isSenegal ? 'letter' : 'A4', 'portrait');
     $dompdf->render();
+    if ($isSenegal) {
+        $dompdf->getCanvas()->page_script(static function ($page, $pageCount, $canvas, $fonts): void {
+            $text = "Page {$page} sur {$pageCount}";
+            $font = $fonts->getFont('times', 'normal');
+            $size = 10;
+            $left = ($canvas->get_width() - $fonts->getTextWidth($text, $font, $size)) / 2;
+            $canvas->text($left, $canvas->get_height() - 36, $text, $font, $size);
+        });
+    }
 
     $dir = agent_contract_upload_dir();
     if (!is_dir($dir)) {

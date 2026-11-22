@@ -1,0 +1,63 @@
+/* The Word template uses US Letter, 12 pt Times New Roman, and a ruled grid. */
+@page { size: letter portrait; margin: .65in .7in; }
+
+.senegal-document {
+  color: #000;
+  font: 12pt/1.15 'Times New Roman', Times, serif;
+  overflow-wrap: break-word;
+}
+.senegal-document p { margin: 0 0 5pt; text-align: left; }
+.senegal-document .senegal-running-header {
+  color: #243746;
+  font-size: 8pt;
+  font-weight: bold;
+  text-align: center;
+}
+.senegal-document .senegal-company,
+.senegal-document .senegal-title {
+  font: bold 12pt/1.15 'Times New Roman', Times, serif;
+  text-align: center;
+}
+.senegal-document .senegal-company { color: #243746; margin: 23pt 0 10pt; }
+.senegal-document .senegal-title { color: #C62828; margin: 13pt 0 10pt; }
+.senegal-document .senegal-subtitle { font-style: italic; text-align: center; margin-bottom: 10pt; }
+.senegal-document .senegal-reference { margin: 9pt 0 10pt; text-align: center; }
+.senegal-document .section-title {
+  color: #243746;
+  font: bold 12pt/1.15 'Times New Roman', Times, serif;
+  margin: 9pt 0 4pt;
+  page-break-after: avoid;
+}
+.senegal-document .contract-list { margin: 0 0 5pt; padding-left: 18pt; }
+.senegal-document .contract-list li { margin: 0 0 2pt; }
+.senegal-document .fee-table-wrap { margin: 0 0 5pt; }
+.senegal-document .senegal-table,
+.senegal-document .fee-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  font: inherit;
+  margin: 0 0 10pt;
+}
+.senegal-document .senegal-table th,
+.senegal-document .senegal-table td,
+.senegal-document .fee-table th,
+.senegal-document .fee-table td {
+  border: .5pt solid #000;
+  padding: 5.5pt;
+  text-align: left;
+  vertical-align: middle;
+  line-height: 1.15;
+}
+.senegal-document thead { display: table-header-group; }
+.senegal-document thead th { background: #243746; color: #fff; font-weight: bold; }
+.senegal-document .senegal-parties th,
+.senegal-document .senegal-row-label { background: #F1F4F6; color: #000; font-weight: bold; }
+.senegal-document .senegal-parties th { width: 46%; }
+.senegal-document .senegal-signatures { page-break-inside: avoid; }
+.senegal-document .senegal-signatures tbody td { padding: 7.5pt; }
+.senegal-document .senegal-signatures tr,
+.senegal-document .fee-table tr { page-break-inside: avoid; }
+.senegal-document .senegal-value { white-space: pre-wrap; }
+.senegal-document .senegal-signature-images img { max-width: 100%; max-height: 42pt; vertical-align: middle; }
+.senegal-document .senegal-signature-images .senegal-stamp { max-height: 56pt; }

@@ -152,8 +152,18 @@ try {
     $senegalDetails = null;
     if ($isSenegal) {
         $companyDetails = agent_contract_senegal_details($locked['senegal_details']);
+        $place = is_string($data['company_signing_place'] ?? null) ? trim($data['company_signing_place']) : '';
+        if (empty($companyDetails['company_signing_place'])) {
+            if (mb_strlen($place) > 100) {
+                throw new InvalidArgumentException('Le lieu de signature de la Société doit contenir au plus 100 caractères.');
+            }
+            $companyDetails['company_signing_place'] = $place;
+        }
+        $effectiveDate = $locked['effective_date'] ?: $effectiveDate;
+        if (!agent_contract_senegal_date($effectiveDate)) {
+            throw new InvalidArgumentException('Saisissez une date d’entrée en vigueur valide.');
+        }
         $senegalDetails = json_encode($signerDetails + $companyDetails, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE);
-        $effectiveDate = $locked['effective_date'];
     }
 
     $stmt = $conn->prepare("

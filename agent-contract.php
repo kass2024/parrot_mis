@@ -253,8 +253,49 @@ button {
 .footer-ref { text-align: center; margin-top: 28px; font-size: 11px; color: #9ca3af; }
 .sig-label { font-family: Georgia, 'Times New Roman', serif; color: #1e3a5f; font-weight: 700; }
 </style>
+<?php if ($isSenegal): ?>
+<style>
+<?php require __DIR__ . '/templates/agent-contract-senegal-fr.css'; ?>
+body.senegal-contract-page { margin: 0; background: #F1F4F6; }
+.senegal-page {
+  width: min(8.5in, calc(100% - 2rem)); margin: 20px auto; padding: .65in .7in;
+  background: #fff; box-shadow: 0 2px 12px rgba(36, 55, 70, .12);
+}
+.senegal-document .fee-table { min-width: 0; }
+.senegal-document .fee-table th { background: #243746; color: #fff; }
+.senegal-document .senegal-field {
+  max-width: 100%; width: 100%; min-width: 0; padding: 2pt 3pt; color: #000;
+  font: inherit; background: #fff; border: 0; border-bottom: 1px solid #243746;
+}
+.senegal-document .senegal-field:focus-visible { outline: 2px solid #243746; outline-offset: 1px; }
+.senegal-document .senegal-reference .senegal-field { width: auto; max-width: 100%; }
+.senegal-document textarea.senegal-field { resize: vertical; }
+.senegal-document .senegal-canvas { display: block; height: 92px; border: 1px dashed #243746; margin-top: 4pt; }
+.senegal-instructions,
+.senegal-actions { color: #243746; font-family: 'Times New Roman', Times, serif; }
+.senegal-instructions { margin: 0 0 12pt; padding: 7pt; background: #F1F4F6; }
+.senegal-account { border: 1px solid #243746; margin: 12pt 0; padding: 8pt; }
+.senegal-account legend { padding: 0 5pt; font-weight: bold; }
+.senegal-account label { display: block; margin: 0 0 5pt; }
+.senegal-account input { display: block; width: 100%; font: inherit; padding: 4pt; }
+.senegal-buttons { display: flex; flex-wrap: wrap; gap: 8pt; }
+.senegal-buttons #signContract { background: #243746; }
+.senegal-buttons #clearSignature { background: #F1F4F6; color: #243746; }
+@media (max-width: 560px) {
+  .senegal-page { width: 100%; margin: 0; padding: 18px 12px; }
+  .senegal-document .fee-table { min-width: 420px; }
+  .senegal-document .senegal-parties th { width: 42%; }
+}
+@media print {
+  body.senegal-contract-page { background: #fff; }
+  .senegal-page { width: auto; padding: 0; margin: 0; box-shadow: none; }
+  .senegal-document { print-color-adjust: exact; }
+  .senegal-actions, .senegal-instructions, .signed-banner { display: none; }
+}
+</style>
+<?php endif; ?>
 </head>
-<body<?= $isSigned ? ' class="contract-signed"' : '' ?>>
+<body class="<?= $isSigned ? 'contract-signed ' : '' ?><?= $isSenegal ? 'senegal-contract-page' : '' ?>">
 
 <?php if ($isSigned): ?>
 <div class="signed-banner">
@@ -278,40 +319,65 @@ button {
 </div>
 <?php endif; ?>
 
+<?php if ($isSenegal): ?>
+<?php
+$senegalEditable = !$isSigned;
+$senegalDocument = [
+    'reference' => agent_contract_senegal_reference((int) $contract['id']),
+    'effective_date' => $contract['effective_date'] ?? '',
+    'agent_name' => $isSigned ? ($signedAgentName ?: $display['name']) : $display['name'],
+    'agent_email' => $display['email'],
+    'agent_phone' => $display['phone'],
+    'agent_address' => $display['address'],
+    'sig_agent_name' => $signedAgentName ?: $display['name'],
+    'sig_signed_date' => $signedDate,
+    'agent_signature' => $agentSignatureData,
+    'company_signature' => 'admin/signature-manager.png',
+    'company_stamp' => 'admin/employer-signature.png',
+] + $senegalDetails;
+?>
+<main class="senegal-page">
+  <?php if ($senegalEditable): ?>
+  <p class="senegal-instructions">Renseignez les champs du contrat, puis signez dans le tableau au bas de la page.</p>
+  <?php endif; ?>
+  <?php require __DIR__ . '/templates/agent-contract-senegal-document.php'; ?>
+  <?php if ($senegalEditable): ?>
+  <div class="senegal-actions">
+    <input type="hidden" id="agent_title" value="<?= htmlspecialchars($display['title']) ?>">
+    <?php if ($needsAccount): ?>
+    <fieldset class="senegal-account">
+      <legend>Créer votre compte agent</legend>
+      <label>Nom d’utilisateur <input id="agent_username" type="text" autocomplete="username" maxlength="50"></label>
+      <label>Mot de passe <input id="agent_password" type="password" autocomplete="new-password" minlength="8"></label>
+      <label>Confirmer le mot de passe <input id="agent_password_confirm" type="password" autocomplete="new-password" minlength="8"></label>
+    </fieldset>
+    <?php endif; ?>
+    <div class="senegal-buttons">
+      <button type="button" id="clearSignature">Effacer la signature</button>
+      <button type="button" id="signContract">Signer et envoyer</button>
+    </div>
+    <input type="hidden" id="signatureData">
+  </div>
+  <?php endif; ?>
+</main>
+<?php else: ?>
 <div class="contract-wrap">
   <div class="contract-header">
-    <?php if (!$isSenegal): ?><div class="badge">AGENT REFERRAL &amp; COMMISSION</div><?php endif; ?>
+    <div class="badge">AGENT REFERRAL &amp; COMMISSION</div>
     <h1>PARROT CANADA VISA CONSULTANT CO. LTD.</h1>
-    <h2><?= htmlspecialchars($isSenegal ? $contractTitle : 'AGENT REFERRAL AND COMMISSION AGREEMENT') ?></h2>
+    <h2>AGENT REFERRAL AND COMMISSION AGREEMENT</h2>
   </div>
 
   <div class="contract-body">
-    <?php if ($isSenegal): ?>
-    <p>Pour les personnes qui ne possèdent pas de société enregistrée et souhaitent référer des clients</p>
-    <p><strong>Référence :</strong> <?= htmlspecialchars(agent_contract_senegal_reference((int) $contract['id'])) ?></p>
-    <?php endif; ?>
     <?php if (!$isSigned): ?>
     <div class="notice">
-      <?php if ($isSenegal): ?>
-      Lisez le contrat, renseignez vos informations et signez électroniquement ci-dessous.
-      <?php else: ?>
       Please read this Agreement carefully. Complete every field in Agent / Staff details, then sign electronically below. By signing, you acknowledge that you fully understand and voluntarily accept all terms and conditions contained herein.
       <?php if ($needsAccount): ?>
       Signing also creates your <strong>agent account</strong> so you can log in to the system.
       <?php endif; ?>
-      <?php endif; ?>
     </div>
     <?php endif; ?>
 
-    <?php if ($isSenegal): ?>
-    <h3 class="section-title">1. PARTIES</h3>
-    <div class="parties-box">
-      <h3>Société</h3>
-      <p>PARROT CANADA VISA CONSULTANT CO.LTD (la « Société »)</p>
-      <p>Courriel officiel : infos@visaconsultantcanada.com<br>
-      Représentant autorisé : <?= htmlspecialchars(AGENT_CONTRACT_COMPANY_SIGNER) ?></p>
-    </div>
-    <?php else: ?>
     <p>This Agent Referral and Commission Agreement (the &ldquo;Agreement&rdquo;) is made effective as of
       <strong><?= htmlspecialchars($effectiveDate ? date('F j, Y', strtotime((string) $effectiveDate)) : '_______________') ?></strong>
       between:</p>
@@ -322,62 +388,43 @@ button {
       <p style="margin:8px 0 0">Company email: <a href="mailto:admission@visaconsultantcanada.com">admission@visaconsultantcanada.com</a><br>
       Company website: <a href="https://www.visaconsultantcanada.com" target="_blank" rel="noopener">www.visaconsultantcanada.com</a></p>
     </div>
-    <?php endif; ?>
 
     <div class="agent-form">
-      <h3><?= $isSenegal ? 'Informations de l’Agent' : 'Agent / Staff details' ?></h3>
+      <h3>Agent / Staff details</h3>
       <?php if ($needsAccount && !$isSigned): ?>
       <div class="account-note">
-        <?php if ($isSenegal): ?>
-        Renseignez vos informations, choisissez un nom d’utilisateur et un mot de passe, puis signez pour créer votre compte agent.
-        <?php else: ?>
         You are not yet in the system. Fill in all of your details below, choose a username and password, then sign.
         After submission your agent record is created automatically and you can log in.
-        <?php endif; ?>
       </div>
       <?php endif; ?>
       <div class="form-row">
-        <label for="agent_name"><?= $isSenegal ? 'Nom complet de l’Agent *' : 'Full legal / business name *' ?></label>
-        <input type="text" id="agent_name" value="<?= htmlspecialchars($isSigned ? $signedAgentName : $display['name']) ?>" <?= $isSenegal ? '' : 'placeholder="Enter full legal or business name"' ?> <?= $ro ?>>
+        <label for="agent_name">Full legal / business name *</label>
+        <input type="text" id="agent_name" value="<?= htmlspecialchars($isSigned ? $signedAgentName : $display['name']) ?>" placeholder="Enter full legal or business name" <?= $ro ?>>
       </div>
       <div class="form-row-2">
         <div class="form-row">
-          <label for="agent_email"><?= $isSenegal ? 'Courriel *' : 'Email (notices) *' ?></label>
+          <label for="agent_email">Email (notices) *</label>
           <input type="email" id="agent_email" value="<?= htmlspecialchars($display['email']) ?>" placeholder="email@example.com" <?= $ro ?>>
         </div>
         <div class="form-row">
-          <label for="agent_phone"><?= $isSenegal ? 'Téléphone / WhatsApp *' : 'Phone *' ?></label>
-          <input type="text" id="agent_phone" value="<?= htmlspecialchars($display['phone']) ?>" <?= $isSenegal ? '' : 'placeholder="Phone / WhatsApp"' ?> <?= $ro ?>>
+          <label for="agent_phone">Phone *</label>
+          <input type="text" id="agent_phone" value="<?= htmlspecialchars($display['phone']) ?>" placeholder="Phone / WhatsApp" <?= $ro ?>>
         </div>
       </div>
       <div class="form-row">
-        <label for="agent_address"><?= $isSenegal ? 'Adresse au Sénégal *' : 'Address *' ?></label>
-        <textarea id="agent_address" rows="2" <?= $isSenegal ? '' : 'placeholder="Physical / business address"' ?> <?= $ro ?>><?= htmlspecialchars($display['address']) ?></textarea>
+        <label for="agent_address">Address *</label>
+        <textarea id="agent_address" rows="2" placeholder="Physical / business address" <?= $ro ?>><?= htmlspecialchars($display['address']) ?></textarea>
       </div>
       <div class="form-row-2">
-        <?php if (!$isSenegal): ?>
         <div class="form-row">
           <label for="agent_title">Title (if applicable)</label>
           <input type="text" id="agent_title" value="<?= htmlspecialchars($isSigned ? $signedTitle : $display['title']) ?>" placeholder="Agent / Staff / Director…" <?= $ro ?>>
         </div>
-        <?php endif; ?>
         <div class="form-row">
-          <label for="effective_date"><?= $isSenegal ? 'Date d’entrée en vigueur' : 'Effective date *' ?></label>
-          <input type="date" id="effective_date" value="<?= htmlspecialchars((string) $effectiveDate) ?>" <?= $isSenegal ? 'readonly' : $ro ?>>
+          <label for="effective_date">Effective date *</label>
+          <input type="date" id="effective_date" value="<?= htmlspecialchars((string) $effectiveDate) ?>" <?= $ro ?>>
         </div>
       </div>
-      <?php if ($isSenegal): ?>
-      <div class="form-row-2">
-        <?php foreach (agent_contract_senegal_fields() as $field => [$label, $maxLength]): ?>
-        <?php if ($field === 'signing_place') { continue; } ?>
-        <div class="form-row">
-          <label for="<?= $field ?>"><?= htmlspecialchars($label) ?> *</label>
-          <input type="<?= $field === 'date_of_birth' ? 'date' : 'text' ?>" id="<?= $field ?>" maxlength="<?= $maxLength ?>"
-            value="<?= htmlspecialchars($senegalDetails[$field] ?? '') ?>" required data-senegal-required <?= $ro ?>>
-        </div>
-        <?php endforeach; ?>
-      </div>
-      <?php else: ?>
       <div class="form-row-2">
         <div class="form-row">
           <label for="national_id">National ID / passport</label>
@@ -407,36 +454,30 @@ button {
           <?php endforeach; ?>
         </select>
       </div>
-      <?php endif; ?>
       <?php if ($needsAccount || $linkedUsername !== ''): ?>
       <div class="form-row-2">
         <div class="form-row">
-          <label for="agent_username"><?= $isSenegal ? 'Nom d’utilisateur' : 'Login username' ?><?= $needsAccount && !$isSigned ? ' *' : '' ?></label>
+          <label for="agent_username"><?= $needsAccount && !$isSigned ? 'Login username *' : 'Login username' ?></label>
           <input type="text" id="agent_username" value="<?= htmlspecialchars($display['username']) ?>"
-            placeholder="<?= $isSenegal ? 'Lettres, chiffres, . _ -' : 'Letters, numbers, . _ -' ?>" autocomplete="username"
+            placeholder="Letters, numbers, . _ -" autocomplete="username"
             <?= $isSigned || !$needsAccount ? 'readonly' : '' ?>>
         </div>
         <?php if ($needsAccount && !$isSigned): ?>
         <div class="form-row">
-          <label for="agent_password"><?= $isSenegal ? 'Mot de passe *' : 'Login password *' ?></label>
-          <input type="password" id="agent_password" placeholder="<?= $isSenegal ? 'Au moins 8 caractères' : 'At least 8 characters' ?>" autocomplete="new-password">
+          <label for="agent_password">Login password *</label>
+          <input type="password" id="agent_password" placeholder="At least 8 characters" autocomplete="new-password">
         </div>
         <?php endif; ?>
       </div>
       <?php if ($needsAccount && !$isSigned): ?>
       <div class="form-row">
-        <label for="agent_password_confirm"><?= $isSenegal ? 'Confirmer le mot de passe *' : 'Confirm password *' ?></label>
-        <input type="password" id="agent_password_confirm" placeholder="<?= $isSenegal ? 'Ressaisissez le mot de passe' : 'Re-enter password' ?>" autocomplete="new-password">
+        <label for="agent_password_confirm">Confirm password *</label>
+        <input type="password" id="agent_password_confirm" placeholder="Re-enter password" autocomplete="new-password">
       </div>
       <?php endif; ?>
       <?php endif; ?>
     </div>
 
-    <?php if ($isSenegal): ?>
-    <p>La Société et l'Agent sont ensemble appelés les « Parties ». L'Agent signe en son nom personnel et non au nom d'une société.</p>
-    <?php require __DIR__ . '/templates/agent-contract-senegal-fr.html'; ?>
-    <h3 class="section-title">SIGNATURES</h3>
-    <?php else: ?>
     <p>The Company and the Agent are each a &ldquo;Party&rdquo; and together the &ldquo;Parties.&rdquo;</p>
 
     <div class="section-title">1. Purpose and Appointment</div>
@@ -569,7 +610,6 @@ button {
 
     <div class="section-title">21. Signatures</div>
     <p>The Parties confirm that they have read, understood, and agreed to the terms of this Agreement and have had the opportunity to obtain independent legal advice.</p>
-    <?php endif; ?>
 
     <div class="contract-section signature-section" style="margin-top:24px;">
       <div class="signature-grid">
@@ -577,20 +617,20 @@ button {
         <!-- LEFT: Company -->
         <div class="signature-block">
           <p class="sig-label" style="margin-bottom:18px;font-size:16px;">
-            <?= $isSenegal ? 'Pour PARROT CANADA VISA CONSULTANT CO.LTD' : 'For Parrot Canada Visa Consultant Co. Ltd' ?>
+            For Parrot Canada Visa Consultant Co. Ltd
           </p>
 
           <div style="margin-bottom:18px;">
-            <strong class="sig-label"><?= $isSenegal ? 'Représentant autorisé :' : 'Name:' ?></strong>
+            <strong class="sig-label">Name:</strong>
             <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
-              <?= htmlspecialchars(AGENT_CONTRACT_COMPANY_SIGNER) ?>
+              Dr. Jean Pierre Twajamahoro
             </div>
           </div>
 
           <div style="margin-bottom:18px;">
-            <strong class="sig-label"><?= $isSenegal ? 'Fonction :' : 'Title:' ?></strong>
+            <strong class="sig-label">Title:</strong>
             <div style="border-bottom:1px solid #000;height:24px;width:85%;margin-top:6px;padding-top:2px;">
-              <?= $isSenegal ? htmlspecialchars(AGENT_CONTRACT_COMPANY_SIGNER_TITLE_FR) : 'Owner &amp; Managing Director' ?>
+              Owner &amp; Managing Director
             </div>
           </div>
 
@@ -602,7 +642,7 @@ button {
           </div>
 
           <div style="margin-bottom:18px;">
-            <strong class="sig-label"><?= $isSenegal ? 'Cachet de la Société :' : 'Company Stamp:' ?></strong>
+            <strong class="sig-label">Company Stamp:</strong>
             <div style="margin-top:6px;width:85%;">
               <img src="admin/employer-signature.png" alt="Company Stamp" style="max-height:140px;max-width:320px;display:block;">
             </div>
@@ -614,22 +654,19 @@ button {
               <?= htmlspecialchars($companyDate) ?>
             </div>
           </div>
-          <?php if ($isSenegal): ?>
-          <p><strong>Lieu :</strong> <?= htmlspecialchars($senegalDetails['company_signing_place'] ?? '') ?></p>
-          <?php endif; ?>
         </div>
 
         <!-- RIGHT: Agent / Staff -->
         <div class="signature-block" style="padding:20px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;">
           <p class="sig-label" style="margin-bottom:20px;font-size:16px;">
-            <?= $isSenegal ? 'Agent individuel — Sénégal' : 'For the Agent / Staff' ?>
+            For the Agent / Staff
           </p>
 
           <div style="margin-bottom:20px;">
-            <label for="sig_agent_name" class="sig-label" style="display:block;margin-bottom:8px;"><?= $isSenegal ? 'Nom complet :' : 'Full Name:' ?></label>
+            <label class="sig-label" style="display:block;margin-bottom:8px;">Full Name:</label>
             <input type="text" id="sig_agent_name"
               style="width:100%;border:2px solid #e5e7eb;border-radius:6px;padding:12px 16px;font-size:16px;box-sizing:border-box;"
-              <?= $isSenegal ? '' : 'placeholder="Enter your full legal name"' ?>
+              placeholder="Enter your full legal name"
               value="<?= htmlspecialchars($isSigned ? $signedAgentName : $display['name']) ?>"
               <?= $ro ?>>
           </div>
@@ -642,7 +679,7 @@ button {
               <?php else: ?>
               <canvas class="signature-canvas"></canvas>
               <div style="position:absolute;top:8px;right:8px;font-size:12px;color:#9ca3af;">
-                <?= $isSenegal ? 'Tracez votre signature' : 'Draw your signature above' ?>
+                Draw your signature above
               </div>
               <?php endif; ?>
             </div>
@@ -655,17 +692,10 @@ button {
               value="<?= htmlspecialchars($isSigned ? $signedDate : '') ?>"
               <?= $ro ?>>
           </div>
-          <?php if ($isSenegal): ?>
-          <div class="form-row">
-            <label for="signing_place">Lieu de signature *</label>
-            <input type="text" id="signing_place" maxlength="100" value="<?= htmlspecialchars($senegalDetails['signing_place'] ?? '') ?>"
-              required data-senegal-required <?= $ro ?>>
-          </div>
-          <?php endif; ?>
 
           <div style="display:flex;gap:12px;flex-wrap:wrap;">
-            <button id="clearSignature" type="button" style="flex:1;background:#f3f4f6;color:#374151;border:none;"><?= $isSenegal ? 'Effacer la signature' : 'Clear Signature' ?></button>
-            <button id="signContract" type="button" style="flex:2;background:#2563eb;color:#ffffff;border:none;"><?= $isSenegal ? 'Signer et envoyer' : 'Sign &amp; Submit Contract' ?></button>
+            <button id="clearSignature" type="button" style="flex:1;background:#f3f4f6;color:#374151;border:none;">Clear Signature</button>
+            <button id="signContract" type="button" style="flex:2;background:#2563eb;color:#ffffff;border:none;">Sign &amp; Submit Contract</button>
             <input type="hidden" id="signatureData">
           </div>
         </div>
@@ -673,11 +703,13 @@ button {
       </div>
     </div>
 
-    <?php if (!$isSenegal): ?><div class="footer-ref">
+    <div class="footer-ref">
       Contract Reference: <?= htmlspecialchars($contract['contract_token']) ?>
-    </div><?php endif; ?>
+    </div>
   </div>
 </div>
+
+<?php endif; ?>
 
 <script>
 const CONTRACT_TOKEN = <?= json_encode($token) ?>;
@@ -705,6 +737,12 @@ if (emailInput && noticeEmail) {
   const inputDate = document.getElementById('sig_signed_date');
   const hiddenSignature = document.getElementById('signatureData');
   const mainName = document.getElementById('agent_name');
+  const signatureId = document.getElementById('senegal-signature-id');
+  if (signatureId) {
+    document.getElementById('national_id').addEventListener('input', event => {
+      signatureId.textContent = event.target.value.trim() || '___________________';
+    });
+  }
   const todayIso = new Date().toISOString().slice(0, 10);
   if (inputDate && !inputDate.value) inputDate.value = todayIso;
   if (mainName && inputName && !inputName.value) inputName.value = (mainName.value || '').trim();
@@ -799,7 +837,7 @@ if (emailInput && noticeEmail) {
     const sigName = inputName.value.trim();
     const signedDate = inputDate.value;
 
-    if (!agentName || !agentEmail || !agentPhone || !agentAddress || !effectiveDate) {
+    if (!agentName || !agentEmail || !agentPhone || !agentAddress || (!SENEGAL_CONTRACT && !effectiveDate)) {
       alert(message('Please complete name, email, phone, address, and effective date before signing.', 'Renseignez votre nom, votre courriel, votre téléphone et votre adresse avant de signer.'));
       return;
     }
@@ -881,6 +919,7 @@ if (emailInput && noticeEmail) {
         marital_status: maritalStatus,
         nationality: nationality,
         place_of_birth: placeOfBirth,
+        company_signing_place: document.getElementById('company_signing_place')?.value.trim() || '',
         ...senegalDetails
       })
     })
