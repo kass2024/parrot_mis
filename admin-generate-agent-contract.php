@@ -355,7 +355,7 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
     <div style="text-align:center;margin-bottom:10px;font-size:12px;font-weight:600;color:var(--primary);">AGENT REFERRAL &amp; COMMISSION</div>
     <?php endif; ?>
     <h1><?= htmlspecialchars($pageTitle) ?></h1>
-    <p class="subtitle">Send a signing link to registered staff/agents, or issue a blank link so an unregistered person can fill in their own details and be added as an agent.</p>
+    <p class="subtitle"><?= $isSenegal ? 'Issue a signing link for a registered agent or let an unregistered agent complete and sign the contract from a blank link.' : 'Send a signing link to registered staff/agents, or issue a blank link so an unregistered person can fill in their own details and be added as an agent.' ?></p>
 
     <?php if ($message): ?>
         <div class="alert alert-<?= $messageType === 'error' ? 'error' : 'success' ?>"><?= htmlspecialchars($message) ?></div>
@@ -400,7 +400,7 @@ h1 { text-align:center; margin:0 0 6px; font-size:22px; }
         </div>
 
         <p class="hint" id="externalHint" style="display:none;margin:-6px 0 16px;">
-            <?= $isSenegal ? 'Copy a blank link so the agent can complete the contract and create their account. Enter an email only to send the link from here.' : 'Leave name and contact blank so the agent can complete their details and create their account on the signing page. Email is required to send the link from here.' ?>
+            <?= $isSenegal ? 'Copy a blank link so the agent can complete and sign the contract. Enter an email only to send the link from here.' : 'Leave name and contact blank so the agent can complete their details and create their account on the signing page. Email is required to send the link from here.' ?>
         </p>
 
         <div class="form-row-2">

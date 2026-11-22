@@ -23,6 +23,11 @@ function agent_contract_senegal_date(string $value): bool
     return $date !== false && $date->format('Y-m-d') === $value;
 }
 
+function agent_contract_senegal_today(): string
+{
+    return (new DateTimeImmutable('today', new DateTimeZone('Africa/Dakar')))->format('Y-m-d');
+}
+
 function agent_contract_senegal_fields(): array
 {
     return [

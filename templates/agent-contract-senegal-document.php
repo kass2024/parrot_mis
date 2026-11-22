@@ -44,7 +44,7 @@ $agentRows = [
   <p class="senegal-reference">
     <strong>Référence :</strong> <?= $escape($value('reference')) ?><br>
     <strong>Date d'entrée en vigueur :</strong>
-    <?php if ($senegalEditable && $value('effective_date') !== ''): ?>
+    <?php if ($senegalEditable && !empty($senegalDocument['issued_effective_date'])): ?>
       <input type="hidden" id="effective_date" value="<?= $escape($value('effective_date')) ?>">
       <?= $escape($dateText($value('effective_date'))) ?>
     <?php else: ?>

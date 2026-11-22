@@ -56,7 +56,7 @@ $email         = trim($data['agent_email'] ?? '');
 $phone         = trim($data['agent_phone'] ?? '');
 $address       = trim($data['agent_address'] ?? '');
 $title         = trim($data['agent_title'] ?? '');
-$effectiveDate = trim($data['effective_date'] ?? '') ?: $signedDate;
+$effectiveDate = trim($data['effective_date'] ?? '');
 $usernameIn    = trim($data['username'] ?? '');
 $passwordIn    = (string) ($data['password'] ?? '');
 $nationalId    = trim($data['national_id'] ?? '');
@@ -65,11 +65,10 @@ $maritalStatus = trim($data['marital_status'] ?? '');
 $nationality   = trim($data['nationality'] ?? '');
 $placeOfBirth  = trim($data['place_of_birth'] ?? '');
 
-if ($token === '' || $name === '' || $signedDate === '' || $email === '' || $signature === '' || $address === '') {
+if ($token === '' || $name === '' || $email === '' || $signature === '' || $address === '') {
     $missing = [];
     if ($token === '') $missing[] = 'token';
     if ($name === '') $missing[] = 'agent_name';
-    if ($signedDate === '') $missing[] = 'signed_date';
     if ($email === '') $missing[] = 'agent_email';
     if ($signature === '') $missing[] = 'signature';
     if ($address === '') $missing[] = 'agent_address';
@@ -102,11 +101,19 @@ if ($contract['status'] === 'signed') {
     ]);
 }
 
-if (empty($contract['admin_id']) && $phone === '') {
+$isSenegal = $contract['contract_template'] === AGENT_CONTRACT_SENEGAL;
+if ($signedDate === '') {
+    if (!$isSenegal) {
+        acFail('Missing required fields: signed_date', 400);
+    }
+    $signedDate = agent_contract_senegal_today();
+}
+$effectiveDate = $effectiveDate ?: $signedDate;
+
+if (!$isSenegal && empty($contract['admin_id']) && $phone === '') {
     acFail('Phone is required to create your agent account', 400);
 }
 
-$isSenegal = $contract['contract_template'] === AGENT_CONTRACT_SENEGAL;
 $signerDetails = [];
 if ($isSenegal) {
     if ($phone === '' || !agent_contract_senegal_date($signedDate)) {
@@ -209,7 +216,7 @@ try {
         'username' => '',
     ];
 
-    if (empty($adminId)) {
+    if (!$isSenegal && empty($adminId)) {
         $accountInfo = agent_contract_ensure_admin($conn, [
             'name'                  => $name,
             'email'                 => $email,

@@ -274,10 +274,6 @@ body.senegal-contract-page { margin: 0; background: #F1F4F6; }
 .senegal-instructions,
 .senegal-actions { color: #243746; font-family: 'Times New Roman', Times, serif; }
 .senegal-instructions { margin: 0 0 12pt; padding: 7pt; background: #F1F4F6; }
-.senegal-account { border: 1px solid #243746; margin: 12pt 0; padding: 8pt; }
-.senegal-account legend { padding: 0 5pt; font-weight: bold; }
-.senegal-account label { display: block; margin: 0 0 5pt; }
-.senegal-account input { display: block; width: 100%; font: inherit; padding: 4pt; }
 .senegal-buttons { display: flex; flex-wrap: wrap; gap: 8pt; }
 .senegal-buttons #signContract { background: #243746; }
 .senegal-buttons #clearSignature { background: #F1F4F6; color: #243746; }
@@ -322,15 +318,17 @@ body.senegal-contract-page { margin: 0; background: #F1F4F6; }
 <?php if ($isSenegal): ?>
 <?php
 $senegalEditable = !$isSigned;
+$senegalSigningDate = $isSigned ? $signedDate : agent_contract_senegal_today();
 $senegalDocument = [
     'reference' => agent_contract_senegal_reference((int) $contract['id']),
-    'effective_date' => $contract['effective_date'] ?? '',
+    'effective_date' => $contract['effective_date'] ?: $senegalSigningDate,
+    'issued_effective_date' => !empty($contract['effective_date']),
     'agent_name' => $isSigned ? ($signedAgentName ?: $display['name']) : $display['name'],
     'agent_email' => $display['email'],
     'agent_phone' => $display['phone'],
     'agent_address' => $display['address'],
     'sig_agent_name' => $signedAgentName ?: $display['name'],
-    'sig_signed_date' => $signedDate,
+    'sig_signed_date' => $senegalSigningDate,
     'agent_signature' => $agentSignatureData,
     'company_signature' => 'admin/signature-manager.png',
     'company_stamp' => 'admin/employer-signature.png',
@@ -344,14 +342,6 @@ $senegalDocument = [
   <?php if ($senegalEditable): ?>
   <div class="senegal-actions">
     <input type="hidden" id="agent_title" value="<?= htmlspecialchars($display['title']) ?>">
-    <?php if ($needsAccount): ?>
-    <fieldset class="senegal-account">
-      <legend>Créer votre compte agent</legend>
-      <label>Nom d’utilisateur <input id="agent_username" type="text" autocomplete="username" maxlength="50"></label>
-      <label>Mot de passe <input id="agent_password" type="password" autocomplete="new-password" minlength="8"></label>
-      <label>Confirmer le mot de passe <input id="agent_password_confirm" type="password" autocomplete="new-password" minlength="8"></label>
-    </fieldset>
-    <?php endif; ?>
     <div class="senegal-buttons">
       <button type="button" id="clearSignature">Effacer la signature</button>
       <button type="button" id="signContract">Signer et envoyer</button>
@@ -713,7 +703,7 @@ $senegalDocument = [
 
 <script>
 const CONTRACT_TOKEN = <?= json_encode($token) ?>;
-const NEEDS_ACCOUNT = <?= $needsAccount && !$isSigned ? 'true' : 'false' ?>;
+const NEEDS_ACCOUNT = <?= !$isSenegal && $needsAccount && !$isSigned ? 'true' : 'false' ?>;
 const SENEGAL_CONTRACT = <?= $isSenegal ? 'true' : 'false' ?>;
 
 const emailInput = document.getElementById('agent_email');
@@ -835,7 +825,7 @@ if (emailInput && noticeEmail) {
     const nationality = (document.getElementById('nationality')?.value || '').trim();
     const placeOfBirth = (document.getElementById('place_of_birth')?.value || '').trim();
     const sigName = inputName.value.trim();
-    const signedDate = inputDate.value;
+    const signedDate = inputDate.value || (SENEGAL_CONTRACT ? inputDate.defaultValue : '');
 
     if (!agentName || !agentEmail || !agentPhone || !agentAddress || (!SENEGAL_CONTRACT && !effectiveDate)) {
       alert(message('Please complete name, email, phone, address, and effective date before signing.', 'Renseignez votre nom, votre courriel, votre téléphone et votre adresse avant de signer.'));
@@ -927,10 +917,12 @@ if (emailInput && noticeEmail) {
     .then(data => {
       if (data.success) {
         let msg = message('Contract signed successfully! You can now download your signed agreement.', 'Contrat signé. Vous pouvez télécharger le PDF.');
-        if (data.account && data.account.created && data.account.username) {
-          msg = message('Contract signed. Your agent account is ready. Username: ', 'Contrat signé. Votre compte agent est prêt. Nom d’utilisateur : ') + data.account.username + message('. Log in with the password you chose.', '. Connectez-vous avec le mot de passe choisi.');
-        } else if (data.account && data.account.existing && data.account.username) {
-          msg = message('Contract signed. This email is already registered. Username: ', 'Contrat signé. Ce courriel est déjà enregistré. Nom d’utilisateur : ') + data.account.username + '.';
+        if (!SENEGAL_CONTRACT && data.account?.username) {
+          if (data.account.created) {
+            msg = 'Contract signed. Your agent account is ready. Username: ' + data.account.username + '. Log in with the password you chose.';
+          } else if (data.account.existing) {
+            msg = 'Contract signed. This email is already registered. Username: ' + data.account.username + '.';
+          }
         }
         if (data.pdf_error) {
           msg += message(' PDF generation had an issue — reload and try Download.', ' Le PDF n’a pas été généré. Rechargez la page et réessayez le téléchargement.');
