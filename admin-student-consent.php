@@ -123,9 +123,7 @@ if ($issuedId) {
     }
 }
 
-$listFields = "SELECT contract_token, language, signed_at, signing_date, created_at,
-    JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.student_name')) AS student_name
-    FROM student_consent_authorizations";
+$signedRecords = [];
 $page = $pageCount = 1;
 if ($signedView) {
     $pageSize = 25;
@@ -139,15 +137,14 @@ if ($signedView) {
     $requestedPage = filter_var($_GET['page'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     $page = min($requestedPage ?: 1, $pageCount);
     $offset = ($page - 1) * $pageSize;
-    $stmt = $conn->prepare($listFields . ' ' . $where . ' ORDER BY signed_at DESC, id DESC LIMIT ? OFFSET ?');
+    $stmt = $conn->prepare("SELECT contract_token, language, signed_at, signing_date,
+        JSON_UNQUOTE(JSON_EXTRACT(form_data, '$.student_name')) AS student_name
+        FROM student_consent_authorizations " . $where . ' ORDER BY signed_at DESC, id DESC LIMIT ? OFFSET ?');
     $stmt->bind_param('iiii', $adminId, $superadmin, $pageSize, $offset);
-} else {
-    $stmt = $conn->prepare($listFields . ' WHERE language = ? AND (issued_by = ? OR ? = 1) ORDER BY id DESC LIMIT 25');
-    $stmt->bind_param('sii', $language, $adminId, $superadmin);
+    $stmt->execute();
+    $signedRecords = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
 }
-$stmt->execute();
-$recent = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
-$stmt->close();
 ?>
 <!doctype html>
 <html lang="en">
@@ -226,22 +223,16 @@ small { color: #4c5562; }
   </form>
   <?php endif; ?>
 
-  <?php if ($recent): ?>
-  <?php if (!$signedView): ?><h2>Recent consent forms</h2><?php endif; ?>
-  <?php foreach ($recent as $record): ?>
+  <?php if ($signedRecords): ?>
+  <?php foreach ($signedRecords as $record): ?>
     <?php $url = 'student-consent.php?token=' . $record['contract_token']; ?>
     <div class="row record">
       <span><?= $h($record['student_name'] ?: 'Blank form') ?> ·
-        <?php if ($signedView): ?>
-          <?= $record['language'] === 'fr' ? 'French' : 'English' ?> ·
-          <small><?= $h($record['signing_date'] ?? substr($record['signed_at'], 0, 10)) ?></small>
-        <?php else: ?>
-          <?= $record['signed_at'] ? 'Signed' : 'Pending' ?>
-          <small>(<?= $h(substr($record['created_at'], 0, 10)) ?>)</small>
-        <?php endif; ?>
+        <?= $record['language'] === 'fr' ? 'French' : 'English' ?> ·
+        <small><?= $h($record['signing_date'] ?? substr($record['signed_at'], 0, 10)) ?></small>
       </span>
-      <a href="<?= $h($url) ?>" target="_blank" rel="noopener noreferrer"><?= $signedView ? 'View signed form' : 'Open form' ?></a>
-      <?php if ($record['signed_at']): ?><a href="<?= $h($url . '&download=1') ?>">Download PDF</a><?php endif; ?>
+      <a href="<?= $h($url) ?>" target="_blank" rel="noopener noreferrer">View signed form</a>
+      <a href="<?= $h($url . '&download=1') ?>">Download PDF</a>
     </div>
   <?php endforeach; ?>
   <?php elseif ($signedView): ?>
