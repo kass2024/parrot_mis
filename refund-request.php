@@ -205,7 +205,7 @@ $csrfToken = pcvc_csrf_token();
 .refund-grid { display: grid; gap: 1rem; }
 @media (min-width: 576px) { .refund-grid-2 { grid-template-columns: 1fr 1fr; } }
 
-/* Live search */
+/* Search */
 .refund-search-wrap { position: relative; }
 .refund-search-input {
   width: 100%;
@@ -232,11 +232,6 @@ $csrfToken = pcvc_csrf_token();
   font-size: 0.85rem; color: var(--muted);
 }
 .refund-search-status.loading { color: var(--pcv-green); }
-.refund-live-hint {
-  display: flex; align-items: center; gap: 8px;
-  margin-top: 10px; font-size: 0.8rem; color: var(--muted);
-}
-.refund-live-hint i { color: var(--pcv-green); font-size: 0.75rem; }
 
 /* Results dropdown */
 .refund-results {
@@ -448,7 +443,7 @@ $csrfToken = pcvc_csrf_token();
       <!-- Step 1 -->
       <div class="refund-card" id="step1Card">
         <div class="refund-step-badge"><i class="fas fa-search"></i> Step 1 — Find your record</div>
-        <h2>Live search</h2>
+        <h2>Search</h2>
         <p class="refund-card-desc">Type at least 2 characters — results appear as you type. Select your name to autofill, or continue manually if you're not listed.</p>
 
         <div class="refund-search-wrap">
@@ -456,7 +451,6 @@ $csrfToken = pcvc_csrf_token();
           <input type="text" id="searchQuery" class="refund-search-input" placeholder="Your full name or email address…" autocomplete="off" aria-label="Search student name or email" aria-autocomplete="list" aria-controls="searchResults">
           <span class="refund-search-status" id="searchStatus" aria-live="polite"></span>
         </div>
-        <div class="refund-live-hint"><i class="fas fa-bolt"></i> Live search — no button needed</div>
 
         <div id="searchResults" class="refund-results" role="listbox" aria-label="Search results"></div>
 
