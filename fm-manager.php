@@ -8,12 +8,10 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/fm_manager_portal.php';
-require_once __DIR__ . '/helpers/fm_payment_records.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 
 fm_ensure_manager_portal_schema($conn);
 fm_ensure_schema($conn);
-fm_ensure_payment_records_schema($conn);
 
 if (isset($_GET['logout'])) {
     fm_manager_portal_logout();
@@ -34,8 +32,6 @@ if ($token !== '' && fm_manager_portal_token_valid($conn, $token)) {
 }
 
 $linkOk = $token !== '' && fm_manager_portal_token_valid($conn, $token) && fm_manager_portal_logged_in();
-$flash = '';
-$flashErr = '';
 
 if (!$linkOk) {
     http_response_code(403);
@@ -53,31 +49,36 @@ if (!$linkOk) {
     exit;
 }
 
-if (empty($_SESSION['csrf_token'])) {
-    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
-}
-
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report'])) {
-    if (empty($_POST['csrf_token']) || !hash_equals((string) $_SESSION['csrf_token'], (string) $_POST['csrf_token'])) {
-        $flashErr = 'Session expired. Refresh and try again.';
-    } else {
-        @set_time_limit(180);
-        $privateUrl = fm_manager_portal_private_url($conn);
-        $picked = $_POST['report_to'] ?? [];
-        if (!is_array($picked)) {
-            $picked = [];
-        }
-        $result = fm_send_manager_full_report($conn, $privateUrl, $picked);
-        if (!empty($result['ok'])) {
-            $flash = (string) ($result['message'] ?? 'Report sent.');
-        } else {
-            $flashErr = (string) ($result['message'] ?? 'Send failed.');
-        }
-    }
-}
-
-$privateUrl = fm_manager_portal_private_url($conn);
-$reportRecipients = fm_payment_report_recipients();
+$tools = [
+    [
+        'href' => 'francophonie-mobility-staff-add.php',
+        'icon' => 'fa-user-plus',
+        'tone' => 'green',
+        'title' => 'Smart Add',
+        'desc' => 'Create a candidate and file documents into visa groups.',
+    ],
+    [
+        'href' => 'francophonie-mobility-applications.php',
+        'icon' => 'fa-list-ul',
+        'tone' => 'blue',
+        'title' => 'View list',
+        'desc' => 'Browse applications and update Waiting List, Ready2start, and more.',
+    ],
+    [
+        'href' => 'francophonie-mobility-client-tracking.php',
+        'icon' => 'fa-clipboard-check',
+        'tone' => 'teal',
+        'title' => 'Overall report',
+        'desc' => 'Document checklist with green / red status, Excel export, and email.',
+    ],
+    [
+        'href' => 'francophonie-mobility-payment-records.php',
+        'icon' => 'fa-money-bill-wave',
+        'tone' => 'gold',
+        'title' => 'Payment records',
+        'desc' => 'Sultan fees, balances, visa status, and comments.',
+    ],
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -88,111 +89,136 @@ $reportRecipients = fm_payment_report_recipients();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background: #f4f6f3; color: #1e293b; min-height: 100vh; }
-        .hero {
-            background: linear-gradient(135deg, #1e4d2b, #3661B9);
-            color: #fff;
-            padding: 1.5rem 0 1.25rem;
-            margin-bottom: 1.25rem;
+        :root {
+            --fm-green: #1e4d2b;
+            --fm-blue: #3661B9;
+            --fm-ink: #0f172a;
+            --fm-muted: #64748b;
         }
-        .card-soft {
-            border: 0; border-radius: 14px;
-            box-shadow: 0 1px 8px rgba(15, 23, 42, .08);
-            background: #fff;
+        body {
+            background:
+                radial-gradient(1200px 420px at 10% -10%, rgba(54, 97, 185, .14), transparent 60%),
+                radial-gradient(900px 380px at 100% 0%, rgba(30, 77, 43, .12), transparent 55%),
+                #f1f5f0;
+            color: var(--fm-ink);
+            min-height: 100vh;
+        }
+        .hero {
+            background: linear-gradient(135deg, #163b22 0%, var(--fm-green) 42%, var(--fm-blue) 100%);
+            color: #fff;
+            padding: 1.75rem 0 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 28px rgba(15, 23, 42, .18);
+        }
+        .hero h1 {
+            font-size: clamp(1.35rem, 2.4vw, 1.75rem);
+            font-weight: 750;
+            letter-spacing: -.02em;
+            margin: 0 0 .35rem;
+        }
+        .hero p { margin: 0; opacity: .88; max-width: 42rem; }
+        .section-label {
+            font-size: .78rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: var(--fm-muted);
+            margin-bottom: .85rem;
         }
         .tool-card {
-            display: block; text-decoration: none; color: inherit;
-            border: 1px solid #e2e8f0; border-radius: 14px; padding: 1.15rem 1.1rem;
-            height: 100%; transition: border-color .15s, box-shadow .15s, transform .15s;
+            display: flex;
+            flex-direction: column;
+            text-decoration: none;
+            color: inherit;
+            height: 100%;
+            min-height: 210px;
+            padding: 1.35rem 1.25rem 1.2rem;
+            border-radius: 18px;
+            border: 1px solid rgba(15, 23, 42, .06);
+            background: #fff;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, .07);
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .tool-card::before {
+            content: '';
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 5px;
+            background: var(--accent, var(--fm-green));
         }
         .tool-card:hover {
-            border-color: #1e4d2b; box-shadow: 0 4px 14px rgba(30, 77, 43, .12);
-            transform: translateY(-1px); color: inherit;
+            transform: translateY(-4px);
+            box-shadow: 0 16px 34px rgba(15, 23, 42, .12);
+            border-color: color-mix(in srgb, var(--accent, var(--fm-green)) 35%, #e2e8f0);
+            color: inherit;
         }
         .tool-card .icon {
-            width: 2.5rem; height: 2.5rem; border-radius: 10px;
-            display: inline-flex; align-items: center; justify-content: center;
-            background: #e8f0ea; color: #1e4d2b; margin-bottom: .7rem;
+            width: 3.15rem;
+            height: 3.15rem;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: 1rem;
+            background: var(--icon-bg, #e8f0ea);
+            color: var(--accent, var(--fm-green));
         }
-        .tool-card h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 .3rem; }
-        .tool-card p { margin: 0; color: #64748b; font-size: .88rem; }
+        .tool-card h2 {
+            font-size: 1.2rem;
+            font-weight: 750;
+            letter-spacing: -.01em;
+            margin: 0 0 .45rem;
+        }
+        .tool-card p {
+            margin: 0;
+            color: var(--fm-muted);
+            font-size: .95rem;
+            line-height: 1.45;
+            flex: 1;
+        }
+        .tool-card .open {
+            margin-top: 1.1rem;
+            font-size: .86rem;
+            font-weight: 700;
+            color: var(--accent, var(--fm-green));
+            display: inline-flex;
+            align-items: center;
+            gap: .4rem;
+        }
+        .tool-card.tone-green { --accent: #1e4d2b; --icon-bg: #e7f3eb; }
+        .tool-card.tone-blue { --accent: #3661B9; --icon-bg: #e8eefc; }
+        .tool-card.tone-teal { --accent: #0f766e; --icon-bg: #e6f7f5; }
+        .tool-card.tone-gold { --accent: #b45309; --icon-bg: #fff4e5; }
+        @media (max-width: 767.98px) {
+            .tool-card { min-height: 0; }
+        }
     </style>
 </head>
 <body>
 <?= fm_manager_portal_nav_html('hub') ?>
 <div class="hero">
-    <div class="container" style="max-width:960px">
-        <h1 class="h4 mb-1"><i class="fas fa-shield-halved me-2"></i>Francophonie Mobility manager portal</h1>
-        <p class="mb-0 opacity-75 small">Private link access — no username or password. Send the full Excel report, or open tools for more details.</p>
+    <div class="container" style="max-width:980px">
+        <h1><i class="fas fa-shield-halved me-2"></i>Francophonie Mobility manager portal</h1>
+        <p>Private link access — no username or password. Open a tool below for Smart Add, applications, overall report, or payment records.</p>
     </div>
 </div>
 
-<div class="container pb-5" style="max-width:960px">
-    <?php if ($flash !== ''): ?><div class="alert alert-success"><?= htmlspecialchars($flash) ?></div><?php endif; ?>
-    <?php if ($flashErr !== ''): ?><div class="alert alert-danger"><?= htmlspecialchars($flashErr) ?></div><?php endif; ?>
-
-    <div class="card card-soft p-3 p-md-4 mb-4">
-        <h2 class="h5 mb-2">Send full report</h2>
-        <p class="text-muted small mb-3">
-            Emails the complete Excel report (Client tracking + Payment records) and asks recipients to open the private link for more details.
-            Choose any of the addresses below.
-        </p>
-        <form method="post">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-            <input type="hidden" name="k" value="<?= htmlspecialchars($token) ?>">
-            <div class="d-flex flex-wrap gap-3 mb-3">
-                <?php foreach ($reportRecipients as $email => $meta): ?>
-                    <label class="form-check mb-0">
-                        <input
-                            class="form-check-input"
-                            type="checkbox"
-                            name="report_to[]"
-                            value="<?= htmlspecialchars($email) ?>"
-                            checked
-                        >
-                        <span class="form-check-label"><?= htmlspecialchars($email) ?></span>
-                    </label>
-                <?php endforeach; ?>
-            </div>
-            <button type="submit" name="send_report" value="1" class="btn btn-success">
-                <i class="fas fa-paper-plane me-1"></i> Send report
-            </button>
-            <span class="small text-muted ms-2">Attachment: Excel workbook</span>
-        </form>
-        <hr class="my-3">
-        <p class="small mb-1 fw-semibold">For more details, use this private link:</p>
-        <code class="small" style="word-break:break-all"><?= htmlspecialchars($privateUrl) ?></code>
-    </div>
-
-    <div class="row g-3">
-        <div class="col-md-6 col-lg-3">
-            <a class="tool-card" href="francophonie-mobility-staff-add.php">
-                <div class="icon"><i class="fas fa-user-plus"></i></div>
-                <h2>Smart Add</h2>
-                <p>Create a candidate and file documents into groups.</p>
+<div class="container pb-5" style="max-width:980px">
+    <div class="section-label">Manager tools</div>
+    <div class="row g-3 g-lg-4">
+        <?php foreach ($tools as $tool): ?>
+        <div class="col-md-6">
+            <a class="tool-card tone-<?= htmlspecialchars($tool['tone']) ?>" href="<?= htmlspecialchars($tool['href']) ?>">
+                <div class="icon"><i class="fas <?= htmlspecialchars($tool['icon']) ?>"></i></div>
+                <h2><?= htmlspecialchars($tool['title']) ?></h2>
+                <p><?= htmlspecialchars($tool['desc']) ?></p>
+                <span class="open">Open <i class="fas fa-arrow-right"></i></span>
             </a>
         </div>
-        <div class="col-md-6 col-lg-3">
-            <a class="tool-card" href="francophonie-mobility-applications.php">
-                <div class="icon"><i class="fas fa-list-ul"></i></div>
-                <h2>View list</h2>
-                <p>Browse applications and update client status.</p>
-            </a>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <a class="tool-card" href="francophonie-mobility-client-tracking.php">
-                <div class="icon"><i class="fas fa-clipboard-check"></i></div>
-                <h2>Overall report</h2>
-                <p>Document checklist with green / red status.</p>
-            </a>
-        </div>
-        <div class="col-md-6 col-lg-3">
-            <a class="tool-card" href="francophonie-mobility-payment-records.php">
-                <div class="icon"><i class="fas fa-money-bill-wave"></i></div>
-                <h2>Payment records</h2>
-                <p>Sultan fees, balances, visa status, and comments.</p>
-            </a>
-        </div>
+        <?php endforeach; ?>
     </div>
 </div>
 </body>
