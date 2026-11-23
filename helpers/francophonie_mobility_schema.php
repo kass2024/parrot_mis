@@ -192,4 +192,7 @@ function fm_ensure_schema(mysqli $conn): void
     if ($jobOfferCol) {
         $jobOfferCol->free();
     }
+
+    require_once __DIR__ . '/francophonie_mobility_documents.php';
+    fm_ensure_documents_schema($conn);
 }

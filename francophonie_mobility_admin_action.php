@@ -10,9 +10,11 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_files.php';
+require_once __DIR__ . '/helpers/francophonie_mobility_documents.php';
 require_once __DIR__ . '/helpers/fm_mobility_contract_schema.php';
 
 fm_ensure_schema($conn);
+fm_ensure_documents_schema($conn);
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -140,6 +142,7 @@ if ($action === 'delete_application') {
         if ($videoLocal !== '') {
             fm_admin_unlink_stored($videoLocal);
         }
+        fm_delete_all_documents_for_application($conn, $applicationId);
 
         $logDel = $conn->prepare('DELETE FROM francophonie_mobility_status_logs WHERE application_id = ?');
         $logDel->bind_param('i', $applicationId);
@@ -191,6 +194,95 @@ if ($action === 'delete_application') {
         $conn->rollback();
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
     }
+    exit;
+}
+
+if ($action === 'upload_attached') {
+    if (empty($_FILES['file']) || (int) ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+        echo json_encode(['success' => false, 'message' => 'Choose a file to upload.']);
+        exit;
+    }
+    $file = $_FILES['file'];
+    $size = (int) ($file['size'] ?? 0);
+    if ($size <= 0 || $size > 12 * 1024 * 1024) {
+        echo json_encode(['success' => false, 'message' => 'File must be 12 MB or smaller.']);
+        exit;
+    }
+    $orig = (string) ($file['name'] ?? 'document');
+    $ext = strtolower(pathinfo($orig, PATHINFO_EXTENSION));
+    if (!in_array($ext, ['pdf', 'jpg', 'jpeg', 'png', 'webp', 'doc', 'docx'], true)) {
+        echo json_encode(['success' => false, 'message' => 'Allowed: PDF, JPG, PNG, DOC, DOCX.']);
+        exit;
+    }
+    $permDir = __DIR__ . '/uploads/francophonie_mobility';
+    if (!is_dir($permDir) && !mkdir($permDir, 0755, true) && !is_dir($permDir)) {
+        echo json_encode(['success' => false, 'message' => 'Cannot create upload directory.']);
+        exit;
+    }
+    $filename = 'fm_' . date('Ymd') . '_' . uniqid() . '_attached' . ($ext !== '' ? '.' . $ext : '');
+    $dest = $permDir . DIRECTORY_SEPARATOR . $filename;
+    if (!move_uploaded_file((string) $file['tmp_name'], $dest)) {
+        echo json_encode(['success' => false, 'message' => 'Could not store the file.']);
+        exit;
+    }
+    $rel = 'uploads/francophonie_mobility/' . $filename;
+    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    try {
+        $docId = fm_insert_document(
+            $conn,
+            $applicationId,
+            $rel,
+            $orig,
+            fm_doc_attached_group(),
+            'manager',
+            $adminPk > 0 ? $adminPk : null,
+            (string) ($file['type'] ?? ''),
+            $size
+        );
+    } catch (Throwable $e) {
+        @unlink($dest);
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
+    echo json_encode([
+        'success' => true,
+        'message' => 'Document added to Attached.',
+        'document_id' => $docId,
+        'reload' => true,
+    ]);
+    exit;
+}
+
+if ($action === 'transfer_document') {
+    $docId = (int) ($_POST['document_id'] ?? 0);
+    $newGroup = trim((string) ($_POST['doc_group'] ?? ''));
+    if ($docId <= 0 || !fm_is_valid_doc_group($newGroup)) {
+        echo json_encode(['success' => false, 'message' => 'Choose a valid destination group.']);
+        exit;
+    }
+    if (!fm_transfer_document($conn, $docId, $applicationId, $newGroup)) {
+        echo json_encode(['success' => false, 'message' => 'Could not move the document.']);
+        exit;
+    }
+    echo json_encode([
+        'success' => true,
+        'message' => 'Moved to ' . fm_doc_group_label($newGroup) . '.',
+        'reload' => true,
+    ]);
+    exit;
+}
+
+if ($action === 'delete_document') {
+    $docId = (int) ($_POST['document_id'] ?? 0);
+    if ($docId <= 0) {
+        echo json_encode(['success' => false, 'message' => 'Invalid document.']);
+        exit;
+    }
+    if (!fm_delete_document_row($conn, $docId, $applicationId, true)) {
+        echo json_encode(['success' => false, 'message' => 'Could not delete the document.']);
+        exit;
+    }
+    echo json_encode(['success' => true, 'message' => 'Document deleted.', 'reload' => true]);
     exit;
 }
 

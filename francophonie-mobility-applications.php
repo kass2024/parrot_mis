@@ -121,6 +121,12 @@ function fm_status_badge(string $s): string
 </div>
 
 <div class="container-fluid px-3 px-md-4 pb-5">
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <div class="small text-muted">Staff Smart Add keeps the public client form unchanged. New files go to <strong>Attached</strong>, then managers file them under Visa submission documents.</div>
+        <a href="francophonie-mobility-staff-add.php" class="btn btn-success">
+            <i class="fas fa-user-plus me-1"></i> Smart Add candidate
+        </a>
+    </div>
     <?php if (!$approvalEmailOk): ?>
     <div class="alert alert-warning py-2 small">
         <i class="fas fa-exclamation-triangle me-1"></i>
@@ -405,6 +411,58 @@ function postAction(url, data) {
     return fetch(url, { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => { if (!d.success) throw new Error(d.message || 'Request failed'); return d; });
+}
+
+function fmTransferDoc(appId, docId, btn) {
+    const wrap = btn ? btn.closest('.border') : null;
+    const sel = wrap ? wrap.querySelector('select[data-fm-transfer]') : null;
+    const group = sel ? sel.value : '';
+    if (!group) {
+        alert('Choose a destination group.');
+        return;
+    }
+    postAction('francophonie_mobility_admin_action.php', {
+        application_id: appId,
+        action: 'transfer_document',
+        document_id: docId,
+        doc_group: group
+    }).then(d => {
+        alert(d.message || 'Moved');
+        viewApp(appId);
+    }).catch(e => alert(e.message));
+}
+
+function fmDeleteDoc(appId, docId) {
+    if (!confirm('Delete this managed document?')) return;
+    postAction('francophonie_mobility_admin_action.php', {
+        application_id: appId,
+        action: 'delete_document',
+        document_id: docId
+    }).then(d => {
+        alert(d.message || 'Deleted');
+        viewApp(appId);
+    }).catch(e => alert(e.message));
+}
+
+function fmUploadAttached(appId) {
+    const input = document.getElementById('fmAttachFile_' + appId);
+    if (!input || !input.files || !input.files[0]) {
+        alert('Choose a file first.');
+        return;
+    }
+    const fd = new FormData();
+    fd.append('csrf_token', CSRF);
+    fd.append('application_id', String(appId));
+    fd.append('action', 'upload_attached');
+    fd.append('file', input.files[0]);
+    fetch('francophonie_mobility_admin_action.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) throw new Error(d.message || 'Upload failed');
+            alert(d.message || 'Uploaded');
+            viewApp(appId);
+        })
+        .catch(e => alert(e.message));
 }
 </script>
 </body>

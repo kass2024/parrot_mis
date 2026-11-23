@@ -326,6 +326,7 @@ $cards = [
     'icon' => 'bi-map',
     'links' => [
       'francophonie-mobility-applications.php' => 'View Applications',
+      'francophonie-mobility-staff-add.php' => 'Smart Add candidate',
       'admin-generate-fm-contract.php' => 'Issue E-Sign Contract',
       'admin-fm-contracts.php' => 'Signed Contracts',
       'admin-generate-fm-contract.php?variant=special' => 'Issue Special E-Sign',
@@ -2507,6 +2508,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php', 'Francophonie Mobility')">
             <i class="bi bi-list-ul"></i>
             View Applications
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-staff-add.php', 'Smart Add candidate')">
+            <i class="bi bi-person-plus"></i>
+            Smart Add candidate
           </a>
           <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=pending', 'Pending')">
             <i class="bi bi-clock"></i>
