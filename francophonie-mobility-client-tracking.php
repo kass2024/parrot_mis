@@ -151,7 +151,8 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
             color: #94a3b8; pointer-events: none;
         }
         .search-wrap input { padding-left: 2.15rem; }
-        .table-wrap { overflow: auto; max-height: calc(100vh - 260px); }
+        /* Horizontal scroll only — no second vertical scrollbar inside the card */
+        .table-wrap { overflow-x: auto; overflow-y: visible; }
         table.track-table { border-collapse: separate; border-spacing: 0; min-width: 1400px; }
         table.track-table thead th {
             position: sticky; top: 0; z-index: 2;
@@ -233,6 +234,9 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
             </div>
             <div class="col-md-9 col-lg-4 d-flex flex-wrap gap-2">
                 <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter me-1"></i> Apply</button>
+                <button type="button" class="btn btn-sm btn-outline-success" id="exportExcelBtn">
+                    <i class="fas fa-file-excel me-1"></i> Export Excel
+                </button>
                 <a class="btn btn-sm btn-success" href="?<?= htmlspecialchars($queryBase) ?>&amp;rescan=1">
                     <i class="fas fa-sync-alt me-1"></i> Refresh document check
                 </a>
@@ -273,7 +277,25 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
                     <tr id="emptyServerRow"><td colspan="<?= 4 + count($checklist) ?>" class="text-muted p-4">No clients found.</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $r): ?>
-                    <tr class="track-row" data-search="<?= htmlspecialchars($r['search'], ENT_QUOTES, 'UTF-8') ?>">
+                    <?php
+                    $exportDocs = [];
+                    foreach ($checklist as $key => $lab) {
+                        $exportDocs[$lab] = !empty($r['cells'][$key]['ok']) ? 'Available' : 'Missing';
+                    }
+                    $exportPayload = [
+                        'name' => $r['name'] !== '' ? $r['name'] : '—',
+                        'ref' => $r['ref'],
+                        'status' => $r['status_label'],
+                        'done' => $r['present'] . '/' . $r['total'],
+                        'pct' => ($r['total'] > 0 ? (int) round(100 * $r['present'] / $r['total']) : 0) . '%',
+                        'docs' => $exportDocs,
+                    ];
+                    ?>
+                    <tr
+                        class="track-row"
+                        data-search="<?= htmlspecialchars($r['search'], ENT_QUOTES, 'UTF-8') ?>"
+                        data-export="<?= htmlspecialchars(json_encode($exportPayload, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>"
+                    >
                         <td class="sticky-col">
                             <div class="fw-semibold text-truncate js-name" title="<?= htmlspecialchars($r['name']) ?>"><?= htmlspecialchars($r['name'] !== '' ? $r['name'] : '—') ?></div>
                             <div class="pct"><code class="js-ref"><?= htmlspecialchars($r['ref']) ?></code>
@@ -321,6 +343,7 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
     const rows = Array.from(document.querySelectorAll('.track-row'));
     const visibleCount = document.getElementById('visibleCount');
     const emptyFilterRow = document.getElementById('emptyFilterRow');
+    const exportBtn = document.getElementById('exportExcelBtn');
     const total = rows.length;
     let timer = null;
 
@@ -330,6 +353,10 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
 
     function tokens(s) {
         return normalize(s).split(' ').filter(Boolean);
+    }
+
+    function visibleRows() {
+        return rows.filter(function (row) { return !row.classList.contains('is-hidden'); });
     }
 
     function applyFilter() {
@@ -345,6 +372,76 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
         if (emptyFilterRow) emptyFilterRow.classList.toggle('is-hidden', shown > 0 || total === 0);
     }
 
+    function xmlEscape(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function exportExcel() {
+        const visible = visibleRows();
+        if (!visible.length) {
+            alert('No clients match the current filter.');
+            return;
+        }
+        const docHeaders = <?= json_encode(array_values($checklist), JSON_UNESCAPED_UNICODE) ?>;
+        const headers = ['Client name', 'Reference', 'Status', 'Done', 'Percent'].concat(docHeaders);
+        let rowsXml = '<Row>';
+        headers.forEach(function (h) {
+            rowsXml += '<Cell ss:StyleID="Header"><Data ss:Type="String">' + xmlEscape(h) + '</Data></Cell>';
+        });
+        rowsXml += '</Row>';
+
+        visible.forEach(function (row) {
+            let payload = {};
+            try { payload = JSON.parse(row.getAttribute('data-export') || '{}'); } catch (e) { payload = {}; }
+            const docs = payload.docs || {};
+            const values = [
+                payload.name || '',
+                payload.ref || '',
+                payload.status || '',
+                payload.done || '',
+                payload.pct || ''
+            ].concat(docHeaders.map(function (h) { return docs[h] || 'Missing'; }));
+            rowsXml += '<Row>';
+            values.forEach(function (v, idx) {
+                const isDoc = idx >= 5;
+                const style = !isDoc ? 'Text' : (String(v) === 'Available' ? 'Ok' : 'Miss');
+                rowsXml += '<Cell ss:StyleID="' + style + '"><Data ss:Type="String">' + xmlEscape(v) + '</Data></Cell>';
+            });
+            rowsXml += '</Row>';
+        });
+
+        const xml = '<?xml version="1.0"?>\n'
+            + '<?mso-application progid="Excel.Sheet"?>\n'
+            + '<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"\n'
+            + ' xmlns:o="urn:schemas-microsoft-com:office:office"\n'
+            + ' xmlns:x="urn:schemas-microsoft-com:office:excel"\n'
+            + ' xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet">\n'
+            + '<Styles>\n'
+            + '<Style ss:ID="Header"><Font ss:Bold="1" ss:Color="#FFFFFF"/><Interior ss:Color="#1E4D2B" ss:Pattern="Solid"/></Style>\n'
+            + '<Style ss:ID="Text"/>\n'
+            + '<Style ss:ID="Ok"><Font ss:Color="#166534"/><Interior ss:Color="#DCFCE7" ss:Pattern="Solid"/></Style>\n'
+            + '<Style ss:ID="Miss"><Font ss:Color="#991B1B"/><Interior ss:Color="#FEE2E2" ss:Pattern="Solid"/></Style>\n'
+            + '</Styles>\n'
+            + '<Worksheet ss:Name="Client tracking"><Table>'
+            + rowsXml
+            + '</Table></Worksheet></Workbook>';
+
+        const blob = new Blob([xml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const stamp = new Date().toISOString().slice(0, 10);
+        a.href = url;
+        a.download = 'client-tracking-' + stamp + '.xls';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+    }
+
     if (input) {
         input.addEventListener('input', function () {
             clearTimeout(timer);
@@ -358,6 +455,7 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
         });
         applyFilter();
     }
+    if (exportBtn) exportBtn.addEventListener('click', exportExcel);
 })();
 </script>
 </body>
