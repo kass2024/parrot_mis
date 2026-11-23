@@ -228,27 +228,88 @@ function fm_payment_clients_for_picker(mysqli $conn, ?int $keepApplicationId = n
     return $out;
 }
 
+/**
+ * Normalize a payment-sheet name for matching / stub creation.
+ * Strips notes like "/of Roger" while keeping the real person name.
+ */
+function fm_payment_clean_client_name(string $fullName): string
+{
+    $fullName = preg_replace('/\s+/u', ' ', trim($fullName)) ?? trim($fullName);
+    $fullName = preg_replace('#\s*/\s*of\s+.*$#iu', '', $fullName) ?? $fullName;
+    $fullName = preg_replace('/\s*\([^)]*\)\s*/u', ' ', $fullName) ?? $fullName;
+    return preg_replace('/\s+/u', ' ', trim($fullName)) ?? trim($fullName);
+}
+
+/**
+ * Guess application status from the payment row visa text.
+ */
+function fm_payment_guess_status_from_visa(string $visaStatus): string
+{
+    $v = strtolower(trim($visaStatus));
+    if ($v === '') {
+        return 'new_clients';
+    }
+    if (str_contains($v, 'ready') || str_contains($v, 'ready2start')) {
+        return 'ready2start';
+    }
+    if (str_contains($v, 'approv')) {
+        return 'approved';
+    }
+    if (str_contains($v, 'reject') || str_contains($v, 'cancel')) {
+        return 'cancelled';
+    }
+    if (str_contains($v, 'wait')) {
+        return 'waiting_list';
+    }
+    return 'new_clients';
+}
+
+/**
+ * Link payment rows without application_id: match existing clients, or insert a new application.
+ */
 function fm_payment_records_link_existing_clients(mysqli $conn): void
 {
+    require_once __DIR__ . '/francophonie_mobility_schema.php';
+    fm_ensure_schema($conn);
+
     $rows = $conn->query(
-        'SELECT id, full_name FROM francophonie_mobility_payment_records
+        'SELECT id, full_name, job_position, visa_status
+         FROM francophonie_mobility_payment_records
          WHERE (application_id IS NULL OR application_id = 0) AND full_name <> \'\''
     );
     if (!$rows) {
         return;
     }
     $upd = $conn->prepare(
-        'UPDATE francophonie_mobility_payment_records SET application_id = ? WHERE id = ? LIMIT 1'
+        'UPDATE francophonie_mobility_payment_records
+         SET application_id = ?, full_name = ?
+         WHERE id = ? LIMIT 1'
     );
     while ($p = $rows->fetch_assoc()) {
         $pid = (int) ($p['id'] ?? 0);
-        $name = trim((string) ($p['full_name'] ?? ''));
+        $rawName = trim((string) ($p['full_name'] ?? ''));
+        $name = fm_payment_clean_client_name($rawName);
         if ($pid <= 0 || $name === '') {
             continue;
         }
+        $job = trim((string) ($p['job_position'] ?? ''));
+        $visa = trim((string) ($p['visa_status'] ?? ''));
+        $status = fm_payment_guess_status_from_visa($visa);
+
         $appId = fm_payment_find_application_id_by_name($conn, $name);
+        if ($appId <= 0 && $name !== $rawName) {
+            $appId = fm_payment_find_application_id_by_name($conn, $rawName);
+        }
+        if ($appId <= 0) {
+            try {
+                $appId = fm_payment_create_stub_application($conn, $name, $job, $status);
+            } catch (Throwable $e) {
+                error_log('fm_payment_records_link_existing_clients: ' . $e->getMessage());
+                continue;
+            }
+        }
         if ($appId > 0 && $upd) {
-            $upd->bind_param('ii', $appId, $pid);
+            $upd->bind_param('isi', $appId, $name, $pid);
             $upd->execute();
         }
     }
@@ -260,23 +321,48 @@ function fm_payment_records_link_existing_clients(mysqli $conn): void
 
 function fm_payment_find_application_id_by_name(mysqli $conn, string $fullName): int
 {
-    $fullName = preg_replace('/\s+/u', ' ', trim($fullName)) ?? trim($fullName);
+    $fullName = fm_payment_clean_client_name($fullName);
     if ($fullName === '') {
         return 0;
     }
+    $needle = strtolower($fullName);
+
     $st = $conn->prepare(
         "SELECT id FROM francophonie_mobility_applications
-         WHERE LOWER(TRIM(CONCAT(TRIM(first_name), ' ', TRIM(last_name)))) = LOWER(?)
+         WHERE LOWER(TRIM(CONCAT(TRIM(first_name), ' ', TRIM(last_name)))) = ?
          LIMIT 1"
     );
-    if (!$st) {
-        return 0;
+    if ($st) {
+        $st->bind_param('s', $needle);
+        $st->execute();
+        $row = $st->get_result()->fetch_assoc();
+        $st->close();
+        if ($row) {
+            return (int) ($row['id'] ?? 0);
+        }
     }
-    $st->bind_param('s', $fullName);
-    $st->execute();
-    $row = $st->get_result()->fetch_assoc();
-    $st->close();
-    return (int) ($row['id'] ?? 0);
+
+    // Also try reversed "Last First" when the sheet used "FIRST LAST".
+    $parts = preg_split('/\s+/u', $fullName) ?: [];
+    if (count($parts) >= 2) {
+        $reversed = strtolower(trim($parts[count($parts) - 1] . ' ' . implode(' ', array_slice($parts, 0, -1))));
+        $st2 = $conn->prepare(
+            "SELECT id FROM francophonie_mobility_applications
+             WHERE LOWER(TRIM(CONCAT(TRIM(first_name), ' ', TRIM(last_name)))) = ?
+             LIMIT 1"
+        );
+        if ($st2) {
+            $st2->bind_param('s', $reversed);
+            $st2->execute();
+            $row2 = $st2->get_result()->fetch_assoc();
+            $st2->close();
+            if ($row2) {
+                return (int) ($row2['id'] ?? 0);
+            }
+        }
+    }
+
+    return 0;
 }
 
 function fm_payment_guess_job_offer_slug(string $jobPosition): string
@@ -300,20 +386,28 @@ function fm_payment_guess_job_offer_slug(string $jobPosition): string
 }
 
 /**
- * Create a minimal FM client in applications DB (no payment fields — payments stay in payment_records only).
+ * Create a minimal FM client in applications (no payment fields — payments stay in payment_records only).
  */
-function fm_payment_create_stub_application(mysqli $conn, string $fullName, string $jobPosition = ''): int
-{
+function fm_payment_create_stub_application(
+    mysqli $conn,
+    string $fullName,
+    string $jobPosition = '',
+    string $status = 'new_clients'
+): int {
     require_once __DIR__ . '/francophonie_mobility_schema.php';
     fm_ensure_schema($conn);
 
-    $fullName = preg_replace('/\s+/u', ' ', trim($fullName)) ?? trim($fullName);
+    $fullName = fm_payment_clean_client_name($fullName);
     if ($fullName === '') {
         throw new RuntimeException('Enter a full name.');
     }
     $existing = fm_payment_find_application_id_by_name($conn, $fullName);
     if ($existing > 0) {
         return $existing;
+    }
+
+    if (!fm_is_valid_application_status($status)) {
+        $status = 'new_clients';
     }
 
     $parts = preg_split('/\s+/u', $fullName, 2) ?: [$fullName];
@@ -340,8 +434,7 @@ function fm_payment_create_stub_application(mysqli $conn, string $fullName, stri
     $beginner = 'beginner';
     $no = 'no';
     $zeroInt = 0;
-    $notes = 'Added from Payment records (stub client — no payment data on application).';
-    $status = 'pending';
+    $notes = 'Added from Payment records (client linked for reference ID and status; payment stays on payment sheet).';
     $source = 'staff';
 
     $sql = 'INSERT INTO francophonie_mobility_applications (
