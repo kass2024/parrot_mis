@@ -6,6 +6,14 @@ require_once __DIR__ . '/helpers/job_application_status.php';
 require_once __DIR__ . '/helpers/form17_application_status.php';
 
 xander_ensure_form17_process_status_column($conn);
+xander_ensure_form17_intake_column($conn);
+
+$visaDestCountries = xander_visa_destination_countries();
+$visaFeaturedDestCountries = array_values(array_filter(
+    xander_visa_featured_destination_countries(),
+    static fn(string $name): bool => in_array($name, $visaDestCountries, true)
+));
+$visaIntakeByCountry = xander_visa_intake_options_by_country();
 
 $sessionRole = isset($_SESSION['role']) ? trim((string) $_SESSION['role']) : '';
 $dbRole = '';
@@ -1010,10 +1018,42 @@ $fileFields = [
         .visa-add-card summary { cursor: pointer; font-size: 1.05rem; font-weight: 700; color: #14532d; }
         .visa-add-card form { margin-top: 12px; }
         .visa-add-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-        @media (min-width: 800px) { .visa-add-grid { grid-template-columns: 1.3fr 1fr .8fr .9fr 1.4fr auto; align-items: end; } }
+        @media (min-width: 900px) { .visa-add-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) auto; align-items: end; } }
+        @media (min-width: 1280px) { .visa-add-grid { grid-template-columns: 1.2fr 1fr .85fr .9fr 1.15fr 1.25fr 1.15fr auto; align-items: end; } }
         .visa-add-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #334155; }
         .visa-add-grid input, .visa-add-grid select { font: inherit; font-size: 15px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px; }
         .visa-add-grid button { background: #166534; color: #fff; border: 0; border-radius: 10px; padding: 11px 16px; font-weight: 700; cursor: pointer; }
+        .visa-smart-country { position: relative; }
+        .visa-smart-country .visa-country-trigger {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            font: inherit; font-size: 15px; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 10px;
+            background: #fff; color: #0f172a; cursor: pointer; text-align: left; width: 100%;
+        }
+        .visa-smart-country .visa-country-trigger[data-empty="1"] { color: #94a3b8; }
+        .visa-smart-country .visa-country-panel {
+            position: absolute; z-index: 40; left: 0; right: 0; top: calc(100% + 4px);
+            background: #fff; border: 1px solid #cbd5e1; border-radius: 12px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14); padding: 8px; display: none;
+        }
+        .visa-smart-country.open .visa-country-panel { display: block; }
+        .visa-smart-country .visa-country-search {
+            width: 100%; margin: 0 0 6px; font: inherit; font-size: 14px; padding: 8px 10px;
+            border: 1px solid #cbd5e1; border-radius: 8px;
+        }
+        .visa-smart-country .visa-country-list {
+            max-height: 220px; overflow: auto; margin: 0; padding: 0; list-style: none;
+        }
+        .visa-smart-country .visa-country-list li button {
+            display: block; width: 100%; text-align: left; background: transparent; border: 0;
+            padding: 8px 10px; border-radius: 8px; font: inherit; font-size: 14px; color: #0f172a; cursor: pointer;
+        }
+        .visa-smart-country .visa-country-list li button:hover,
+        .visa-smart-country .visa-country-list li button[aria-selected="true"] { background: #ecfdf5; color: #14532d; }
+        .visa-smart-country .visa-country-group {
+            font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+            color: #64748b; padding: 8px 10px 4px;
+        }
+        .visa-smart-country .visa-country-empty { padding: 10px; font-size: 13px; color: #64748b; }
         .process-panel { padding-bottom: 12px; }
     </style>
 </head>
@@ -1111,6 +1151,29 @@ $fileFields = [
                         <option>Work Visa</option>
                     </select>
                 </label>
+                <label class="visa-smart-country" id="visaDestCountryField">Destination country
+                    <input type="hidden" name="destination_country" id="visaDestCountry" value="" required>
+                    <button type="button" class="visa-country-trigger" id="visaDestCountryBtn" data-empty="1" aria-haspopup="listbox" aria-expanded="false">
+                        <span id="visaDestCountryLabel">Search or select country…</span>
+                        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+                    </button>
+                    <div class="visa-country-panel" id="visaDestCountryPanel" hidden>
+                        <input type="search" class="visa-country-search" id="visaDestCountrySearch" placeholder="Type to filter countries…" autocomplete="off" aria-label="Search destination country">
+                        <div class="visa-country-list" id="visaDestCountryList" role="listbox"></div>
+                    </div>
+                </label>
+                <label>Choose intake
+                    <select name="intake" id="visaIntakeSelect">
+                        <option value="">Select intake…</option>
+                        <?php foreach ($visaIntakeByCountry as $groupLabel => $intakeLabels): ?>
+                        <optgroup label="<?= htmlspecialchars($groupLabel) ?>">
+                            <?php foreach ($intakeLabels as $intakeLabel): ?>
+                            <option value="<?= htmlspecialchars($intakeLabel) ?>"><?= htmlspecialchars($intakeLabel) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
                 <label>Status
                     <select name="process_status">
                         <?php foreach ($JOB_PROCESS_STATUSES as $k => $lab): ?>
@@ -1192,6 +1255,7 @@ $fileFields = [
                     $fromCountry = trim((string) ($applicant['country_applying_from'] ?? ''));
                     $toCountry = trim((string) ($applicant['country_to_visit'] ?? ''));
                     $visaTypeText = trim((string) ($applicant['visa_type'] ?? ''));
+                    $intakeText = trim((string) ($applicant['intake'] ?? ''));
 
                     $procKey = xander_normalize_visa_process_status($applicant['process_status'] ?? null);
                     $procLabel = $JOB_PROCESS_STATUSES[$procKey];
@@ -1201,6 +1265,7 @@ $fileFields = [
                         $phoneText,
                         $passportInfo,
                         $visaTypeText,
+                        $intakeText,
                         (string) ($applicant['user_id'] ?? ''),
                         $fromCountry,
                         $toCountry,
@@ -1234,6 +1299,9 @@ $fileFields = [
                             <?php endif; ?>
                             <?php if ($fromCountry !== '' || $toCountry !== ''): ?>
                             <div class="card-fact"><i class="fas fa-plane"></i><span><?= htmlspecialchars($fromCountry !== '' ? $fromCountry : '—') ?> → <?= htmlspecialchars($toCountry !== '' ? $toCountry : '—') ?></span></div>
+                            <?php endif; ?>
+                            <?php if ($intakeText !== ''): ?>
+                            <div class="card-fact"><i class="fas fa-calendar-alt"></i><span><?= htmlspecialchars($intakeText) ?></span></div>
                             <?php endif; ?>
                             <?php if ($emailText !== ''): ?>
                             <div class="card-fact"><i class="fas fa-envelope"></i><span><?= htmlspecialchars($emailText) ?></span></div>
@@ -1763,9 +1831,103 @@ $fileFields = [
 
             var visaAddForm = document.getElementById('visaAddForm');
             if (visaAddForm) {
+                (function initVisaSmartCountry() {
+                    var featured = <?= json_encode($visaFeaturedDestCountries, JSON_UNESCAPED_UNICODE) ?>;
+                    var allCountries = <?= json_encode($visaDestCountries, JSON_UNESCAPED_UNICODE) ?>;
+                    var field = document.getElementById('visaDestCountryField');
+                    var hidden = document.getElementById('visaDestCountry');
+                    var btn = document.getElementById('visaDestCountryBtn');
+                    var label = document.getElementById('visaDestCountryLabel');
+                    var panel = document.getElementById('visaDestCountryPanel');
+                    var search = document.getElementById('visaDestCountrySearch');
+                    var list = document.getElementById('visaDestCountryList');
+                    if (!field || !hidden || !btn || !label || !panel || !search || !list) return;
+
+                    function setOpen(open) {
+                        field.classList.toggle('open', open);
+                        panel.hidden = !open;
+                        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                        if (open) {
+                            search.focus();
+                            search.select();
+                        }
+                    }
+
+                    function setCountry(name) {
+                        hidden.value = name || '';
+                        if (name) {
+                            label.textContent = name;
+                            btn.setAttribute('data-empty', '0');
+                        } else {
+                            label.textContent = 'Search or select country…';
+                            btn.setAttribute('data-empty', '1');
+                        }
+                        setOpen(false);
+                    }
+
+                    function render(filter) {
+                        var q = (filter || '').trim().toLowerCase();
+                        list.innerHTML = '';
+                        function addGroup(title, names) {
+                            var filtered = names.filter(function(n) {
+                                return !q || String(n).toLowerCase().indexOf(q) !== -1;
+                            });
+                            if (!filtered.length) return 0;
+                            var head = document.createElement('div');
+                            head.className = 'visa-country-group';
+                            head.textContent = title;
+                            list.appendChild(head);
+                            filtered.forEach(function(name) {
+                                var li = document.createElement('div');
+                                var b = document.createElement('button');
+                                b.type = 'button';
+                                b.textContent = name;
+                                b.setAttribute('role', 'option');
+                                b.setAttribute('aria-selected', hidden.value === name ? 'true' : 'false');
+                                b.addEventListener('click', function() { setCountry(name); });
+                                li.appendChild(b);
+                                list.appendChild(li);
+                            });
+                            return filtered.length;
+                        }
+                        var featuredSet = {};
+                        (featured || []).forEach(function(n) { featuredSet[n] = true; });
+                        var rest = (allCountries || []).filter(function(n) { return !featuredSet[n]; });
+                        var shown = 0;
+                        if (!q) {
+                            shown += addGroup('Popular destinations', featured || []);
+                        }
+                        shown += addGroup(q ? 'Matching countries' : 'All countries', q ? (allCountries || []) : rest);
+                        if (!shown) {
+                            var empty = document.createElement('div');
+                            empty.className = 'visa-country-empty';
+                            empty.textContent = 'No countries match that search.';
+                            list.appendChild(empty);
+                        }
+                    }
+
+                    btn.addEventListener('click', function() {
+                        setOpen(panel.hidden);
+                        if (!panel.hidden) render(search.value);
+                    });
+                    search.addEventListener('input', function() { render(search.value); });
+                    search.addEventListener('keydown', function(e) {
+                        if (e.key === 'Escape') setOpen(false);
+                    });
+                    document.addEventListener('click', function(e) {
+                        if (!field.contains(e.target)) setOpen(false);
+                    });
+                    render('');
+                })();
+
                 visaAddForm.addEventListener('submit', function(ev) {
                     ev.preventDefault();
                     var msg = document.getElementById('visaAddMsg');
+                    var dest = document.getElementById('visaDestCountry');
+                    if (!dest || !dest.value) {
+                        if (msg) msg.textContent = 'Choose a destination country.';
+                        return;
+                    }
                     var fd = new FormData(visaAddForm);
                     if (msg) msg.textContent = 'Saving…';
                     fetch('api/form17-add-applicant.php', {

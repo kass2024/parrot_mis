@@ -6,6 +6,7 @@ require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/form17_application_status.php';
 
 xander_ensure_form17_process_status_column($conn);
+xander_ensure_form17_intake_column($conn);
 header('Content-Type: application/json; charset=utf-8');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -63,6 +64,17 @@ if (!in_array($visaType, ['Study Visa', 'Visit Visa', 'Work Visa'], true)) {
     $visaType = 'Study Visa';
 }
 
+$destination = trim((string) ($_POST['destination_country'] ?? $_POST['country_to_visit'] ?? ''));
+$allowedCountries = xander_visa_destination_countries();
+if ($destination === '' || !in_array($destination, $allowedCountries, true)) {
+    jsonResponse('Choose a destination country.', false, 400);
+}
+
+$intake = trim((string) ($_POST['intake'] ?? ''));
+if (!xander_is_valid_visa_intake($intake)) {
+    jsonResponse('Choose a valid intake.', false, 400);
+}
+
 $userId = 'user-' . time() . '/' . random_int(100, 999) . '/' . random_int(10000, 99999) . '-' . random_int(1000, 9999);
 $date = date('Y-m-d');
 $empty = '';
@@ -73,15 +85,15 @@ $isRead = 1;
 $sql = 'INSERT INTO form_17_applications
     (user_id, date, company, prefix, first_name, middle_name, last_name,
      email, applicant_mobile, birthdate, gender, passport_number,
-     country_applying_from, country_to_visit, visa_type,
+     country_applying_from, country_to_visit, visa_type, intake,
      region_id, country_id, form_url, is_read, process_status, submitted_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())';
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())';
 $st = $conn->prepare($sql);
 if (!$st) {
     jsonResponse('Could not add the applicant.', false, 500);
 }
 $st->bind_param(
-    'ssssssssssssssiisis',
+    'sssssssssssssssiisis',
     $userId,
     $date,
     $empty,
@@ -94,8 +106,9 @@ $st->bind_param(
     $empty,
     $empty,
     $empty,
-    $empty,
+    $destination,
     $visaType,
+    $intake,
     $regionId,
     $countryId,
     $empty,
@@ -113,4 +126,6 @@ jsonResponse([
     'user_id' => $userId,
     'process_status' => $status,
     'label' => xander_visa_application_process_statuses()[$status] ?? $status,
+    'destination_country' => $destination,
+    'intake' => $intake,
 ], true);
