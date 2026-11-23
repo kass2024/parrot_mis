@@ -33,8 +33,7 @@ if ($application_id <= 0 || $new_status === '') {
     exit;
 }
 
-$allowed = ['pending', 'under_review', 'approved', 'rejected'];
-if (!in_array($new_status, $allowed, true)) {
+if (!fm_is_valid_application_status($new_status)) {
     echo json_encode(['success' => false, 'message' => 'Invalid status']);
     exit;
 }

@@ -70,6 +70,10 @@ function pcvc_staff_level_clearance_catalog(): array
         'francophonie_mobility' => ['group' => 'Work Abroad', 'label' => 'Canada – Francophone Mobility', 'items' => [
             'francophonie-mobility-applications.php' => 'Francophonie Mobility',
             'francophonie-mobility-staff-add.php' => 'Smart Add candidate',
+            'francophonie-mobility-applications.php?status=waiting_list' => 'Waiting List',
+            'francophonie-mobility-applications.php?status=ready2start' => 'Ready2start',
+            'francophonie-mobility-applications.php?status=new_clients' => 'New clients',
+            'francophonie-mobility-applications.php?status=cancelled' => 'Cancelled',
             'francophonie-mobility-applications.php?status=pending' => 'Pending',
             'francophonie-mobility-applications.php?status=under_review' => 'Under Review',
             'francophonie-mobility-applications.php?status=approved' => 'Approved',

@@ -193,6 +193,59 @@ function fm_ensure_schema(mysqli $conn): void
         $jobOfferCol->free();
     }
 
+    // Pipeline + workflow statuses (Waiting List / Ready2start / New clients / Cancelled).
+    @$conn->query(
+        "ALTER TABLE francophonie_mobility_applications
+         MODIFY COLUMN `status` ENUM(
+            'pending','under_review','approved','rejected',
+            'waiting_list','ready2start','new_clients','cancelled'
+         ) NOT NULL DEFAULT 'pending'"
+    );
+
     require_once __DIR__ . '/francophonie_mobility_documents.php';
     fm_ensure_documents_schema($conn);
+}
+
+/**
+ * All Francophonie Mobility statuses (workflow + client pipeline groups).
+ *
+ * @return array<string, string> slug => label
+ */
+function fm_application_statuses(): array
+{
+    return [
+        'pending' => 'Pending',
+        'under_review' => 'Under Review',
+        'approved' => 'Approved',
+        'rejected' => 'Rejected',
+        'waiting_list' => 'Waiting List (low budget but skilled)',
+        'ready2start' => 'Ready2start (payment confirmed)',
+        'new_clients' => 'New clients (processing)',
+        'cancelled' => 'Cancelled',
+    ];
+}
+
+/**
+ * Client pipeline group statuses managers assign from the dashboard.
+ *
+ * @return array<string, string>
+ */
+function fm_client_pipeline_statuses(): array
+{
+    return [
+        'waiting_list' => 'Waiting List (low budget but skilled)',
+        'ready2start' => 'Ready2start (payment confirmed)',
+        'new_clients' => 'New clients (processing)',
+        'cancelled' => 'Cancelled',
+    ];
+}
+
+function fm_is_valid_application_status(string $status): bool
+{
+    return array_key_exists($status, fm_application_statuses());
+}
+
+function fm_application_status_label(string $status): string
+{
+    return fm_application_statuses()[$status] ?? $status;
 }

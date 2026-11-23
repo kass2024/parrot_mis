@@ -2513,6 +2513,22 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             <i class="bi bi-person-plus"></i>
             Smart Add candidate
           </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=waiting_list', 'Waiting List')">
+            <i class="bi bi-hourglass-split"></i>
+            Waiting List
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=ready2start', 'Ready2start')">
+            <i class="bi bi-lightning-charge"></i>
+            Ready2start
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=new_clients', 'New clients')">
+            <i class="bi bi-people"></i>
+            New clients
+          </a>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=cancelled', 'Cancelled')">
+            <i class="bi bi-slash-circle"></i>
+            Cancelled
+          </a>
           <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=pending', 'Pending')">
             <i class="bi bi-clock"></i>
             Pending

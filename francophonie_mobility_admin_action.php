@@ -197,9 +197,17 @@ if ($action === 'delete_application') {
     exit;
 }
 
-if ($action === 'upload_attached') {
+if ($action === 'upload_attached' || $action === 'upload_to_group') {
     if (empty($_FILES['file']) || (int) ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         echo json_encode(['success' => false, 'message' => 'Choose a file to upload.']);
+        exit;
+    }
+    $targetGroup = trim((string) ($_POST['doc_group'] ?? fm_doc_attached_group()));
+    if ($action === 'upload_attached') {
+        $targetGroup = fm_doc_attached_group();
+    }
+    if (!fm_is_valid_doc_group($targetGroup)) {
+        echo json_encode(['success' => false, 'message' => 'Choose a valid document group.']);
         exit;
     }
     $file = $_FILES['file'];
@@ -219,7 +227,8 @@ if ($action === 'upload_attached') {
         echo json_encode(['success' => false, 'message' => 'Cannot create upload directory.']);
         exit;
     }
-    $filename = 'fm_' . date('Ymd') . '_' . uniqid() . '_attached' . ($ext !== '' ? '.' . $ext : '');
+    $tag = preg_replace('/[^a-z0-9_]/', '', $targetGroup) ?: 'doc';
+    $filename = 'fm_' . date('Ymd') . '_' . uniqid() . '_' . $tag . ($ext !== '' ? '.' . $ext : '');
     $dest = $permDir . DIRECTORY_SEPARATOR . $filename;
     if (!move_uploaded_file((string) $file['tmp_name'], $dest)) {
         echo json_encode(['success' => false, 'message' => 'Could not store the file.']);
@@ -233,7 +242,7 @@ if ($action === 'upload_attached') {
             $applicationId,
             $rel,
             $orig,
-            fm_doc_attached_group(),
+            $targetGroup,
             'manager',
             $adminPk > 0 ? $adminPk : null,
             (string) ($file['type'] ?? ''),
@@ -246,7 +255,89 @@ if ($action === 'upload_attached') {
     }
     echo json_encode([
         'success' => true,
-        'message' => 'Document added to Attached.',
+        'message' => 'Document added to ' . fm_doc_group_label($targetGroup) . '.',
+        'document_id' => $docId,
+        'reload' => true,
+    ]);
+    exit;
+}
+
+if ($action === 'file_client_document') {
+    $field = trim((string) ($_POST['field'] ?? ''));
+    $targetGroup = trim((string) ($_POST['doc_group'] ?? ''));
+    $academicIndex = (int) ($_POST['academic_index'] ?? -1);
+    if (!fm_is_valid_doc_group($targetGroup) || $targetGroup === '') {
+        echo json_encode(['success' => false, 'message' => 'Choose a destination group.']);
+        exit;
+    }
+    $path = '';
+    $label = 'Document';
+    if ($field === 'cv_file') {
+        $path = trim((string) ($row['cv_file'] ?? ''));
+        $label = 'CV';
+    } elseif ($field === 'french_cert_file') {
+        $path = trim((string) ($row['french_cert_file'] ?? ''));
+        $label = 'French Certificate';
+    } elseif ($field === 'english_cert_file') {
+        $path = trim((string) ($row['english_cert_file'] ?? ''));
+        $label = 'English Certificate';
+    } elseif ($field === 'academic_docs_file') {
+        $list = fm_parse_stored_files((string) ($row['academic_docs_file'] ?? ''));
+        if ($academicIndex < 0 || $academicIndex >= count($list)) {
+            echo json_encode(['success' => false, 'message' => 'Academic document not found.']);
+            exit;
+        }
+        $path = trim((string) $list[$academicIndex]);
+        $label = count($list) > 1 ? 'Academic Document ' . ($academicIndex + 1) : 'Academic Documents';
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Unknown client document field.']);
+        exit;
+    }
+    if ($path === '' || !fm_abs_upload_path($path)) {
+        echo json_encode(['success' => false, 'message' => 'That client document file is missing.']);
+        exit;
+    }
+    // Avoid duplicate filing of the same path into the same group.
+    $dup = $conn->prepare(
+        'SELECT id FROM francophonie_mobility_documents
+         WHERE application_id = ? AND stored_path = ? AND doc_group = ? LIMIT 1'
+    );
+    if ($dup) {
+        $dup->bind_param('iss', $applicationId, $path, $targetGroup);
+        $dup->execute();
+        if ($dup->get_result()->fetch_assoc()) {
+            $dup->close();
+            echo json_encode([
+                'success' => true,
+                'message' => $label . ' is already in ' . fm_doc_group_label($targetGroup) . '.',
+                'reload' => true,
+            ]);
+            exit;
+        }
+        $dup->close();
+    }
+    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    $abs = fm_abs_upload_path($path);
+    $size = ($abs && is_file($abs)) ? (int) filesize($abs) : 0;
+    try {
+        $docId = fm_insert_document(
+            $conn,
+            $applicationId,
+            $path,
+            $label,
+            $targetGroup,
+            'client',
+            $adminPk > 0 ? $adminPk : null,
+            null,
+            $size
+        );
+    } catch (Throwable $e) {
+        echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        exit;
+    }
+    echo json_encode([
+        'success' => true,
+        'message' => $label . ' filed into ' . fm_doc_group_label($targetGroup) . '. Original client upload kept.',
         'document_id' => $docId,
         'reload' => true,
     ]);

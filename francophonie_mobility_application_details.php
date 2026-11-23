@@ -47,7 +47,7 @@ function fm_doc_link(string $relPath, string $label): string
 
 $name = htmlspecialchars(trim($row['first_name'] . ' ' . $row['last_name']), ENT_QUOTES, 'UTF-8');
 $ref = htmlspecialchars($row['reference_id'], ENT_QUOTES, 'UTF-8');
-$status = htmlspecialchars(ucwords(str_replace('_', ' ', $row['status'])), ENT_QUOTES, 'UTF-8');
+$status = htmlspecialchars(fm_application_status_label((string) ($row['status'] ?? '')), ENT_QUOTES, 'UTF-8');
 
 $frenchCerts = [];
 if ($row['french_tef']) $frenchCerts[] = 'TEF';
@@ -192,7 +192,25 @@ $appId = (int) $row['id'];
             <div class="card-body">
                 <h6 class="card-title">Quick actions</h6>
                 <p class="small text-muted mb-2">Status actions notify the candidate by <strong>email only</strong>.</p>
+                <div class="mb-2">
+                    <label class="form-label small fw-semibold mb-1">Client group / status</label>
+                    <select class="form-select form-select-sm" id="fmStatusSelect_<?= $appId ?>">
+                        <?php foreach (fm_application_statuses() as $statusKey => $statusLab): ?>
+                        <option value="<?= htmlspecialchars($statusKey, ENT_QUOTES, 'UTF-8') ?>" <?= ($row['status'] ?? '') === $statusKey ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($statusLab, ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <button type="button" class="btn btn-primary btn-sm w-100 mt-2" onclick="fmSetStatusFromSelect(<?= $appId ?>)">
+                        <i class="fas fa-exchange-alt me-1"></i> Move to selected status
+                    </button>
+                </div>
                 <div class="d-grid gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" onclick="setStatus(<?= $appId ?>, 'waiting_list')">Waiting List</button>
+                    <button type="button" class="btn btn-outline-success btn-sm" onclick="setStatus(<?= $appId ?>, 'ready2start')">Ready2start</button>
+                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="setStatus(<?= $appId ?>, 'new_clients')">New clients</button>
+                    <button type="button" class="btn btn-outline-dark btn-sm" onclick="setStatus(<?= $appId ?>, 'cancelled')">Cancelled</button>
+                    <hr class="my-1">
                     <button type="button" class="btn btn-warning btn-sm" onclick="setStatus(<?= $appId ?>, 'under_review')">Mark Under Review</button>
                     <button type="button" class="btn btn-success btn-sm" onclick="setStatus(<?= $appId ?>, 'approved')">Approve &amp; Send Package</button>
                     <button type="button" class="btn btn-danger btn-sm" onclick="setStatus(<?= $appId ?>, 'rejected')">Reject</button>
@@ -232,21 +250,79 @@ $appId = (int) $row['id'];
                 <p class="small mb-0"><strong>User ID:</strong> <code><?= htmlspecialchars($row['user_id']) ?></code></p>
             </div>
         </div>
+        <?php
+        $groupedDocs = fm_documents_grouped($conn, $appId);
+        $visaGroups = fm_visa_submission_groups();
+
+        $buildGroupOptions = static function (string $selected = '', bool $includeAttached = true) use ($visaGroups): string {
+            $html = '<option value="">Move to group…</option>';
+            if ($includeAttached) {
+                $html .= '<optgroup label="Inbox"><option value="attached"'
+                    . ($selected === 'attached' ? ' selected' : '') . '>Attached</option></optgroup>';
+            }
+            $html .= '<optgroup label="Visa submission documents">';
+            foreach ($visaGroups as $slug => $lab) {
+                $html .= '<option value="' . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') . '"'
+                    . ($selected === $slug ? ' selected' : '') . '>'
+                    . htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') . '</option>';
+            }
+            $html .= '</optgroup>';
+            return $html;
+        };
+
+        $renderClientDocRow = static function (string $field, string $label, string $path, int $academicIndex = -1) use ($appId, $buildGroupOptions): string {
+            $path = trim($path);
+            if ($path === '') {
+                return '<div class="text-muted small mb-2">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . ': none uploaded</div>';
+            }
+            $links = pcvc_secure_file_links_html($path, $label);
+            $safeField = htmlspecialchars($field, ENT_QUOTES, 'UTF-8');
+            return '<div class="border rounded p-2 mb-2 bg-white">'
+                . '<div class="small fw-semibold mb-1">' . htmlspecialchars($label, ENT_QUOTES, 'UTF-8') . '</div>'
+                . $links
+                . '<div class="d-flex flex-wrap gap-1 mt-2 align-items-center">'
+                . '<select class="form-select form-select-sm" style="max-width:240px" data-fm-client-field="' . $safeField . '" data-fm-academic-index="' . (int) $academicIndex . '">'
+                . $buildGroupOptions('', true)
+                . '</select>'
+                . '<button type="button" class="btn btn-sm btn-outline-primary" onclick="fmFileClientDoc(' . $appId . ', this)">'
+                . '<i class="fas fa-folder-open me-1"></i> Move to group</button>'
+                . '</div></div>';
+        };
+
+        $renderManagedDoc = static function (array $doc) use ($buildGroupOptions, $appId): string {
+            $id = (int) ($doc['id'] ?? 0);
+            $name = htmlspecialchars((string) ($doc['original_name'] ?: basename((string) ($doc['stored_path'] ?? ''))), ENT_QUOTES, 'UTF-8');
+            $path = (string) ($doc['stored_path'] ?? '');
+            $links = pcvc_secure_file_links_html($path, $name);
+            $group = (string) ($doc['doc_group'] ?? 'attached');
+            return '<div class="border rounded p-2 mb-2 bg-white">'
+                . '<div class="small fw-semibold mb-1">' . $name . '</div>'
+                . $links
+                . '<div class="d-flex flex-wrap gap-1 mt-2 align-items-center">'
+                . '<select class="form-select form-select-sm" style="max-width:240px" data-fm-transfer="' . $id . '" '
+                . 'onchange="fmTransferDoc(' . $appId . ',' . $id . ', this)">'
+                . $buildGroupOptions($group, true)
+                . '</select>'
+                . '<button type="button" class="btn btn-sm btn-outline-primary" onclick="fmTransferDoc(' . $appId . ',' . $id . ', this)">Move</button>'
+                . '<button type="button" class="btn btn-sm btn-outline-danger" onclick="fmDeleteDoc(' . $appId . ',' . $id . ')">Delete</button>'
+                . '</div></div>';
+        };
+        ?>
         <div class="card mt-3">
             <div class="card-body">
                 <h6 class="card-title">Client form documents</h6>
-                <p class="small text-muted mb-2">Unchanged client uploads from the public form.</p>
-                <?= fm_doc_link($row['cv_file'] ?? '', 'CV') ?>
-                <?= fm_doc_link($row['french_cert_file'] ?? '', 'French Certificate') ?>
-                <?= fm_doc_link($row['english_cert_file'] ?? '', 'English Certificate') ?>
+                <p class="small text-muted mb-2">Public-form uploads stay here. Use <strong>Move to group</strong> to file a copy into Attached or Visa submission documents.</p>
+                <?= $renderClientDocRow('cv_file', 'CV', (string) ($row['cv_file'] ?? '')) ?>
+                <?= $renderClientDocRow('french_cert_file', 'French Certificate', (string) ($row['french_cert_file'] ?? '')) ?>
+                <?= $renderClientDocRow('english_cert_file', 'English Certificate', (string) ($row['english_cert_file'] ?? '')) ?>
                 <?php
                 $academicList = fm_parse_stored_files((string) ($row['academic_docs_file'] ?? ''));
                 if ($academicList === []) {
-                    echo '<div class="text-muted small">Academic Documents: none uploaded</div>';
+                    echo '<div class="text-muted small mb-2">Academic Documents: none uploaded</div>';
                 } else {
                     foreach ($academicList as $i => $apath) {
                         $label = count($academicList) > 1 ? 'Academic Document ' . ($i + 1) : 'Academic Documents';
-                        echo fm_doc_link($apath, $label);
+                        echo $renderClientDocRow('academic_docs_file', $label, (string) $apath, (int) $i);
                     }
                 }
                 ?>
@@ -262,41 +338,10 @@ $appId = (int) $row['id'];
             </div>
         </div>
 
-        <?php
-        $groupedDocs = fm_documents_grouped($conn, $appId);
-        $visaGroups = fm_visa_submission_groups();
-
-        $renderManagedDoc = static function (array $doc) use ($visaGroups, $appId): string {
-            $id = (int) ($doc['id'] ?? 0);
-            $name = htmlspecialchars((string) ($doc['original_name'] ?: basename((string) ($doc['stored_path'] ?? ''))), ENT_QUOTES, 'UTF-8');
-            $path = (string) ($doc['stored_path'] ?? '');
-            $links = pcvc_secure_file_links_html($path, $name);
-            $group = (string) ($doc['doc_group'] ?? 'attached');
-            $opts = '<option value="">Move to…</option><optgroup label="Inbox"><option value="attached"'
-                . ($group === 'attached' ? ' selected' : '') . '>Attached</option></optgroup>'
-                . '<optgroup label="Visa submission documents">';
-            foreach ($visaGroups as $slug => $lab) {
-                $opts .= '<option value="' . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') . '"'
-                    . ($group === $slug ? ' selected' : '') . '>'
-                    . htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') . '</option>';
-            }
-            $opts .= '</optgroup>';
-            return '<div class="border rounded p-2 mb-2 bg-white">'
-                . '<div class="small fw-semibold mb-1">' . $name . '</div>'
-                . $links
-                . '<div class="d-flex flex-wrap gap-1 mt-2 align-items-center">'
-                . '<select class="form-select form-select-sm" style="max-width:220px" data-fm-transfer="' . $id . '">'
-                . $opts
-                . '</select>'
-                . '<button type="button" class="btn btn-sm btn-outline-primary" onclick="fmTransferDoc(' . $appId . ',' . $id . ', this)">Move</button>'
-                . '<button type="button" class="btn btn-sm btn-outline-danger" onclick="fmDeleteDoc(' . $appId . ',' . $id . ')">Delete</button>'
-                . '</div></div>';
-        };
-        ?>
         <div class="card mt-3 border-primary-subtle">
             <div class="card-body">
                 <h6 class="card-title"><i class="fas fa-paperclip me-1 text-primary"></i> Attached</h6>
-                <p class="small text-muted mb-2">Staff / manager uploads land here first. Move them into Visa submission documents below.</p>
+                <p class="small text-muted mb-2">Inbox for staff uploads and filed client docs. Choose a group to move directly.</p>
                 <?php if ($groupedDocs['attached'] === []): ?>
                 <div class="text-muted small mb-2">No files in Attached yet.</div>
                 <?php else: ?>
@@ -314,18 +359,24 @@ $appId = (int) $row['id'];
         <div class="card mt-3">
             <div class="card-body">
                 <h6 class="card-title"><i class="fas fa-folder me-1 text-success"></i> Visa submission documents</h6>
-                <p class="small text-muted mb-3">Organized groups for the visa package. Transfer from Attached into the right folder.</p>
+                <p class="small text-muted mb-3">File docs here from Attached, from client form uploads, or upload directly into a group.</p>
                 <?php foreach ($visaGroups as $slug => $lab): ?>
-                <div class="mb-3">
+                <div class="mb-3 border-bottom pb-2">
                     <div class="small fw-bold text-uppercase text-secondary mb-1">
                         <i class="fas fa-folder me-1"></i><?= htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') ?>
                         <span class="badge text-bg-light"><?= count($groupedDocs['visa'][$slug] ?? []) ?></span>
                     </div>
                     <?php if (empty($groupedDocs['visa'][$slug])): ?>
-                    <div class="text-muted small ps-3">Empty</div>
+                    <div class="text-muted small ps-1 mb-2">Empty</div>
                     <?php else: ?>
                     <?php foreach ($groupedDocs['visa'][$slug] as $doc) { echo $renderManagedDoc($doc); } ?>
                     <?php endif; ?>
+                    <div class="input-group input-group-sm">
+                        <input type="file" class="form-control" id="fmGroupFile_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*">
+                        <button type="button" class="btn btn-outline-success" onclick="fmUploadToGroup(<?= $appId ?>, <?= json_encode($slug) ?>)">
+                            <i class="fas fa-upload me-1"></i> Add here
+                        </button>
+                    </div>
                 </div>
                 <?php endforeach; ?>
             </div>

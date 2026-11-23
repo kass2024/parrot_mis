@@ -25,13 +25,20 @@ function fm_applicant_name(array $row): string
 
 function fm_status_label(string $status): string
 {
+    if (!function_exists('fm_application_status_label')) {
+        require_once __DIR__ . '/francophonie_mobility_schema.php';
+    }
     $map = [
         'pending' => 'Received',
         'under_review' => 'Under Review',
         'approved' => 'Approved',
         'rejected' => 'Rejected',
+        'waiting_list' => 'Waiting List',
+        'ready2start' => 'Ready to start',
+        'new_clients' => 'New client — processing',
+        'cancelled' => 'Cancelled',
     ];
-    return $map[$status] ?? $status;
+    return $map[$status] ?? fm_application_status_label($status);
 }
 
 function fm_email_wrap(string $title, string $innerHtml): string

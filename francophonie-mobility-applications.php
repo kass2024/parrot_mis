@@ -34,7 +34,7 @@ $where = ['1=1'];
 $params = [];
 $types = '';
 
-if ($status_filter !== 'all' && in_array($status_filter, ['pending', 'under_review', 'approved', 'rejected'], true)) {
+if ($status_filter !== 'all' && fm_is_valid_application_status($status_filter)) {
     $where[] = 'status = ?';
     $params[] = $status_filter;
     $types .= 's';
@@ -57,18 +57,21 @@ $stmt->close();
 $fmPaidMap = fm_invoice_paid_totals_map($conn);
 $fmProgramTotal = fm_invoice_program_total();
 
-$counts = ['pending' => 0, 'under_review' => 0, 'approved' => 0, 'rejected' => 0, 'total' => 0];
+$fmStatuses = fm_application_statuses();
+$counts = array_fill_keys(array_keys($fmStatuses), 0);
+$counts['total'] = 0;
 $cr = $conn->query('SELECT status, COUNT(*) c FROM francophonie_mobility_applications GROUP BY status');
 if ($cr) {
     while ($r = $cr->fetch_assoc()) {
-        $counts[$r['status']] = (int) $r['c'];
+        $key = (string) ($r['status'] ?? '');
+        $counts[$key] = (int) $r['c'];
         $counts['total'] += (int) $r['c'];
     }
 }
 
 function fm_status_badge(string $s): string
 {
-    return 'badge-' . preg_replace('/[^a-z_]/', '', $s);
+    return 'badge-' . preg_replace('/[^a-z0-9_]/', '', $s);
 }
 ?>
 <!DOCTYPE html>
@@ -95,6 +98,10 @@ function fm_status_badge(string $s): string
         .badge-under_review { background:#dbeafe; color:#1e40af; }
         .badge-approved { background:#d1fae5; color:#065f46; }
         .badge-rejected { background:#fee2e2; color:#991b1b; }
+        .badge-waiting_list { background:#ffedd5; color:#9a3412; }
+        .badge-ready2start { background:#dcfce7; color:#166534; }
+        .badge-new_clients { background:#e0e7ff; color:#3730a3; }
+        .badge-cancelled { background:#e2e8f0; color:#475569; }
         .app-card {
             background:#fff; border:1px solid #e2e8f0; border-radius:12px;
             padding:1rem; margin-bottom:.75rem; box-shadow:0 1px 4px rgba(0,0,0,.04);
@@ -135,19 +142,27 @@ function fm_status_badge(string $s): string
     <?php endif; ?>
 
     <div class="row g-2 g-md-3 mb-3">
-        <div class="col-6 col-md-3"><div class="stat-card"><strong><?= $counts['total'] ?></strong><span class="small text-muted">Total</span></div></div>
-        <div class="col-6 col-md-3"><div class="stat-card"><strong><?= $counts['pending'] ?></strong><span class="small text-muted">Pending</span></div></div>
-        <div class="col-6 col-md-3"><div class="stat-card"><strong><?= $counts['under_review'] ?></strong><span class="small text-muted">Review</span></div></div>
-        <div class="col-6 col-md-3"><div class="stat-card"><strong><?= $counts['approved'] ?></strong><span class="small text-muted">Approved</span></div></div>
+        <div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong><?= (int) $counts['total'] ?></strong><span class="small text-muted">Total</span></div></div>
+        <div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong><?= (int) ($counts['waiting_list'] ?? 0) ?></strong><span class="small text-muted">Waiting List</span></div></div>
+        <div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong><?= (int) ($counts['ready2start'] ?? 0) ?></strong><span class="small text-muted">Ready2start</span></div></div>
+        <div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong><?= (int) ($counts['new_clients'] ?? 0) ?></strong><span class="small text-muted">New clients</span></div></div>
+        <div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong><?= (int) ($counts['cancelled'] ?? 0) ?></strong><span class="small text-muted">Cancelled</span></div></div>
     </div>
 
     <form class="row g-2 mb-3" method="get">
         <div class="col-12 col-md-4">
             <select name="status" class="form-select">
                 <option value="all">All statuses</option>
-                <?php foreach (['pending','under_review','approved','rejected'] as $s): ?>
-                <option value="<?= $s ?>" <?= $status_filter === $s ? 'selected' : '' ?>><?= ucwords(str_replace('_',' ',$s)) ?></option>
-                <?php endforeach; ?>
+                <optgroup label="Client groups">
+                    <?php foreach (fm_client_pipeline_statuses() as $s => $lab): ?>
+                    <option value="<?= htmlspecialchars($s) ?>" <?= $status_filter === $s ? 'selected' : '' ?>><?= htmlspecialchars($lab) ?></option>
+                    <?php endforeach; ?>
+                </optgroup>
+                <optgroup label="Workflow">
+                    <?php foreach (['pending','under_review','approved','rejected'] as $s): ?>
+                    <option value="<?= $s ?>" <?= $status_filter === $s ? 'selected' : '' ?>><?= htmlspecialchars($fmStatuses[$s] ?? $s) ?></option>
+                    <?php endforeach; ?>
+                </optgroup>
             </select>
         </div>
         <div class="col-12 col-md-6">
@@ -169,7 +184,7 @@ function fm_status_badge(string $s): string
                         <div class="fw-bold"><?= htmlspecialchars(trim($a['first_name'].' '.$a['last_name'])) ?></div>
                         <code class="small"><?= htmlspecialchars($a['reference_id']) ?></code>
                     </div>
-                    <span class="badge <?= fm_status_badge($a['status']) ?>"><?= ucwords(str_replace('_',' ',$a['status'])) ?></span>
+                    <span class="badge <?= fm_status_badge($a['status']) ?>"><?= htmlspecialchars(fm_application_status_label((string) $a['status'])) ?></span>
                 </div>
                 <div class="meta mb-2">
                     <?= htmlspecialchars($a['email']) ?><br>
@@ -228,7 +243,15 @@ function fm_status_badge(string $s): string
                             <?php endif; ?>
                         </td>
                         <td class="small"><?= htmlspecialchars($a['profession']) ?></td>
-                        <td><span class="badge <?= fm_status_badge($a['status']) ?>"><?= ucwords(str_replace('_',' ',$a['status'])) ?></span></td>
+                        <td>
+                            <span class="badge <?= fm_status_badge($a['status']) ?>"><?= htmlspecialchars(fm_application_status_label((string) $a['status'])) ?></span>
+                            <select class="form-select form-select-sm mt-1" style="min-width:11rem" onchange="fmQuickStatus(<?= (int) $a['id'] ?>, this.value)">
+                                <option value="">Move to…</option>
+                                <?php foreach ($fmStatuses as $sKey => $sLab): ?>
+                                <option value="<?= htmlspecialchars($sKey) ?>" <?= ((string) $a['status'] === $sKey) ? 'selected' : '' ?>><?= htmlspecialchars($sLab) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </td>
                         <td class="small"><?= date('M j, Y', strtotime($a['created_at'])) ?></td>
                         <td class="text-nowrap">
                             <button class="btn btn-sm btn-outline-primary" onclick="viewApp(<?= (int)$a['id'] ?>)">
@@ -323,16 +346,18 @@ function viewApp(id) {
         .then(html => { document.getElementById('detailBody').innerHTML = html; });
 }
 
+const FM_STATUS_LABELS = <?= json_encode($fmStatuses, JSON_UNESCAPED_UNICODE) ?>;
+
 function setStatus(id, status) {
     let note = '';
-    if (status === 'rejected') {
+    if (status === 'rejected' || status === 'cancelled') {
         note = prompt('Reason / message for applicant (sent by email):') || '';
         if (note === null) return;
-    } else if (status === 'under_review') {
+    } else if (status === 'under_review' || status === 'waiting_list' || status === 'new_clients' || status === 'ready2start') {
         note = prompt('Optional message for applicant (email):', '') || '';
     }
-    const label = status.replace(/_/g, ' ');
-    if (!confirm('Set status to "' + label + '"? Applicant will be notified by email.')) return;
+    const label = (FM_STATUS_LABELS && FM_STATUS_LABELS[status]) ? FM_STATUS_LABELS[status] : status.replace(/_/g, ' ');
+    if (!confirm('Move this client to "' + label + '"? Applicant will be notified by email.')) return;
 
     postAction('update_francophonie_mobility_status.php', {
         application_id: id, status: status, note: note
@@ -415,7 +440,9 @@ function postAction(url, data) {
 
 function fmTransferDoc(appId, docId, btn) {
     const wrap = btn ? btn.closest('.border') : null;
-    const sel = wrap ? wrap.querySelector('select[data-fm-transfer]') : null;
+    let sel = null;
+    if (btn && btn.tagName === 'SELECT') sel = btn;
+    else if (wrap) sel = wrap.querySelector('select[data-fm-transfer]');
     const group = sel ? sel.value : '';
     if (!group) {
         alert('Choose a destination group.');
@@ -463,6 +490,58 @@ function fmUploadAttached(appId) {
             viewApp(appId);
         })
         .catch(e => alert(e.message));
+}
+
+function fmUploadToGroup(appId, group) {
+    const input = document.getElementById('fmGroupFile_' + appId + '_' + group);
+    if (!input || !input.files || !input.files[0]) {
+        alert('Choose a file first.');
+        return;
+    }
+    const fd = new FormData();
+    fd.append('csrf_token', CSRF);
+    fd.append('application_id', String(appId));
+    fd.append('action', 'upload_to_group');
+    fd.append('doc_group', group);
+    fd.append('file', input.files[0]);
+    fetch('francophonie_mobility_admin_action.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) throw new Error(d.message || 'Upload failed');
+            alert(d.message || 'Uploaded');
+            viewApp(appId);
+        })
+        .catch(e => alert(e.message));
+}
+
+function fmFileClientDoc(appId, btn) {
+    const wrap = btn ? btn.closest('.border') : null;
+    const sel = wrap ? wrap.querySelector('select[data-fm-client-field]') : null;
+    if (!sel || !sel.value) {
+        alert('Choose a destination group.');
+        return;
+    }
+    postAction('francophonie_mobility_admin_action.php', {
+        application_id: appId,
+        action: 'file_client_document',
+        field: sel.getAttribute('data-fm-client-field') || '',
+        academic_index: sel.getAttribute('data-fm-academic-index') || '-1',
+        doc_group: sel.value
+    }).then(d => {
+        alert(d.message || 'Filed');
+        viewApp(appId);
+    }).catch(e => alert(e.message));
+}
+
+function fmSetStatusFromSelect(appId) {
+    const sel = document.getElementById('fmStatusSelect_' + appId);
+    if (!sel || !sel.value) return;
+    setStatus(appId, sel.value);
+}
+
+function fmQuickStatus(appId, status) {
+    if (!status) return;
+    setStatus(appId, status);
 }
 </script>
 </body>
