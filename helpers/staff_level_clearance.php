@@ -84,6 +84,9 @@ function pcvc_staff_level_clearance_catalog(): array
             'admin-fm-contracts.php?variant=special' => 'Signed Special Contracts',
             'francophonie-record-invoice.php' => 'Record Invoice',
         ]],
+        'client_tracking' => ['group' => 'Work Abroad', 'label' => 'Client tracking', 'items' => [
+            'francophonie-mobility-client-tracking.php' => 'Overall report',
+        ]],
         'canada_workers' => ['group' => 'Work Abroad', 'label' => 'Canada – General Worker Recruitment', 'items' => [
             'canada-workers-applications.php' => 'View Applications',
             'canada-workers-applications.php?status=pending' => 'Pending',
