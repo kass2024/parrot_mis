@@ -173,6 +173,45 @@ foreach ($rows as $r) {
         .mode-tabs input { display:none; }
         .mode-tabs label:has(input:checked) { border-color:var(--pay-green); background:#eef6f0; color:var(--pay-green); font-weight:600; }
         .client-panel[hidden], .new-panel[hidden] { display:none !important; }
+        .smart-search { position:relative; }
+        .smart-search .search-field {
+            display:flex; align-items:center; gap:.55rem;
+            border:1px solid #cbd5e1; border-radius:12px; background:#fff;
+            padding:.55rem .75rem; transition:border-color .15s, box-shadow .15s;
+        }
+        .smart-search .search-field:focus-within {
+            border-color:var(--pay-green); box-shadow:0 0 0 3px rgba(30,77,43,.12);
+        }
+        .smart-search .search-field i { color:#94a3b8; }
+        .smart-search input[type="search"] {
+            border:0; outline:0; width:100%; background:transparent; font-size:.95rem;
+        }
+        .smart-search .results {
+            position:absolute; z-index:30; left:0; right:0; top:calc(100% + .35rem);
+            max-height:280px; overflow:auto; background:#fff; border:1px solid #e2e8f0;
+            border-radius:12px; box-shadow:0 12px 28px rgba(15,23,42,.12); display:none;
+        }
+        .smart-search .results.open { display:block; }
+        .smart-search .result-item {
+            width:100%; text-align:left; border:0; background:#fff; padding:.7rem .85rem;
+            border-bottom:1px solid #f1f5f9; cursor:pointer;
+        }
+        .smart-search .result-item:hover, .smart-search .result-item.active { background:#f0fdf4; }
+        .smart-search .result-item .r-name { font-weight:650; display:block; }
+        .smart-search .result-item .r-meta { font-size:.78rem; color:var(--pay-muted); }
+        .smart-search .result-empty { padding:.85rem; color:var(--pay-muted); font-size:.88rem; }
+        .selected-client {
+            display:none; align-items:flex-start; justify-content:space-between; gap:.75rem;
+            margin-top:.55rem; padding:.7rem .85rem; border-radius:12px;
+            background:#f0fdf4; border:1px solid #bbf7d0;
+        }
+        .selected-client.show { display:flex; }
+        .selected-client .sc-name { font-weight:700; }
+        .selected-client .sc-meta { font-size:.8rem; color:var(--pay-muted); }
+        .selected-client .btn-clear {
+            border:0; background:transparent; color:#166534; font-size:.82rem; font-weight:650;
+            white-space:nowrap; padding:.15rem .35rem;
+        }
     </style>
 </head>
 <body>
@@ -182,7 +221,7 @@ foreach ($rows as $r) {
         <h1 class="h4 mb-1"><i class="fas fa-money-bill-wave me-2"></i>Payment records</h1>
         <p class="mb-0 opacity-75 small">
             <?php if ($canEdit): ?>
-            Pick clients from the Francophonie Mobility database. Payment figures stay only on this sheet — not on Record invoice or the client form.
+            Pick Francophonie Mobility clients with smart search. Payment figures stay only on this sheet — not on Record invoice or the client form.
             <?php else: ?>
             View-only payment sheet. Adding or editing records is done from the superadmin dashboard.
             <?php endif; ?>
@@ -225,7 +264,7 @@ foreach ($rows as $r) {
         <div class="d-flex justify-content-between align-items-start gap-2 mb-3">
             <div>
                 <h2 class="h5 mb-1"><?= $isAdd ? 'Add payment record' : 'Edit payment record' ?></h2>
-                <p class="hint mb-0">Choose an existing client, or add a missing client to the applications DB (without storing payment there).</p>
+                <p class="hint mb-0">Search an existing client, or add someone who is not in the list yet (payments stay on this sheet only).</p>
             </div>
             <a href="francophonie-mobility-payment-records.php<?= $inAdminFrame ? '?staff=1' : '' ?>" class="btn btn-sm btn-outline-secondary">Cancel</a>
         </div>
@@ -241,30 +280,43 @@ foreach ($rows as $r) {
 
             <div class="editor-grid">
                 <div class="span-6 client-panel" id="existingPanel">
-                    <label class="form-label fw-semibold">Client from database *</label>
-                    <select class="form-select" name="application_id" id="applicationSelect">
-                        <option value="">Select client…</option>
-                        <?php if ($formAppId > 0 && $editing): ?>
-                        <option value="<?= $formAppId ?>" selected>
-                            <?= htmlspecialchars((string) ($editing['app_name'] ?: $editing['full_name'])) ?>
-                            <?php if (!empty($editing['app_reference'])): ?> · <?= htmlspecialchars((string) $editing['app_reference']) ?><?php endif; ?>
-                        </option>
-                        <?php endif; ?>
-                        <?php foreach ($clients as $c): ?>
-                        <option
-                            value="<?= (int) $c['id'] ?>"
-                            data-job="<?= htmlspecialchars($c['profession'] !== '' && strtoupper($c['profession']) !== 'N/A' ? $c['profession'] : fm_job_offer_label($c['job_offer']), ENT_QUOTES, 'UTF-8') ?>"
-                            <?= $formAppId === (int) $c['id'] ? 'selected' : '' ?>
-                        >
-                            <?= htmlspecialchars($c['name']) ?> · <?= htmlspecialchars($c['reference_id']) ?>
-                        </option>
-                        <?php endforeach; ?>
-                    </select>
+                    <label class="form-label fw-semibold" for="clientSmartSearch">Client *</label>
+                    <div class="smart-search" id="clientSmartSearchWrap">
+                        <div class="search-field">
+                            <i class="fas fa-search"></i>
+                            <input
+                                type="search"
+                                id="clientSmartSearch"
+                                placeholder="Type name, reference, email, or status…"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <input type="hidden" name="application_id" id="applicationSelect" value="<?= $formAppId > 0 ? $formAppId : '' ?>">
+                        <div class="results" id="clientSearchResults" role="listbox"></div>
+                        <div class="selected-client<?= $formAppId > 0 ? ' show' : '' ?>" id="selectedClientCard">
+                            <div>
+                                <div class="sc-name" id="selectedClientName">
+                                    <?php if ($formAppId > 0 && $editing): ?>
+                                    <?= htmlspecialchars((string) ($editing['app_name'] ?: $editing['full_name'])) ?>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="sc-meta" id="selectedClientMeta">
+                                    <?php if ($formAppId > 0 && $editing && !empty($editing['app_reference'])): ?>
+                                    <?= htmlspecialchars((string) $editing['app_reference']) ?>
+                                    <?php if (!empty($editing['app_status'])): ?>
+                                    · <?= htmlspecialchars(fm_application_status_label((string) $editing['app_status'])) ?>
+                                    <?php endif; ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            <button type="button" class="btn-clear" id="clearSelectedClient">Change</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="span-6 new-panel" id="newPanel" hidden>
                     <label class="form-label fw-semibold">New client full name *</label>
                     <input class="form-control" name="new_full_name" id="newFullName" maxlength="200" placeholder="As on passport">
-                    <div class="hint mt-1">Creates a stub application only. Payment amounts are saved here, not on the application.</div>
+                    <div class="hint mt-1">Adds the client to applications if needed. Payment amounts are saved here only.</div>
                 </div>
 
                 <div class="span-4">
@@ -353,7 +405,7 @@ foreach ($rows as $r) {
                                 <?php endif; ?>
                             </div>
                             <?php elseif (empty($r['application_id'])): ?>
-                            <div class="meta text-warning">Not linked to applications DB</div>
+                            <div class="meta text-warning">Not linked to an application</div>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars((string) ($r['job_position'] ?? '')) ?></td>
@@ -384,34 +436,246 @@ foreach ($rows as $r) {
     </div>
 </div>
 <?php if ($showForm): ?>
+<?php
+$clientPickerJson = [];
+foreach ($clients as $c) {
+    $jobGuess = $c['profession'] !== '' && strtoupper($c['profession']) !== 'N/A'
+        ? $c['profession']
+        : fm_job_offer_label($c['job_offer']);
+    $clientPickerJson[] = [
+        'id' => (int) $c['id'],
+        'name' => (string) $c['name'],
+        'reference' => (string) $c['reference_id'],
+        'email' => (string) $c['email'],
+        'status' => fm_application_status_label((string) $c['status']),
+        'job' => (string) $jobGuess,
+        'search' => strtolower(trim(
+            $c['name'] . ' ' . $c['reference_id'] . ' ' . $c['email'] . ' '
+            . fm_application_status_label((string) $c['status']) . ' ' . $c['status']
+        )),
+    ];
+}
+if ($formAppId > 0 && $editing) {
+    $already = false;
+    foreach ($clientPickerJson as $row) {
+        if ((int) $row['id'] === $formAppId) {
+            $already = true;
+            break;
+        }
+    }
+    if (!$already) {
+        $editName = trim((string) ($editing['app_name'] ?: $editing['full_name']));
+        $clientPickerJson[] = [
+            'id' => $formAppId,
+            'name' => $editName !== '' ? $editName : ('Client #' . $formAppId),
+            'reference' => (string) ($editing['app_reference'] ?? ''),
+            'email' => (string) ($editing['app_email'] ?? ''),
+            'status' => fm_application_status_label((string) ($editing['app_status'] ?? '')),
+            'job' => (string) ($editing['job_position'] ?? ''),
+            'search' => strtolower(trim(
+                $editName . ' ' . ($editing['app_reference'] ?? '') . ' ' . ($editing['app_email'] ?? '')
+            )),
+        ];
+    }
+}
+?>
 <script>
 (function () {
     const modes = document.querySelectorAll('input[name="client_mode"]');
     const existingPanel = document.getElementById('existingPanel');
     const newPanel = document.getElementById('newPanel');
     const select = document.getElementById('applicationSelect');
+    const searchInput = document.getElementById('clientSmartSearch');
+    const resultsBox = document.getElementById('clientSearchResults');
+    const selectedCard = document.getElementById('selectedClientCard');
+    const selectedName = document.getElementById('selectedClientName');
+    const selectedMeta = document.getElementById('selectedClientMeta');
+    const clearBtn = document.getElementById('clearSelectedClient');
     const job = document.getElementById('jobPosition');
     const moneyIns = document.querySelectorAll('.money-in');
     const bal = document.getElementById('balancePreview');
+    const clients = <?= json_encode($clientPickerJson, JSON_UNESCAPED_UNICODE) ?>;
+    let activeIndex = -1;
+    let timer = null;
 
+    function normalize(s) {
+        return String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+    function tokens(s) {
+        return normalize(s).split(' ').filter(Boolean);
+    }
+    function findClient(id) {
+        id = Number(id || 0);
+        for (let i = 0; i < clients.length; i++) {
+            if (Number(clients[i].id) === id) return clients[i];
+        }
+        return null;
+    }
+    function setRequiredForMode(isNew) {
+        if (searchInput) searchInput.required = !isNew && !(select && select.value);
+        const nn = document.getElementById('newFullName');
+        if (nn) nn.required = isNew;
+    }
     function syncMode() {
         const mode = (document.querySelector('input[name="client_mode"]:checked') || {}).value || 'existing';
         const isNew = mode === 'new';
         existingPanel.hidden = isNew;
         newPanel.hidden = !isNew;
-        if (select) select.required = !isNew;
-        const nn = document.getElementById('newFullName');
-        if (nn) nn.required = isNew;
+        setRequiredForMode(isNew);
+        if (isNew && resultsBox) resultsBox.classList.remove('open');
     }
     modes.forEach(function (el) { el.addEventListener('change', syncMode); });
-    syncMode();
 
-    if (select && job) {
-        select.addEventListener('change', function () {
-            const opt = select.options[select.selectedIndex];
-            if (opt && opt.dataset.job && !job.value) job.value = opt.dataset.job;
+    function renderSelected(client) {
+        if (!selectedCard || !selectedName || !selectedMeta || !select) return;
+        if (!client) {
+            select.value = '';
+            selectedCard.classList.remove('show');
+            selectedName.textContent = '';
+            selectedMeta.textContent = '';
+            if (searchInput) {
+                searchInput.value = '';
+                searchInput.required = true;
+            }
+            return;
+        }
+        select.value = String(client.id);
+        selectedName.textContent = client.name || '';
+        const bits = [];
+        if (client.reference) bits.push(client.reference);
+        if (client.status) bits.push(client.status);
+        if (client.email) bits.push(client.email);
+        selectedMeta.textContent = bits.join(' · ');
+        selectedCard.classList.add('show');
+        if (searchInput) {
+            searchInput.value = client.name || '';
+            searchInput.required = false;
+        }
+        if (job && client.job && !job.value) job.value = client.job;
+    }
+
+    function filteredClients(q) {
+        const toks = tokens(q);
+        if (!toks.length) return clients.slice(0, 12);
+        return clients.filter(function (c) {
+            return toks.every(function (t) { return (c.search || '').indexOf(t) !== -1; });
+        }).slice(0, 20);
+    }
+
+    function paintResults(list) {
+        if (!resultsBox) return;
+        if (!list.length) {
+            resultsBox.innerHTML = '<div class="result-empty">No matching clients.</div>';
+            resultsBox.classList.add('open');
+            activeIndex = -1;
+            return;
+        }
+        resultsBox.innerHTML = list.map(function (c, idx) {
+            const meta = [c.reference, c.status, c.email].filter(Boolean).join(' · ');
+            return '<button type="button" class="result-item" data-idx="' + idx + '" data-id="' + c.id + '">'
+                + '<span class="r-name">' + escapeHtml(c.name) + '</span>'
+                + '<span class="r-meta">' + escapeHtml(meta) + '</span>'
+                + '</button>';
+        }).join('');
+        resultsBox.classList.add('open');
+        activeIndex = 0;
+        markActive();
+    }
+
+    function escapeHtml(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function markActive() {
+        if (!resultsBox) return;
+        Array.from(resultsBox.querySelectorAll('.result-item')).forEach(function (el, i) {
+            el.classList.toggle('active', i === activeIndex);
         });
     }
+
+    function openSearch() {
+        if (!searchInput) return;
+        paintResults(filteredClients(searchInput.value));
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('focus', openSearch);
+        searchInput.addEventListener('input', function () {
+            if (select) select.value = '';
+            if (selectedCard) selectedCard.classList.remove('show');
+            searchInput.required = true;
+            clearTimeout(timer);
+            timer = setTimeout(openSearch, 80);
+        });
+        searchInput.addEventListener('keydown', function (e) {
+            const items = resultsBox ? Array.from(resultsBox.querySelectorAll('.result-item')) : [];
+            if (e.key === 'ArrowDown' && items.length) {
+                e.preventDefault();
+                activeIndex = Math.min(activeIndex + 1, items.length - 1);
+                markActive();
+            } else if (e.key === 'ArrowUp' && items.length) {
+                e.preventDefault();
+                activeIndex = Math.max(activeIndex - 1, 0);
+                markActive();
+            } else if (e.key === 'Enter' && items.length && activeIndex >= 0) {
+                e.preventDefault();
+                items[activeIndex].click();
+            } else if (e.key === 'Escape') {
+                resultsBox.classList.remove('open');
+            }
+        });
+    }
+
+    if (resultsBox) {
+        resultsBox.addEventListener('mousedown', function (e) {
+            const btn = e.target.closest('.result-item');
+            if (!btn) return;
+            e.preventDefault();
+            const client = findClient(btn.getAttribute('data-id'));
+            if (client) {
+                renderSelected(client);
+                resultsBox.classList.remove('open');
+            }
+        });
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+            renderSelected(null);
+            if (searchInput) {
+                searchInput.focus();
+                openSearch();
+            }
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        const wrap = document.getElementById('clientSmartSearchWrap');
+        if (wrap && !wrap.contains(e.target) && resultsBox) resultsBox.classList.remove('open');
+    });
+
+    const payForm = document.getElementById('payForm');
+    if (payForm) {
+        payForm.addEventListener('submit', function (e) {
+            const mode = (document.querySelector('input[name="client_mode"]:checked') || {}).value || 'existing';
+            if (mode === 'existing' && (!select || !select.value)) {
+                e.preventDefault();
+                alert('Search and select a client first.');
+                if (searchInput) searchInput.focus();
+            }
+        });
+    }
+
+    if (select && select.value) {
+        const pre = findClient(select.value);
+        if (pre) renderSelected(pre);
+    }
+
+    syncMode();
 
     function recalc() {
         const nums = Array.from(moneyIns).map(function (el) { return parseFloat(el.value || '0') || 0; });
