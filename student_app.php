@@ -1,50 +1,80 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
-/* ======================================================
-   AUTH CHECK
-====================================================== */
+require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/job_admission_details.php';
+
+header('Cache-Control: private, no-store');
+$savingDraft = $_SERVER['REQUEST_METHOD'] === 'POST';
+$draftResponse = static function (bool $success, string $message = '', int $code = 200): void {
+    http_response_code($code);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['success' => $success, 'message' => $message]);
+    exit;
+};
 if (!isset($_SESSION['id'], $_SESSION['role'])) {
+    if ($savingDraft) {
+        $draftResponse(false, 'Sign in again to save your edits.', 403);
+    }
     header("Location: admin-login.php");
     exit;
 }
 
-/* ======================================================
-   VALIDATE INPUT
-====================================================== */
-if (empty($_GET['job_id']) || !ctype_digit($_GET['job_id'])) {
+$job_id = filter_var($_GET['job_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if (!$job_id) {
+    if ($savingDraft) {
+        $draftResponse(false, 'Job not specified.', 400);
+    }
     die("Invalid access: job not specified.");
 }
-$job_id = (int)$_GET['job_id'];
 
-/* ======================================================
-   LOAD JOB
-====================================================== */
-$stmt = $conn->prepare("
-    SELECT jl.*, 
-           u.name AS university_name,
-           c.name AS destination_country,
-           p.platform_name
-    FROM job_list jl
-    LEFT JOIN universities u ON u.id = jl.university_id
-    LEFT JOIN countries c ON c.id = u.country_id
-    LEFT JOIN platforms p ON p.id = jl.platform_id
-    WHERE jl.id = ?
-    LIMIT 1
-");
-$stmt->bind_param("i", $job_id);
-$stmt->execute();
-$job = $stmt->get_result()->fetch_assoc();
-$stmt->close();
-
-if (!$job || $job['status'] === 'completed') {
+$adminId = (int) $_SESSION['id'];
+$superadmin = (int) pcvc_current_user_is_superadmin($conn);
+$_SESSION['job_admission_csrf'] ??= bin2hex(random_bytes(32));
+$csrf = $_SESSION['job_admission_csrf'];
+session_write_close();
+$job = pcvc_job_admission_load($conn, $job_id);
+if (!pcvc_job_admission_can_edit($job, $adminId, (bool) $superadmin)) {
+    if ($savingDraft) {
+        $draftResponse(false, 'This job is no longer open for editing.', 409);
+    }
     header("Location: job_todo_list.php");
     exit;
 }
 
-$isAdmission = ($job['job_type'] === 'Student Admission Application');
+if ($savingDraft) {
+    $request = json_decode(file_get_contents('php://input', false, null, 0, 131072), true);
+    if (!is_string($request['csrf_token'] ?? null) || !hash_equals($csrf, $request['csrf_token'])) {
+        $draftResponse(false, 'Reload the form to continue saving.', 403);
+    }
+    if (!is_array($request['fields'] ?? null) || !$request['fields']) {
+        $draftResponse(false, 'No valid edits were received.', 400);
+    }
+    try {
+        $patch = json_encode(pcvc_job_admission_validate_fields($request['fields']), JSON_THROW_ON_ERROR);
+        $stmt = $conn->prepare("UPDATE job_list SET admission_draft = JSON_MERGE_PATCH(COALESCE(admission_draft, '{}'), ?)
+            WHERE id = ? AND (status IS NULL OR status = 'not_completed') AND (admin_id = ? OR ? = 1)");
+        $stmt->bind_param('siii', $patch, $job_id, $adminId, $superadmin);
+        $stmt->execute();
+        $changed = $stmt->affected_rows;
+        $stmt->close();
+        if ($changed === 0 && !pcvc_job_admission_can_edit(pcvc_job_admission_load($conn, $job_id), $adminId, (bool) $superadmin)) {
+            $draftResponse(false, 'This job is no longer open for editing.', 409);
+        }
+        $draftResponse(true);
+    } catch (InvalidArgumentException $error) {
+        $draftResponse(false, $error->getMessage(), 422);
+    } catch (Throwable $error) {
+        error_log('Admission draft save failed: ' . $error->getCode());
+        $draftResponse(false, 'Could not save your edits. Try again.', 500);
+    }
+}
+
+$fields = pcvc_job_admission_form($job);
+$limits = pcvc_job_admission_fields();
+$h = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $universities = $conn->query("SELECT id, name FROM universities ORDER BY name ASC");
-$platforms    = $conn->query("SELECT id, platform_name FROM platforms WHERE status='Active'");
+$platforms = $conn->query("SELECT DISTINCT platform_name FROM platforms WHERE status='Active' ORDER BY platform_name");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -60,7 +90,7 @@ body{background:#f9fdf9}
 .excel-header{background:#198754;color:#fff;font-weight:700;text-align:center}
 .excel-cell{border:1px solid #ccc;padding:6px;min-width:180px}
 .excel-form{border:2px solid #198754;background:#fff}
-.readonly{background:#e9ecef}
+.draft-save{min-height:1.5rem}
 
 /* Screenshot Area */
 .paste-zone{
@@ -88,15 +118,16 @@ body{background:#f9fdf9}
 
 <div class="d-flex justify-content-between mb-3">
   <h4 class="text-success">📋 <?= htmlspecialchars($job['job_type']) ?></h4>
-  <a href="job_todo_list.php" class="btn btn-secondary">⬅ Back</a>
+  <a href="job_todo_list.php" id="backToJobs" class="btn btn-secondary">⬅ Back</a>
 </div>
 
 <div class="alert alert-info">
-🔒 This job was auto-created. A screenshot is <strong>required</strong> before submission.
+Edits are saved as a draft. A screenshot is <strong>required</strong> to complete the job.
 </div>
 
-<form id="studentAppForm" enctype="multipart/form-data">
+<form id="studentAppForm" method="post" action="submit_student_app.php" enctype="multipart/form-data">
 <input type="hidden" name="job_id" value="<?= $job_id ?>">
+<input type="hidden" name="csrf_token" value="<?= $h($csrf) ?>">
 
 <!-- ================= TABLE ================= -->
 <div class="table-responsive">
@@ -108,8 +139,8 @@ $headers=[
  'Applicant','Application ID','Email','Platform','Applied Country',
  'University','WhatsApp','Country','City','Status','Remarks','Subagent'
 ];
-foreach($headers as $h){
-    echo "<th class='excel-header'>$h</th>";
+foreach($headers as $heading){
+    echo "<th class='excel-header'>$heading</th>";
 }
 ?>
 </tr>
@@ -118,67 +149,63 @@ foreach($headers as $h){
 <tr>
 
 <td class="excel-cell">
-<input class="form-control readonly" value="<?= htmlspecialchars($job['applicant_name']) ?>" readonly>
-<input type="hidden" name="applicant_name" value="<?= htmlspecialchars($job['applicant_name']) ?>">
+<input name="applicant_name" class="form-control" aria-label="Applicant" maxlength="<?= $limits['applicant_name'] ?>" value="<?= $h($fields['applicant_name']) ?>" required data-draft-field>
 </td>
 
 <td class="excel-cell">
-<input name="application_id" class="form-control" placeholder="APP-XXXX (optional)">
+<input name="application_id" class="form-control" aria-label="Application ID" maxlength="<?= $limits['application_id'] ?>" value="<?= $h($fields['application_id']) ?>" placeholder="APP-XXXX (optional)" data-draft-field>
 </td>
 
 <td class="excel-cell">
-<input class="form-control readonly" value="<?= htmlspecialchars($job['applicant_email']) ?>" readonly>
-<input type="hidden" name="email" value="<?= htmlspecialchars($job['applicant_email']) ?>">
+<input type="email" name="email" class="form-control" aria-label="Email" maxlength="<?= $limits['email'] ?>" value="<?= $h($fields['email']) ?>" required data-draft-field>
 </td>
 
 <td class="excel-cell">
-<?php if ($isAdmission): ?>
-<input class="form-control readonly" value="<?= htmlspecialchars($job['platform_name']) ?>" readonly>
-<input type="hidden" name="platform_id" value="<?= (int)$job['platform_id'] ?>">
-<?php else: ?>
-<select name="platform_id" class="form-select select2">
-<option value="">-- Select Platform --</option>
+<input name="platform" class="form-control" aria-label="Platform" list="admissionPlatforms" maxlength="<?= $limits['platform'] ?>" value="<?= $h($fields['platform']) ?>" data-draft-field>
+<datalist id="admissionPlatforms">
 <?php while($p=$platforms->fetch_assoc()): ?>
-<option value="<?= $p['id'] ?>"><?= htmlspecialchars($p['platform_name']) ?></option>
+<option value="<?= $h($p['platform_name']) ?>">
 <?php endwhile; ?>
-</select>
-<?php endif; ?>
+</datalist>
 </td>
 
 <td class="excel-cell">
-<input class="form-control readonly" value="<?= htmlspecialchars($job['destination_country'] ?? '') ?>" readonly>
+<input name="destination" class="form-control" aria-label="Applied country" maxlength="<?= $limits['destination'] ?>" value="<?= $h($fields['destination']) ?>" data-draft-field>
 </td>
 
 <td class="excel-cell">
-<select name="university_id" class="form-select select2">
+<select name="university_id" class="form-select select2" aria-label="University" data-draft-field>
 <option value="">-- Select University --</option>
 <?php while($u=$universities->fetch_assoc()): ?>
-<option value="<?= $u['id'] ?>" <?= $u['id']==$job['university_id']?'selected':'' ?>>
+<option value="<?= (int) $u['id'] ?>" <?= (string) $u['id'] === $fields['university_id'] ? 'selected' : '' ?>>
 <?= htmlspecialchars($u['name']) ?>
 </option>
 <?php endwhile; ?>
 </select>
 </td>
 
-<td class="excel-cell"><input name="phone_number" class="form-control" placeholder="+250..."></td>
-<td class="excel-cell"><input name="country" class="form-control" value="Rwanda"></td>
-<td class="excel-cell"><input name="city" class="form-control" value="Kigali"></td>
+<td class="excel-cell"><input name="phone_number" type="tel" class="form-control" aria-label="WhatsApp" maxlength="<?= $limits['phone_number'] ?>" value="<?= $h($fields['phone_number']) ?>" placeholder="+250..." data-draft-field></td>
+<td class="excel-cell"><input name="country" class="form-control" aria-label="Country" maxlength="<?= $limits['country'] ?>" value="<?= $h($fields['country']) ?>" data-draft-field></td>
+<td class="excel-cell"><input name="city" class="form-control" aria-label="City" maxlength="<?= $limits['city'] ?>" value="<?= $h($fields['city']) ?>" data-draft-field></td>
 
 <td class="excel-cell">
-<select name="status" class="form-select">
-<option>Submitted</option>
-<option>Processing</option>
-<option>Additional Documents Required</option>
-<option>No Documents</option>
+<select name="status" class="form-select" aria-label="Status" data-draft-field>
+<?php foreach (pcvc_job_admission_statuses() as $status): ?>
+<option <?= $status === $fields['status'] ? 'selected' : '' ?>><?= $h($status) ?></option>
+<?php endforeach; ?>
 </select>
 </td>
 
-<td class="excel-cell"><input name="application_remarks" class="form-control"></td>
-<td class="excel-cell"><input name="subagent" class="form-control"></td>
+<td class="excel-cell"><input name="application_remarks" class="form-control" aria-label="Remarks" maxlength="<?= $limits['application_remarks'] ?>" value="<?= $h($fields['application_remarks']) ?>" data-draft-field></td>
+<td class="excel-cell"><input name="subagent" class="form-control" aria-label="Subagent" maxlength="<?= $limits['subagent'] ?>" value="<?= $h($fields['subagent']) ?>" data-draft-field></td>
 
 </tr>
 </tbody>
 </table>
+</div>
+<div class="draft-save small mt-2">
+  <span id="draftStatus" role="status" class="text-muted"><?= empty($job['admission_draft']) ? '' : 'Draft saved.' ?></span>
+  <button type="button" id="retryDraftSave" class="btn btn-link btn-sm p-0 ms-2" hidden>Retry save</button>
 </div>
 
 <!-- ================= SCREENSHOT (REQUIRED) ================= -->
@@ -195,7 +222,7 @@ foreach($headers as $h){
 
 <!-- ================= SUBMIT ================= -->
 <div class="text-center mt-4">
-<button class="btn btn-success btn-lg px-5">
+<button type="submit" id="completeJob" class="btn btn-success btn-lg px-5">
 ✅ Submit & Complete Job
 </button>
 </div>
@@ -207,73 +234,160 @@ foreach($headers as $h){
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
-$('.select2').select2({width:'100%'});
-
+const form = document.getElementById('studentAppForm');
 const pasteZone = document.getElementById('pasteZone');
 const preview   = document.getElementById('screenshotPreview');
 const fileInput = document.getElementById('fileInput');
 const errorMsg  = document.getElementById('shotError');
+const completeButton = document.getElementById('completeJob');
+const draftStatus = document.getElementById('draftStatus');
+const retryDraftSave = document.getElementById('retryDraftSave');
+const changedFields = new Map();
+const csrfToken = form.elements.csrf_token.value;
 
 let screenshotFile = null;
+let screenshotUrl = '';
+let saveTimer;
+let saving = null;
+let submitting = false;
 
-/* CTRL + V (clipboard paste) */
-document.addEventListener('paste', e => {
-    for (const item of e.clipboardData.items) {
+function showDraftStatus(message, failed = false) {
+    draftStatus.textContent = message;
+    draftStatus.className = failed ? 'text-danger' : 'text-muted';
+    retryDraftSave.hidden = !failed;
+}
+
+function saveDraft() {
+    clearTimeout(saveTimer);
+    if (saving) return saving.then(ok => ok && saveDraft());
+    if (changedFields.size === 0) return Promise.resolve(true);
+
+    const fields = Object.fromEntries(changedFields);
+    changedFields.clear();
+    showDraftStatus('Saving draft…');
+
+    saving = fetch(location.href, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({csrf_token: csrfToken, fields})
+    }).then(async response => {
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || 'Could not save your edits.');
+        }
+        showDraftStatus(changedFields.size ? 'Saving draft…' : 'Draft saved.');
+        return true;
+    }).catch(error => {
+        for (const [name, value] of Object.entries(fields)) {
+            if (!changedFields.has(name)) changedFields.set(name, value);
+        }
+        showDraftStatus(error.message || 'Could not save your edits.', true);
+        return false;
+    }).finally(() => {
+        saving = null;
+    });
+    return saving.then(ok => ok && saveDraft());
+}
+
+function queueField(input) {
+    changedFields.set(input.name, input.value);
+    showDraftStatus('Saving draft…');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveDraft, 400);
+}
+
+form.addEventListener('input', event => {
+    if (event.target.matches('[data-draft-field]')) queueField(event.target);
+});
+form.addEventListener('change', event => {
+    if (event.target.matches('[data-draft-field]')) queueField(event.target);
+});
+form.addEventListener('focusout', event => {
+    if (event.target.matches('[data-draft-field]')) saveDraft();
+});
+if (window.jQuery?.fn?.select2) {
+    window.jQuery('.select2').select2({width: '100%'}).on('change', function () {
+        queueField(this);
+    });
+}
+retryDraftSave.addEventListener('click', saveDraft);
+document.getElementById('backToJobs').addEventListener('click', async event => {
+    const target = event.currentTarget.href;
+    event.preventDefault();
+    if (!submitting && await saveDraft()) location.href = target;
+});
+window.addEventListener('beforeunload', event => {
+    if (changedFields.size || saving || submitting) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+});
+
+function showScreenshot(file) {
+    if (screenshotUrl) URL.revokeObjectURL(screenshotUrl);
+    screenshotFile = file;
+    screenshotUrl = URL.createObjectURL(file);
+    preview.src = screenshotUrl;
+    preview.style.display = 'block';
+    errorMsg.classList.add('d-none');
+}
+
+document.addEventListener('paste', event => {
+    if (submitting) return;
+    for (const item of event.clipboardData?.items || []) {
         if (item.type.startsWith('image/')) {
-            screenshotFile = item.getAsFile();
-            preview.src = URL.createObjectURL(screenshotFile);
-            preview.style.display = 'block';
-            errorMsg.classList.add('d-none');
+            const file = item.getAsFile();
+            if (file) {
+                event.preventDefault();
+                showScreenshot(file);
+                break;
+            }
         }
     }
 });
 
 /* Click to upload fallback */
-pasteZone.addEventListener('click', () => fileInput.click());
+pasteZone.addEventListener('click', () => {
+    if (!submitting) fileInput.click();
+});
 
 fileInput.addEventListener('change', () => {
-    if (fileInput.files.length) {
-        screenshotFile = fileInput.files[0];
-        preview.src = URL.createObjectURL(screenshotFile);
-        preview.style.display = 'block';
-        errorMsg.classList.add('d-none');
-    }
+    if (fileInput.files.length) showScreenshot(fileInput.files[0]);
 });
 
 /* Submit validation */
-$('#studentAppForm').on('submit', function(e){
-    e.preventDefault();
-
+form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (submitting) return;
     if (!screenshotFile) {
         errorMsg.classList.remove('d-none');
         return;
     }
 
-    const formData = new FormData(this);
-    formData.append('screenshot', screenshotFile);
-
-    const btn = $(this).find('button');
-    btn.prop('disabled', true).text('Submitting...');
-
-    $.ajax({
-        url: 'submit_student_app.php',
-        method: 'POST',
-        data: formData,
-        processData: false,
-        contentType: false,
-        success: res => {
-            if (res.trim() === 'success') {
-                location.href = 'job_todo_list.php';
-            } else {
-                alert(res);
-                btn.prop('disabled', false).text('✅ Submit & Complete Job');
-            }
-        },
-        error: () => {
-            alert('Server error');
-            btn.prop('disabled', false).text('✅ Submit & Complete Job');
-        }
-    });
+    submitting = true;
+    completeButton.disabled = true;
+    completeButton.textContent = 'Submitting…';
+    const inputs = form.querySelectorAll('[data-draft-field]');
+    try {
+        if (!await saveDraft()) return;
+        const formData = new FormData();
+        formData.set('job_id', form.elements.job_id.value);
+        formData.set('csrf_token', csrfToken);
+        formData.set('screenshot', screenshotFile);
+        inputs.forEach(input => { input.disabled = true; });
+        const response = await fetch('submit_student_app.php', {method: 'POST', body: formData});
+        const message = (await response.text()).trim();
+        if (!response.ok || message !== 'success') throw new Error(message || 'Server error');
+        submitting = false;
+        location.href = 'job_todo_list.php';
+    } catch (error) {
+        alert(error.message);
+    } finally {
+        submitting = false;
+        inputs.forEach(input => { input.disabled = false; });
+        completeButton.disabled = false;
+        completeButton.textContent = '✅ Submit & Complete Job';
+    }
 });
 </script>
 

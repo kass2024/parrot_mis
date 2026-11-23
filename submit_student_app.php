@@ -1,262 +1,172 @@
 <?php
-/**
- * submit_student_app.php
- * AJAX-ONLY ENDPOINT
- * FINAL PRODUCTION VERSION
- */
+declare(strict_types=1);
+
+ini_set('display_errors', '0');
+mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
+date_default_timezone_set('UTC');
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/job_admission_details.php';
 require_once __DIR__ . '/helpers/attendance_checkout.php';
-/* =======================
-   HARDENING
-======================= */
-ini_set('display_errors', '0');
-ini_set('display_startup_errors', '0');
-error_reporting(E_ALL);
-date_default_timezone_set('UTC');
 
-/* =======================
-   AUTH
-======================= */
-if (empty($_SESSION['admin_id'])) {
-    echo "unauthorized";
+header('Content-Type: text/plain; charset=utf-8');
+header('Cache-Control: private, no-store');
+
+$respond = static function (string $message, int $code): void {
+    http_response_code($code);
+    echo $message;
     exit;
+};
+
+$adminId = (int) ($_SESSION['id'] ?? 0);
+if ($adminId < 1 || !isset($_SESSION['role'])) {
+    $respond('Sign in again to complete the job.', 403);
 }
-$admin_id = (int) $_SESSION['admin_id'];
-
-/* =======================
-   INPUT
-======================= */
-$job_id              = (int) ($_POST['job_id'] ?? 0);
-$applicant_name      = trim($_POST['applicant_name'] ?? '');
-$email               = trim($_POST['email'] ?? '');
-$platform             = trim($_POST['platform'] ?? '');
-$destination_country = trim($_POST['destination'] ?? '');
-$university_id        = (int) ($_POST['university_id'] ?? 0);
-$phone_number         = trim($_POST['phone_number'] ?? '');
-$country              = trim($_POST['country'] ?? 'Rwanda');
-$city                 = trim($_POST['city'] ?? 'Kigali');
-$status_app           = trim($_POST['status'] ?? 'Submitted');
-$application_remarks  = trim($_POST['application_remarks'] ?? '');
-$subagent             = trim($_POST['subagent'] ?? '');
-
-/* =======================
-   BASIC VALIDATION
-======================= */
-if ($job_id <= 0 || $applicant_name === '' || $email === '') {
-    echo "Invalid input";
-    exit;
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $respond('Submit the admission form to complete the job.', 405);
+}
+$csrf = $_SESSION['job_admission_csrf'] ?? '';
+$token = $_POST['csrf_token'] ?? null;
+if ($csrf === '' || !is_string($token) || !hash_equals($csrf, $token)) {
+    $respond('Reload the form before submitting.', 403);
 }
 
-/* =======================
-   SCREENSHOT (REQUIRED)
-======================= */
-if (
-    empty($_FILES['screenshot']) ||
-    $_FILES['screenshot']['error'] !== UPLOAD_ERR_OK
-) {
-    echo "Screenshot is required";
-    exit;
+$jobId = filter_var($_POST['job_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if (!$jobId) {
+    $respond('Job not specified.', 400);
 }
+$superadmin = pcvc_current_user_is_superadmin($conn);
+session_write_close();
 
-/* Validate image */
-$finfo = new finfo(FILEINFO_MIME_TYPE);
-$mime  = $finfo->file($_FILES['screenshot']['tmp_name']);
+$jobIsAvailable = static function (?array $job) use ($adminId, $superadmin, $respond): void {
+    if ($job !== null && $job['status'] === 'completed' && ($superadmin || (int) $job['admin_id'] === $adminId)) {
+        $respond('success', 200);
+    }
+    if (!pcvc_job_admission_can_edit($job, $adminId, $superadmin)) {
+        $respond('This job is no longer open for editing.', 409);
+    }
+};
+$jobIsAvailable(pcvc_job_admission_load($conn, $jobId));
 
+$screenshot = $_FILES['screenshot'] ?? [];
+if (($screenshot['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || !is_uploaded_file($screenshot['tmp_name'])) {
+    $respond('Screenshot is required.', 422);
+}
+if ($screenshot['size'] > 5 * 1024 * 1024) {
+    $respond('Screenshot is too large (maximum 5 MB).', 422);
+}
+$mime = (new finfo(FILEINFO_MIME_TYPE))->file($screenshot['tmp_name']);
 if (!in_array($mime, ['image/png', 'image/jpeg'], true)) {
-    echo "Invalid screenshot type";
-    exit;
+    $respond('Upload a PNG or JPG screenshot.', 422);
 }
 
-if ($_FILES['screenshot']['size'] > 5 * 1024 * 1024) {
-    echo "Screenshot too large (max 5MB)";
-    exit;
-}
-
-/* Save screenshot */
-$uploadDir = __DIR__ . '/uploads/';
-if (!is_dir($uploadDir)) {
-    echo "Upload directory missing";
-    exit;
-}
-
-$ext = $mime === 'image/png' ? 'png' : 'jpg';
-$filename = 'job_' . $job_id . '_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-$relativePath = 'uploads/' . $filename;
-
-if (!move_uploaded_file($_FILES['screenshot']['tmp_name'], $uploadDir . $filename)) {
-    echo "Failed to save screenshot";
-    exit;
-}
-
-/* =======================
-   SAVE SCREENSHOT PATH (THIS WAS MISSING)
-======================= */
-$upd = $conn->prepare("
-    UPDATE job_list
-    SET screenshot_path = ?
-    WHERE id = ?
-");
-$upd->bind_param("si", $relativePath, $job_id);
-$upd->execute();
-$upd->close();
-
-/* =======================
-   FETCH JOB TYPE
-======================= */
-$job_type = '';
-$stmt = $conn->prepare("SELECT job_type FROM job_list WHERE id=?");
-$stmt->bind_param("i", $job_id);
-$stmt->execute();
-$stmt->bind_result($job_type);
-$stmt->fetch();
-$stmt->close();
-
-if ($job_type === '') {
-    echo "Invalid job";
-    exit;
-}
-
-/* =======================
-   UNIQUE APPLICATION ID
-======================= */
-do {
-    $application_id = "APP-" . strtoupper(bin2hex(random_bytes(6)));
-    $chk = $conn->prepare("SELECT id FROM student_app WHERE application_id=?");
-    $chk->bind_param("s", $application_id);
-    $chk->execute();
-    $chk->store_result();
-    $exists = $chk->num_rows > 0;
-    $chk->close();
-} while ($exists);
-
-/* =======================
-   UNIVERSITY NAME
-======================= */
-$university_name = '';
-if ($university_id > 0) {
-    $u = $conn->prepare("SELECT name FROM universities WHERE id=?");
-    $u->bind_param("i", $university_id);
-    $u->execute();
-    $u->bind_result($university_name);
-    $u->fetch();
-    $u->close();
-}
-
-/* =======================
-   INSERT STUDENT APP (UNCHANGED)
-======================= */
-$stmt = $conn->prepare("
-    INSERT INTO student_app (
-        applicant_name,
-        application_id,
-        email,
-        platform,
-        destination_country,
-        university_id,
-        phone_number,
-        country,
-        city,
-        status_app,
-        application_remarks,
-        subagent,
-        job_id,
-        created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-");
-
-$stmt->bind_param(
-    "sssssiisssssi",
-    $applicant_name,
-    $application_id,
-    $email,
-    $platform,
-    $destination_country,
-    $university_id,
-    $phone_number,
-    $country,
-    $city,
-    $status_app,
-    $application_remarks,
-    $subagent,
-    $job_id
-);
-
-if (!$stmt->execute()) {
-    echo "Database error";
-    exit;
-}
-$stmt->close();
-
-/* =======================
-   GOOGLE SHEETS (UNCHANGED)
-======================= */
+$uploadedFile = null;
+$inTransaction = false;
 try {
-    require_once __DIR__ . '/vendor/autoload.php';
-    putenv('GOOGLE_APPLICATION_CREDENTIALS=' . __DIR__ . '/credentials.json');
+    $posted = pcvc_job_admission_validate_fields(array_intersect_key($_POST, pcvc_job_admission_fields()));
+    pcvc_ensure_job_list_completed_at($conn);
+    $conn->begin_transaction();
+    $inTransaction = true;
+    $job = pcvc_job_admission_load($conn, $jobId, true);
+    if (!pcvc_job_admission_can_edit($job, $adminId, $superadmin)) {
+        $conn->rollback();
+        $jobIsAvailable($job);
+    }
 
-    $sheetId = null;
-    $s = $conn->prepare("SELECT sheet_id FROM admins WHERE id=?");
-    $s->bind_param("i", $admin_id);
-    $s->execute();
-    $s->bind_result($sheetId);
-    $s->fetch();
-    $s->close();
+    $fields = array_replace(pcvc_job_admission_form($job), $posted);
+    if ($fields['applicant_name'] === '' || !filter_var($fields['email'], FILTER_VALIDATE_EMAIL)) {
+        throw new InvalidArgumentException('Enter an applicant name and a valid email address.');
+    }
+    $applicationId = $fields['application_id'] !== '' ? $fields['application_id'] : 'APP-' . strtoupper(bin2hex(random_bytes(6)));
+    $universityId = (int) $fields['university_id'];
+    $universityName = '';
+    if ($universityId > 0) {
+        $stmt = $conn->prepare('SELECT name FROM universities WHERE id = ?');
+        $stmt->bind_param('i', $universityId);
+        $stmt->execute();
+        $university = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$university) {
+            throw new InvalidArgumentException('Select a valid university.');
+        }
+        $universityName = $university['name'];
+    }
 
+    $extension = $mime === 'image/png' ? 'png' : 'jpg';
+    $path = 'uploads/job_' . $jobId . '_' . time() . '_' . bin2hex(random_bytes(8)) . '.' . $extension;
+    if (!move_uploaded_file($screenshot['tmp_name'], __DIR__ . '/' . $path)) {
+        throw new RuntimeException('Could not save screenshot.');
+    }
+    $uploadedFile = __DIR__ . '/' . $path;
+
+    $stmt = $conn->prepare(
+        'INSERT INTO student_app (applicant_name, application_id, email, platform, destination_country,
+            university_id, phone_number, country, city, status_app, application_remarks, subagent, job_id, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())'
+    );
+    $stmt->bind_param(
+        'sssssissssssi',
+        $fields['applicant_name'], $applicationId, $fields['email'], $fields['platform'], $fields['destination'],
+        $universityId, $fields['phone_number'], $fields['country'], $fields['city'], $fields['status'],
+        $fields['application_remarks'], $fields['subagent'], $jobId
+    );
+    $stmt->execute();
+    $stmt->close();
+
+    $stmt = $conn->prepare(
+        'UPDATE job_list SET screenshot_path = ?, applicant_name = ?, applicant_email = ?, admission_draft = NULL WHERE id = ?'
+    );
+    $stmt->bind_param('sssi', $path, $fields['applicant_name'], $fields['email'], $jobId);
+    $stmt->execute();
+    $stmt->close();
+    pcvc_job_list_mark_completed($conn, $jobId);
+    $conn->commit();
+} catch (Throwable $error) {
+    if ($inTransaction) {
+        $conn->rollback();
+    }
+    if ($uploadedFile !== null && is_file($uploadedFile)) {
+        unlink($uploadedFile);
+    }
+    if ($error instanceof InvalidArgumentException) {
+        $respond($error->getMessage(), 422);
+    }
+    if ($error instanceof mysqli_sql_exception && $error->getCode() === 1062) {
+        $respond('That application ID is already in use.', 409);
+    }
+    error_log('Admission job completion failed: ' . $error->getCode());
+    $respond('Could not complete the job. Try again.', 500);
+}
+
+try {
+    $stmt = $conn->prepare('SELECT sheet_id FROM admins WHERE id = ?');
+    $stmt->bind_param('i', $adminId);
+    $stmt->execute();
+    $sheetId = $stmt->get_result()->fetch_assoc()['sheet_id'] ?? null;
+    $stmt->close();
     if ($sheetId) {
+        require_once __DIR__ . '/vendor/autoload.php';
+        putenv('GOOGLE_APPLICATION_CREDENTIALS=' . __DIR__ . '/credentials.json');
         $client = new Google_Client();
         $client->useApplicationDefaultCredentials();
         $client->addScope(Google_Service_Sheets::SPREADSHEETS);
 
         $service = new Google_Service_Sheets($client);
-
-        $rows = $service->spreadsheets_values
-            ->get($sheetId, "Sheet1!A:A")
-            ->getValues();
-
+        $rows = $service->spreadsheets_values->get($sheetId, 'Sheet1!A:A')->getValues() ?? [];
         $row = max(count($rows) + 1, 3);
-        $sn  = $row - 2;
-
-        $values = [[
-            $sn,
-            $applicant_name,
-            "",
-            $email,
-            $platform,
-            $job_type,
-            $destination_country,
-            $university_name,
-            $phone_number,
-            $country,
-            $city,
-            $status_app,
-            $application_remarks,
-            $subagent,
-            date("Y-m-d H:i:s")
-        ]];
-
-        $body = new Google_Service_Sheets_ValueRange(['values' => $values]);
-
-        $service->spreadsheets_values->update(
-            $sheetId,
-            "Sheet1!A{$row}:O{$row}",
-            $body,
-            ['valueInputOption' => 'RAW']
-        );
+        $body = new Google_Service_Sheets_ValueRange(['values' => [[
+            $row - 2, $fields['applicant_name'], '', $fields['email'], $fields['platform'], $job['job_type'],
+            $fields['destination'], $universityName, $fields['phone_number'], $fields['country'], $fields['city'],
+            $fields['status'], $fields['application_remarks'], $fields['subagent'], date('Y-m-d H:i:s'),
+        ]]]);
+        $service->spreadsheets_values->update($sheetId, "Sheet1!A{$row}:O{$row}", $body, ['valueInputOption' => 'RAW']);
     }
-} catch (Throwable $e) {
-    error_log("Google Sheets error: " . $e->getMessage());
+} catch (Throwable $error) {
+    error_log('Google Sheets error: ' . $error->getMessage());
 }
 
-/* =======================
-   MARK JOB COMPLETED
-======================= */
-pcvc_job_list_mark_completed($conn, $job_id, date('Y-m-d H:i:s'));
-
-/* =======================
-   SUCCESS
-======================= */
+session_start();
 $_SESSION['job_save_success'] = 'Student admission job was saved and marked completed.';
-echo 'success';
-exit;
+$respond('success', 200);

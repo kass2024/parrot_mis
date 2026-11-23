@@ -1,0 +1,6 @@
+ALTER TABLE job_list
+    ADD COLUMN IF NOT EXISTS admission_draft JSON DEFAULT NULL;
+
+ALTER TABLE student_app
+    ENGINE = InnoDB,
+    MODIFY COLUMN platform VARCHAR(200) NOT NULL;
