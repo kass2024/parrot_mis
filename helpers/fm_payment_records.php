@@ -26,6 +26,7 @@ function fm_ensure_payment_records_schema(mysqli $conn): void
 
     $sql = "CREATE TABLE IF NOT EXISTS `francophonie_mobility_payment_records` (
       `id` int(11) NOT NULL AUTO_INCREMENT,
+      `application_id` int(11) DEFAULT NULL,
       `sort_order` int(11) NOT NULL DEFAULT 0,
       `full_name` varchar(200) NOT NULL DEFAULT '',
       `job_position` varchar(120) NOT NULL DEFAULT '',
@@ -40,11 +41,24 @@ function fm_ensure_payment_records_schema(mysqli $conn): void
       `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
       `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
       PRIMARY KEY (`id`),
-      KEY `sort_order` (`sort_order`)
+      KEY `sort_order` (`sort_order`),
+      KEY `application_id` (`application_id`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
     if (!$conn->query($sql)) {
         error_log('fm_ensure_payment_records_schema: ' . $conn->error);
         return;
+    }
+
+    $appCol = $conn->query("SHOW COLUMNS FROM francophonie_mobility_payment_records LIKE 'application_id'");
+    if ($appCol && $appCol->num_rows === 0) {
+        $conn->query(
+            'ALTER TABLE francophonie_mobility_payment_records
+             ADD COLUMN `application_id` int(11) DEFAULT NULL AFTER `id`,
+             ADD KEY `application_id` (`application_id`)'
+        );
+    }
+    if ($appCol) {
+        $appCol->free();
     }
 
     $cnt = $conn->query('SELECT COUNT(*) AS c FROM francophonie_mobility_payment_records');
@@ -56,6 +70,7 @@ function fm_ensure_payment_records_schema(mysqli $conn): void
     if ($n === 0) {
         fm_payment_records_seed_defaults($conn);
     }
+    fm_payment_records_link_existing_clients($conn);
 }
 
 /**
@@ -102,7 +117,14 @@ function fm_payment_records_list(mysqli $conn): array
 {
     fm_ensure_payment_records_schema($conn);
     $res = $conn->query(
-        'SELECT * FROM francophonie_mobility_payment_records ORDER BY sort_order ASC, id ASC'
+        'SELECT p.*,
+                a.reference_id AS app_reference,
+                a.email AS app_email,
+                a.status AS app_status,
+                TRIM(CONCAT(COALESCE(a.first_name,\'\'), \' \', COALESCE(a.last_name,\'\'))) AS app_name
+         FROM francophonie_mobility_payment_records p
+         LEFT JOIN francophonie_mobility_applications a ON a.id = p.application_id
+         ORDER BY p.sort_order ASC, p.id ASC'
     );
     if (!$res) {
         return [];
@@ -110,6 +132,222 @@ function fm_payment_records_list(mysqli $conn): array
     $rows = $res->fetch_all(MYSQLI_ASSOC) ?: [];
     $res->free();
     return $rows;
+}
+
+/**
+ * FM applications available to attach to a payment row.
+ *
+ * @return list<array{id:int,name:string,reference_id:string,email:string,status:string,profession:string}>
+ */
+function fm_payment_clients_for_picker(mysqli $conn, ?int $keepApplicationId = null): array
+{
+    fm_ensure_payment_records_schema($conn);
+    $used = [];
+    $res = $conn->query(
+        'SELECT application_id FROM francophonie_mobility_payment_records
+         WHERE application_id IS NOT NULL AND application_id > 0'
+    );
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $aid = (int) ($row['application_id'] ?? 0);
+            if ($aid > 0 && $aid !== (int) $keepApplicationId) {
+                $used[$aid] = true;
+            }
+        }
+        $res->free();
+    }
+
+    $out = [];
+    $apps = $conn->query(
+        "SELECT id, first_name, last_name, email, reference_id, status, profession, job_offer
+         FROM francophonie_mobility_applications
+         ORDER BY first_name ASC, last_name ASC, id DESC
+         LIMIT 800"
+    );
+    if (!$apps) {
+        return [];
+    }
+    while ($a = $apps->fetch_assoc()) {
+        $id = (int) ($a['id'] ?? 0);
+        if ($id <= 0 || isset($used[$id])) {
+            continue;
+        }
+        $name = trim(($a['first_name'] ?? '') . ' ' . ($a['last_name'] ?? ''));
+        $out[] = [
+            'id' => $id,
+            'name' => $name !== '' ? $name : ('Client #' . $id),
+            'reference_id' => (string) ($a['reference_id'] ?? ''),
+            'email' => (string) ($a['email'] ?? ''),
+            'status' => (string) ($a['status'] ?? ''),
+            'profession' => (string) ($a['profession'] ?? ''),
+            'job_offer' => (string) ($a['job_offer'] ?? ''),
+        ];
+    }
+    $apps->free();
+    return $out;
+}
+
+function fm_payment_records_link_existing_clients(mysqli $conn): void
+{
+    $rows = $conn->query(
+        'SELECT id, full_name FROM francophonie_mobility_payment_records
+         WHERE (application_id IS NULL OR application_id = 0) AND full_name <> \'\''
+    );
+    if (!$rows) {
+        return;
+    }
+    $upd = $conn->prepare(
+        'UPDATE francophonie_mobility_payment_records SET application_id = ? WHERE id = ? LIMIT 1'
+    );
+    while ($p = $rows->fetch_assoc()) {
+        $pid = (int) ($p['id'] ?? 0);
+        $name = trim((string) ($p['full_name'] ?? ''));
+        if ($pid <= 0 || $name === '') {
+            continue;
+        }
+        $appId = fm_payment_find_application_id_by_name($conn, $name);
+        if ($appId > 0 && $upd) {
+            $upd->bind_param('ii', $appId, $pid);
+            $upd->execute();
+        }
+    }
+    $rows->free();
+    if ($upd) {
+        $upd->close();
+    }
+}
+
+function fm_payment_find_application_id_by_name(mysqli $conn, string $fullName): int
+{
+    $fullName = preg_replace('/\s+/u', ' ', trim($fullName)) ?? trim($fullName);
+    if ($fullName === '') {
+        return 0;
+    }
+    $st = $conn->prepare(
+        "SELECT id FROM francophonie_mobility_applications
+         WHERE LOWER(TRIM(CONCAT(TRIM(first_name), ' ', TRIM(last_name)))) = LOWER(?)
+         LIMIT 1"
+    );
+    if (!$st) {
+        return 0;
+    }
+    $st->bind_param('s', $fullName);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    return (int) ($row['id'] ?? 0);
+}
+
+function fm_payment_guess_job_offer_slug(string $jobPosition): string
+{
+    require_once __DIR__ . '/francophonie_mobility_schema.php';
+    $j = strtolower($jobPosition);
+    if (str_contains($j, 'store') || str_contains($j, 'customer')) {
+        return 'customer_service_representative';
+    }
+    if (str_contains($j, 'restaurant') || str_contains($j, 'cook') || str_contains($j, 'kitchen')) {
+        return 'restaurant_staff';
+    }
+    if (str_contains($j, 'mechanical')) {
+        return 'mechanical_helper';
+    }
+    if (isset(fm_job_offer_choices()['construction_helper'])) {
+        return 'construction_helper';
+    }
+    $keys = array_keys(fm_job_offer_choices());
+    return $keys[0] ?? 'construction_helper';
+}
+
+/**
+ * Create a minimal FM client in applications DB (no payment fields — payments stay in payment_records only).
+ */
+function fm_payment_create_stub_application(mysqli $conn, string $fullName, string $jobPosition = ''): int
+{
+    require_once __DIR__ . '/francophonie_mobility_schema.php';
+    fm_ensure_schema($conn);
+
+    $fullName = preg_replace('/\s+/u', ' ', trim($fullName)) ?? trim($fullName);
+    if ($fullName === '') {
+        throw new RuntimeException('Enter a full name.');
+    }
+    $existing = fm_payment_find_application_id_by_name($conn, $fullName);
+    if ($existing > 0) {
+        return $existing;
+    }
+
+    $parts = preg_split('/\s+/u', $fullName, 2) ?: [$fullName];
+    $first = (string) ($parts[0] ?? $fullName);
+    $last = (string) ($parts[1] ?? '');
+    $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '', $first . $last) ?: 'client');
+    $email = 'fm.pay.' . $slug . '.' . substr(bin2hex(random_bytes(3)), 0, 6) . '@placeholder.local';
+    $userId = 'fm_pay_' . bin2hex(random_bytes(6)) . '_' . time();
+    $reference = 'FM' . date('Y') . strtoupper(substr(bin2hex(random_bytes(4)), 0, 8));
+    $jobOffer = fm_payment_guess_job_offer_slug($jobPosition);
+    $profession = $jobPosition !== '' ? $jobPosition : 'N/A';
+    $phoneArea = '';
+    $phoneNum = '0';
+    $dobBind = '';
+    $passport = 'PENDING';
+    $address = 'N/A';
+    $age = 0;
+    $nationality = 'N/A';
+    $residence = 'N/A';
+    $zero = '0';
+    $na = 'N/A';
+    $year = '0000';
+    $empty = '';
+    $beginner = 'beginner';
+    $no = 'no';
+    $zeroInt = 0;
+    $notes = 'Added from Payment records (stub client — no payment data on application).';
+    $status = 'pending';
+    $source = 'staff';
+
+    $sql = 'INSERT INTO francophonie_mobility_applications (
+            user_id, reference_id, first_name, last_name, email,
+            phone_area_code, phone_number, date_of_birth, passport_number, address,
+            age, nationality, country_of_residence,
+            profession, years_experience, highest_degree, field_of_study, university_name,
+            country_of_study, graduation_year, other_certifications,
+            french_level, french_tef, french_tcf, french_professional,
+            english_level, english_toefl, english_ielts, english_professional,
+            has_wes, job_offer, cv_file, french_cert_file, english_cert_file, academic_docs_file,
+            admin_notes, status, source, created_at
+        ) VALUES (
+            ?,?,?,?,?,
+            ?,?,NULLIF(?,\'\'),?,?,
+            ?,?,?,
+            ?,?,?,?,?,
+            ?,?,?,
+            ?,?,?,?,
+            ?,?,?,?,
+            ?,?,\'\',\'\',\'\',\'\',
+            ?,?,?, NOW()
+        )';
+    $st = $conn->prepare($sql);
+    if (!$st) {
+        throw new RuntimeException('Could not create client: ' . $conn->error);
+    }
+    $type = 'ssssssssssisssssssssssiissiissssss';
+    $st->bind_param(
+        $type,
+        $userId, $reference, $first, $last, $email,
+        $phoneArea, $phoneNum, $dobBind, $passport, $address,
+        $age, $nationality, $residence,
+        $profession, $zero, $na, $na, $na,
+        $na, $year, $empty,
+        $beginner, $zeroInt, $zeroInt, $no,
+        $beginner, $zeroInt, $zeroInt, $no,
+        $no, $jobOffer, $notes, $status, $source
+    );
+    if (!$st->execute()) {
+        $err = $st->error;
+        $st->close();
+        throw new RuntimeException('Could not create client: ' . $err);
+    }
+    $newId = (int) $st->insert_id;
+    $st->close();
+    return $newId;
 }
 
 function fm_payment_record_recalc_balance(float $total, float $up1, float $up2, float $med): float
@@ -123,25 +361,53 @@ function fm_payment_record_recalc_balance(float $total, float $up1, float $up2, 
 function fm_payment_record_save(mysqli $conn, int $id, array $data): bool
 {
     fm_ensure_payment_records_schema($conn);
+    $appId = (int) ($data['application_id'] ?? 0);
     $name = trim((string) ($data['full_name'] ?? ''));
     $job = trim((string) ($data['job_position'] ?? ''));
+
+    if ($appId > 0) {
+        $stApp = $conn->prepare(
+            'SELECT first_name, last_name, profession, job_offer FROM francophonie_mobility_applications WHERE id = ? LIMIT 1'
+        );
+        if ($stApp) {
+            $stApp->bind_param('i', $appId);
+            $stApp->execute();
+            $app = $stApp->get_result()->fetch_assoc();
+            $stApp->close();
+            if ($app) {
+                $appName = trim(($app['first_name'] ?? '') . ' ' . ($app['last_name'] ?? ''));
+                if ($appName !== '') {
+                    $name = $appName;
+                }
+                if ($job === '') {
+                    $job = trim((string) ($app['profession'] ?? ''));
+                    if ($job === '' || strtoupper($job) === 'N/A') {
+                        require_once __DIR__ . '/francophonie_mobility_schema.php';
+                        $job = fm_job_offer_label((string) ($app['job_offer'] ?? ''));
+                    }
+                }
+            }
+        }
+    }
+
     $total = (float) ($data['total_fees'] ?? 0);
     $up1 = (float) ($data['upfront_fees_paid'] ?? 0);
     $up2 = (float) ($data['upfront_fees_paid_2'] ?? 0);
     $med = (float) ($data['paid_after_medical'] ?? 0);
     $bal = fm_payment_record_recalc_balance($total, $up1, $up2, $med);
-    if (isset($data['balance_to_sultan']) && $data['balance_to_sultan'] !== '') {
+    if (array_key_exists('balance_to_sultan', $data) && $data['balance_to_sultan'] !== '' && $data['balance_to_sultan'] !== null) {
         $bal = (float) $data['balance_to_sultan'];
     }
     $visa = trim((string) ($data['visa_status'] ?? ''));
     $comment = trim((string) ($data['comment'] ?? ''));
     $hi = !empty($data['highlighted']) ? 1 : 0;
     $sort = (int) ($data['sort_order'] ?? 0);
+    $appIdBind = $appId > 0 ? $appId : 0;
 
     if ($id > 0) {
         $st = $conn->prepare(
             'UPDATE francophonie_mobility_payment_records SET
-             sort_order=?, full_name=?, job_position=?, total_fees=?, upfront_fees_paid=?,
+             application_id=NULLIF(?,0), sort_order=?, full_name=?, job_position=?, total_fees=?, upfront_fees_paid=?,
              upfront_fees_paid_2=?, paid_after_medical=?, balance_to_sultan=?, visa_status=?,
              comment=?, highlighted=? WHERE id=? LIMIT 1'
         );
@@ -149,8 +415,8 @@ function fm_payment_record_save(mysqli $conn, int $id, array $data): bool
             return false;
         }
         $st->bind_param(
-            'issdddddssii',
-            $sort, $name, $job, $total, $up1, $up2, $med, $bal, $visa, $comment, $hi, $id
+            'iissdddddssii',
+            $appIdBind, $sort, $name, $job, $total, $up1, $up2, $med, $bal, $visa, $comment, $hi, $id
         );
         $ok = $st->execute();
         $st->close();
@@ -159,16 +425,16 @@ function fm_payment_record_save(mysqli $conn, int $id, array $data): bool
 
     $st = $conn->prepare(
         'INSERT INTO francophonie_mobility_payment_records
-        (sort_order, full_name, job_position, total_fees, upfront_fees_paid, upfront_fees_paid_2,
+        (application_id, sort_order, full_name, job_position, total_fees, upfront_fees_paid, upfront_fees_paid_2,
          paid_after_medical, balance_to_sultan, visa_status, comment, highlighted)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+         VALUES (NULLIF(?,0),?,?,?,?,?,?,?,?,?,?,?)'
     );
     if (!$st) {
         return false;
     }
     $st->bind_param(
-        'issdddddssi',
-        $sort, $name, $job, $total, $up1, $up2, $med, $bal, $visa, $comment, $hi
+        'iissdddddssi',
+        $appIdBind, $sort, $name, $job, $total, $up1, $up2, $med, $bal, $visa, $comment, $hi
     );
     $ok = $st->execute();
     $st->close();

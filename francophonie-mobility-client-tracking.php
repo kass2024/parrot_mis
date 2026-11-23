@@ -13,10 +13,12 @@ require_once __DIR__ . '/helpers/fm_manager_portal.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_documents.php';
 require_once __DIR__ . '/helpers/fm_client_tracking.php';
+require_once __DIR__ . '/helpers/fm_payment_records.php';
 
 fm_ensure_schema($conn);
 fm_ensure_documents_schema($conn);
 fm_ensure_tracking_schema($conn);
+fm_ensure_payment_records_schema($conn);
 
 fm_require_staff_or_manager_portal($conn);
 
@@ -31,8 +33,25 @@ $forceScan = isset($_GET['rescan']) && $_GET['rescan'] === '1';
 $scanOne = (int) ($_GET['scan_id'] ?? 0);
 $scanReady = pcvc_docvision_is_configured();
 $scanErrors = [];
+$emailFlash = '';
+$emailErr = '';
 if ($forceScan || $scanOne > 0) {
     @set_time_limit(300);
+}
+
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report_email'])) {
+    if (empty($_POST['csrf_token']) || !hash_equals((string) $_SESSION['csrf_token'], (string) $_POST['csrf_token'])) {
+        $emailErr = 'Session expired. Refresh and try again.';
+    } else {
+        @set_time_limit(180);
+        $link = fm_manager_portal_private_url($conn);
+        $result = fm_send_manager_full_report($conn, $link);
+        if (!empty($result['ok'])) {
+            $emailFlash = (string) ($result['message'] ?? 'Report sent.');
+        } else {
+            $emailErr = (string) ($result['message'] ?? 'Could not send the report.');
+        }
+    }
 }
 
 $where = '1=1';
@@ -230,25 +249,37 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="col-md-9 col-lg-4 d-flex flex-wrap gap-2">
+            <div class="col-12 col-lg-4 d-flex flex-wrap gap-2 align-items-center">
                 <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter me-1"></i> Apply</button>
                 <button type="button" class="btn btn-sm btn-outline-success" id="exportExcelBtn">
                     <i class="fas fa-file-excel me-1"></i> Export Excel
                 </button>
-                <a class="btn btn-sm btn-success" href="?<?= htmlspecialchars($queryBase) ?>&amp;rescan=1">
-                    <i class="fas fa-sync-alt me-1"></i> Refresh document check
+                <a class="btn btn-sm btn-outline-secondary" href="?<?= htmlspecialchars($queryBase) ?>&amp;rescan=1">
+                    <i class="fas fa-sync-alt me-1"></i> Refresh check
                 </a>
-                <a class="btn btn-sm btn-outline-secondary" href="francophonie-mobility-applications.php">Applications</a>
             </div>
-            <div class="col-12">
+            <div class="col-12 d-flex flex-wrap gap-2 align-items-center justify-content-between">
                 <span class="hint" id="resultHint">
                     <?= $scanReady
                         ? '<i class="fas fa-check-circle text-success"></i> Document check ready'
                         : '<i class="fas fa-exclamation-triangle text-warning"></i> Using folder names only' ?>
                     · <span id="visibleCount"><?= count($rows) ?></span> of <?= count($rows) ?> client<?= count($rows) === 1 ? '' : 's' ?>
                 </span>
+                <button type="submit" form="sendReportForm" class="btn btn-sm btn-success" name="send_report_email" value="1">
+                    <i class="fas fa-paper-plane me-1"></i> Send email
+                </button>
             </div>
         </form>
+        <form method="post" id="sendReportForm" class="d-none">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+            <input type="hidden" name="send_report_email" value="1">
+        </form>
+        <?php if ($emailFlash !== ''): ?>
+        <div class="alert alert-success mt-3 mb-0 py-2 small"><?= htmlspecialchars($emailFlash) ?></div>
+        <?php endif; ?>
+        <?php if ($emailErr !== ''): ?>
+        <div class="alert alert-danger mt-3 mb-0 py-2 small"><?= htmlspecialchars($emailErr) ?></div>
+        <?php endif; ?>
         <?php if ($scanErrors !== []): ?>
         <div class="alert alert-warning mt-3 mb-0 py-2 small">
             Some rows used folder names when a full document check was not available.
