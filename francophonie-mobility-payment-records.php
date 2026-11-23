@@ -16,10 +16,8 @@ fm_ensure_schema($conn);
 fm_ensure_payment_records_schema($conn);
 
 $isPortal = fm_manager_portal_logged_in();
-$isSuper = false;
-if (!empty($_SESSION['id']) || !empty($_SESSION['admin_id'])) {
-    $isSuper = pcvc_current_user_is_superadmin($conn);
-}
+$staffSession = !empty($_SESSION['id']) || !empty($_SESSION['admin_id']);
+$isSuper = $staffSession && pcvc_current_user_is_superadmin($conn);
 
 if ($isPortal && fm_manager_portal_script_allowed()) {
     if (empty($_SESSION['csrf_token'])) {
@@ -28,17 +26,23 @@ if ($isPortal && fm_manager_portal_script_allowed()) {
 } elseif ($isSuper) {
     // ok
 } else {
-    if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
+    if (!$staffSession) {
         header('Location: admin-login.php');
         exit;
     }
     pcvc_require_superadmin($conn);
 }
 
-$canEdit = $isSuper && (!empty($_SESSION['id']) || !empty($_SESSION['admin_id']));
+// Private manager link is view-only. Add/edit/delete only from superadmin dashboard.
+$inAdminFrame = (($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'iframe')
+    || isset($_GET['staff'])
+    || (isset($_SERVER['HTTP_REFERER']) && str_contains((string) $_SERVER['HTTP_REFERER'], 'admin-dashboard.php'));
+$showPortalNav = $isPortal && !$inAdminFrame;
+$canEdit = $isSuper && (!$isPortal || $inAdminFrame);
 $message = '';
 $error = '';
-$editId = (int) ($_GET['edit'] ?? 0);
+$editId = $canEdit ? (int) ($_GET['edit'] ?? 0) : 0;
+$wantAdd = $canEdit && isset($_GET['add']);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -111,7 +115,7 @@ if ($editId > 0) {
         }
     }
 }
-$showForm = $canEdit && ($editing !== null || isset($_GET['add']));
+$showForm = $canEdit && ($editing !== null || $wantAdd);
 $pickerKeep = $editing ? (int) ($editing['application_id'] ?? 0) : null;
 $clients = $canEdit ? fm_payment_clients_for_picker($conn, $pickerKeep) : [];
 $nextSn = 1;
@@ -172,12 +176,16 @@ foreach ($rows as $r) {
     </style>
 </head>
 <body>
-<?= $isPortal ? fm_manager_portal_nav_html('payments') : '' ?>
+<?= $showPortalNav ? fm_manager_portal_nav_html('payments') : '' ?>
 <div class="page-head">
     <div class="container-fluid px-3 px-md-4" style="max-width:1180px">
         <h1 class="h4 mb-1"><i class="fas fa-money-bill-wave me-2"></i>Payment records</h1>
         <p class="mb-0 opacity-75 small">
+            <?php if ($canEdit): ?>
             Pick clients from the Francophonie Mobility database. Payment figures stay only on this sheet — not on Record invoice or the client form.
+            <?php else: ?>
+            View-only payment sheet. Adding or editing records is done from the superadmin dashboard.
+            <?php endif; ?>
         </p>
     </div>
 </div>
@@ -185,13 +193,13 @@ foreach ($rows as $r) {
 <div class="container-fluid px-3 px-md-4 pb-5" style="max-width:1180px">
     <div class="toolbar">
         <div>
-            <?php if (!$isPortal): ?>
+            <?php if (!$showPortalNav && $canEdit): ?>
             <a href="francophonie-mobility-applications.php" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left me-1"></i> Back</a>
             <?php endif; ?>
-            <span class="hint ms-2"><?= count($rows) ?> record<?= count($rows) === 1 ? '' : 's' ?></span>
+            <span class="hint<?= (!$showPortalNav && $canEdit) ? ' ms-2' : '' ?>"><?= count($rows) ?> record<?= count($rows) === 1 ? '' : 's' ?></span>
         </div>
         <?php if ($canEdit && !$showForm): ?>
-        <a class="btn btn-success btn-sm" href="?add=1"><i class="fas fa-plus me-1"></i> Add payment record</a>
+        <a class="btn btn-success btn-sm" href="?<?= $inAdminFrame ? 'staff=1&' : '' ?>add=1"><i class="fas fa-plus me-1"></i> Add payment record</a>
         <?php endif; ?>
     </div>
 
@@ -219,7 +227,7 @@ foreach ($rows as $r) {
                 <h2 class="h5 mb-1"><?= $isAdd ? 'Add payment record' : 'Edit payment record' ?></h2>
                 <p class="hint mb-0">Choose an existing client, or add a missing client to the applications DB (without storing payment there).</p>
             </div>
-            <a href="francophonie-mobility-payment-records.php" class="btn btn-sm btn-outline-secondary">Cancel</a>
+            <a href="francophonie-mobility-payment-records.php<?= $inAdminFrame ? '?staff=1' : '' ?>" class="btn btn-sm btn-outline-secondary">Cancel</a>
         </div>
         <form method="post" id="payForm">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
@@ -358,7 +366,7 @@ foreach ($rows as $r) {
                         <td><?= htmlspecialchars((string) ($r['comment'] ?? '')) ?></td>
                         <?php if ($canEdit): ?>
                         <td class="text-nowrap">
-                            <a class="btn btn-sm btn-outline-primary" href="?edit=<?= (int) $r['id'] ?>"><i class="fas fa-pen"></i></a>
+                            <a class="btn btn-sm btn-outline-primary" href="?<?= $inAdminFrame ? 'staff=1&' : '' ?>edit=<?= (int) $r['id'] ?>"><i class="fas fa-pen"></i></a>
                             <form method="post" class="d-inline" onsubmit="return confirm('Remove this payment record? The client application is kept.');">
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                                 <input type="hidden" name="action" value="delete">

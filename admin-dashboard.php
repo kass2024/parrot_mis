@@ -2526,7 +2526,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             Manager private link
           </a>
           <?php if (!empty($isSuperExecutive)): ?>
-          <a href="#" onclick="loadInFrame('francophonie-mobility-payment-records.php', 'Payment records')">
+          <a href="#" onclick="loadInFrame('francophonie-mobility-payment-records.php?staff=1', 'Payment records')">
             <i class="bi bi-cash-stack"></i>
             Payment records
           </a>
