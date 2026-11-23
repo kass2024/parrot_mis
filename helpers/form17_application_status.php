@@ -91,7 +91,8 @@ function xander_visa_featured_destination_countries(): array
 }
 
 /**
- * Canada (Jan / May / Sep) and USA (Spring / Summer / Fall) intakes for current + next two years.
+ * Canada (Jan / May / Sep / Dec) and USA (Spring / Summer / Fall / Winter-Dec) intakes
+ * for current + next two years.
  *
  * @return array<string, list<string>> country label => intake labels
  */
@@ -105,9 +106,11 @@ function xander_visa_intake_options_by_country(): array
         $canada[] = 'Canada — January ' . $y . ' (Winter)';
         $canada[] = 'Canada — May ' . $y . ' (Spring/Summer)';
         $canada[] = 'Canada — September ' . $y . ' (Fall)';
+        $canada[] = 'Canada — December ' . $y . ' (Winter)';
         $usa[] = 'USA — Spring ' . $y . ' (January)';
         $usa[] = 'USA — Summer ' . $y . ' (May)';
         $usa[] = 'USA — Fall ' . $y . ' (August)';
+        $usa[] = 'USA — Winter ' . $y . ' (December)';
     }
 
     return [

@@ -1054,6 +1054,16 @@ $fileFields = [
             color: #64748b; padding: 8px 10px 4px;
         }
         .visa-smart-country .visa-country-empty { padding: 10px; font-size: 13px; color: #64748b; }
+        .visa-edit-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 700px) { .visa-edit-grid { grid-template-columns: 1fr 1fr; } }
+        .visa-edit-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 700; color: #334155; }
+        .visa-edit-grid input, .visa-edit-grid select {
+            font: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff;
+        }
+        .visa-edit-grid .full { grid-column: 1 / -1; }
+        .visa-edit-msg { margin: 0 0 10px; font-size: 13px; font-weight: 700; min-height: 1.2em; }
+        .visa-edit-msg.ok { color: #166534; }
+        .visa-edit-msg.err { color: #b91c1c; }
         .process-panel { padding-bottom: 12px; }
     </style>
 </head>
@@ -1377,12 +1387,14 @@ $fileFields = [
                                         'id' => $applicant['user_id'],
                                         'email' => $applicant['email'],
                                         'mobile' => $applicant['applicant_mobile'],
-                                        'birthdate' => $applicant['birthdate'],
+                                        'birthdate' => ($birthText !== '' ? $birthText : ''),
                                         'gender' => $applicant['gender'],
                                         'passport' => $passportInfo,
+                                        'passport_number' => $applicant['passport_number'] ?? '',
                                         'country_from' => $applicant['country_applying_from'],
                                         'country_to' => $applicant['country_to_visit'],
                                         'visa_type' => $applicant['visa_type'],
+                                        'intake' => $intakeText,
                                         'region' => $applicant['region_name'],
                                         'country' => $applicant['country_name'],
                                         'terms' => $applicant['terms'],
@@ -1390,7 +1402,7 @@ $fileFields = [
                                         'is_read' => $applicant['is_read'],
                                         'processStatus' => $procKey,
                                         'processLabel' => $procLabel,
-                                    ])) ?>'>
+                                    ], JSON_UNESCAPED_UNICODE)) ?>'>
                                 <i class="fas fa-eye"></i> Details
                             </button>
                             <?php if ($canDeleteVisaApplication): ?>
@@ -1483,6 +1495,9 @@ $fileFields = [
         window.JOB_PROCESS_LABELS = <?= json_encode($JOB_PROCESS_STATUSES, JSON_UNESCAPED_UNICODE) ?>;
         window.CAN_DELETE_VISA = <?= json_encode($canDeleteVisaApplication) ?>;
         window.CAN_EDIT_VISA_PROCESS = <?= json_encode($canEditVisaProcess) ?>;
+        window.VISA_DEST_COUNTRIES = <?= json_encode($visaDestCountries, JSON_UNESCAPED_UNICODE) ?>;
+        window.VISA_FEATURED_DEST_COUNTRIES = <?= json_encode($visaFeaturedDestCountries, JSON_UNESCAPED_UNICODE) ?>;
+        window.VISA_INTAKE_BY_COUNTRY = <?= json_encode($visaIntakeByCountry, JSON_UNESCAPED_UNICODE) ?>;
     </script>
 
     <script>
@@ -1508,93 +1523,292 @@ $fileFields = [
                 });
             });
             
+            function escapeHtml(value) {
+                return String(value == null ? '' : value)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
+            function buildCountryOptionsHtml(selected) {
+                var featured = window.VISA_FEATURED_DEST_COUNTRIES || [];
+                var all = window.VISA_DEST_COUNTRIES || [];
+                var selectedVal = String(selected || '');
+                var featuredSet = {};
+                var html = '<option value="">Select country…</option>';
+                if (featured.length) {
+                    html += '<optgroup label="Popular destinations">';
+                    featured.forEach(function(name) {
+                        featuredSet[name] = true;
+                        html += '<option value="' + escapeHtml(name) + '"' + (selectedVal === name ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+                    });
+                    html += '</optgroup>';
+                }
+                html += '<optgroup label="All countries">';
+                all.forEach(function(name) {
+                    if (featuredSet[name]) return;
+                    html += '<option value="' + escapeHtml(name) + '"' + (selectedVal === name ? ' selected' : '') + '>' + escapeHtml(name) + '</option>';
+                });
+                html += '</optgroup>';
+                if (selectedVal && all.indexOf(selectedVal) === -1 && !featuredSet[selectedVal]) {
+                    html += '<option value="' + escapeHtml(selectedVal) + '" selected>' + escapeHtml(selectedVal) + '</option>';
+                }
+                return html;
+            }
+
+            function buildIntakeOptionsHtml(selected) {
+                var groups = window.VISA_INTAKE_BY_COUNTRY || {};
+                var selectedVal = String(selected || '');
+                var html = '<option value="">Select intake…</option>';
+                Object.keys(groups).forEach(function(groupLabel) {
+                    html += '<optgroup label="' + escapeHtml(groupLabel) + '">';
+                    (groups[groupLabel] || []).forEach(function(label) {
+                        html += '<option value="' + escapeHtml(label) + '"' + (selectedVal === label ? ' selected' : '') + '>' + escapeHtml(label) + '</option>';
+                    });
+                    html += '</optgroup>';
+                });
+                if (selectedVal) {
+                    var known = false;
+                    Object.keys(groups).forEach(function(g) {
+                        if ((groups[g] || []).indexOf(selectedVal) !== -1) known = true;
+                    });
+                    if (!known) {
+                        html += '<option value="' + escapeHtml(selectedVal) + '" selected>' + escapeHtml(selectedVal) + '</option>';
+                    }
+                }
+                return html;
+            }
+
             // Show applicant details in modal
             function showApplicantDetails(data) {
                 const procLabel = data.processLabel || (window.JOB_PROCESS_LABELS && data.processStatus ? window.JOB_PROCESS_LABELS[data.processStatus] : '') || '—';
-                modalContent.innerHTML = `
+                const canEdit = !!window.CAN_EDIT_VISA_PROCESS;
+                const birthVal = (data.birthdate && data.birthdate !== 'null' && data.birthdate !== '0000-00-00') ? String(data.birthdate) : '';
+                const genderVal = (data.gender && data.gender !== 'null') ? String(data.gender) : '';
+                const visaType = data.visa_type || 'Study Visa';
+                const intakeVal = data.intake || '';
+                const passportNum = data.passport_number || ((data.passport || '').replace(/\s*\(Exp:.*$/, '').trim());
+
+                if (!canEdit) {
+                    modalContent.innerHTML = `
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
                         <div style="grid-column: 1 / -1; background: linear-gradient(135deg, #f8f9fa, #e9ecef); padding: 15px; border-radius: 8px; text-align: center;">
-                            <h4 style="margin: 0; color: <?= $colors['navy'] ?>;">${data.name}</h4>
-                            <p style="margin: 5px 0 0 0; color: #666;">ID: ${data.id} | Applied on ${data.applied}</p>
+                            <h4 style="margin: 0; color: <?= $colors['navy'] ?>;">${escapeHtml(data.name)}</h4>
+                            <p style="margin: 5px 0 0 0; color: #666;">ID: ${escapeHtml(data.id)} | Applied on ${escapeHtml(data.applied)}</p>
                         </div>
                         <div style="grid-column: 1 / -1; background: rgba(37, 77, 129, 0.08); padding: 12px 14px; border-radius: 8px; border-left: 4px solid <?= $colors['gold'] ?>;">
                             <strong style="color: <?= $colors['secondary_blue'] ?>; font-size: 0.85rem;">Application process</strong>
-                            <div style="margin-top: 6px; font-weight: 700; color: <?= $colors['navy'] ?>;">${procLabel}</div>
+                            <div style="margin-top: 6px; font-weight: 700; color: <?= $colors['navy'] ?>;">${escapeHtml(procLabel)}</div>
                         </div>
-                        
                         <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
                             <strong style="color: <?= $colors['secondary_blue'] ?>;">Contact Information</strong>
                             <div style="margin-top: 8px;">
-                                <div><i class="fas fa-envelope" style="color: <?= $colors['gold'] ?>;"></i> ${data.email}</div>
-                                <div><i class="fas fa-mobile-alt" style="color: <?= $colors['gold'] ?>;"></i> ${data.mobile}</div>
+                                <div><i class="fas fa-envelope" style="color: <?= $colors['gold'] ?>;"></i> ${escapeHtml(data.email || '—')}</div>
+                                <div><i class="fas fa-mobile-alt" style="color: <?= $colors['gold'] ?>;"></i> ${escapeHtml(data.mobile || '—')}</div>
                             </div>
                         </div>
-                        
                         <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
                             <strong style="color: <?= $colors['secondary_blue'] ?>;">Personal Details</strong>
                             <div style="margin-top: 8px;">
-                                <div><i class="fas fa-birthday-cake" style="color: <?= $colors['gold'] ?>;"></i> ${data.birthdate}</div>
-                                <div><i class="fas fa-venus-mars" style="color: <?= $colors['gold'] ?>;"></i> ${data.gender}</div>
+                                <div><i class="fas fa-birthday-cake" style="color: <?= $colors['gold'] ?>;"></i> ${escapeHtml(birthVal || '—')}</div>
+                                <div><i class="fas fa-venus-mars" style="color: <?= $colors['gold'] ?>;"></i> ${escapeHtml(genderVal || '—')}</div>
                             </div>
                         </div>
-                        
                         <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
                             <strong style="color: <?= $colors['secondary_blue'] ?>;">Passport Information</strong>
                             <div style="margin-top: 8px;">
-                                <div><i class="fas fa-passport" style="color: <?= $colors['gold'] ?>;"></i> ${data.passport}</div>
+                                <div><i class="fas fa-passport" style="color: <?= $colors['gold'] ?>;"></i> ${escapeHtml(data.passport || '—')}</div>
                             </div>
                         </div>
-                        
                         <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
                             <strong style="color: <?= $colors['secondary_blue'] ?>;">Travel Information</strong>
                             <div style="margin-top: 8px;">
-                                <div><i class="fas fa-plane-departure" style="color: <?= $colors['gold'] ?>;"></i> From: ${data.country_from}</div>
-                                <div><i class="fas fa-plane-arrival" style="color: <?= $colors['gold'] ?>;"></i> To: ${data.country_to}</div>
-                                <div><i class="fas fa-file-alt" style="color: <?= $colors['gold'] ?>;"></i> Visa Type: <span class="status-tag visa">${data.visa_type}</span></div>
+                                <div><i class="fas fa-plane-departure" style="color: <?= $colors['gold'] ?>;"></i> From: ${escapeHtml(data.country_from || '—')}</div>
+                                <div><i class="fas fa-plane-arrival" style="color: <?= $colors['gold'] ?>;"></i> To: ${escapeHtml(data.country_to || '—')}</div>
+                                <div><i class="fas fa-file-alt" style="color: <?= $colors['gold'] ?>;"></i> Visa Type: <span class="status-tag visa">${escapeHtml(visaType)}</span></div>
+                                ${intakeVal ? `<div><i class="fas fa-calendar-alt" style="color: <?= $colors['gold'] ?>;"></i> Intake: ${escapeHtml(intakeVal)}</div>` : ''}
                             </div>
                         </div>
-                        
-                        <div style="background: #f8f9fa; padding: 12px; border-radius: 6px;">
-                            <strong style="color: <?= $colors['secondary_blue'] ?>;">Region & Terms</strong>
-                            <div style="margin-top: 8px;">
-                                <div><i class="fas fa-map-marker-alt" style="color: <?= $colors['gold'] ?>;"></i> Region: ${data.region || 'Not specified'}</div>
-                                <div><i class="fas fa-globe" style="color: <?= $colors['gold'] ?>;"></i> Country: ${data.country || 'Not specified'}</div>
-                                <div><i class="fas fa-check-circle" style="color: <?= $colors['gold'] ?>;"></i> Terms: ${data.terms ? 'Accepted' : 'Not accepted'}</div>
-                            </div>
-                        </div>
-                        
                         <div style="grid-column: 1 / -1; background: rgba(242, 166, 90, 0.1); padding: 12px; border-radius: 6px; border-left: 4px solid <?= $colors['gold'] ?>;">
                             <strong style="color: <?= $colors['secondary_blue'] ?>;">Application Status</strong>
                             <div style="margin-top: 8px;">
-                                <div><i class="fas fa-info-circle" style="color: <?= $colors['gold'] ?>;"></i> Application ID: ${data.id}</div>
-                                <div><i class="fas fa-calendar" style="color: <?= $colors['gold'] ?>;"></i> Submitted: ${data.applied}</div>
+                                <div><i class="fas fa-info-circle" style="color: <?= $colors['gold'] ?>;"></i> Application ID: ${escapeHtml(data.id)}</div>
+                                <div><i class="fas fa-calendar" style="color: <?= $colors['gold'] ?>;"></i> Submitted: ${escapeHtml(data.applied)}</div>
                                 <div><i class="fas fa-eye" style="color: <?= $colors['gold'] ?>;"></i> Read Status: ${data.is_read == 0 ? 'Unread' : 'Read'}</div>
                             </div>
                         </div>
                     </div>
-                    
                     <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 15px; border-top: 1px solid #dee2e6;">
-                        <a href="mailto:${data.email}" class="contact-btn" style="display: inline-flex; text-decoration: none;">
+                        <a href="mailto:${escapeHtml(data.email || '')}" class="contact-btn" style="display: inline-flex; text-decoration: none;">
                             <i class="fas fa-envelope"></i> Send Email
                         </a>
-                        <button id="closeDetails" class="search-btn" style="background: #666;">
+                        <button type="button" id="closeDetails" class="search-btn" style="background: #666;">
                             <i class="fas fa-times"></i> Close
                         </button>
-                    </div>
-                `;
-                
+                    </div>`;
+                } else {
+                    modalContent.innerHTML = `
+                    <form id="visaEditDetailsForm">
+                        <input type="hidden" name="user_id" value="${escapeHtml(data.id)}">
+                        <div style="background: linear-gradient(135deg, #f8f9fa, #e9ecef); padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 14px;">
+                            <h4 style="margin: 0; color: <?= $colors['navy'] ?>;" id="visaEditTitleName">${escapeHtml(data.name)}</h4>
+                            <p style="margin: 5px 0 0 0; color: #666;">ID: ${escapeHtml(data.id)} | Applied on ${escapeHtml(data.applied)}</p>
+                        </div>
+                        <div style="background: rgba(37, 77, 129, 0.08); padding: 12px 14px; border-radius: 8px; border-left: 4px solid <?= $colors['gold'] ?>; margin-bottom: 14px;">
+                            <strong style="color: <?= $colors['secondary_blue'] ?>; font-size: 0.85rem;">Application process</strong>
+                            <div style="margin-top: 6px; font-weight: 700; color: <?= $colors['navy'] ?>;">${escapeHtml(procLabel)}</div>
+                            <p style="margin: 6px 0 0; font-size: 12px; color: #64748b;">Change status from the applicant card. Edit personal and travel details below.</p>
+                        </div>
+                        <p class="visa-edit-msg" id="visaEditMsg"></p>
+                        <div class="visa-edit-grid">
+                            <label class="full">Full name
+                                <input name="full_name" required maxlength="200" value="${escapeHtml(data.name || '')}">
+                            </label>
+                            <label>Email
+                                <input name="email" type="email" maxlength="150" value="${escapeHtml(data.email || '')}" placeholder="Optional">
+                            </label>
+                            <label>Phone
+                                <input name="phone" maxlength="20" value="${escapeHtml(data.mobile || '')}" placeholder="Optional">
+                            </label>
+                            <label>Birth date
+                                <input name="birthdate" type="date" value="${escapeHtml(birthVal)}">
+                            </label>
+                            <label>Gender
+                                <select name="gender">
+                                    <option value="">Not specified</option>
+                                    <option value="Male"${genderVal === 'Male' ? ' selected' : ''}>Male</option>
+                                    <option value="Female"${genderVal === 'Female' ? ' selected' : ''}>Female</option>
+                                    <option value="Other"${genderVal === 'Other' ? ' selected' : ''}>Other</option>
+                                </select>
+                            </label>
+                            <label>Passport number
+                                <input name="passport_number" maxlength="50" value="${escapeHtml(passportNum || '')}" placeholder="Optional">
+                            </label>
+                            <label>Visa type
+                                <select name="visa_type" id="visaEditVisaType">
+                                    <option${visaType === 'Study Visa' ? ' selected' : ''}>Study Visa</option>
+                                    <option${visaType === 'Visit Visa' ? ' selected' : ''}>Visit Visa</option>
+                                    <option${visaType === 'Work Visa' ? ' selected' : ''}>Work Visa</option>
+                                </select>
+                            </label>
+                            <label>Applying from
+                                <select name="country_applying_from">${buildCountryOptionsHtml(data.country_from)}</select>
+                            </label>
+                            <label>Destination country
+                                <select name="destination_country">${buildCountryOptionsHtml(data.country_to)}</select>
+                            </label>
+                            <label class="full" id="visaEditIntakeWrap">Choose intake
+                                <select name="intake" id="visaEditIntake">${buildIntakeOptionsHtml(intakeVal)}</select>
+                            </label>
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; gap: 10px; padding-top: 15px; margin-top: 15px; border-top: 1px solid #dee2e6; flex-wrap: wrap;">
+                            <a href="mailto:${escapeHtml(data.email || '')}" class="contact-btn" style="display: inline-flex; text-decoration: none;">
+                                <i class="fas fa-envelope"></i> Send Email
+                            </a>
+                            <button type="button" id="closeDetails" class="search-btn" style="background: #666;">
+                                <i class="fas fa-times"></i> Close
+                            </button>
+                            <button type="submit" class="search-btn" style="background: #166534;" id="visaEditSaveBtn">
+                                <i class="fas fa-save"></i> Save details
+                            </button>
+                        </div>
+                    </form>`;
+                }
+
                 modal.style.display = 'flex';
-                
-                // Close modal events
-                closeModal.addEventListener('click', hideModal);
-                document.getElementById('closeDetails').addEventListener('click', hideModal);
-                
-                // Close on outside click
-                modal.addEventListener('click', function(e) {
-                    if(e.target === modal) {
-                        hideModal();
+
+                var closeBtn = document.getElementById('closeDetails');
+                if (closeBtn) closeBtn.onclick = hideModal;
+                closeModal.onclick = hideModal;
+                modal.onclick = function(e) {
+                    if (e.target === modal) hideModal();
+                };
+
+                if (canEdit) {
+                    var form = document.getElementById('visaEditDetailsForm');
+                    var typeSel = document.getElementById('visaEditVisaType');
+                    var intakeWrap = document.getElementById('visaEditIntakeWrap');
+                    var intakeSel = document.getElementById('visaEditIntake');
+                    function syncEditIntake() {
+                        var isStudy = typeSel && typeSel.value === 'Study Visa';
+                        if (intakeWrap) intakeWrap.style.display = isStudy ? '' : 'none';
+                        if (!isStudy && intakeSel) intakeSel.value = '';
                     }
-                });
+                    if (typeSel) typeSel.addEventListener('change', syncEditIntake);
+                    syncEditIntake();
+
+                    if (form) {
+                        form.addEventListener('submit', function(ev) {
+                            ev.preventDefault();
+                            var msg = document.getElementById('visaEditMsg');
+                            var saveBtn = document.getElementById('visaEditSaveBtn');
+                            syncEditIntake();
+                            var fd = new FormData(form);
+                            if (msg) {
+                                msg.className = 'visa-edit-msg';
+                                msg.textContent = 'Saving…';
+                            }
+                            if (saveBtn) saveBtn.disabled = true;
+                            fetch('api/form17-update-applicant.php', {
+                                method: 'POST',
+                                body: fd,
+                                credentials: 'same-origin'
+                            }).then(function(r) { return r.json(); }).then(function(json) {
+                                if (saveBtn) saveBtn.disabled = false;
+                                if (!json.success) {
+                                    if (msg) {
+                                        msg.className = 'visa-edit-msg err';
+                                        msg.textContent = json.message || 'Could not save details.';
+                                    }
+                                    return;
+                                }
+                                var saved = json.data || {};
+                                if (msg) {
+                                    msg.className = 'visa-edit-msg ok';
+                                    msg.textContent = 'Details saved.';
+                                }
+                                var title = document.getElementById('visaEditTitleName');
+                                if (title && saved.name) title.textContent = saved.name;
+
+                                var uid = String(data.id || '');
+                                var card = null;
+                                document.querySelectorAll('.applicant-card').forEach(function(c) {
+                                    if (c.getAttribute('data-user-id') === uid || c.getAttribute('data-id') === uid) card = c;
+                                });
+                                if (card) {
+                                    var nameEl = card.querySelector('.applicant-name');
+                                    if (nameEl && saved.name) nameEl.textContent = saved.name;
+                                    updateCardIntakeUI(card, saved.intake || '');
+                                    var viewBtn = card.querySelector('.view-details-btn');
+                                    if (viewBtn) {
+                                        try {
+                                            var d = JSON.parse(viewBtn.getAttribute('data-applicant'));
+                                            Object.keys(saved).forEach(function(k) {
+                                                if (k === 'user_id') d.id = saved.user_id;
+                                                else d[k] = saved[k];
+                                            });
+                                            viewBtn.setAttribute('data-applicant', JSON.stringify(d));
+                                        } catch (err3) {}
+                                    }
+                                    var searchBits = [
+                                        saved.name, saved.email, saved.mobile, saved.passport,
+                                        saved.visa_type, saved.intake, saved.country_from, saved.country_to, data.id
+                                    ];
+                                    card.setAttribute('data-search', searchBits.filter(Boolean).join(' ').toLowerCase());
+                                    if (window.visaFilterCards) window.visaFilterCards();
+                                }
+                            }).catch(function() {
+                                if (saveBtn) saveBtn.disabled = false;
+                                if (msg) {
+                                    msg.className = 'visa-edit-msg err';
+                                    msg.textContent = 'Network error.';
+                                }
+                            });
+                        });
+                    }
+                }
             }
             
             function hideModal() {
