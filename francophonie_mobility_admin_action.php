@@ -8,6 +8,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/fm_manager_portal.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_files.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_documents.php';
@@ -18,9 +19,9 @@ fm_ensure_documents_schema($conn);
 
 header('Content-Type: application/json; charset=utf-8');
 
-pcvc_require_francophonie_mobility($conn, true);
+fm_require_staff_or_manager_portal($conn, true);
 
-if (empty($_SESSION['id']) || empty($_POST['csrf_token'])
+if (!fm_manager_portal_session_or_admin_id() || empty($_POST['csrf_token'])
     || !hash_equals((string) ($_SESSION['csrf_token'] ?? ''), (string) $_POST['csrf_token'])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Access denied']);
@@ -116,6 +117,10 @@ if ($action === 'create_video_invite') {
 }
 
 if ($action === 'delete_application') {
+    if (fm_manager_portal_logged_in() && !pcvc_can_access_francophonie_mobility($conn)) {
+        echo json_encode(['success' => false, 'message' => 'Managers cannot delete applications from the private portal.']);
+        exit;
+    }
     $confirm = trim((string) ($_POST['confirm_reference'] ?? ''));
     $ref = (string) ($row['reference_id'] ?? '');
     if ($confirm === '' || strcasecmp($confirm, $ref) !== 0) {

@@ -7,6 +7,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/fm_manager_portal.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 fm_ensure_schema($conn);
 require_once __DIR__ . '/helpers/francophonie_mobility_notify.php';
@@ -16,12 +17,7 @@ require_once __DIR__ . '/helpers/fm_public_share.php';
 require_once __DIR__ . '/helpers/secure_file.php';
 fm_ensure_documents_schema($conn);
 
-if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
-    http_response_code(403);
-    echo '<div class="alert alert-danger">Access denied</div>';
-    exit;
-}
-pcvc_require_francophonie_mobility($conn);
+fm_require_staff_or_manager_portal($conn);
 
 $id = (int) ($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -239,10 +235,12 @@ $appId = (int) $row['id'];
                     <a href="mailto:<?= htmlspecialchars($row['email'], ENT_QUOTES, 'UTF-8') ?>" class="btn btn-outline-secondary btn-sm">
                         <i class="fas fa-envelope"></i> Open in mail client
                     </a>
+                    <?php if (!(fm_manager_portal_logged_in() && !pcvc_can_access_francophonie_mobility($conn))): ?>
                     <hr class="my-1">
                     <button type="button" class="btn btn-outline-danger btn-sm" onclick="deleteApplication(<?= $appId ?>, <?= json_encode($row['reference_id']) ?>)">
                         <i class="fas fa-trash"></i> Delete full application
                     </button>
+                    <?php endif; ?>
                 </div>
                 <hr>
                 <p class="small mb-1"><strong>Reference:</strong> <code><?= $ref ?></code></p>

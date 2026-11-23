@@ -7,6 +7,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/fm_manager_portal.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/francophonie_invoice.php';
 require_once __DIR__ . '/helpers/env_load.php';
@@ -14,11 +15,7 @@ fm_ensure_schema($conn);
 fm_invoice_ensure_schema($conn);
 xander_load_env_file();
 
-if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
-    header('Location: admin-login.php');
-    exit;
-}
-pcvc_require_francophonie_mobility($conn);
+fm_require_staff_or_manager_portal($conn);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -120,6 +117,7 @@ function fm_status_badge(string $s): string
     </style>
 </head>
 <body>
+<?= function_exists('fm_manager_portal_nav_html') ? fm_manager_portal_nav_html('list') : '' ?>
 <div class="page-head">
     <div class="container-fluid px-3 px-md-4">
         <h1 class="h4 h3-md mb-1"><i class="fas fa-maple-leaf me-2"></i>Francophonie Mobility</h1>

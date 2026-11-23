@@ -93,6 +93,9 @@ function pcvc_secure_file_auth_ok(): bool
     if (!empty($_SESSION['admin_id']) || !empty($_SESSION['id'])) {
         return true;
     }
+    if (!empty($_SESSION['fm_manager_portal']['ok'])) {
+        return true;
+    }
     if (!empty($_SESSION['student_account_id'])) {
         return true;
     }

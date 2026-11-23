@@ -15,9 +15,10 @@ require_once __DIR__ . '/helpers/env_load.php';
 
 header('Content-Type: application/json');
 
-pcvc_require_francophonie_mobility($conn, true);
+require_once __DIR__ . '/helpers/fm_manager_portal.php';
+fm_require_staff_or_manager_portal($conn, true);
 
-if (!isset($_SESSION['id']) || empty($_POST['csrf_token'])
+if (!fm_manager_portal_session_or_admin_id() || empty($_POST['csrf_token'])
     || !hash_equals((string) ($_SESSION['csrf_token'] ?? ''), (string) $_POST['csrf_token'])) {
     http_response_code(403);
     echo json_encode(['success' => false, 'message' => 'Access denied']);

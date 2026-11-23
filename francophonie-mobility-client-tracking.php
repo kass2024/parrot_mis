@@ -9,6 +9,7 @@ declare(strict_types=1);
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/fm_manager_portal.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 require_once __DIR__ . '/helpers/francophonie_mobility_documents.php';
 require_once __DIR__ . '/helpers/fm_client_tracking.php';
@@ -17,11 +18,7 @@ fm_ensure_schema($conn);
 fm_ensure_documents_schema($conn);
 fm_ensure_tracking_schema($conn);
 
-if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
-    header('Location: admin-login.php');
-    exit;
-}
-pcvc_require_francophonie_mobility($conn);
+fm_require_staff_or_manager_portal($conn);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -194,6 +191,7 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
     </style>
 </head>
 <body>
+<?= function_exists('fm_manager_portal_nav_html') ? fm_manager_portal_nav_html('report') : '' ?>
 <div class="page-head">
     <div class="container-fluid px-3 px-md-4">
         <h1 class="h4 mb-1"><i class="fas fa-clipboard-check me-2"></i>Client tracking — Overall report</h1>

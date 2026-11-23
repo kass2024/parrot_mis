@@ -17,12 +17,8 @@ require_once __DIR__ . '/helpers/env_load.php';
 fm_ensure_schema($conn);
 xander_load_env_file();
 
-if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'message' => 'Access denied']);
-    exit;
-}
-pcvc_require_francophonie_mobility($conn, true);
+require_once __DIR__ . '/helpers/fm_manager_portal.php';
+fm_require_staff_or_manager_portal($conn, true);
 
 if (empty($_POST['csrf_token']) || !hash_equals((string) ($_SESSION['csrf_token'] ?? ''), (string) $_POST['csrf_token'])) {
     http_response_code(403);
