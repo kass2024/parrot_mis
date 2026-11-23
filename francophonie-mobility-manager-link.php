@@ -57,7 +57,7 @@ $privateUrl = fm_manager_portal_private_url($conn);
 <div class="page-head">
     <div class="container" style="max-width:820px">
         <h1 class="h4 mb-1"><i class="fas fa-link me-2"></i>Manager private link</h1>
-        <p class="mb-0 opacity-75 small">Share this link only. No username or password — the link alone opens Smart Add, View list, Overall report, Payment records, and Send report.</p>
+        <p class="mb-0 opacity-75 small">Share this link only. No username or password — the link alone opens Smart Add, View list, Client Tracking, and Payment records.</p>
     </div>
 </div>
 <div class="container pb-5" style="max-width:820px">
@@ -67,7 +67,7 @@ $privateUrl = fm_manager_portal_private_url($conn);
 
     <div class="card card-soft p-3 p-md-4 mb-3">
         <h2 class="h5">Private link</h2>
-        <p class="small text-muted">Send this to the manager. The private link opens Smart Add, View list, Overall report, and Payment records — no username or password.</p>
+        <p class="small text-muted">Send this to the manager. The private link opens Smart Add, View list, Client Tracking, and Payment records — no username or password.</p>
         <div class="input-group mb-2">
             <input type="text" class="form-control" id="portalUrl" readonly value="<?= htmlspecialchars($privateUrl) ?>">
             <button type="button" class="btn btn-primary" id="copyBtn"><i class="fas fa-copy me-1"></i> Copy</button>

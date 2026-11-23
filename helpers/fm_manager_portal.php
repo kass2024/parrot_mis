@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Private Francophonie Mobility manager portal.
- * Shareable link → username/password → Smart Add, View list, Overall report.
+ * Shareable private link → Smart Add, View list, Client Tracking, Payment records.
  */
 
 require_once __DIR__ . '/env_bootstrap.php';
@@ -288,7 +288,7 @@ function fm_manager_portal_nav_html(string $active = ''): string
         'hub' => ['fm-manager.php', 'Home', 'fa-home'],
         'list' => ['francophonie-mobility-applications.php', 'View list', 'fa-list'],
         'add' => ['francophonie-mobility-staff-add.php', 'Smart Add', 'fa-user-plus'],
-        'report' => ['francophonie-mobility-client-tracking.php', 'Overall report', 'fa-clipboard-check'],
+        'report' => ['francophonie-mobility-client-tracking.php', 'Client Tracking', 'fa-clipboard-check'],
         'payments' => ['francophonie-mobility-payment-records.php', 'Payment records', 'fa-money-bill-wave'],
     ];
     $html = '<div class="fm-portal-nav">'

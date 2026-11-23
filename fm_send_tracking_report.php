@@ -15,7 +15,13 @@ require_once __DIR__ . '/helpers/fm_payment_records.php';
 
 fm_ensure_schema($conn);
 fm_ensure_payment_records_schema($conn);
-fm_require_staff_or_manager_portal($conn, true);
+
+// Staff only — private manager portal is view-only (no send email).
+if (!pcvc_can_access_francophonie_mobility($conn)) {
+    http_response_code(403);
+    echo json_encode(['success' => false, 'message' => 'Send email is only available from the staff dashboard.']);
+    exit;
+}
 
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     http_response_code(405);

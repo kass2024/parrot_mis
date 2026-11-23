@@ -68,8 +68,8 @@ $tools = [
         'href' => 'francophonie-mobility-client-tracking.php',
         'icon' => 'fa-clipboard-check',
         'tone' => 'teal',
-        'title' => 'Overall report',
-        'desc' => 'Document checklist with green / red status, Excel export, and email.',
+        'title' => 'Client Tracking',
+        'desc' => 'Document checklist with green / red status and Excel export.',
     ],
     [
         'href' => 'francophonie-mobility-payment-records.php',
@@ -202,7 +202,7 @@ $tools = [
 <div class="hero">
     <div class="container" style="max-width:980px">
         <h1><i class="fas fa-shield-halved me-2"></i>Francophonie Mobility manager portal</h1>
-        <p>Private link access — no username or password. Open a tool below for Smart Add, applications, overall report, or payment records.</p>
+        <p>Private link access — no username or password. Open a tool below for Smart Add, applications, Client Tracking, or payment records.</p>
     </div>
 </div>
 

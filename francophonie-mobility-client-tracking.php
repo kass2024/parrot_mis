@@ -1,6 +1,6 @@
 <?php
 /**
- * Client tracking — Overall report.
+ * Client Tracking checklist report.
  * Lists FM clients vs Clients tracking.xlsx checklist; green = found (clickable), red = missing.
  * Folder files are mapped to checklist items (document groups unchanged).
  */
@@ -21,6 +21,14 @@ fm_ensure_tracking_schema($conn);
 fm_ensure_payment_records_schema($conn);
 
 fm_require_staff_or_manager_portal($conn);
+
+$isPortal = fm_manager_portal_logged_in();
+$staffSession = !empty($_SESSION['id']) || !empty($_SESSION['admin_id']);
+$inAdminFrame = (($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'iframe')
+    || isset($_GET['staff'])
+    || (isset($_SERVER['HTTP_REFERER']) && str_contains((string) $_SERVER['HTTP_REFERER'], 'admin-dashboard.php'));
+$showPortalNav = $isPortal && !$inAdminFrame;
+$canSendEmail = !$showPortalNav && ($staffSession || !$isPortal);
 
 if (empty($_SESSION['csrf_token'])) {
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -133,7 +141,7 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Client tracking — Overall report</title>
+    <title>Client Tracking</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -225,10 +233,10 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
     </style>
 </head>
 <body>
-<?= function_exists('fm_manager_portal_nav_html') ? fm_manager_portal_nav_html('report') : '' ?>
+<?= $showPortalNav ? fm_manager_portal_nav_html('report') : '' ?>
 <div class="page-head">
     <div class="container-fluid px-3 px-md-4">
-        <h1 class="h4 mb-1"><i class="fas fa-clipboard-check me-2"></i>Client tracking — Overall report</h1>
+        <h1 class="h4 mb-1"><i class="fas fa-clipboard-check me-2"></i>Client Tracking</h1>
         <p class="mb-0 opacity-75 small">
             Checklist matches <code>Clients tracking.xlsx</code>. Files live in existing Visa submission folders (groups unchanged; multiple files per folder allowed).
             Green = found (preview / download). Red = missing. No document is mandatory.
@@ -282,6 +290,7 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
                 </span>
             </div>
         </form>
+        <?php if ($canSendEmail): ?>
         <div class="send-box">
             <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
                 <strong class="small">Send email</strong>
@@ -311,6 +320,7 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
             </div>
             <div id="sendAlert" class="mt-2" hidden></div>
         </div>
+        <?php endif; ?>
         <?php if ($scanErrors !== []): ?>
         <div class="alert alert-warning mt-3 mb-0 py-2 small">
             Some rows used folder names when a full document check was not available.
