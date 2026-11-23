@@ -91,14 +91,14 @@ function xander_visa_featured_destination_countries(): array
 }
 
 /**
- * Canada (Jan / May / Sep) and USA (Spring / Summer / Fall) intakes for current + next year.
+ * Canada (Jan / May / Sep) and USA (Spring / Summer / Fall) intakes for current + next two years.
  *
  * @return array<string, list<string>> country label => intake labels
  */
 function xander_visa_intake_options_by_country(): array
 {
     $year = (int) date('Y');
-    $years = [$year, $year + 1];
+    $years = [$year, $year + 1, $year + 2];
     $canada = [];
     $usa = [];
     foreach ($years as $y) {
@@ -112,7 +112,7 @@ function xander_visa_intake_options_by_country(): array
 
     return [
         'Canada' => $canada,
-        'United States' => $usa,
+        'USA' => $usa,
     ];
 }
 
@@ -174,66 +174,4 @@ function xander_normalize_visa_process_status(?string $raw): string
 {
     $s = strtolower(trim((string) $raw));
     return xander_is_valid_visa_process_status($s) ? $s : 'submitted';
-}
-
-/**
- * Ensure form_17_applications.intake exists (Canada / USA study intakes).
- */
-function xander_ensure_form17_intake_column(mysqli $conn): void
-{
-    $r = @$conn->query("SHOW COLUMNS FROM `form_17_applications` LIKE 'intake'");
-    if ($r && $r->num_rows > 0) {
-        return;
-    }
-    $sql = "ALTER TABLE `form_17_applications`
-            ADD COLUMN `intake` VARCHAR(120) NULL DEFAULT NULL
-            COMMENT 'Selected Canada or USA intake term'
-            AFTER `visa_type`";
-    if (!@$conn->query($sql)) {
-        error_log('form_17_applications intake migration: ' . $conn->error);
-    }
-}
-
-/**
- * Standard Canada and USA study intakes for the next few years.
- *
- * @return array{Canada: list<string>, USA: list<string>}
- */
-function xander_visa_canada_usa_intakes(?int $fromYear = null, int $yearsAhead = 3): array
-{
-    $start = $fromYear ?? (int) date('Y');
-    if ($start < 2024) {
-        $start = (int) date('Y');
-    }
-    $canada = [];
-    $usa = [];
-    for ($y = $start; $y < $start + max(1, $yearsAhead); $y++) {
-        $canada[] = "Canada — Winter (January) {$y}";
-        $canada[] = "Canada — Spring (May) {$y}";
-        $canada[] = "Canada — Fall (September) {$y}";
-        $usa[] = "USA — Spring (January) {$y}";
-        $usa[] = "USA — Summer (May) {$y}";
-        $usa[] = "USA — Fall (August) {$y}";
-    }
-
-    return ['Canada' => $canada, 'USA' => $usa];
-}
-
-/**
- * @return list<string>
- */
-function xander_visa_intake_flat_list(?int $fromYear = null, int $yearsAhead = 3): array
-{
-    $grouped = xander_visa_canada_usa_intakes($fromYear, $yearsAhead);
-    return array_merge($grouped['Canada'], $grouped['USA']);
-}
-
-function xander_is_valid_visa_intake(string $intake): bool
-{
-    $intake = trim($intake);
-    if ($intake === '') {
-        return true;
-    }
-    return in_array($intake, xander_visa_intake_flat_list(), true)
-        || in_array($intake, xander_visa_intake_flat_list((int) date('Y') - 1, 5), true);
 }

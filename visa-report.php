@@ -1043,12 +1043,12 @@ $fileFields = [
         .visa-smart-country .visa-country-list {
             max-height: 220px; overflow: auto; margin: 0; padding: 0; list-style: none;
         }
-        .visa-smart-country .visa-country-list li button {
+        .visa-smart-country .visa-country-list button {
             display: block; width: 100%; text-align: left; background: transparent; border: 0;
             padding: 8px 10px; border-radius: 8px; font: inherit; font-size: 14px; color: #0f172a; cursor: pointer;
         }
-        .visa-smart-country .visa-country-list li button:hover,
-        .visa-smart-country .visa-country-list li button[aria-selected="true"] { background: #ecfdf5; color: #14532d; }
+        .visa-smart-country .visa-country-list button:hover,
+        .visa-smart-country .visa-country-list button[aria-selected="true"] { background: #ecfdf5; color: #14532d; }
         .visa-smart-country .visa-country-group {
             font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
             color: #64748b; padding: 8px 10px 4px;
@@ -1853,6 +1853,40 @@ $fileFields = [
                         }
                     }
 
+                    function syncIntakeForCountry(name) {
+                        var intakeSel = document.getElementById('visaIntakeSelect');
+                        if (!intakeSel) return;
+                        var n = String(name || '').toLowerCase();
+                        var preferUsa = n === 'united states' || n === 'usa' || n === 'us';
+                        var preferCanada = n === 'canada';
+                        var groups = intakeSel.querySelectorAll('optgroup');
+                        groups.forEach(function(g) {
+                            var labelText = String(g.label || '').toLowerCase();
+                            var isUsa = labelText.indexOf('usa') !== -1 || labelText.indexOf('united states') !== -1;
+                            var isCanada = labelText.indexOf('canada') !== -1;
+                            if (preferUsa) {
+                                g.disabled = !isUsa;
+                                g.hidden = !isUsa;
+                            } else if (preferCanada) {
+                                g.disabled = !isCanada;
+                                g.hidden = !isCanada;
+                            } else {
+                                g.disabled = false;
+                                g.hidden = false;
+                            }
+                        });
+                        if (preferUsa || preferCanada) {
+                            var cur = intakeSel.value;
+                            var stillVisible = false;
+                            Array.prototype.forEach.call(intakeSel.options, function(opt) {
+                                if (opt.value && opt.value === cur && !opt.parentNode.disabled && !opt.parentNode.hidden) {
+                                    stillVisible = true;
+                                }
+                            });
+                            if (!stillVisible) intakeSel.value = '';
+                        }
+                    }
+
                     function setCountry(name) {
                         hidden.value = name || '';
                         if (name) {
@@ -1862,6 +1896,7 @@ $fileFields = [
                             label.textContent = 'Search or select country…';
                             btn.setAttribute('data-empty', '1');
                         }
+                        syncIntakeForCountry(name);
                         setOpen(false);
                     }
 
