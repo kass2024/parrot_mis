@@ -67,7 +67,7 @@ $privateUrl = fm_manager_portal_private_url($conn);
 
     <div class="card card-soft p-3 p-md-4 mb-3">
         <h2 class="h5">Private link</h2>
-        <p class="small text-muted">Send this to the manager. They can send the full Excel report to <?= htmlspecialchars(fm_payment_report_recipient()) ?> and open tools for more details.</p>
+        <p class="small text-muted">Send this to the manager. They can email the full Excel report (always includes info@francocana.com) and open tools for more details.</p>
         <div class="input-group mb-2">
             <input type="text" class="form-control" id="portalUrl" readonly value="<?= htmlspecialchars($privateUrl) ?>">
             <button type="button" class="btn btn-primary" id="copyBtn"><i class="fas fa-copy me-1"></i> Copy</button>

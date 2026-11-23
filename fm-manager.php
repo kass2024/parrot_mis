@@ -63,7 +63,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report']
     } else {
         @set_time_limit(180);
         $privateUrl = fm_manager_portal_private_url($conn);
-        $result = fm_send_manager_full_report($conn, $privateUrl);
+        $picked = $_POST['report_to'] ?? [];
+        if (!is_array($picked)) {
+            $picked = [];
+        }
+        $result = fm_send_manager_full_report($conn, $privateUrl, $picked);
         if (!empty($result['ok'])) {
             $flash = (string) ($result['message'] ?? 'Report sent.');
         } else {
@@ -73,6 +77,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report']
 }
 
 $privateUrl = fm_manager_portal_private_url($conn);
+$reportRecipients = fm_payment_report_recipients();
+$requiredReportTo = fm_payment_report_required_recipient();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -129,17 +135,37 @@ $privateUrl = fm_manager_portal_private_url($conn);
     <div class="card card-soft p-3 p-md-4 mb-4">
         <h2 class="h5 mb-2">Send full report</h2>
         <p class="text-muted small mb-3">
-            Emails the complete Excel report (Client tracking + Payment records) to
-            <strong><?= htmlspecialchars(fm_payment_report_recipient()) ?></strong>,
-            and asks them to open the private link below for more details.
+            Emails the complete Excel report (Client tracking + Payment records) and asks recipients to open the private link for more details.
+            <strong>info@francocana.com</strong> is always included.
         </p>
-        <form method="post" class="d-flex flex-wrap gap-2 align-items-center">
+        <form method="post">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
             <input type="hidden" name="k" value="<?= htmlspecialchars($token) ?>">
+            <div class="d-flex flex-wrap gap-3 mb-3">
+                <?php foreach ($reportRecipients as $email => $meta): ?>
+                    <?php $required = !empty($meta['required']); ?>
+                    <label class="form-check mb-0">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="report_to[]"
+                            value="<?= htmlspecialchars($email) ?>"
+                            <?= $required ? 'checked disabled' : 'checked' ?>
+                        >
+                        <?php if ($required): ?>
+                        <input type="hidden" name="report_to[]" value="<?= htmlspecialchars($requiredReportTo) ?>">
+                        <?php endif; ?>
+                        <span class="form-check-label">
+                            <?= htmlspecialchars($email) ?>
+                            <?= $required ? '<span class="text-muted small">(always)</span>' : '' ?>
+                        </span>
+                    </label>
+                <?php endforeach; ?>
+            </div>
             <button type="submit" name="send_report" value="1" class="btn btn-success">
                 <i class="fas fa-paper-plane me-1"></i> Send report
             </button>
-            <span class="small text-muted">Attachment: Excel workbook</span>
+            <span class="small text-muted ms-2">Attachment: Excel workbook</span>
         </form>
         <hr class="my-3">
         <p class="small mb-1 fw-semibold">For more details, use this private link:</p>

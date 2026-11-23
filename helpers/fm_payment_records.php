@@ -11,9 +11,49 @@ require_once __DIR__ . '/francophonie_mobility_notify.php';
 require_once __DIR__ . '/fm_client_tracking.php';
 require_once __DIR__ . '/fm_manager_portal.php';
 
+function fm_payment_report_required_recipient(): string
+{
+    return 'info@francocana.com';
+}
+
+/**
+ * Selectable report recipients. Required address is always included when sending.
+ *
+ * @return array<string, array{label:string,required:bool}>
+ */
+function fm_payment_report_recipients(): array
+{
+    return [
+        'info@francocana.com' => ['label' => 'info@francocana.com', 'required' => true],
+        'ujeanmethode@gmail.com' => ['label' => 'ujeanmethode@gmail.com', 'required' => false],
+        'infos@visaconsultantcanada.com' => ['label' => 'infos@visaconsultantcanada.com', 'required' => false],
+    ];
+}
+
+/** @deprecated Use fm_payment_report_required_recipient() */
 function fm_payment_report_recipient(): string
 {
-    return 'ujeanmethode@gmail.com';
+    return fm_payment_report_required_recipient();
+}
+
+/**
+ * @param list<string>|null $selected
+ * @return list<string>
+ */
+function fm_normalize_report_recipients(?array $selected): array
+{
+    $allowed = array_keys(fm_payment_report_recipients());
+    $out = [fm_payment_report_required_recipient()];
+    foreach ($selected ?? [] as $email) {
+        $email = strtolower(trim((string) $email));
+        if ($email === '' || !in_array($email, $allowed, true)) {
+            continue;
+        }
+        if (!in_array($email, $out, true)) {
+            $out[] = $email;
+        }
+    }
+    return $out;
 }
 
 function fm_ensure_payment_records_schema(mysqli $conn): void
@@ -570,12 +610,17 @@ function fm_build_manager_report_xls(mysqli $conn): string
 }
 
 /**
+ * @param list<string>|null $selectedRecipients
  * @return array{ok:bool,message:string}
  */
-function fm_send_manager_full_report(mysqli $conn, string $privateLink): array
+function fm_send_manager_full_report(mysqli $conn, string $privateLink, ?array $selectedRecipients = null): array
 {
     require_once __DIR__ . '/francophonie_mobility_schema.php';
     fm_ensure_schema($conn);
+
+    $recipients = fm_normalize_report_recipients($selectedRecipients);
+    $to = $recipients[0];
+    $cc = array_slice($recipients, 1);
 
     $xml = fm_build_manager_report_xls($conn);
     $tmp = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'fm_manager_report_' . date('Ymd_His') . '.xls';
@@ -583,7 +628,6 @@ function fm_send_manager_full_report(mysqli $conn, string $privateLink): array
         return ['ok' => false, 'message' => 'Could not create the Excel report file.'];
     }
 
-    $to = fm_payment_report_recipient();
     $subject = 'Francophonie Mobility — full report ' . date('Y-m-d');
     $body = '<p>Please find the attached Excel report (Client tracking + Payment records).</p>'
         . '<p><strong>For more details</strong> (Smart Add, application list, overall report, and payment records), '
@@ -596,12 +640,17 @@ function fm_send_manager_full_report(mysqli $conn, string $privateLink): array
         $to,
         $subject,
         fm_email_wrap('Full report', $body),
-        [['path' => $tmp, 'name' => 'Francophonie-Mobility-Full-Report.xls']]
+        [['path' => $tmp, 'name' => 'Francophonie-Mobility-Full-Report.xls']],
+        [],
+        $cc
     );
     @unlink($tmp);
 
     if ($ok) {
-        return ['ok' => true, 'message' => 'Report sent to ' . $to . ' with the Excel attachment.'];
+        return [
+            'ok' => true,
+            'message' => 'Report sent to ' . implode(', ', $recipients) . ' with the Excel attachment.',
+        ];
     }
     return ['ok' => false, 'message' => 'Could not send the report email. Please try again.'];
 }

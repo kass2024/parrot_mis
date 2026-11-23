@@ -45,7 +45,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report_e
     } else {
         @set_time_limit(180);
         $link = fm_manager_portal_private_url($conn);
-        $result = fm_send_manager_full_report($conn, $link);
+        $picked = $_POST['report_to'] ?? [];
+        if (!is_array($picked)) {
+            $picked = [];
+        }
+        $result = fm_send_manager_full_report($conn, $link, $picked);
         if (!empty($result['ok'])) {
             $emailFlash = (string) ($result['message'] ?? 'Report sent.');
         } else {
@@ -53,6 +57,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report_e
         }
     }
 }
+$reportRecipients = fm_payment_report_recipients();
+$requiredReportTo = fm_payment_report_required_recipient();
 
 $where = '1=1';
 $types = '';
@@ -258,22 +264,47 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
                     <i class="fas fa-sync-alt me-1"></i> Refresh check
                 </a>
             </div>
-            <div class="col-12 d-flex flex-wrap gap-2 align-items-center justify-content-between">
+            <div class="col-12">
                 <span class="hint" id="resultHint">
                     <?= $scanReady
                         ? '<i class="fas fa-check-circle text-success"></i> Document check ready'
                         : '<i class="fas fa-exclamation-triangle text-warning"></i> Using folder names only' ?>
                     · <span id="visibleCount"><?= count($rows) ?></span> of <?= count($rows) ?> client<?= count($rows) === 1 ? '' : 's' ?>
                 </span>
-                <button type="submit" form="sendReportForm" class="btn btn-sm btn-success" name="send_report_email" value="1">
-                    <i class="fas fa-paper-plane me-1"></i> Send email
-                </button>
             </div>
         </form>
-        <form method="post" id="sendReportForm" class="d-none">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-            <input type="hidden" name="send_report_email" value="1">
-        </form>
+        <div class="border rounded p-2 mt-3 bg-white">
+            <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
+                <strong class="small">Send email</strong>
+                <span class="hint mb-0">Excel report (Client tracking + Payment records)</span>
+            </div>
+            <form method="post" id="sendReportForm" class="d-flex flex-wrap gap-3 align-items-center">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+                <input type="hidden" name="send_report_email" value="1">
+                <?php foreach ($reportRecipients as $email => $meta): ?>
+                    <?php $required = !empty($meta['required']); ?>
+                    <label class="form-check form-check-inline mb-0 small">
+                        <input
+                            class="form-check-input"
+                            type="checkbox"
+                            name="report_to[]"
+                            value="<?= htmlspecialchars($email) ?>"
+                            <?= $required ? 'checked disabled' : 'checked' ?>
+                        >
+                        <?php if ($required): ?>
+                        <input type="hidden" name="report_to[]" value="<?= htmlspecialchars($requiredReportTo) ?>">
+                        <?php endif; ?>
+                        <span class="form-check-label">
+                            <?= htmlspecialchars($email) ?>
+                            <?= $required ? '<span class="text-muted">(always)</span>' : '' ?>
+                        </span>
+                    </label>
+                <?php endforeach; ?>
+                <button type="submit" class="btn btn-sm btn-success ms-auto">
+                    <i class="fas fa-paper-plane me-1"></i> Send email
+                </button>
+            </form>
+        </div>
         <?php if ($emailFlash !== ''): ?>
         <div class="alert alert-success mt-3 mb-0 py-2 small"><?= htmlspecialchars($emailFlash) ?></div>
         <?php endif; ?>
