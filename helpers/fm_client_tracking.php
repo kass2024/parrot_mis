@@ -198,7 +198,7 @@ function fm_tracking_match_gemini(array $inventory): array
     }
 
     if (!pcvc_docvision_is_configured()) {
-        return ['matches' => $fallback, 'source' => 'heuristic', 'error' => 'Gemini API key not configured'];
+        return ['matches' => $fallback, 'source' => 'heuristic', 'error' => 'Document check service not configured'];
     }
 
     $keys = array_keys($checklist);
@@ -236,7 +236,7 @@ function fm_tracking_match_gemini(array $inventory): array
         return [
             'matches' => $fallback,
             'source' => 'heuristic',
-            'error' => (string) ($result['error']['message'] ?? 'Gemini failed'),
+            'error' => 'Document check unavailable',
         ];
     }
 
@@ -246,7 +246,7 @@ function fm_tracking_match_gemini(array $inventory): array
         $rawMatches = $json['matches'] ?? $json;
     }
     if (!is_array($rawMatches)) {
-        return ['matches' => $fallback, 'source' => 'heuristic', 'error' => 'Invalid Gemini JSON'];
+        return ['matches' => $fallback, 'source' => 'heuristic', 'error' => 'Document check returned an unexpected result'];
     }
 
     $byId = [];
@@ -337,7 +337,7 @@ function fm_tracking_resolve_for_app(mysqli $conn, array $app, bool $forceGemini
         if ($cached !== null) {
             return ['matches' => $cached, 'source' => 'cache'];
         }
-        // Fast path: folder/filename heuristics. Use "Rescan with Gemini" for AI classification.
+        // Fast path: folder/filename heuristics. Use "Refresh document check" for full scan.
         $result = ['matches' => fm_tracking_match_heuristic($inventory), 'source' => 'heuristic'];
         fm_tracking_save_cache($conn, $appId, $fp, $result['matches'], 'heuristic');
         return $result;
