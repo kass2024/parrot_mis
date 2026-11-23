@@ -1,15 +1,19 @@
 <?php
 /**
  * Private Francophonie Mobility manager portal.
- * Open with ?k=TOKEN → login → Smart Add / View list / Overall report.
+ * Valid ?k=TOKEN opens tools with no username/password.
  */
 declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/fm_manager_portal.php';
+require_once __DIR__ . '/helpers/fm_payment_records.php';
+require_once __DIR__ . '/helpers/francophonie_mobility_schema.php';
 
 fm_ensure_manager_portal_schema($conn);
+fm_ensure_schema($conn);
+fm_ensure_payment_records_schema($conn);
 
 if (isset($_GET['logout'])) {
     fm_manager_portal_logout();
@@ -21,17 +25,17 @@ if (isset($_GET['logout'])) {
 
 $token = trim((string) ($_GET['k'] ?? $_POST['k'] ?? ''));
 if ($token !== '' && fm_manager_portal_token_valid($conn, $token)) {
-    fm_manager_portal_mark_invite_ok();
     $_SESSION['fm_manager_portal_token'] = $token;
+    fm_manager_portal_grant_access();
 } elseif (!empty($_SESSION['fm_manager_portal_token'])
     && fm_manager_portal_token_valid($conn, (string) $_SESSION['fm_manager_portal_token'])) {
     $token = (string) $_SESSION['fm_manager_portal_token'];
-    fm_manager_portal_mark_invite_ok();
+    fm_manager_portal_grant_access();
 }
 
-$linkOk = fm_manager_portal_invite_ok() && $token !== '' && fm_manager_portal_token_valid($conn, $token);
-$error = '';
-$settings = fm_manager_portal_settings($conn);
+$linkOk = $token !== '' && fm_manager_portal_token_valid($conn, $token) && fm_manager_portal_logged_in();
+$flash = '';
+$flashErr = '';
 
 if (!$linkOk) {
     http_response_code(403);
@@ -49,18 +53,26 @@ if (!$linkOk) {
     exit;
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['portal_login'])) {
-    $user = trim((string) ($_POST['username'] ?? ''));
-    $pass = (string) ($_POST['password'] ?? '');
-    if (fm_manager_portal_login($conn, $user, $pass)) {
-        header('Location: fm-manager.php');
-        exit;
-    }
-    $error = 'Incorrect username or password.';
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
 }
 
-$loggedIn = fm_manager_portal_logged_in();
-$defaultUser = (string) ($settings['username'] ?? fm_manager_portal_default_username());
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report'])) {
+    if (empty($_POST['csrf_token']) || !hash_equals((string) $_SESSION['csrf_token'], (string) $_POST['csrf_token'])) {
+        $flashErr = 'Session expired. Refresh and try again.';
+    } else {
+        @set_time_limit(180);
+        $privateUrl = fm_manager_portal_private_url($conn);
+        $result = fm_send_manager_full_report($conn, $privateUrl);
+        if (!empty($result['ok'])) {
+            $flash = (string) ($result['message'] ?? 'Report sent.');
+        } else {
+            $flashErr = (string) ($result['message'] ?? 'Send failed.');
+        }
+    }
+}
+
+$privateUrl = fm_manager_portal_private_url($conn);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -99,73 +111,71 @@ $defaultUser = (string) ($settings['username'] ?? fm_manager_portal_default_user
         }
         .tool-card h2 { font-size: 1.05rem; font-weight: 700; margin: 0 0 .3rem; }
         .tool-card p { margin: 0; color: #64748b; font-size: .88rem; }
-        .login-shell { max-width: 420px; margin: 0 auto; }
     </style>
 </head>
 <body>
-<?php if ($loggedIn): ?>
 <?= fm_manager_portal_nav_html('hub') ?>
-<?php endif; ?>
 <div class="hero">
-    <div class="container" style="max-width:920px">
+    <div class="container" style="max-width:960px">
         <h1 class="h4 mb-1"><i class="fas fa-shield-halved me-2"></i>Francophonie Mobility manager portal</h1>
-        <p class="mb-0 opacity-75 small">Private access for Smart Add, application list, and client tracking overall report.</p>
+        <p class="mb-0 opacity-75 small">Private link access — no username or password. Send the full Excel report, or open tools for more details.</p>
     </div>
 </div>
 
-<div class="container pb-5" style="max-width:920px">
-<?php if (!$loggedIn): ?>
-    <div class="login-shell card card-soft p-4">
-        <h2 class="h5 mb-1">Sign in</h2>
-        <p class="text-muted small mb-3">Enter the manager username and password for this private link.</p>
-        <?php if ($error !== ''): ?>
-        <div class="alert alert-danger py-2"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-        <form method="post" autocomplete="username">
+<div class="container pb-5" style="max-width:960px">
+    <?php if ($flash !== ''): ?><div class="alert alert-success"><?= htmlspecialchars($flash) ?></div><?php endif; ?>
+    <?php if ($flashErr !== ''): ?><div class="alert alert-danger"><?= htmlspecialchars($flashErr) ?></div><?php endif; ?>
+
+    <div class="card card-soft p-3 p-md-4 mb-4">
+        <h2 class="h5 mb-2">Send full report</h2>
+        <p class="text-muted small mb-3">
+            Emails the complete Excel report (Client tracking + Payment records) to
+            <strong><?= htmlspecialchars(fm_payment_report_recipient()) ?></strong>,
+            and asks them to open the private link below for more details.
+        </p>
+        <form method="post" class="d-flex flex-wrap gap-2 align-items-center">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
             <input type="hidden" name="k" value="<?= htmlspecialchars($token) ?>">
-            <input type="hidden" name="portal_login" value="1">
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Username</label>
-                <input class="form-control" name="username" required maxlength="64"
-                       value="<?= htmlspecialchars((string) ($_POST['username'] ?? $defaultUser)) ?>"
-                       autocomplete="username">
-            </div>
-            <div class="mb-3">
-                <label class="form-label fw-semibold">Password</label>
-                <input class="form-control" type="password" name="password" required
-                       autocomplete="current-password" placeholder="Enter password">
-            </div>
-            <button type="submit" class="btn btn-success w-100">
-                <i class="fas fa-sign-in-alt me-1"></i> Continue
+            <button type="submit" name="send_report" value="1" class="btn btn-success">
+                <i class="fas fa-paper-plane me-1"></i> Send report
             </button>
+            <span class="small text-muted">Attachment: Excel workbook</span>
         </form>
+        <hr class="my-3">
+        <p class="small mb-1 fw-semibold">For more details, use this private link:</p>
+        <code class="small" style="word-break:break-all"><?= htmlspecialchars($privateUrl) ?></code>
     </div>
-<?php else: ?>
-    <p class="text-muted small mb-3">Signed in as <strong><?= htmlspecialchars((string) ($_SESSION['fm_manager_portal']['username'] ?? $defaultUser)) ?></strong></p>
+
     <div class="row g-3">
-        <div class="col-md-4">
+        <div class="col-md-6 col-lg-3">
             <a class="tool-card" href="francophonie-mobility-staff-add.php">
                 <div class="icon"><i class="fas fa-user-plus"></i></div>
                 <h2>Smart Add</h2>
-                <p>Create a candidate, set status, and file documents into groups.</p>
+                <p>Create a candidate and file documents into groups.</p>
             </a>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-6 col-lg-3">
             <a class="tool-card" href="francophonie-mobility-applications.php">
                 <div class="icon"><i class="fas fa-list-ul"></i></div>
                 <h2>View list</h2>
-                <p>Browse applications, open details, and move clients by status.</p>
+                <p>Browse applications and update client status.</p>
             </a>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-6 col-lg-3">
             <a class="tool-card" href="francophonie-mobility-client-tracking.php">
                 <div class="icon"><i class="fas fa-clipboard-check"></i></div>
                 <h2>Overall report</h2>
-                <p>Client tracking checklist with green/red document status and export.</p>
+                <p>Document checklist with green / red status.</p>
+            </a>
+        </div>
+        <div class="col-md-6 col-lg-3">
+            <a class="tool-card" href="francophonie-mobility-payment-records.php">
+                <div class="icon"><i class="fas fa-money-bill-wave"></i></div>
+                <h2>Payment records</h2>
+                <p>Sultan fees, balances, visa status, and comments.</p>
             </a>
         </div>
     </div>
-<?php endif; ?>
 </div>
 </body>
 </html>

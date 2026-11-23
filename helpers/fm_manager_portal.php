@@ -31,6 +31,7 @@ function fm_manager_portal_allowed_scripts(): array
         'francophonie-mobility-applications.php',
         'francophonie-mobility-staff-add.php',
         'francophonie-mobility-client-tracking.php',
+        'francophonie-mobility-payment-records.php',
         'francophonie_mobility_application_details.php',
         'francophonie_mobility_admin_action.php',
         'update_francophonie_mobility_status.php',
@@ -190,36 +191,31 @@ function fm_manager_portal_invite_ok(): bool
     return !empty($_SESSION['fm_manager_portal_invite']) || fm_manager_portal_logged_in();
 }
 
-function fm_manager_portal_login(mysqli $conn, string $username, string $password): bool
+/** Grant portal access from a valid private link (no username/password). */
+function fm_manager_portal_grant_access(): void
 {
-    $settings = fm_manager_portal_settings($conn);
-    if (!$settings) {
-        return false;
-    }
-    $expectedUser = (string) ($settings['username'] ?? '');
-    $hash = (string) ($settings['password_hash'] ?? '');
-    if ($expectedUser === '' || $hash === '') {
-        return false;
-    }
-    if (!hash_equals(strtolower($expectedUser), strtolower(trim($username)))) {
-        return false;
-    }
-    if (!password_verify($password, $hash)) {
-        return false;
-    }
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
-    session_regenerate_id(true);
+    if (empty($_SESSION['fm_manager_portal']['ok'])) {
+        session_regenerate_id(true);
+    }
     $_SESSION['fm_manager_portal'] = [
         'ok' => true,
-        'username' => $expectedUser,
+        'username' => 'manager',
         'at' => time(),
     ];
     $_SESSION['fm_manager_portal_invite'] = true;
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
+}
+
+/** @deprecated Password login removed — private link alone is enough. */
+function fm_manager_portal_login(mysqli $conn, string $username, string $password): bool
+{
+    unset($conn, $username, $password);
+    fm_manager_portal_grant_access();
     return true;
 }
 
@@ -292,6 +288,7 @@ function fm_manager_portal_nav_html(string $active = ''): string
         'list' => ['francophonie-mobility-applications.php', 'View list', 'fa-list'],
         'add' => ['francophonie-mobility-staff-add.php', 'Smart Add', 'fa-user-plus'],
         'report' => ['francophonie-mobility-client-tracking.php', 'Overall report', 'fa-clipboard-check'],
+        'payments' => ['francophonie-mobility-payment-records.php', 'Payment records', 'fa-money-bill-wave'],
     ];
     $html = '<div class="fm-portal-nav">'
         . '<div class="fm-portal-nav-inner">'
@@ -302,7 +299,7 @@ function fm_manager_portal_nav_html(string $active = ''): string
         $html .= '<a class="fm-portal-link' . $cls . '" href="' . htmlspecialchars($item[0]) . '">'
             . '<i class="fas ' . $item[2] . ' me-1"></i>' . htmlspecialchars($item[1]) . '</a>';
     }
-    $html .= '<a class="fm-portal-link" href="fm-manager.php?logout=1"><i class="fas fa-sign-out-alt me-1"></i>Sign out</a>'
+    $html .= '<a class="fm-portal-link" href="fm-manager.php?logout=1"><i class="fas fa-sign-out-alt me-1"></i>Leave</a>'
         . '</div></div></div>'
         . '<style>
 .fm-portal-nav{background:#163d22;color:#fff;margin:0 0 1rem;box-shadow:0 1px 4px rgba(0,0,0,.12)}

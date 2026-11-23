@@ -329,6 +329,7 @@ $cards = [
       'francophonie-mobility-staff-add.php' => 'Smart Add candidate',
       'francophonie-mobility-client-tracking.php' => 'Client tracking — Overall report',
       'francophonie-mobility-manager-link.php' => 'Manager private link',
+      'francophonie-mobility-payment-records.php' => 'Payment records',
       'admin-generate-fm-contract.php' => 'Issue E-Sign Contract',
       'admin-fm-contracts.php' => 'Signed Contracts',
       'admin-generate-fm-contract.php?variant=special' => 'Issue Special E-Sign',
@@ -2524,6 +2525,12 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             <i class="bi bi-link-45deg"></i>
             Manager private link
           </a>
+          <?php if (!empty($isSuperExecutive)): ?>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-payment-records.php', 'Payment records')">
+            <i class="bi bi-cash-stack"></i>
+            Payment records
+          </a>
+          <?php endif; ?>
           <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=waiting_list', 'Waiting List')">
             <i class="bi bi-hourglass-split"></i>
             Waiting List

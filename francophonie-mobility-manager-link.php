@@ -1,6 +1,7 @@
 <?php
 /**
  * Issue / copy the private Francophonie Mobility manager portal link (staff only).
+ * Link-only access — no username or password.
  */
 declare(strict_types=1);
 
@@ -8,6 +9,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/fm_manager_portal.php';
+require_once __DIR__ . '/helpers/fm_payment_records.php';
 
 if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
     header('Location: admin-login.php');
@@ -31,16 +33,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
         if ($action === 'rotate') {
             fm_manager_portal_rotate_token($conn);
             $message = 'New private link generated. Share the updated link with the manager.';
-        } elseif ($action === 'reset_password') {
-            fm_manager_portal_reset_credentials($conn);
-            $message = 'Credentials reset to the default manager username and password.';
         }
     }
 }
 
-$settings = fm_manager_portal_settings($conn);
 $privateUrl = fm_manager_portal_private_url($conn);
-$username = (string) ($settings['username'] ?? fm_manager_portal_default_username());
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -54,14 +51,13 @@ $username = (string) ($settings['username'] ?? fm_manager_portal_default_usernam
         body { background: #f4f6f3; }
         .card-soft { border: 0; border-radius: 12px; box-shadow: 0 1px 6px rgba(0,0,0,.06); background: #fff; }
         .page-head { background: linear-gradient(135deg, #1e4d2b, #3661B9); color: #fff; padding: 1.1rem 0; margin-bottom: 1rem; }
-        code.url { word-break: break-all; }
     </style>
 </head>
 <body>
 <div class="page-head">
     <div class="container" style="max-width:820px">
         <h1 class="h4 mb-1"><i class="fas fa-link me-2"></i>Manager private link</h1>
-        <p class="mb-0 opacity-75 small">Issue a private portal link. After sign-in the manager can use Smart Add, View list, and Overall report.</p>
+        <p class="mb-0 opacity-75 small">Share this link only. No username or password — the link alone opens Smart Add, View list, Overall report, Payment records, and Send report.</p>
     </div>
 </div>
 <div class="container pb-5" style="max-width:820px">
@@ -71,7 +67,7 @@ $username = (string) ($settings['username'] ?? fm_manager_portal_default_usernam
 
     <div class="card card-soft p-3 p-md-4 mb-3">
         <h2 class="h5">Private link</h2>
-        <p class="small text-muted">Send this link only to the manager. Opening it asks for username and password.</p>
+        <p class="small text-muted">Send this to the manager. They can send the full Excel report to <?= htmlspecialchars(fm_payment_report_recipient()) ?> and open tools for more details.</p>
         <div class="input-group mb-2">
             <input type="text" class="form-control" id="portalUrl" readonly value="<?= htmlspecialchars($privateUrl) ?>">
             <button type="button" class="btn btn-primary" id="copyBtn"><i class="fas fa-copy me-1"></i> Copy</button>
@@ -79,25 +75,13 @@ $username = (string) ($settings['username'] ?? fm_manager_portal_default_usernam
         <p class="small mb-0"><a href="<?= htmlspecialchars($privateUrl) ?>" target="_blank" rel="noopener">Open private link</a></p>
     </div>
 
-    <div class="card card-soft p-3 p-md-4 mb-3">
-        <h2 class="h5">Sign-in details</h2>
-        <ul class="mb-0">
-            <li>Username: <code><?= htmlspecialchars($username) ?></code></li>
-            <li>Password: default manager password (reset below if needed)</li>
-        </ul>
-    </div>
-
     <div class="card card-soft p-3 p-md-4">
         <h2 class="h5">Manage</h2>
-        <form method="post" class="d-flex flex-wrap gap-2">
+        <form method="post">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
             <button type="submit" name="action" value="rotate" class="btn btn-outline-danger"
                     onclick="return confirm('Generate a new private link? The old link will stop working.');">
                 <i class="fas fa-sync-alt me-1"></i> Generate new link
-            </button>
-            <button type="submit" name="action" value="reset_password" class="btn btn-outline-secondary"
-                    onclick="return confirm('Reset username/password to the default manager credentials?');">
-                <i class="fas fa-key me-1"></i> Reset default password
             </button>
         </form>
     </div>

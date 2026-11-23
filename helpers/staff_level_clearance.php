@@ -72,6 +72,7 @@ function pcvc_staff_level_clearance_catalog(): array
             'francophonie-mobility-staff-add.php' => 'Smart Add candidate',
             'francophonie-mobility-client-tracking.php' => 'Client tracking — Overall report',
             'francophonie-mobility-manager-link.php' => 'Manager private link',
+            'francophonie-mobility-payment-records.php' => 'Payment records',
             'francophonie-mobility-applications.php?status=waiting_list' => 'Waiting List',
             'francophonie-mobility-applications.php?status=ready2start' => 'Ready2start',
             'francophonie-mobility-applications.php?status=new_clients' => 'New clients',
