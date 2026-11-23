@@ -574,11 +574,17 @@ $fileFields = [
             padding: 8px 10px;
             background: <?= $colors['light_gray'] ?>;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
+            flex-direction: column;
+            align-items: stretch;
+            gap: 8px;
             border-top: 1px solid <?= $colors['border_gray'] ?>;
+        }
+
+        .card-footer .status-pill-v {
+            align-self: flex-start;
+            max-width: 100%;
+            white-space: normal;
+            line-height: 1.25;
         }
 
         .applied-date {
@@ -592,7 +598,18 @@ $fileFields = [
         .action-buttons {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 6px;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .action-buttons > .view-btn,
+        .action-buttons > .contact-btn,
+        .action-buttons > .btn-delete-visa {
+            flex: 1 1 auto;
+            min-width: 0;
+            justify-content: center;
+            white-space: nowrap;
         }
 
         .view-btn {
@@ -604,7 +621,7 @@ $fileFields = [
             cursor: pointer;
             font-weight: 600;
             font-size: 0.9rem;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 5px;
             transition: all 0.3s;
@@ -623,9 +640,10 @@ $fileFields = [
             cursor: pointer;
             font-weight: 600;
             font-size: 0.9rem;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 5px;
+            text-decoration: none;
             transition: all 0.3s;
         }
 
@@ -645,6 +663,8 @@ $fileFields = [
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            visibility: visible;
+            opacity: 1;
         }
 
         .btn-delete-visa:hover {
@@ -791,7 +811,7 @@ $fileFields = [
             padding: 6px 12px 2px;
         }
         .card-date-light { color: rgba(255,255,255,.9); font-size: 12px; white-space: nowrap; }
-        .view-btn, .contact-btn, .btn-delete-visa { padding: 6px 10px; font-size: 0.8rem; }
+        .view-btn, .contact-btn, .btn-delete-visa { padding: 7px 10px; font-size: 0.8rem; }
 
         .card-fact {
             display: flex;
@@ -907,13 +927,10 @@ $fileFields = [
                 width: 100%;
                 justify-content: center;
             }
-            .card-footer {
-                flex-direction: column;
-                gap: 10px;
-                align-items: stretch;
-            }
-            .action-buttons {
-                justify-content: center;
+            .action-buttons > .view-btn,
+            .action-buttons > .contact-btn,
+            .action-buttons > .btn-delete-visa {
+                flex: 1 1 calc(50% - 6px);
             }
         }
 
@@ -924,10 +941,26 @@ $fileFields = [
             
             .applicants-grid {
                 gap: 15px;
+                grid-template-columns: 1fr;
             }
             
             .card-header, .card-body, .card-footer {
                 padding: 12px;
+            }
+
+            .action-buttons > .view-btn,
+            .action-buttons > .contact-btn,
+            .action-buttons > .btn-delete-visa {
+                flex: 1 1 100%;
+            }
+        }
+
+        /* Narrow cards in 2-column grid still need full action row */
+        @media (min-width: 980px) and (max-width: 1299px) {
+            .action-buttons > .view-btn,
+            .action-buttons > .contact-btn,
+            .action-buttons > .btn-delete-visa {
+                flex: 1 1 calc(50% - 6px);
             }
         }
 
@@ -1378,7 +1411,7 @@ $fileFields = [
                         <div class="action-buttons">
                             <?php if ($emailText !== ''): ?>
                             <a href="mailto:<?= htmlspecialchars($emailText) ?>" class="contact-btn" title="Send Email">
-                                <i class="fas fa-envelope"></i> Contact
+                                <i class="fas fa-envelope"></i> <span>Contact</span>
                             </a>
                             <?php endif; ?>
                             <button class="view-btn view-details-btn" 
@@ -1403,11 +1436,11 @@ $fileFields = [
                                         'processStatus' => $procKey,
                                         'processLabel' => $procLabel,
                                     ], JSON_UNESCAPED_UNICODE)) ?>'>
-                                <i class="fas fa-eye"></i> Details
+                                <i class="fas fa-eye"></i> <span>Details</span>
                             </button>
                             <?php if ($canDeleteVisaApplication): ?>
                             <button type="button" class="btn-delete-visa btn-delete-visa-app" data-user-id="<?= htmlspecialchars($applicant['user_id']) ?>" title="Delete this application (Superadmin)">
-                                <i class="fas fa-trash-alt"></i> Delete
+                                <i class="fas fa-trash-alt"></i> <span>Delete</span>
                             </button>
                             <?php endif; ?>
                         </div>
