@@ -78,7 +78,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report']
 
 $privateUrl = fm_manager_portal_private_url($conn);
 $reportRecipients = fm_payment_report_recipients();
-$requiredReportTo = fm_payment_report_required_recipient();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -136,29 +135,22 @@ $requiredReportTo = fm_payment_report_required_recipient();
         <h2 class="h5 mb-2">Send full report</h2>
         <p class="text-muted small mb-3">
             Emails the complete Excel report (Client tracking + Payment records) and asks recipients to open the private link for more details.
-            <strong>info@francocana.com</strong> is always included.
+            Choose any of the addresses below.
         </p>
         <form method="post">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
             <input type="hidden" name="k" value="<?= htmlspecialchars($token) ?>">
             <div class="d-flex flex-wrap gap-3 mb-3">
                 <?php foreach ($reportRecipients as $email => $meta): ?>
-                    <?php $required = !empty($meta['required']); ?>
                     <label class="form-check mb-0">
                         <input
                             class="form-check-input"
                             type="checkbox"
                             name="report_to[]"
                             value="<?= htmlspecialchars($email) ?>"
-                            <?= $required ? 'checked disabled' : 'checked' ?>
+                            checked
                         >
-                        <?php if ($required): ?>
-                        <input type="hidden" name="report_to[]" value="<?= htmlspecialchars($requiredReportTo) ?>">
-                        <?php endif; ?>
-                        <span class="form-check-label">
-                            <?= htmlspecialchars($email) ?>
-                            <?= $required ? '<span class="text-muted small">(always)</span>' : '' ?>
-                        </span>
+                        <span class="form-check-label"><?= htmlspecialchars($email) ?></span>
                     </label>
                 <?php endforeach; ?>
             </div>

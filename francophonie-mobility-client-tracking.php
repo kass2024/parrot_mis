@@ -38,7 +38,6 @@ if ($forceScan || $scanOne > 0) {
 }
 
 $reportRecipients = fm_payment_report_recipients();
-$requiredReportTo = fm_payment_report_required_recipient();
 
 $where = '1=1';
 $types = '';
@@ -291,21 +290,15 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
             <form id="sendReportForm" class="d-flex flex-wrap gap-3 align-items-center" onsubmit="return false;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
                 <?php foreach ($reportRecipients as $email => $meta): ?>
-                    <?php $required = !empty($meta['required']); ?>
                     <label class="form-check form-check-inline mb-0 small">
                         <input
                             class="form-check-input report-to-check"
                             type="checkbox"
                             name="report_to[]"
                             value="<?= htmlspecialchars($email) ?>"
-                            data-required="<?= $required ? '1' : '0' ?>"
-                            <?= 'checked' ?>
-                            <?= $required ? 'disabled' : '' ?>
+                            checked
                         >
-                        <span class="form-check-label">
-                            <?= htmlspecialchars($email) ?>
-                            <?= $required ? '<span class="text-muted">(always)</span>' : '' ?>
-                        </span>
+                        <span class="form-check-label"><?= htmlspecialchars($email) ?></span>
                     </label>
                 <?php endforeach; ?>
                 <button type="button" class="btn btn-sm btn-success ms-auto" id="sendEmailBtn">
@@ -529,7 +522,6 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
     const sendProgress = document.getElementById('sendProgress');
     const sendStatusText = document.getElementById('sendStatusText');
     const sendAlert = document.getElementById('sendAlert');
-    const requiredTo = <?= json_encode($requiredReportTo) ?>;
     let sending = false;
 
     function showSendAlert(ok, msg) {
@@ -560,13 +552,11 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
     async function sendReportEmail() {
         if (sending || !sendForm || !sendBtn) return;
         const checks = Array.from(sendForm.querySelectorAll('.report-to-check'));
-        const selected = [];
-        checks.forEach(function (el) {
-            if (el.checked || el.getAttribute('data-required') === '1') {
-                selected.push(el.value);
-            }
-        });
-        if (requiredTo && selected.indexOf(requiredTo) === -1) selected.unshift(requiredTo);
+        const selected = checks.filter(function (el) { return el.checked; }).map(function (el) { return el.value; });
+        if (!selected.length) {
+            showSendAlert(false, 'Select at least one email address.');
+            return;
+        }
 
         sending = true;
         sendBtn.disabled = true;

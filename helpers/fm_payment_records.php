@@ -11,29 +11,30 @@ require_once __DIR__ . '/francophonie_mobility_notify.php';
 require_once __DIR__ . '/fm_client_tracking.php';
 require_once __DIR__ . '/fm_manager_portal.php';
 
+/** @deprecated No recipient is mandatory; kept for older call sites. */
 function fm_payment_report_required_recipient(): string
 {
-    return 'info@francocana.com';
+    return '';
 }
 
 /**
- * Selectable report recipients. Required address is always included when sending.
+ * Selectable report recipients. All three may be checked or unchecked freely.
  *
  * @return array<string, array{label:string,required:bool}>
  */
 function fm_payment_report_recipients(): array
 {
     return [
-        'info@francocana.com' => ['label' => 'info@francocana.com', 'required' => true],
+        'info@francocana.com' => ['label' => 'info@francocana.com', 'required' => false],
         'ujeanmethode@gmail.com' => ['label' => 'ujeanmethode@gmail.com', 'required' => false],
         'infos@visaconsultantcanada.com' => ['label' => 'infos@visaconsultantcanada.com', 'required' => false],
     ];
 }
 
-/** @deprecated Use fm_payment_report_required_recipient() */
+/** @deprecated Prefer fm_payment_report_recipients() */
 function fm_payment_report_recipient(): string
 {
-    return fm_payment_report_required_recipient();
+    return 'info@francocana.com';
 }
 
 /**
@@ -43,7 +44,7 @@ function fm_payment_report_recipient(): string
 function fm_normalize_report_recipients(?array $selected): array
 {
     $allowed = array_keys(fm_payment_report_recipients());
-    $out = [fm_payment_report_required_recipient()];
+    $out = [];
     foreach ($selected ?? [] as $email) {
         $email = strtolower(trim((string) $email));
         if ($email === '' || !in_array($email, $allowed, true)) {
@@ -619,6 +620,9 @@ function fm_send_manager_full_report(mysqli $conn, string $privateLink, ?array $
     fm_ensure_schema($conn);
 
     $recipients = fm_normalize_report_recipients($selectedRecipients);
+    if ($recipients === []) {
+        return ['ok' => false, 'message' => 'Select at least one email address.'];
+    }
     $to = $recipients[0];
     $cc = array_slice($recipients, 1);
 
