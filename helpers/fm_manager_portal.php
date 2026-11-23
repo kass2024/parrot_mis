@@ -36,6 +36,7 @@ function fm_manager_portal_allowed_scripts(): array
         'francophonie_mobility_admin_action.php',
         'update_francophonie_mobility_status.php',
         'send_francophonie_mobility_email.php',
+        'fm_send_tracking_report.php',
         'download.php',
     ];
 }

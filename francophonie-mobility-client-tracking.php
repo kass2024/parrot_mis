@@ -33,30 +33,10 @@ $forceScan = isset($_GET['rescan']) && $_GET['rescan'] === '1';
 $scanOne = (int) ($_GET['scan_id'] ?? 0);
 $scanReady = pcvc_docvision_is_configured();
 $scanErrors = [];
-$emailFlash = '';
-$emailErr = '';
 if ($forceScan || $scanOne > 0) {
     @set_time_limit(300);
 }
 
-if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['send_report_email'])) {
-    if (empty($_POST['csrf_token']) || !hash_equals((string) $_SESSION['csrf_token'], (string) $_POST['csrf_token'])) {
-        $emailErr = 'Session expired. Refresh and try again.';
-    } else {
-        @set_time_limit(180);
-        $link = fm_manager_portal_private_url($conn);
-        $picked = $_POST['report_to'] ?? [];
-        if (!is_array($picked)) {
-            $picked = [];
-        }
-        $result = fm_send_manager_full_report($conn, $link, $picked);
-        if (!empty($result['ok'])) {
-            $emailFlash = (string) ($result['message'] ?? 'Report sent.');
-        } else {
-            $emailErr = (string) ($result['message'] ?? 'Could not send the report.');
-        }
-    }
-}
 $reportRecipients = fm_payment_report_recipients();
 $requiredReportTo = fm_payment_report_required_recipient();
 
@@ -213,6 +193,36 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
         .pct { font-size: .72rem; color: #64748b; }
         .badge-src { font-size: .65rem; }
         mark.hit { background: #fef08a; padding: 0 .1rem; border-radius: 2px; }
+        .send-box { border: 1px solid #e2e8f0; border-radius: 12px; padding: .85rem 1rem; margin-top: .85rem; background: #fff; }
+        .send-progress { display: none; margin-top: .75rem; }
+        .send-progress.active { display: block; }
+        .send-progress .bar-track {
+            height: 10px; border-radius: 999px; background: #e2e8f0; overflow: hidden;
+        }
+        .send-progress .bar-fill {
+            height: 100%; width: 8%; border-radius: 999px;
+            background: linear-gradient(90deg, #1e4d2b, #3661B9, #1e4d2b);
+            background-size: 200% 100%;
+            animation: sendSlide 1.1s linear infinite, sendGrow 12s ease-out forwards;
+        }
+        .send-progress.done .bar-fill {
+            width: 100% !important; animation: none; background: #16a34a;
+        }
+        .send-progress.fail .bar-fill {
+            width: 100% !important; animation: none; background: #dc2626;
+        }
+        @keyframes sendSlide {
+            0% { background-position: 0% 0; }
+            100% { background-position: -200% 0; }
+        }
+        @keyframes sendGrow {
+            0% { width: 8%; }
+            20% { width: 28%; }
+            50% { width: 55%; }
+            80% { width: 78%; }
+            100% { width: 92%; }
+        }
+        .send-status { font-size: .82rem; color: #64748b; margin-top: .4rem; }
     </style>
 </head>
 <body>
@@ -273,44 +283,41 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
                 </span>
             </div>
         </form>
-        <div class="border rounded p-2 mt-3 bg-white">
+        <div class="send-box">
             <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-2">
                 <strong class="small">Send email</strong>
-                <span class="hint mb-0">Excel report (Client tracking + Payment records)</span>
+                <span class="hint mb-0">Builds Excel (Client tracking + Payment records) then emails selected addresses</span>
             </div>
-            <form method="post" id="sendReportForm" class="d-flex flex-wrap gap-3 align-items-center">
+            <form id="sendReportForm" class="d-flex flex-wrap gap-3 align-items-center" onsubmit="return false;">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
-                <input type="hidden" name="send_report_email" value="1">
                 <?php foreach ($reportRecipients as $email => $meta): ?>
                     <?php $required = !empty($meta['required']); ?>
                     <label class="form-check form-check-inline mb-0 small">
                         <input
-                            class="form-check-input"
+                            class="form-check-input report-to-check"
                             type="checkbox"
                             name="report_to[]"
                             value="<?= htmlspecialchars($email) ?>"
-                            <?= $required ? 'checked disabled' : 'checked' ?>
+                            data-required="<?= $required ? '1' : '0' ?>"
+                            <?= 'checked' ?>
+                            <?= $required ? 'disabled' : '' ?>
                         >
-                        <?php if ($required): ?>
-                        <input type="hidden" name="report_to[]" value="<?= htmlspecialchars($requiredReportTo) ?>">
-                        <?php endif; ?>
                         <span class="form-check-label">
                             <?= htmlspecialchars($email) ?>
                             <?= $required ? '<span class="text-muted">(always)</span>' : '' ?>
                         </span>
                     </label>
                 <?php endforeach; ?>
-                <button type="submit" class="btn btn-sm btn-success ms-auto">
+                <button type="button" class="btn btn-sm btn-success ms-auto" id="sendEmailBtn">
                     <i class="fas fa-paper-plane me-1"></i> Send email
                 </button>
             </form>
+            <div class="send-progress" id="sendProgress">
+                <div class="bar-track"><div class="bar-fill" id="sendBarFill"></div></div>
+                <div class="send-status" id="sendStatusText">Preparing report…</div>
+            </div>
+            <div id="sendAlert" class="mt-2" hidden></div>
         </div>
-        <?php if ($emailFlash !== ''): ?>
-        <div class="alert alert-success mt-3 mb-0 py-2 small"><?= htmlspecialchars($emailFlash) ?></div>
-        <?php endif; ?>
-        <?php if ($emailErr !== ''): ?>
-        <div class="alert alert-danger mt-3 mb-0 py-2 small"><?= htmlspecialchars($emailErr) ?></div>
-        <?php endif; ?>
         <?php if ($scanErrors !== []): ?>
         <div class="alert alert-warning mt-3 mb-0 py-2 small">
             Some rows used folder names when a full document check was not available.
@@ -516,6 +523,105 @@ $queryBase = 'status=' . rawurlencode($statusFilter) . ($q !== '' ? '&q=' . rawu
         applyFilter();
     }
     if (exportBtn) exportBtn.addEventListener('click', exportExcel);
+
+    const sendBtn = document.getElementById('sendEmailBtn');
+    const sendForm = document.getElementById('sendReportForm');
+    const sendProgress = document.getElementById('sendProgress');
+    const sendStatusText = document.getElementById('sendStatusText');
+    const sendAlert = document.getElementById('sendAlert');
+    const requiredTo = <?= json_encode($requiredReportTo) ?>;
+    let sending = false;
+
+    function showSendAlert(ok, msg) {
+        if (!sendAlert) return;
+        sendAlert.hidden = false;
+        sendAlert.className = 'alert mt-2 mb-0 py-2 small ' + (ok ? 'alert-success' : 'alert-danger');
+        sendAlert.textContent = msg;
+    }
+
+    function setProgressState(state, text) {
+        if (!sendProgress) return;
+        sendProgress.classList.add('active');
+        sendProgress.classList.remove('done', 'fail');
+        if (state === 'run') {
+            const track = sendProgress.querySelector('.bar-track');
+            const oldFill = document.getElementById('sendBarFill');
+            if (track && oldFill) {
+                const fresh = oldFill.cloneNode(true);
+                fresh.removeAttribute('style');
+                oldFill.replaceWith(fresh);
+            }
+        }
+        if (state === 'done') sendProgress.classList.add('done');
+        if (state === 'fail') sendProgress.classList.add('fail');
+        if (sendStatusText) sendStatusText.textContent = text || '';
+    }
+
+    async function sendReportEmail() {
+        if (sending || !sendForm || !sendBtn) return;
+        const checks = Array.from(sendForm.querySelectorAll('.report-to-check'));
+        const selected = [];
+        checks.forEach(function (el) {
+            if (el.checked || el.getAttribute('data-required') === '1') {
+                selected.push(el.value);
+            }
+        });
+        if (requiredTo && selected.indexOf(requiredTo) === -1) selected.unshift(requiredTo);
+
+        sending = true;
+        sendBtn.disabled = true;
+        const oldHtml = sendBtn.innerHTML;
+        sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending…';
+        if (sendAlert) sendAlert.hidden = true;
+        setProgressState('run', 'Building Excel report…');
+
+        const steps = [
+            'Building Excel report…',
+            'Attaching Client tracking + Payment records…',
+            'Connecting mail server…',
+            'Delivering to selected addresses…'
+        ];
+        let step = 0;
+        const stepTimer = setInterval(function () {
+            step = Math.min(step + 1, steps.length - 1);
+            if (sendStatusText && sending) sendStatusText.textContent = steps[step];
+        }, 2200);
+
+        try {
+            const fd = new FormData();
+            const csrf = sendForm.querySelector('input[name="csrf_token"]');
+            if (csrf) fd.append('csrf_token', csrf.value);
+            selected.forEach(function (email) { fd.append('report_to[]', email); });
+
+            const res = await fetch('fm_send_tracking_report.php', {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin'
+            });
+            let data = null;
+            try { data = await res.json(); } catch (e) { data = null; }
+            clearInterval(stepTimer);
+
+            if (data && data.success) {
+                setProgressState('done', 'Email sent successfully.');
+                showSendAlert(true, data.message || 'Report emailed successfully.');
+            } else {
+                const msg = (data && data.message) ? data.message : ('Send failed (HTTP ' + res.status + ').');
+                setProgressState('fail', 'Send failed.');
+                showSendAlert(false, msg);
+            }
+        } catch (err) {
+            clearInterval(stepTimer);
+            setProgressState('fail', 'Send failed.');
+            showSendAlert(false, err && err.message ? err.message : 'Network error while sending.');
+        } finally {
+            sending = false;
+            sendBtn.disabled = false;
+            sendBtn.innerHTML = oldHtml;
+        }
+    }
+
+    if (sendBtn) sendBtn.addEventListener('click', sendReportEmail);
 })();
 </script>
 </body>

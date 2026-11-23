@@ -636,21 +636,28 @@ function fm_send_manager_full_report(mysqli $conn, string $privateLink, ?array $
         . htmlspecialchars($privateLink, ENT_QUOTES, 'UTF-8') . '</a></p>'
         . '<p>No username or password is required — the private link alone grants access.</p>';
 
-    $ok = sendSMTPMail(
+    $send = sendSMTPMailDetailed(
         $to,
         $subject,
         fm_email_wrap('Full report', $body),
         [['path' => $tmp, 'name' => 'Francophonie-Mobility-Full-Report.xls']],
         [],
+        null,
         $cc
     );
     @unlink($tmp);
 
-    if ($ok) {
+    if (!empty($send['ok'])) {
         return [
             'ok' => true,
             'message' => 'Report sent to ' . implode(', ', $recipients) . ' with the Excel attachment.',
         ];
     }
-    return ['ok' => false, 'message' => 'Could not send the report email. Please try again.'];
+    $err = trim((string) ($send['error'] ?? ''));
+    return [
+        'ok' => false,
+        'message' => $err !== ''
+            ? ('Could not send the report email: ' . $err)
+            : 'Could not send the report email. Please try again.',
+    ];
 }
