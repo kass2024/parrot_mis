@@ -374,6 +374,7 @@ foreach ($rows as $r) {
                     <tr>
                         <th>S/N</th>
                         <th>Client</th>
+                        <th>Status</th>
                         <th>Job</th>
                         <th>Total</th>
                         <th>Upfront</th>
@@ -387,25 +388,29 @@ foreach ($rows as $r) {
                 </thead>
                 <tbody>
                 <?php if ($rows === []): ?>
-                    <tr><td colspan="<?= $canEdit ? 11 : 10 ?>" class="text-muted p-4">No payment records yet.</td></tr>
+                    <tr><td colspan="<?= $canEdit ? 12 : 11 ?>" class="text-muted p-4">No payment records yet.</td></tr>
                 <?php else: ?>
                     <?php foreach ($rows as $r): ?>
                     <?php
                         $bal = (float) ($r['balance_to_sultan'] ?? 0);
                         $displayName = trim((string) ($r['app_name'] ?? '')) ?: (string) ($r['full_name'] ?? '');
+                        $appStatus = trim((string) ($r['app_status'] ?? ''));
                     ?>
                     <tr class="<?= !empty($r['highlighted']) ? 'row-hi' : '' ?>">
                         <td><?= (int) ($r['sort_order'] ?? 0) ?></td>
                         <td>
                             <div class="name-cell"><?= htmlspecialchars($displayName) ?></div>
                             <?php if (!empty($r['app_reference'])): ?>
-                            <div class="meta"><code><?= htmlspecialchars((string) $r['app_reference']) ?></code>
-                                <?php if (!empty($r['app_status'])): ?>
-                                <span class="pill"><?= htmlspecialchars(fm_application_status_label((string) $r['app_status'])) ?></span>
-                                <?php endif; ?>
-                            </div>
+                            <div class="meta"><code><?= htmlspecialchars((string) $r['app_reference']) ?></code></div>
                             <?php elseif (empty($r['application_id'])): ?>
                             <div class="meta text-warning">Not linked to an application</div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ($appStatus !== ''): ?>
+                            <span class="pill"><?= htmlspecialchars(fm_application_status_label($appStatus)) ?></span>
+                            <?php else: ?>
+                            <span class="meta">—</span>
                             <?php endif; ?>
                         </td>
                         <td><?= htmlspecialchars((string) ($r['job_position'] ?? '')) ?></td>
