@@ -335,13 +335,6 @@ $cards = [
       'francophonie-record-invoice.php' => 'Record Invoice',
     ]
   ],
-  'client_tracking' => [
-    'title' => 'Client tracking',
-    'icon' => 'bi-clipboard-check',
-    'links' => [
-      'francophonie-mobility-client-tracking.php' => 'Overall report',
-    ]
-  ],
   'employment_opportunities' => [
     'title' => 'Russian Employment Opportunities',
     'icon' => 'bi-briefcase',
@@ -516,7 +509,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'client_tracking', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'student_consent', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'student_consent', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -557,9 +550,6 @@ if (!pcvc_can_access_francophonie_mobility($conn)) {
     $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, ['francophonie_mobility', 'client_tracking']));
 } elseif (!in_array('francophonie_mobility', $allowedSidebarItems, true)) {
     $allowedSidebarItems[] = 'francophonie_mobility';
-}
-if (pcvc_can_access_francophonie_mobility($conn) && !in_array('client_tracking', $allowedSidebarItems, true)) {
-    $allowedSidebarItems[] = 'client_tracking';
 }
 if (!pcvc_can_access_francophonie_mobility($conn)) {
     $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, ['immigration_records']));
@@ -2184,7 +2174,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     <?php
     $pcvcSidebarGroups = [
       'study' => ['all_admissions', 'loan_applications', 'I-20_applications', 'credit_transfer', 'german_language_contracts', 'noble_education', 'malta_courses', 'eci_malta', 'contracts', 'student_consent'],
-      'work' => ['jobsabrod', 'francophonie_mobility', 'client_tracking', 'canada_workers', 'employment_opportunities', 'employment_agreement', 'dubai_work', 'czech_work'],
+      'work' => ['jobsabrod', 'francophonie_mobility', 'canada_workers', 'employment_opportunities', 'employment_agreement', 'dubai_work', 'czech_work'],
       'visit' => ['visit_study_visa', 'canada_medical', 'korea_event_participation', 'korea_invitation_contracts', 'client_consent', 'immigration_records'],
       'partners' => ['staff_reporting', 'staff_attendance', 'commission_request', 'marketing', 'smart_brochure', 'meeting_invitation', 'refund_requests', 'partner_contracts', 'agent_contracts', 'special_contracts'],
       'connect' => ['canada_partner_clients'],
@@ -2524,6 +2514,11 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             <i class="bi bi-person-plus"></i>
             Smart Add candidate
           </a>
+          <span class="menu-label">Client tracking</span>
+          <a href="#" onclick="loadInFrame('francophonie-mobility-client-tracking.php', 'Overall report')">
+            <i class="bi bi-clipboard-check"></i>
+            Overall report
+          </a>
           <a href="#" onclick="loadInFrame('francophonie-mobility-applications.php?status=waiting_list', 'Waiting List')">
             <i class="bi bi-hourglass-split"></i>
             Waiting List
@@ -2576,19 +2571,6 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="loadInFrame('francophonie-record-invoice.php', 'Record Invoice')">
             <i class="bi bi-receipt"></i>
             Record Invoice
-          </a>
-        </div>
-        <?php endif; ?>
-  <?php if (in_array('francophonie_mobility', $allowedSidebarItems) || in_array('client_tracking', $allowedSidebarItems)): ?>
-        <a href="#client_tracking" class="sidebar-link" onclick="toggleSidebarMenu('client_tracking')">
-          <i class="bi bi-clipboard-check"></i>
-          <span>Client tracking</span>
-          <i class="bi bi-chevron-down arrow"></i>
-        </a>
-        <div class="sidebar-submenu" id="submenu_client_tracking">
-          <a href="#" onclick="loadInFrame('francophonie-mobility-client-tracking.php', 'Overall report')">
-            <i class="bi bi-table"></i>
-            Overall report
           </a>
         </div>
         <?php endif; ?>

@@ -70,6 +70,7 @@ function pcvc_staff_level_clearance_catalog(): array
         'francophonie_mobility' => ['group' => 'Work Abroad', 'label' => 'Canada – Francophone Mobility', 'items' => [
             'francophonie-mobility-applications.php' => 'Francophonie Mobility',
             'francophonie-mobility-staff-add.php' => 'Smart Add candidate',
+            'francophonie-mobility-client-tracking.php' => 'Client tracking — Overall report',
             'francophonie-mobility-applications.php?status=waiting_list' => 'Waiting List',
             'francophonie-mobility-applications.php?status=ready2start' => 'Ready2start',
             'francophonie-mobility-applications.php?status=new_clients' => 'New clients',
@@ -83,9 +84,6 @@ function pcvc_staff_level_clearance_catalog(): array
             'admin-generate-fm-contract.php?variant=special' => 'Issue Special E-Sign',
             'admin-fm-contracts.php?variant=special' => 'Signed Special Contracts',
             'francophonie-record-invoice.php' => 'Record Invoice',
-        ]],
-        'client_tracking' => ['group' => 'Work Abroad', 'label' => 'Client tracking', 'items' => [
-            'francophonie-mobility-client-tracking.php' => 'Overall report',
         ]],
         'canada_workers' => ['group' => 'Work Abroad', 'label' => 'Canada – General Worker Recruitment', 'items' => [
             'canada-workers-applications.php' => 'View Applications',
