@@ -1141,11 +1141,8 @@ $fileFields = [
                 <label>Email
                     <input name="email" type="email" maxlength="150" placeholder="Optional">
                 </label>
-                <label>Phone
-                    <input name="phone" maxlength="40" placeholder="Optional">
-                </label>
                 <label>Visa type
-                    <select name="visa_type">
+                    <select name="visa_type" id="visaAddVisaType">
                         <option>Study Visa</option>
                         <option>Visit Visa</option>
                         <option>Work Visa</option>
@@ -1162,7 +1159,7 @@ $fileFields = [
                         <div class="visa-country-list" id="visaDestCountryList" role="listbox"></div>
                     </div>
                 </label>
-                <label>Choose intake
+                <label id="visaAddIntakeWrap">Choose intake
                     <select name="intake" id="visaIntakeSelect">
                         <option value="">Select intake…</option>
                         <?php foreach ($visaIntakeByCountry as $groupLabel => $intakeLabels): ?>
@@ -1301,7 +1298,7 @@ $fileFields = [
                             <div class="card-fact"><i class="fas fa-plane"></i><span><?= htmlspecialchars($fromCountry !== '' ? $fromCountry : '—') ?> → <?= htmlspecialchars($toCountry !== '' ? $toCountry : '—') ?></span></div>
                             <?php endif; ?>
                             <?php if ($intakeText !== ''): ?>
-                            <div class="card-fact"><i class="fas fa-calendar-alt"></i><span><?= htmlspecialchars($intakeText) ?></span></div>
+                            <div class="card-fact card-fact-intake"><i class="fas fa-calendar-alt"></i><span><?= htmlspecialchars($intakeText) ?></span></div>
                             <?php endif; ?>
                             <?php if ($emailText !== ''): ?>
                             <div class="card-fact"><i class="fas fa-envelope"></i><span><?= htmlspecialchars($emailText) ?></span></div>
@@ -1446,6 +1443,20 @@ $fileFields = [
                     <label for="visaRejectReason" style="display:block;font-weight:600;font-size:0.85rem;color:#b91c1c;margin-bottom:6px;">Reason for rejection</label>
                     <textarea id="visaRejectReason" rows="3" maxlength="2000" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.9rem;resize:vertical;" placeholder="Required if you send email or WhatsApp"></textarea>
                     <p style="margin:6px 0 0;font-size:0.78rem;color:#64748b;">Included in the message to the applicant when you notify.</p>
+                </div>
+                <div id="visaNotifyIntakeWrap" style="display:none;margin-bottom:14px;">
+                    <label for="visaNotifyIntake" style="display:block;font-weight:600;font-size:0.85rem;color:#14532d;margin-bottom:6px;">Changed to which intake?</label>
+                    <select id="visaNotifyIntake" style="width:100%;padding:10px 12px;border:1px solid #e2e8f0;border-radius:10px;font-size:0.9rem;background:#fff;">
+                        <option value="">Select intake…</option>
+                        <?php foreach ($visaIntakeByCountry as $groupLabel => $intakeLabels): ?>
+                        <optgroup label="<?= htmlspecialchars($groupLabel) ?>">
+                            <?php foreach ($intakeLabels as $intakeLabel): ?>
+                            <option value="<?= htmlspecialchars($intakeLabel) ?>"><?= htmlspecialchars($intakeLabel) ?></option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                        <?php endforeach; ?>
+                    </select>
+                    <p style="margin:6px 0 0;font-size:0.78rem;color:#64748b;">Saved on the applicant record with this status change.</p>
                 </div>
                 <p class="visa-notify-hint">Choose one — you can save without a notification.</p>
                 <div class="visa-notify-grid">
@@ -1695,6 +1706,34 @@ $fileFields = [
                 var vrw = document.getElementById('visaRejectReasonWrap');
                 if (vri) vri.value = '';
                 if (vrw) vrw.style.display = 'none';
+                var vi = document.getElementById('visaNotifyIntake');
+                var viw = document.getElementById('visaNotifyIntakeWrap');
+                if (vi) vi.value = '';
+                if (viw) viw.style.display = 'none';
+            }
+
+            function isVisaIntakeChangeStatus(key) {
+                return key === 'intake_changed' || key === 'intake_changed_waiting_documents';
+            }
+
+            function updateCardIntakeUI(card, intakeText) {
+                if (!card) return;
+                var facts = card.querySelector('.card-facts');
+                if (!facts) return;
+                var existing = card.querySelector('.card-fact-intake');
+                var text = (intakeText || '').trim();
+                if (!text) {
+                    if (existing) existing.remove();
+                    return;
+                }
+                if (!existing) {
+                    existing = document.createElement('div');
+                    existing.className = 'card-fact card-fact-intake';
+                    existing.innerHTML = '<i class="fas fa-calendar-alt"></i><span></span>';
+                    facts.appendChild(existing);
+                }
+                var span = existing.querySelector('span');
+                if (span) span.textContent = text;
             }
 
             document.getElementById('visaNotifyCancel').addEventListener('click', closeVisaNotifyModal);
@@ -1714,8 +1753,14 @@ $fileFields = [
                 var userId = p.userId;
                 var vrEl = document.getElementById('visaRejectReason');
                 var rejectReason = vrEl ? (vrEl.value || '').trim() : '';
+                var intakeEl = document.getElementById('visaNotifyIntake');
+                var intakeValue = intakeEl ? (intakeEl.value || '').trim() : '';
                 if (statusKey === 'rejected' && (ne || nw) && rejectReason === '') {
                     alert('Please enter a rejection reason before sending email or WhatsApp.');
+                    return;
+                }
+                if (isVisaIntakeChangeStatus(statusKey) && !intakeValue) {
+                    alert('Please choose which intake this application changed to.');
                     return;
                 }
                 closeVisaNotifyModal();
@@ -1726,6 +1771,7 @@ $fileFields = [
                 fd.append('notify_email', ne ? '1' : '0');
                 fd.append('notify_whatsapp', nw ? '1' : '0');
                 fd.append('rejection_reason', rejectReason);
+                if (intakeValue) fd.append('intake', intakeValue);
                 fetch('api/form17-application-status.php', {
                     method: 'POST',
                     body: fd,
@@ -1744,6 +1790,9 @@ $fileFields = [
                     shiftVisaKpi(p.prevKey, statusKey);
                     var card = sel.closest('.applicant-card');
                     updateCardVisaProcessUI(card, statusKey);
+                    if (json.data && json.data.intake) {
+                        updateCardIntakeUI(card, json.data.intake);
+                    }
                     var label = (json.data && json.data.label) ? json.data.label : ((window.JOB_PROCESS_LABELS && window.JOB_PROCESS_LABELS[statusKey]) || statusKey);
                     var n = json.data && json.data.notify;
                     var parts = ['Status saved'];
@@ -1786,6 +1835,7 @@ $fileFields = [
                             var d = JSON.parse(viewBtn.getAttribute('data-applicant'));
                             d.processStatus = statusKey;
                             d.processLabel = label;
+                            if (json.data && json.data.intake) d.intake = json.data.intake;
                             viewBtn.setAttribute('data-applicant', JSON.stringify(d));
                         } catch (err2) {}
                     }
@@ -1824,6 +1874,12 @@ $fileFields = [
                 if (vrr && vri) {
                     vrr.style.display = newKey === 'rejected' ? 'block' : 'none';
                     vri.value = '';
+                }
+                var viw = document.getElementById('visaNotifyIntakeWrap');
+                var vi = document.getElementById('visaNotifyIntake');
+                if (viw && vi) {
+                    viw.style.display = isVisaIntakeChangeStatus(newKey) ? 'block' : 'none';
+                    vi.value = '';
                 }
                 visaNotifyPending = { sel: sel, userId: userId, newKey: newKey, prevKey: prevKey };
                 openVisaNotifyModal();
@@ -1955,6 +2011,20 @@ $fileFields = [
                     render('');
                 })();
 
+                (function syncVisaAddIntakeVisibility() {
+                    var typeSel = document.getElementById('visaAddVisaType');
+                    var wrap = document.getElementById('visaAddIntakeWrap');
+                    var intakeSel = document.getElementById('visaIntakeSelect');
+                    if (!typeSel || !wrap) return;
+                    function apply() {
+                        var isStudy = typeSel.value === 'Study Visa';
+                        wrap.style.display = isStudy ? '' : 'none';
+                        if (!isStudy && intakeSel) intakeSel.value = '';
+                    }
+                    typeSel.addEventListener('change', apply);
+                    apply();
+                })();
+
                 visaAddForm.addEventListener('submit', function(ev) {
                     ev.preventDefault();
                     var msg = document.getElementById('visaAddMsg');
@@ -1962,6 +2032,11 @@ $fileFields = [
                     if (!dest || !dest.value) {
                         if (msg) msg.textContent = 'Choose a destination country.';
                         return;
+                    }
+                    var typeSel = document.getElementById('visaAddVisaType');
+                    var intakeSel = document.getElementById('visaIntakeSelect');
+                    if (typeSel && typeSel.value !== 'Study Visa' && intakeSel) {
+                        intakeSel.value = '';
                     }
                     var fd = new FormData(visaAddForm);
                     if (msg) msg.textContent = 'Saving…';

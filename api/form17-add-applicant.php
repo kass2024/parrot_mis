@@ -54,7 +54,7 @@ $parts = preg_split('/\s+/u', $full);
 $first = (string) array_shift($parts);
 $last = $parts ? implode(' ', $parts) : $first;
 $email = trim((string) ($_POST['email'] ?? ''));
-$phone = preg_replace('/\s+/', '', trim((string) ($_POST['phone'] ?? '')));
+$phone = '';
 $status = trim((string) ($_POST['process_status'] ?? 'submitted'));
 if (!xander_is_valid_visa_process_status($status)) {
     jsonResponse('Choose a valid status.', false, 400);
@@ -71,7 +71,9 @@ if ($destination === '' || !in_array($destination, $allowedCountries, true)) {
 }
 
 $intake = trim((string) ($_POST['intake'] ?? ''));
-if (!xander_is_valid_visa_intake($intake)) {
+if ($visaType !== 'Study Visa') {
+    $intake = '';
+} elseif (!xander_is_valid_visa_intake($intake)) {
     jsonResponse('Choose a valid intake.', false, 400);
 }
 

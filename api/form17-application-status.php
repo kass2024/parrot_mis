@@ -8,6 +8,7 @@ require_once __DIR__ . '/../helpers/form17_application_status.php';
 require_once __DIR__ . '/../helpers/rejection_reason_column.php';
 
 xander_ensure_form17_process_status_column($conn);
+xander_ensure_form17_intake_column($conn);
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -65,11 +66,19 @@ if (!xander_is_valid_visa_process_status($statusKey)) {
 xander_ensure_rejection_reason_column($conn, 'form_17_applications');
 
 $rejectionReasonPosted = trim((string) ($_POST['rejection_reason'] ?? ''));
+$intakePosted = trim((string) ($_POST['intake'] ?? ''));
 $notifyEmail = isset($_POST['notify_email']) && (string) $_POST['notify_email'] === '1';
 $notifyWhatsapp = isset($_POST['notify_whatsapp']) && (string) $_POST['notify_whatsapp'] === '1';
+$intakeChangeStatuses = ['intake_changed', 'intake_changed_waiting_documents'];
+$isIntakeChange = in_array($statusKey, $intakeChangeStatuses, true);
 
 if ($statusKey === 'rejected' && ($notifyEmail || $notifyWhatsapp) && $rejectionReasonPosted === '') {
     jsonResponse('Please enter a reason for the rejection before sending email or WhatsApp.', false, 400);
+}
+if ($isIntakeChange) {
+    if ($intakePosted === '' || !xander_is_valid_visa_intake($intakePosted)) {
+        jsonResponse('Choose which intake this application changed to.', false, 400);
+    }
 }
 
 $chk = $conn->prepare('SELECT user_id FROM form_17_applications WHERE user_id = ? LIMIT 1');
@@ -91,6 +100,12 @@ if ($statusKey === 'rejected') {
     }
     $rejStore = $rejectionReasonPosted !== '' ? $rejectionReasonPosted : null;
     $st->bind_param('sss', $statusKey, $rejStore, $userId);
+} elseif ($isIntakeChange) {
+    $st = $conn->prepare('UPDATE form_17_applications SET process_status = ?, intake = ?, rejection_reason = NULL WHERE user_id = ? LIMIT 1');
+    if (!$st) {
+        jsonResponse('Server error', false, 500);
+    }
+    $st->bind_param('sss', $statusKey, $intakePosted, $userId);
 } else {
     $st = $conn->prepare('UPDATE form_17_applications SET process_status = ?, rejection_reason = NULL WHERE user_id = ? LIMIT 1');
     if (!$st) {
@@ -118,6 +133,9 @@ $data = [
     'process_status' => $statusKey,
     'label' => $labels[$statusKey] ?? $statusKey,
 ];
+if ($isIntakeChange) {
+    $data['intake'] = $intakePosted;
+}
 if ($notifyResult !== null) {
     $data['notify'] = $notifyResult;
 }
