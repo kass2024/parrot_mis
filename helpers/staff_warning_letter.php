@@ -370,7 +370,14 @@ function pcvc_swl_whatsapp_template_lang_codes(string $primary): array
 function pcvc_swl_whatsapp_extract_error_message(array $res): string
 {
     $err = xander_whatsapp_extract_error($res['json'] ?? null);
-    return (string) ($err['message'] ?? ('HTTP ' . ($res['http'] ?? 0)));
+    if ($err) {
+        $hint = xander_whatsapp_user_hint($err);
+        if ($hint !== '') {
+            return $hint;
+        }
+        return (string) ($err['message'] ?? ('HTTP ' . ($res['http'] ?? 0)));
+    }
+    return 'HTTP ' . ($res['http'] ?? 0);
 }
 
 function pcvc_swl_whatsapp_is_language_error(array $res): bool
@@ -623,11 +630,28 @@ function pcvc_swl_send_whatsapp(
 ): array {
     $token   = trim((string) xander_env_get('WHATSAPP_ACCESS_TOKEN'));
     if ($token === '') $token = trim((string) xander_env_get('WHATSAPP_TOKEN'));
+    if ($token === '') $token = trim((string) xander_env_get('META_SYSTEM_USER_TOKEN'));
     $phoneId = trim((string) xander_env_get('WHATSAPP_PHONE_NUMBER_ID'));
 
     $result = ['sent' => false, 'method' => '', 'error' => '', 'not_on_whatsapp' => false, 'cc' => ['sent' => false, 'error' => '', 'to' => '']];
     if ($token === '' || $phoneId === '') {
         $result['error'] = 'WhatsApp is not configured (token/phone-id missing).';
+        return $result;
+    }
+
+    // Fail fast with a clear message when Meta has invalidated the token (OAuth 190/460).
+    $probeVersion = trim((string) xander_env_get('META_GRAPH_VERSION')) ?: 'v19.0';
+    $probeUrl = 'https://graph.facebook.com/' . rawurlencode($probeVersion) . '/' . rawurlencode($phoneId)
+        . '?fields=display_phone_number';
+    $probe = xander_whatsapp_graph_get($probeUrl, $token);
+    if (($probe['http'] ?? 0) === 401 || (int) (($probe['json']['error']['code'] ?? 0) === 190)) {
+        $err = xander_whatsapp_extract_error($probe['json'] ?? null) ?: [
+            'code' => 190,
+            'subcode' => (int) ($probe['json']['error']['error_subcode'] ?? 0),
+            'message' => (string) ($probe['json']['error']['message'] ?? 'Authentication Error'),
+        ];
+        $result['error'] = xander_whatsapp_user_hint($err);
+        $result['detail'] = substr((string) ($probe['body'] ?? ''), 0, 500);
         return $result;
     }
 

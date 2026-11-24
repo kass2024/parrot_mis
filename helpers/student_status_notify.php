@@ -468,6 +468,34 @@ function xander_send_student_status_email(string $toEmail, string $studentName, 
 }
 
 /**
+ * GET Graph API helper; returns HTTP code and decoded JSON when possible.
+ *
+ * @return array{http:int,body:string,json:?array}
+ */
+function xander_whatsapp_graph_get(string $url, string $token): array
+{
+    if (!function_exists('curl_init')) {
+        return ['http' => 0, 'body' => '', 'json' => null];
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_HTTPHEADER => [
+            'Authorization: Bearer ' . $token,
+        ],
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT => 20,
+    ]);
+    $response = curl_exec($ch);
+    $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    $body = (string) $response;
+    $decoded = json_decode($body, true);
+    $json = is_array($decoded) ? $decoded : null;
+
+    return ['http' => $code, 'body' => $body, 'json' => $json];
+}
+
+/**
  * POST to Graph /messages; returns HTTP code and decoded JSON when possible.
  *
  * @return array{http:int,body:string,json:?array}
@@ -546,8 +574,11 @@ function xander_whatsapp_user_hint(array $err): string
     if ($code === 132000 || $code === 132005) {
         return 'WhatsApp template is missing or not approved in Meta Business Manager.';
     }
-    if ($code === 190 || stripos($msg, 'OAuth') !== false) {
-        return 'WhatsApp API authentication failed — check the access token.';
+    if ($code === 190 || stripos($msg, 'OAuth') !== false || stripos($msg, 'Authentication Error') !== false) {
+        if ($sub === 460 || stripos($msg, 'password') !== false || stripos($msg, 'invalidated') !== false) {
+            return 'WhatsApp Meta token was invalidated (password/security change). Generate a new Admin System User token in Meta Business Manager (Never expires) and update WHATSAPP_ACCESS_TOKEN + META_SYSTEM_USER_TOKEN in .env on local and cPanel.';
+        }
+        return 'WhatsApp Meta access token expired or invalid. Generate a new System User token and update WHATSAPP_ACCESS_TOKEN in .env.';
     }
     if ($msg !== '') {
         return xander_notify_text_clip($msg, 280);
