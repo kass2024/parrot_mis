@@ -48,7 +48,10 @@ function pcvc_dash_person_name(array $row): string
  *   company_students: int
  * }
  */
-function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null): array
+/**
+ * @param list<int>|null $memberAdminIds When set, only these admin accounts and their students appear.
+ */
+function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null, ?array $memberAdminIds = null): array
 {
     $empty = [
         'staff' => [],
@@ -64,13 +67,31 @@ function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null): array
         'company_students' => 0,
     ];
 
+    $memberFilter = null;
+    if ($memberAdminIds !== null) {
+        $memberFilter = [];
+        foreach ($memberAdminIds as $mid) {
+            $mid = (int) $mid;
+            if ($mid > 0) {
+                $memberFilter[$mid] = true;
+            }
+        }
+        if ($memberFilter === []) {
+            return $empty;
+        }
+    }
+
     $select = ['id', 'first_name', 'last_name', 'email', 'role'];
     foreach (['full_name', 'account_type', 'company_name', 'account_status'] as $column) {
         if (pcvc_dash_admin_has_column($conn, $column)) {
             $select[] = $column;
         }
     }
-    $adminRes = $conn->query('SELECT ' . implode(', ', $select) . ' FROM admins');
+    $adminSql = 'SELECT ' . implode(', ', $select) . ' FROM admins';
+    if ($memberFilter !== null) {
+        $adminSql .= ' WHERE id IN (' . implode(',', array_map('intval', array_keys($memberFilter))) . ')';
+    }
+    $adminRes = $conn->query($adminSql);
     if (!$adminRes) {
         return $empty;
     }
@@ -137,11 +158,28 @@ function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null): array
     }
     $statusSql = $flagColumns === [] ? 'NULL' : ('CASE ' . implode(' ', $flagColumns) . ' ELSE NULL END');
     $assignSql = $hasAssign ? 'sa.assigned_to_admin_id' : 'NULL AS assigned_to_admin_id';
+    $appWhere = '';
+    if ($memberFilter !== null) {
+        $inList = implode(',', array_map('intval', array_keys($memberFilter)));
+        $emailParts = [];
+        foreach ($admins as $admin) {
+            $em = strtolower(trim((string) ($admin['email'] ?? '')));
+            if ($em !== '') {
+                $emailParts[$em] = "'" . $conn->real_escape_string($em) . "'";
+            }
+        }
+        $ors = ["sa.assigned_to_admin_id IN ({$inList})"];
+        if ($emailParts !== []) {
+            $ors[] = 'LOWER(TRIM(COALESCE(sa.agent_email, \'\'))) IN (' . implode(',', array_values($emailParts)) . ')';
+        }
+        $appWhere = ' WHERE (' . implode(' OR ', $ors) . ')';
+    }
     $appSql = "
         SELECT sa.id, sa.first_name, sa.last_name, sa.email, {$assignSql},
                LOWER(TRIM(COALESCE(sa.agent_email, ''))) AS agent_email,
                {$statusSql} AS effective_status
         FROM student_applications sa
+        {$appWhere}
         ORDER BY sa.id DESC
     ";
     $appRes = $conn->query($appSql);
@@ -222,9 +260,10 @@ function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null): array
     $staff = [];
     $agents = [];
     $companies = [];
+    $scopedCompanyRoster = $memberFilter !== null;
     foreach ($admins as $admin) {
         $isCompany = $admin['account_type'] === 'company';
-        if ($isCompany) {
+        if ($isCompany && !$scopedCompanyRoster) {
             if ($admin['status'] === 'inactive' && $admin['in_charge'] === [] && $admin['recruited'] === []) {
                 continue;
             }
@@ -233,18 +272,26 @@ function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null): array
             $companies[] = $admin;
             continue;
         }
-        if ($admin['in_charge'] === []) {
+        // HQ board: only people who already have students. Company board: show all linked people.
+        if (!$scopedCompanyRoster && $admin['in_charge'] === []) {
             continue;
         }
-        $admin['students'] = $dedupe($admin['in_charge']);
-        $isStaffPerson = $admin['is_staff'];
-        $admin['kind'] = $isStaffPerson
-            ? (pcvc_is_superadmin_role($admin['role']) ? 'Superadmin' : 'Staff')
-            : 'Agent';
-        if ($isStaffPerson) {
-            $staff[] = $admin;
-        } else {
+        $admin['students'] = $dedupe(
+            $scopedCompanyRoster
+                ? array_merge($admin['in_charge'], $admin['recruited'])
+                : $admin['in_charge']
+        );
+        $isAgentPerson = pcvc_is_agent_role($admin['role']) || $isCompany;
+        $isStaffPerson = !$isAgentPerson && ($admin['is_staff'] || $scopedCompanyRoster);
+        $admin['kind'] = $isCompany
+            ? 'Company'
+            : ($isAgentPerson
+                ? 'Agent'
+                : (pcvc_is_superadmin_role($admin['role']) ? 'Superadmin' : 'Staff'));
+        if ($isAgentPerson || $isCompany) {
             $agents[] = $admin;
+        } else {
+            $staff[] = $admin;
         }
     }
 

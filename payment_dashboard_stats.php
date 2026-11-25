@@ -5,12 +5,50 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 
-if (!isset($_SESSION['id']) || !pcvc_current_user_is_superadmin($conn)) {
+$companyPayCtx = pcvc_effective_company_context($conn);
+$isCompanyPayScope = $companyPayCtx !== null;
+$canPayDash = isset($_SESSION['id']) && (
+    pcvc_current_user_is_superadmin($conn) || $isCompanyPayScope
+);
+if (!$canPayDash) {
     http_response_code(403);
     header('Content-Type: application/json; charset=UTF-8');
     echo json_encode(['error' => true, 'message' => 'Forbidden']);
     exit;
+}
+
+$companyAppIdList = '';
+$companyPkgScopeSql = '';
+$companyReceiptScopeSql = '';
+if ($isCompanyPayScope) {
+    $scopedIds = pcvc_company_scoped_application_ids(
+        $conn,
+        (int) ($companyPayCtx['id'] ?? 0)
+    );
+    if ($scopedIds === []) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode([
+            'error' => false,
+            'expected' => 0,
+            'collected' => 0,
+            'outstanding' => 0,
+            'by_currency' => [],
+            'active_receipts' => 0,
+            'cancelled_receipts' => 0,
+            'status' => ['fully_paid' => 0, 'partial_paid' => 0, 'unpaid' => 0],
+            'methods' => [],
+            'methods_chart' => [],
+            'recent' => [],
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    $companyAppIdList = implode(',', array_map('intval', $scopedIds));
+    $companyPkgScopeSql = " AND (ap.source_table = 'student_applications' OR ap.source_table IS NULL OR ap.source_table = '')
+        AND ap.application_id IN ({$companyAppIdList})";
+    $companyReceiptScopeSql = " AND (pr.source_table = 'student_applications' OR pr.source_table IS NULL OR pr.source_table = '')
+        AND pr.application_id IN ({$companyAppIdList})";
 }
 
 header('Content-Type: application/json; charset=UTF-8');
@@ -170,6 +208,8 @@ if ($statusFilter !== null) {
            AND pi.fee_item_id = fi.id
 
         " . pcvc_dashboard_student_joins_sql('ap.application_id', 'ap.source_table') . "
+        WHERE 1 = 1
+        {$companyPkgScopeSql}
 
         GROUP BY ap.application_id, ap.source_table
     ";
@@ -222,6 +262,7 @@ $expectedByCurrencySql = "
     JOIN fee_items fi ON fi.package_id = ap.package_id
     JOIN fee_packages fp ON fp.id = fi.package_id
     WHERE fp.currency IS NOT NULL AND fp.currency <> ''
+    {$companyPkgScopeSql}
     GROUP BY fp.currency
 ";
 $expectedByCurrency = [];
@@ -238,6 +279,7 @@ $collectedByCurrencySql = "
     FROM payment_receipts pr
     LEFT JOIN fee_packages fp ON fp.id = pr.package_id
     WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
+    {$companyReceiptScopeSql}
     GROUP BY COALESCE(fp.currency, '—')
 ";
 $collectedByCurrency = [];
@@ -251,8 +293,9 @@ while ($row = $res->fetch_assoc()) {
 
 $cancelledSql = "
     SELECT COUNT(*) AS c
-    FROM payment_receipts
-    WHERE status = 'CANCELED'
+    FROM payment_receipts pr
+    WHERE pr.status = 'CANCELED'
+    {$companyReceiptScopeSql}
 ";
 $cancelledReceipts = (int) (run($conn, $cancelledSql, 'cancelled')->fetch_assoc()['c'] ?? 0);
 
@@ -347,6 +390,8 @@ $statusSql = "
             ON pi.application_id = ap.application_id
            AND pi.source_table = ap.source_table
            AND pi.fee_item_id = fi.id
+        WHERE 1 = 1
+        {$companyPkgScopeSql}
         GROUP BY ap.application_id, ap.source_table
     ) x
 ";
@@ -363,6 +408,7 @@ $methodsSql = "
     FROM payment_receipts pr
     LEFT JOIN fee_packages fp ON fp.id = pr.package_id
     WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
+    {$companyReceiptScopeSql}
     GROUP BY pr.payment_method, COALESCE(fp.currency, '—')
     ORDER BY total DESC
 ";
@@ -392,6 +438,7 @@ $recentSql = "
     LEFT JOIN fee_packages fp ON fp.id = pr.package_id
     " . pcvc_dashboard_student_joins_sql('pr.application_id', 'pr.source_table') . "
     WHERE COALESCE(pr.status, 'ACTIVE') <> 'CANCELED'
+    {$companyReceiptScopeSql}
     ORDER BY pr.created_at DESC
     LIMIT 10
 ";

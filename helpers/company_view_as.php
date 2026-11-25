@@ -226,6 +226,67 @@ function pcvc_effective_data_admin_id(mysqli $conn): int
     return (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
 }
 
+/**
+ * SQL predicate limiting student_applications to a company and its linked people.
+ * Safe to embed (ids are ints; emails are escaped).
+ */
+function pcvc_company_applications_where_sql(mysqli $conn, int $companyAdminId, string $alias = 'sa'): string
+{
+    $companyAdminId = max(0, $companyAdminId);
+    if ($companyAdminId < 1) {
+        return '0 = 1';
+    }
+    $alias = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'sa';
+    $ids = pcvc_company_member_admin_ids($conn, $companyAdminId);
+    if ($ids === []) {
+        return '0 = 1';
+    }
+    $inList = implode(',', array_map('intval', $ids));
+    $parts = ["{$alias}.assigned_to_admin_id IN ({$inList})"];
+    $emailRes = $conn->query(
+        "SELECT DISTINCT LOWER(TRIM(email)) AS em
+         FROM admins
+         WHERE id IN ({$inList})
+           AND email IS NOT NULL
+           AND TRIM(email) <> ''"
+    );
+    if ($emailRes) {
+        while ($row = $emailRes->fetch_assoc()) {
+            $em = strtolower(trim((string) ($row['em'] ?? '')));
+            if ($em === '') {
+                continue;
+            }
+            $parts[] = "LOWER(TRIM(COALESCE({$alias}.agent_email, ''))) = '"
+                . $conn->real_escape_string($em) . "'";
+        }
+        $emailRes->free();
+    }
+
+    return '(' . implode(' OR ', $parts) . ')';
+}
+
+/** @return list<int> */
+function pcvc_company_scoped_application_ids(mysqli $conn, int $companyAdminId, int $limit = 5000): array
+{
+    $where = pcvc_company_applications_where_sql($conn, $companyAdminId, 'sa');
+    $limit = max(1, min(20000, $limit));
+    $ids = [];
+    $res = $conn->query(
+        "SELECT sa.id FROM student_applications sa WHERE {$where} ORDER BY sa.id DESC LIMIT {$limit}"
+    );
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $id = (int) ($row['id'] ?? 0);
+            if ($id > 0) {
+                $ids[] = $id;
+            }
+        }
+        $res->free();
+    }
+
+    return $ids;
+}
+
 /** Attach a newly created staff/agent account to the active company partner. */
 function pcvc_link_admin_to_company(mysqli $conn, int $adminId, int $companyAdminId): void
 {

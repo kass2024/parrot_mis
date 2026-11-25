@@ -125,8 +125,18 @@ require_once __DIR__ . '/helpers/application_filters.php';
 require_once __DIR__ . '/helpers/caq_status.php';
 pcvc_ensure_caq_column($conn);
 $isSuperExecutive = pcvc_current_user_is_superadmin($conn);
+$companyDashCtx = $actingCompany ?: pcvc_effective_company_context($conn);
+$isCompanyScopedHome = $companyDashCtx !== null;
+$companyDashMemberIds = $isCompanyScopedHome
+    ? pcvc_company_member_admin_ids($conn, (int) ($companyDashCtx['id'] ?? 0))
+    : [];
+$companyAppsWhereSql = $isCompanyScopedHome
+    ? pcvc_company_applications_where_sql($conn, (int) ($companyDashCtx['id'] ?? 0), 'sa')
+    : '';
+// Same executive dashboard layout for HQ and for each company (scoped to its members).
+$showExecutiveHome = $isSuperExecutive || $isCompanyScopedHome;
 $isCatholicPortal = (strtolower(trim((string) $role)) === 'catholic university of america');
-$showStaffPersonalDashboard = !$isSuperExecutive && !$isCatholicPortal;
+$showStaffPersonalDashboard = !$showExecutiveHome && !$isCatholicPortal;
 $staffDashStats = [];
 if ($showStaffPersonalDashboard) {
     $staffDashStats = pcvc_staff_dashboard_stats($conn, (int) $admin_id);
@@ -153,14 +163,17 @@ $flagMap = [
 // ===============================
 // TOTAL APPLICATIONS COUNT
 // (Only rows with valid email)
+// Company view: only that company's students.
 // ===============================
 $totalApplications = 0;
+$companyAppFilter = $companyAppsWhereSql !== '' ? (' AND ' . $companyAppsWhereSql) : '';
 
 $totalQuery = "
     SELECT COUNT(*) AS total
-    FROM student_applications
-    WHERE email IS NOT NULL
-    AND email != ''
+    FROM student_applications sa
+    WHERE sa.email IS NOT NULL
+    AND sa.email != ''
+    {$companyAppFilter}
 ";
 
 $totalRes = mysqli_query($conn, $totalQuery);
@@ -174,79 +187,75 @@ if ($totalRes) {
 // COUNT ALL STATUS FLAGS
 // ===============================
 $flagCounts = [];
+$flagZero = array_fill_keys([
+    'incomplete_app', 'submitted', 'admit', 'caq', 'i20_sent', 'sevis_paid',
+    'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start'
+], 0);
 
-$flagQuery = "
-    SELECT
-        COUNT(CASE WHEN incomplete_app = 1 THEN 1 END) AS incomplete_app,
-        COUNT(CASE WHEN submitted = 1 THEN 1 END) AS submitted,
-        COUNT(CASE WHEN admit = 1 THEN 1 END) AS admit,
-        COUNT(CASE WHEN caq = 1 THEN 1 END) AS caq,
-        COUNT(CASE WHEN i20_sent = 1 THEN 1 END) AS i20_sent,
-        COUNT(CASE WHEN sevis_paid = 1 THEN 1 END) AS sevis_paid,
-        COUNT(CASE WHEN visa_scheduled = 1 THEN 1 END) AS visa_scheduled,
-        COUNT(CASE WHEN visa_approved = 1 THEN 1 END) AS visa_approved,
-        COUNT(CASE WHEN enrolled = 1 THEN 1 END) AS enrolled,
-        COUNT(CASE WHEN addn_doc = 1 THEN 1 END) AS addn_doc,
-        COUNT(CASE WHEN deny = 1 THEN 1 END) AS deny,
-        COUNT(CASE WHEN app_start = 1 THEN 1 END) AS app_start
-    FROM student_applications
-";
+if ($isCompanyScopedHome) {
+    // Company dashboard: student_applications for this company only (no HQ malta/turkey mix).
+    $flagQuery = "
+      SELECT
+        SUM(incomplete_app) AS incomplete_app,
+        SUM(submitted) AS submitted,
+        SUM(admit) AS admit,
+        SUM(IFNULL(caq,0)) AS caq,
+        SUM(i20_sent) AS i20_sent,
+        SUM(sevis_paid) AS sevis_paid,
+        SUM(visa_scheduled) AS visa_scheduled,
+        SUM(visa_approved) AS visa_approved,
+        SUM(enrolled) AS enrolled,
+        SUM(addn_doc) AS addn_doc,
+        SUM(deny) AS deny,
+        SUM(app_start) AS app_start
+      FROM student_applications sa
+      WHERE 1 = 1
+      {$companyAppFilter}
+    ";
+} else {
+    $flagQuery = "
+      SELECT
+        SUM(incomplete_app) AS incomplete_app,
+        SUM(submitted) AS submitted,
+        SUM(admit) AS admit,
+        SUM(caq) AS caq,
+        SUM(i20_sent) AS i20_sent,
+        SUM(sevis_paid) AS sevis_paid,
+        SUM(visa_scheduled) AS visa_scheduled,
+        SUM(visa_approved) AS visa_approved,
+        SUM(enrolled) AS enrolled,
+        SUM(addn_doc) AS addn_doc,
+        SUM(deny) AS deny,
+        SUM(app_start) AS app_start
+      FROM (
+        SELECT incomplete_app, submitted, admit, IFNULL(caq,0) AS caq, i20_sent, sevis_paid,
+               visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
+        FROM student_applications
 
-$flagRes = mysqli_query($conn, $flagQuery);
+        UNION ALL
 
-if ($flagRes) {
-    $flagCounts = mysqli_fetch_assoc($flagRes);
+        SELECT incomplete_app, submitted, admit, 0 AS caq, i20_sent, sevis_paid,
+               visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
+        FROM malta_applications
+
+        UNION ALL
+
+        SELECT incomplete_app, submitted, admit, 0 AS caq, i20_sent, sevis_paid,
+               visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
+        FROM turkey_applications
+      ) AS all_flags
+    ";
 }
-$totalRes = mysqli_query($conn, $totalQuery);
-$totalApplications = 0;
-
-if ($totalRes) {
-    $row = mysqli_fetch_assoc($totalRes);
-    $totalApplications = (int)$row['total'];
-}
-
-$flagQuery = "
-  SELECT
-    SUM(incomplete_app) AS incomplete_app,
-    SUM(submitted) AS submitted,
-    SUM(admit) AS admit,
-    SUM(caq) AS caq,
-    SUM(i20_sent) AS i20_sent,
-    SUM(sevis_paid) AS sevis_paid,
-    SUM(visa_scheduled) AS visa_scheduled,
-    SUM(visa_approved) AS visa_approved,
-    SUM(enrolled) AS enrolled,
-    SUM(addn_doc) AS addn_doc,
-    SUM(deny) AS deny,
-    SUM(app_start) AS app_start
-  FROM (
-    SELECT incomplete_app, submitted, admit, IFNULL(caq,0) AS caq, i20_sent, sevis_paid,
-           visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
-    FROM student_applications
-
-    UNION ALL
-
-    SELECT incomplete_app, submitted, admit, 0 AS caq, i20_sent, sevis_paid,
-           visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
-    FROM malta_applications
-
-    UNION ALL
-
-    SELECT incomplete_app, submitted, admit, 0 AS caq, i20_sent, sevis_paid,
-           visa_scheduled, visa_approved, enrolled, addn_doc, deny, app_start
-    FROM turkey_applications
-  ) AS all_flags
-";
 
 $countRes = mysqli_query($conn, $flagQuery);
 if ($countRes) {
-    $flagCounts = mysqli_fetch_assoc($countRes);
+    $flagCounts = mysqli_fetch_assoc($countRes) ?: $flagZero;
+    foreach ($flagZero as $k => $_) {
+        $flagCounts[$k] = (int) ($flagCounts[$k] ?? 0);
+    }
 } else {
     error_log("Flag count query failed: " . mysqli_error($conn));
-    $flagCounts = array_fill_keys([
-        'incomplete_app', 'submitted', 'admit', 'caq', 'i20_sent', 'sevis_paid',
-        'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start'
-    ], 0);
+    $flagCounts = $flagZero;
 }
 
 // Catholic-only flag counts (student_applications only)
@@ -729,6 +738,7 @@ if (strtolower($role) !== 'catholic university of america') {
     $admitExpr = pcvc_agent_pipeline_expr('admit');
     $visaExpr = pcvc_agent_pipeline_expr('visa_approved');
     $enrolledExpr = pcvc_agent_pipeline_expr('enrolled');
+    $agentScopeWhere = $companyAppsWhereSql !== '' ? (' AND ' . $companyAppsWhereSql) : '';
     $mainAgentsQuery = "
       SELECT 
         LOWER(TRIM(sa.agent_email)) AS agent_email_norm,
@@ -739,6 +749,7 @@ if (strtolower($role) !== 'catholic university of america') {
         SUM({$enrolledExpr}) AS enrolled
       FROM student_applications sa
       WHERE sa.agent_email IS NOT NULL AND TRIM(sa.agent_email) != ''
+      {$agentScopeWhere}
       GROUP BY LOWER(TRIM(sa.agent_email))
     ";
     $res1 = mysqli_query($conn, $mainAgentsQuery);
@@ -3681,8 +3692,8 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         <?php endif; ?>
         <?php endif; ?>
 
-        <?php if ($isSuperExecutive): ?>
-        <!-- Hero Stats (superadmin only) -->
+        <?php if ($showExecutiveHome): ?>
+        <!-- Hero Stats (HQ + company partner dashboard) -->
         <section class="dashboard-hero mb-4">
           <div class="row g-3">
             <div class="col-xl-3 col-md-6">
@@ -3720,8 +3731,8 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         </section>
         <?php endif; ?>
         
-        <!-- Application Flag Summary + Payments (superadmin only) -->
-        <?php if ($isSuperExecutive): ?>
+        <!-- Application Flag Summary + Payments (HQ + company partner dashboard) -->
+        <?php if ($showExecutiveHome): ?>
           <div class="summary-card">
             <div class="summary-header">
               <div class="summary-title">
@@ -3819,8 +3830,11 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           </div>
         <?php endif; ?>
 
-        <?php if ($isSuperExecutive): ?>
-          <?php include __DIR__ . '/includes/dashboard_control_board.php'; ?>
+        <?php if ($showExecutiveHome): ?>
+          <?php
+            $dashboardRosterMemberIds = $isCompanyScopedHome ? $companyDashMemberIds : null;
+            include __DIR__ . '/includes/dashboard_control_board.php';
+          ?>
         <?php endif; ?>
 
       </div>

@@ -3,7 +3,15 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../helpers/dashboard_control.php';
 
-$roster = pcvc_dashboard_roster($conn, (isset($conn2) && $conn2 instanceof mysqli) ? $conn2 : null);
+$rosterMemberIds = null;
+if (isset($dashboardRosterMemberIds) && is_array($dashboardRosterMemberIds)) {
+    $rosterMemberIds = $dashboardRosterMemberIds;
+}
+$roster = pcvc_dashboard_roster(
+    $conn,
+    (isset($conn2) && $conn2 instanceof mysqli) ? $conn2 : null,
+    $rosterMemberIds
+);
 
 $renderStudents = static function (array $people): string {
     if ($people === []) {
@@ -119,15 +127,20 @@ $renderRows = static function (array $accounts, string $group) use ($renderStude
     .fold-status { justify-self: start; }
   }
 </style>
+<?php $rosterIsCompanyScope = is_array($rosterMemberIds); ?>
 <section class="roster-board" aria-labelledby="rosterBoardTitle">
   <div class="roster-head">
-    <h2 id="rosterBoardTitle">Who is in charge</h2>
-    <p>Staff and agents appear when they have students in their charge. Companies are only accounts created as a company. Open a group, then a name, to see the students.</p>
+    <h2 id="rosterBoardTitle"><?= $rosterIsCompanyScope ? 'Your company team' : 'Who is in charge' ?></h2>
+    <p><?= $rosterIsCompanyScope
+      ? 'Only this company’s staff, agents, and their students. Open a group, then a name, to see the students.'
+      : 'Staff and agents appear when they have students in their charge. Companies are only accounts created as a company. Open a group, then a name, to see the students.' ?></p>
   </div>
   <div class="roster-kpis">
     <button type="button" class="roster-kpi" data-open="fold-staff"><span>Staff in charge</span><strong><?= (int) $roster['staff_count'] ?></strong><em><?= (int) $roster['staff_students'] ?> students</em></button>
     <button type="button" class="roster-kpi" data-open="fold-agents"><span>Agents</span><strong><?= (int) ($roster['agent_role_count'] ?? 0) ?></strong><em><?= (int) $roster['agent_students'] ?> students in charge</em></button>
+    <?php if (!$rosterIsCompanyScope): ?>
     <button type="button" class="roster-kpi" data-open="fold-companies"><span>Companies</span><strong><?= (int) $roster['company_count'] ?></strong><em><?= (int) $roster['company_students'] ?> students</em></button>
+    <?php endif; ?>
     <button type="button" class="roster-kpi" data-open="fold-staff"><span>Students in charge</span><strong><?= (int) $roster['students_in_charge'] ?></strong><em>Assigned to a staff member or agent</em></button>
   </div>
   <input id="rosterSearch" class="roster-search" type="search" placeholder="Search a name or a student" aria-label="Search staff, agents, companies, and students">
@@ -151,6 +164,7 @@ $renderRows = static function (array $accounts, string $group) use ($renderStude
       <details class="fold-sub" id="fold-agent-counts">
         <summary>Recruiting counts <span class="fold-section-count"><?= count($agentsCombined) ?></span></summary>
         <div class="fold-sub-body">
+          <?php if (!$rosterIsCompanyScope): ?>
           <div class="border rounded-3 p-3 mb-3 bg-white">
             <div class="fw-semibold text-dark mb-1"><i class="bi bi-arrow-left-right me-1"></i> Change recruiting agent</div>
             <p class="small text-muted mb-2">Search an applicant, pick a new agent, then save.</p>
@@ -158,6 +172,7 @@ $renderRows = static function (array $accounts, string $group) use ($renderStude
             <input type="search" id="pcvcStudentAgentSearch" class="form-control form-control-sm" maxlength="140" placeholder="Type at least 2 characters…" autocomplete="off">
             <div id="pcvcStudentAgentSearchResults" class="mt-2"></div>
           </div>
+          <?php endif; ?>
           <div style="overflow-x: auto;">
             <table id="agentTable" class="display compact stripe" style="width: 100%;">
               <thead>
@@ -213,6 +228,7 @@ $renderRows = static function (array $accounts, string $group) use ($renderStude
     </div>
   </details>
 
+  <?php if (!$rosterIsCompanyScope): ?>
   <details class="fold-section" id="fold-companies">
     <summary>
       <span><span class="fold-section-title">Companies</span><span class="fold-section-note">Accounts created as a company</span></span>
@@ -220,6 +236,7 @@ $renderRows = static function (array $accounts, string $group) use ($renderStude
     </summary>
     <div class="fold-panel"><?= $renderRows($roster['companies'], 'companies') ?></div>
   </details>
+  <?php endif; ?>
   <?php
     $pipe = ['Allocated' => 0, 'Submitted' => 0, 'Admitted' => 0, 'Visa approved' => 0, 'Enrolled' => 0];
     $ranked = [];
