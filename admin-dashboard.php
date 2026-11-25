@@ -403,6 +403,7 @@ $cards = [
     'icon' => 'bi-building',
     'links' => [
       'companies-management.php' => 'Approve and manage companies',
+      'company-dashboard.php' => 'Company activity dashboard',
       'register.php?type=company' => 'Company signup link',
     ]
   ],
@@ -3118,6 +3119,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="loadInFrame('companies-management.php', 'Companies Management')">
             <i class="bi bi-building-check"></i>
             Approve and manage companies
+          </a>
+          <a href="#" onclick="loadInFrame('companies-management.php?filter=pending', 'Companies waiting approval')">
+            <i class="bi bi-hourglass-split"></i>
+            Waiting approval
           </a>
           <a href="#" onclick="loadInFrame('companies-management.php', 'Companies Management')">
             <i class="bi bi-link-45deg"></i>

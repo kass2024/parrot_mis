@@ -212,6 +212,7 @@ function pcvc_staff_level_clearance_catalog(): array
         ]],
         'company_accounts' => ['group' => 'Partners & Operations', 'label' => 'Companies Management', 'items' => [
             'companies-management.php' => 'Approve and manage companies',
+            'company-dashboard.php' => 'Company activity dashboard',
             'register.php?type=company' => 'Company signup link',
         ]],
         'partner_contracts' => ['group' => 'Partners & Operations', 'label' => 'B2B Partner Contracts', 'items' => [

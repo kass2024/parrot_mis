@@ -6,6 +6,7 @@ require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/staff_self_register.php';
+require_once __DIR__ . '/helpers/companies_management.php';
 
 pcvc_ensure_staff_account_columns($conn);
 
@@ -52,16 +53,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isSuperAdmin) {
     }
 
     if (isset($_POST['approve_company'])) {
-        $result = pcvc_approve_staff_account($conn, (int) ($_POST['id'] ?? 0));
+        $approveId = (int) ($_POST['id'] ?? 0);
+        $result = pcvc_approve_staff_account($conn, $approveId);
         if (!empty($result['ok'])) {
             $_SESSION['success'] = 'Approved '
                 . (string) ($result['name'] ?? 'the company')
                 . '. Sign-in details were emailed to '
                 . (string) ($result['email'] ?? 'the contact')
-                . '.';
-        } else {
-            $_SESSION['error'] = (string) ($result['error'] ?? 'Approval failed.');
+                . '. Opening the company dashboard…';
+            header('Location: company-dashboard.php?id=' . $approveId . '&approved=1');
+            exit;
         }
+        $_SESSION['error'] = (string) ($result['error'] ?? 'Approval failed.');
         cm_redirect('filter=pending');
     }
 
@@ -200,6 +203,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isSuperAdmin) {
         $_SESSION[$ok ? 'success' : 'error'] = $ok
             ? 'Company details saved.'
             : 'Could not save company details.';
+        if ($ok && isset($_POST['save_and_dashboard'])) {
+            header('Location: company-dashboard.php?id=' . $id);
+            exit;
+        }
         cm_redirect('filter=' . rawurlencode($filter) . '&view=' . $id);
     }
 }
@@ -265,6 +272,8 @@ body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;color:var(--ink);backg
 .btn-amber{background:#f59e0b;color:#111}
 .btn-red{background:var(--red);color:#fff}
 .btn-sm{padding:7px 10px;font-size:.8rem;border-radius:9px}
+.row-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row-actions form{display:inline;margin:0}
 .link-box{margin-top:8px;padding:12px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0}
 .link-box input{width:100%;padding:11px 12px;border:2px solid #86efac;border-radius:10px;font-size:.9rem}
 .filters{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
@@ -423,11 +432,19 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
           <input type="email" id="email" name="email" required maxlength="190" value="<?= cm_h((string)($viewRow['email'] ?? '')) ?>">
           <label for="phone_number">Contact phone</label>
           <input type="tel" id="phone_number" name="phone_number" required maxlength="24" value="<?= cm_h((string)($viewRow['phone_number'] ?? '')) ?>">
-          <button type="submit" class="btn btn-green" style="margin-top:12px;width:100%">Save company</button>
+          <div class="actions" style="margin-top:12px">
+            <button type="submit" class="btn btn-green" style="flex:1">Save company</button>
+            <button type="submit" name="save_and_dashboard" value="1" class="btn btn-sky" style="flex:1">Save & open dashboard</button>
+          </div>
         </form>
       </div>
       <?php endif; ?>
     </div>
+    <?php if ($status !== 'pending'): ?>
+    <div class="actions" style="margin-top:14px">
+      <a class="btn btn-sky" href="<?= cm_h(pcvc_company_dashboard_url((int)$viewRow['id'])) ?>">Open company dashboard</a>
+    </div>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 
@@ -452,6 +469,7 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
           <tr>
             <th>Company</th>
             <th>Contact</th>
+            <th>Activity</th>
             <th>Status</th>
             <th>Created</th>
             <th>Actions</th>
@@ -459,7 +477,7 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
         </thead>
         <tbody>
         <?php if (!$companies): ?>
-          <tr><td colspan="5" class="muted">No company accounts yet. Share the company signup link above.</td></tr>
+          <tr><td colspan="6" class="muted">No company accounts yet. Share the company signup link above.</td></tr>
         <?php else: foreach ($companies as $row):
           $status = strtolower(trim((string) ($row['account_status'] ?? 'active')));
           if ($status === '') { $status = 'active'; }
@@ -469,6 +487,8 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
             $contact = trim((string) (($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')));
           }
           $email = trim((string) ($row['email'] ?? ''));
+          $activity = pcvc_company_activity_counts($conn, (int) $row['id'], strtolower($email));
+          $dashUrl = pcvc_company_dashboard_url((int) $row['id']);
         ?>
           <tr>
             <td>
@@ -481,18 +501,42 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
               <?= cm_h($contact !== '' ? $contact : '—') ?>
               <?php if ($email !== ''): ?><div class="muted"><?= cm_h($email) ?></div><?php endif; ?>
             </td>
+            <td>
+              <strong><?= (int)$activity['applications'] ?></strong> apps
+              <div class="muted"><?= (int)$activity['self_regs'] ?> self-reg · <?= (int)$activity['admitted'] ?> admitted</div>
+            </td>
             <td><span class="badge <?= cm_h($status) ?>"><?= cm_h(ucfirst($status)) ?></span></td>
             <td class="muted"><?= cm_h((string)($row['created_at'] ?? '')) ?></td>
             <td>
-              <div class="actions">
-                <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
-                <?php if ($isSuperAdmin && $status === 'pending'): ?>
-                <form method="post" style="display:inline">
-                  <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
-                  <input type="hidden" name="approve_company" value="1">
-                  <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
-                  <button type="submit" class="btn btn-green btn-sm">Approve</button>
-                </form>
+              <div class="row-actions">
+                <?php if ($status === 'pending'): ?>
+                  <?php if ($isSuperAdmin): ?>
+                  <form method="post">
+                    <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
+                    <input type="hidden" name="approve_company" value="1">
+                    <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
+                    <button type="submit" class="btn btn-green btn-sm">Approve</button>
+                  </form>
+                  <?php endif; ?>
+                  <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Review</a>
+                <?php else: ?>
+                  <a class="btn btn-sky btn-sm" href="<?= cm_h($dashUrl) ?>">Dashboard</a>
+                  <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
+                  <?php if ($isSuperAdmin && $status !== 'inactive' && (int)$row['id'] !== $currentUserId): ?>
+                  <form method="post" onsubmit="return confirm('Deactivate this company account?');">
+                    <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
+                    <input type="hidden" name="deactivate_company" value="1">
+                    <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
+                    <button type="submit" class="btn btn-amber btn-sm">Deactivate</button>
+                  </form>
+                  <?php elseif ($isSuperAdmin && $status === 'inactive'): ?>
+                  <form method="post">
+                    <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
+                    <input type="hidden" name="reactivate_company" value="1">
+                    <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
+                    <button type="submit" class="btn btn-green btn-sm">Reactivate</button>
+                  </form>
+                  <?php endif; ?>
                 <?php endif; ?>
               </div>
             </td>
