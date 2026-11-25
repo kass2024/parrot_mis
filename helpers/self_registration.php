@@ -91,6 +91,289 @@ function pcvc_self_reg_ensure_schema(mysqli $conn): void
             KEY `idx_self_reg_doc_reg` (`registration_id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
     );
+
+    // Workflow columns (safe to re-run)
+    $cols = [
+        'source' => "ALTER TABLE `self_registrations` ADD COLUMN `source` VARCHAR(20) NOT NULL DEFAULT 'link' AFTER `status`",
+        'followup_status' => "ALTER TABLE `self_registrations` ADD COLUMN `followup_status` VARCHAR(40) NOT NULL DEFAULT 'new' AFTER `source`",
+        'assigned_to_admin_id' => "ALTER TABLE `self_registrations` ADD COLUMN `assigned_to_admin_id` INT NULL AFTER `created_by_admin_id`",
+        'assigned_by_admin_id' => "ALTER TABLE `self_registrations` ADD COLUMN `assigned_by_admin_id` INT NULL AFTER `assigned_to_admin_id`",
+        'assigned_at' => "ALTER TABLE `self_registrations` ADD COLUMN `assigned_at` DATETIME NULL AFTER `assigned_by_admin_id`",
+        'followup_notes' => "ALTER TABLE `self_registrations` ADD COLUMN `followup_notes` TEXT NULL AFTER `assigned_at`",
+    ];
+    foreach ($cols as $name => $sql) {
+        $chk = $conn->query("SHOW COLUMNS FROM `self_registrations` LIKE '{$name}'");
+        if ($chk && $chk->num_rows === 0) {
+            @$conn->query($sql);
+        }
+        if ($chk instanceof mysqli_result) {
+            $chk->free();
+        }
+    }
+}
+
+/** @return array<string, string> */
+function pcvc_self_reg_followup_statuses(): array
+{
+    return [
+        'new' => 'New',
+        'assigned' => 'Assigned',
+        'in_progress' => 'In progress',
+        'contacted' => 'Contacted',
+        'waiting_documents' => 'Waiting documents',
+        'under_review' => 'Under review',
+        'offer_received' => 'Offer received',
+        'closed' => 'Closed',
+        'cancelled' => 'Cancelled',
+    ];
+}
+
+function pcvc_self_reg_is_valid_followup_status(string $key): bool
+{
+    return array_key_exists($key, pcvc_self_reg_followup_statuses());
+}
+
+/**
+ * Staff + agents available for transfer.
+ *
+ * @return list<array{id:int,full_name:string,role:string}>
+ */
+function pcvc_self_reg_assignable_users(mysqli $conn): array
+{
+    $rows = [];
+    $sql = "SELECT id, full_name, username, role
+            FROM admins
+            WHERE REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(role,''))),' ',''),'_',''),'-','')
+                  IN ('staff','staffadmin','accountant','agent')
+            ORDER BY full_name ASC, username ASC";
+    $res = $conn->query($sql);
+    if (!$res) {
+        return $rows;
+    }
+    while ($row = $res->fetch_assoc()) {
+        $name = trim((string) ($row['full_name'] ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($row['username'] ?? '')) ?: ('User #' . (int) $row['id']);
+        }
+        $rows[] = [
+            'id' => (int) $row['id'],
+            'full_name' => $name,
+            'role' => (string) ($row['role'] ?? ''),
+        ];
+    }
+    return $rows;
+}
+
+/** @return array{total:int,draft:int,submitted:int,unassigned:int,assigned:int,in_progress:int,waiting_documents:int,closed:int} */
+function pcvc_self_reg_kpis(mysqli $conn): array
+{
+    pcvc_self_reg_ensure_schema($conn);
+    $kpi = [
+        'total' => 0,
+        'draft' => 0,
+        'submitted' => 0,
+        'unassigned' => 0,
+        'assigned' => 0,
+        'in_progress' => 0,
+        'waiting_documents' => 0,
+        'closed' => 0,
+    ];
+    $res = $conn->query(
+        "SELECT
+            COUNT(*) AS total,
+            SUM(status = 'draft') AS draft,
+            SUM(status = 'submitted') AS submitted,
+            SUM(assigned_to_admin_id IS NULL OR assigned_to_admin_id = 0) AS unassigned,
+            SUM(assigned_to_admin_id IS NOT NULL AND assigned_to_admin_id > 0) AS assigned,
+            SUM(followup_status = 'in_progress') AS in_progress,
+            SUM(followup_status = 'waiting_documents') AS waiting_documents,
+            SUM(followup_status IN ('closed','cancelled')) AS closed
+         FROM self_registrations"
+    );
+    if ($res && ($row = $res->fetch_assoc())) {
+        foreach ($kpi as $k => $_) {
+            $kpi[$k] = (int) ($row[$k] ?? 0);
+        }
+    }
+    return $kpi;
+}
+
+/**
+ * @return list<array>
+ */
+function pcvc_self_reg_list_applications(
+    mysqli $conn,
+    ?int $assignedTo = null,
+    string $filter = 'all',
+    int $limit = 200
+): array {
+    pcvc_self_reg_ensure_schema($conn);
+    $limit = max(1, min(500, $limit));
+    $where = ['1=1'];
+    $types = '';
+    $params = [];
+
+    if ($assignedTo !== null && $assignedTo > 0) {
+        $where[] = 'r.assigned_to_admin_id = ?';
+        $types .= 'i';
+        $params[] = $assignedTo;
+    }
+    if ($filter === 'submitted') {
+        $where[] = "r.status = 'submitted'";
+    } elseif ($filter === 'draft') {
+        $where[] = "r.status = 'draft'";
+    } elseif ($filter === 'unassigned') {
+        $where[] = '(r.assigned_to_admin_id IS NULL OR r.assigned_to_admin_id = 0)';
+    } elseif ($filter === 'assigned') {
+        $where[] = 'r.assigned_to_admin_id IS NOT NULL AND r.assigned_to_admin_id > 0';
+    } elseif (pcvc_self_reg_is_valid_followup_status($filter)) {
+        $where[] = 'r.followup_status = ?';
+        $types .= 's';
+        $params[] = $filter;
+    }
+
+    $sql = 'SELECT r.*,
+                   a.full_name AS assignee_name,
+                   a.role AS assignee_role,
+                   b.full_name AS created_by_name
+            FROM self_registrations r
+            LEFT JOIN admins a ON a.id = r.assigned_to_admin_id
+            LEFT JOIN admins b ON b.id = r.created_by_admin_id
+            WHERE ' . implode(' AND ', $where) . '
+            ORDER BY r.id DESC
+            LIMIT ' . $limit;
+
+    $rows = [];
+    if ($types === '') {
+        $res = $conn->query($sql);
+        if ($res) {
+            while ($row = $res->fetch_assoc()) {
+                $rows[] = $row;
+            }
+        }
+        return $rows;
+    }
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        return $rows;
+    }
+    $bind = [];
+    $bind[] = &$types;
+    foreach ($params as $k => $v) {
+        $bind[] = &$params[$k];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $bind);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    while ($row = $res->fetch_assoc()) {
+        $rows[] = $row;
+    }
+    $stmt->close();
+    return $rows;
+}
+
+function pcvc_self_reg_find_by_id(mysqli $conn, int $id): ?array
+{
+    pcvc_self_reg_ensure_schema($conn);
+    if ($id <= 0) {
+        return null;
+    }
+    $stmt = $conn->prepare('SELECT * FROM self_registrations WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        return null;
+    }
+    $stmt->bind_param('i', $id);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc() ?: null;
+    $stmt->close();
+    return $row;
+}
+
+function pcvc_self_reg_transfer(
+    mysqli $conn,
+    int $registrationId,
+    int $assigneeId,
+    int $byAdminId,
+    string $notes = ''
+): void {
+    pcvc_self_reg_ensure_schema($conn);
+    $assigneeId = max(0, $assigneeId);
+    $notes = mb_substr(trim($notes), 0, 2000);
+
+    // Validate assignee is staff/agent
+    $okUser = false;
+    foreach (pcvc_self_reg_assignable_users($conn) as $u) {
+        if ((int) $u['id'] === $assigneeId) {
+            $okUser = true;
+            break;
+        }
+    }
+    if (!$okUser) {
+        throw new InvalidArgumentException('Selected staff/agent is not assignable.');
+    }
+
+    $stmt = $conn->prepare(
+        "UPDATE self_registrations
+         SET assigned_to_admin_id = ?,
+             assigned_by_admin_id = ?,
+             assigned_at = NOW(),
+             followup_status = CASE
+                 WHEN followup_status IN ('new','') THEN 'assigned'
+                 ELSE followup_status
+             END,
+             followup_notes = CASE
+                 WHEN ? = '' THEN followup_notes
+                 WHEN followup_notes IS NULL OR followup_notes = '' THEN ?
+                 ELSE CONCAT(followup_notes, '\n', ?)
+             END
+         WHERE id = ?
+         LIMIT 1"
+    );
+    if (!$stmt) {
+        throw new RuntimeException('Transfer prepare failed: ' . $conn->error);
+    }
+    $stmt->bind_param('iiissi', $assigneeId, $byAdminId, $notes, $notes, $notes, $registrationId);
+    if (!$stmt->execute()) {
+        $err = $stmt->error;
+        $stmt->close();
+        throw new RuntimeException('Transfer failed: ' . $err);
+    }
+    $stmt->close();
+}
+
+function pcvc_self_reg_update_followup(
+    mysqli $conn,
+    int $registrationId,
+    string $status,
+    string $notes = ''
+): void {
+    pcvc_self_reg_ensure_schema($conn);
+    if (!pcvc_self_reg_is_valid_followup_status($status)) {
+        throw new InvalidArgumentException('Invalid follow-up status.');
+    }
+    $notes = mb_substr(trim($notes), 0, 2000);
+    $stmt = $conn->prepare(
+        "UPDATE self_registrations
+         SET followup_status = ?,
+             followup_notes = CASE
+                 WHEN ? = '' THEN followup_notes
+                 WHEN followup_notes IS NULL OR followup_notes = '' THEN ?
+                 ELSE CONCAT(followup_notes, '\n', ?)
+             END
+         WHERE id = ?
+         LIMIT 1"
+    );
+    if (!$stmt) {
+        throw new RuntimeException('Status update prepare failed.');
+    }
+    $stmt->bind_param('ssssi', $status, $notes, $notes, $notes, $registrationId);
+    if (!$stmt->execute()) {
+        $err = $stmt->error;
+        $stmt->close();
+        throw new RuntimeException('Status update failed: ' . $err);
+    }
+    $stmt->close();
 }
 
 /** @return list<string> */
@@ -267,17 +550,19 @@ function pcvc_self_reg_document_slots(): array
     ];
 }
 
-function pcvc_self_reg_issue_link(mysqli $conn, ?int $adminId = null): array
+function pcvc_self_reg_issue_link(mysqli $conn, ?int $adminId = null, string $source = 'link'): array
 {
     pcvc_self_reg_ensure_schema($conn);
+    $source = in_array($source, ['link', 'manual'], true) ? $source : 'link';
     $token = bin2hex(random_bytes(32));
     $stmt = $conn->prepare(
-        'INSERT INTO self_registrations (token, created_by_admin_id) VALUES (?, ?)'
+        'INSERT INTO self_registrations (token, source, followup_status, created_by_admin_id)
+         VALUES (?, ?, \'new\', ?)'
     );
     if (!$stmt) {
         throw new RuntimeException('Could not prepare self-registration insert: ' . $conn->error);
     }
-    $stmt->bind_param('si', $token, $adminId);
+    $stmt->bind_param('ssi', $token, $source, $adminId);
     if (!$stmt->execute()) {
         $err = $stmt->error;
         $stmt->close();
@@ -286,7 +571,7 @@ function pcvc_self_reg_issue_link(mysqli $conn, ?int $adminId = null): array
     $id = (int) $stmt->insert_id;
     $stmt->close();
 
-    return ['id' => $id, 'token' => $token];
+    return ['id' => $id, 'token' => $token, 'source' => $source];
 }
 
 function pcvc_self_reg_find_by_token(mysqli $conn, string $token): ?array
@@ -340,21 +625,7 @@ function pcvc_self_reg_public_url(string $token): string
  */
 function pcvc_self_reg_recent(mysqli $conn, int $limit = 40): array
 {
-    pcvc_self_reg_ensure_schema($conn);
-    $limit = max(1, min(200, $limit));
-    $rows = [];
-    $sql = "SELECT id, token, status, full_name, email, whatsapp, destination_country,
-                   preferred_intake, preferred_level, created_at, submitted_at, updated_at
-            FROM self_registrations
-            ORDER BY id DESC
-            LIMIT {$limit}";
-    $res = $conn->query($sql);
-    if ($res) {
-        while ($row = $res->fetch_assoc()) {
-            $rows[] = $row;
-        }
-    }
-    return $rows;
+    return pcvc_self_reg_list_applications($conn, null, 'all', $limit);
 }
 
 /** @return array<string, string> */
