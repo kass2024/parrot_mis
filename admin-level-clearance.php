@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/staff_level_clearance.php';
+require_once __DIR__ . '/helpers/staff_self_register.php';
 require_once __DIR__ . '/helpers/university_admins_schema.php';
 
 if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
@@ -12,8 +13,11 @@ if (empty($_SESSION['id']) && empty($_SESSION['admin_id'])) {
     exit;
 }
 pcvc_ensure_account_status_column($conn);
+pcvc_ensure_staff_account_columns($conn);
 if (!pcvc_current_user_is_superadmin($conn)) {
-    if (!function_exists('pcvc_deny_page')) { require_once __DIR__ . '/helpers/role.php'; }
+    if (!function_exists('pcvc_deny_page')) {
+        require_once __DIR__ . '/helpers/role.php';
+    }
     pcvc_deny_page();
     exit;
 }
@@ -22,49 +26,72 @@ if (empty($_SESSION['csrf_token'])) {
 }
 
 $catalog = pcvc_staff_level_clearance_catalog();
-$staff = [];
-$result = $conn->query('SELECT id, first_name, last_name, full_name, email, position, role, account_status FROM admins ORDER BY first_name, last_name, id');
+$segment = strtolower(trim((string) ($_GET['segment'] ?? $_POST['segment'] ?? 'staff')));
+if (!in_array($segment, ['staff', 'agent', 'company'], true)) {
+    $segment = 'staff';
+}
+
+$people = ['staff' => [], 'agent' => [], 'company' => []];
+$result = $conn->query(
+    'SELECT id, first_name, last_name, full_name, email, position, role, account_status,
+            account_type, company_name
+     FROM admins
+     ORDER BY company_name, first_name, last_name, id'
+);
 if ($result) {
     while ($row = $result->fetch_assoc()) {
-        if (!pcvc_staff_level_clearance_is_target((string) ($row['role'] ?? ''))) {
-            continue;
-        }
         $status = strtolower(trim((string) ($row['account_status'] ?? 'active')));
         if (in_array($status, ['inactive', 'pending'], true)) {
+            continue;
+        }
+        $seg = pcvc_level_clearance_segment_for_row($row);
+        if ($seg === '' || !isset($people[$seg])) {
             continue;
         }
         $name = trim((string) (($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')));
         if ($name === '') {
             $name = trim((string) ($row['full_name'] ?? ''));
         }
-        if ($name === '') {
-            $name = 'Staff #' . (int) $row['id'];
+        $companyName = trim((string) ($row['company_name'] ?? ''));
+        if ($seg === 'company' && $companyName !== '') {
+            $row['display_name'] = $companyName;
+            $row['role_label'] = 'Company';
+            $row['subtitle'] = $name !== '' ? $name : (string) ($row['email'] ?? '');
+        } else {
+            if ($name === '') {
+                $name = ($seg === 'company' ? 'Company' : 'Account') . ' #' . (int) $row['id'];
+            }
+            $row['display_name'] = $name;
+            $roleKey = strtolower(trim((string) ($row['role'] ?? '')));
+            $row['role_label'] = [
+                'staff' => 'Staff',
+                'accountant' => 'Accountant',
+                'secretary' => 'Secretary',
+                'agent' => 'Agent',
+            ][$roleKey] ?? ucfirst($roleKey !== '' ? $roleKey : $seg);
+            $row['subtitle'] = trim((string) ($row['position'] ?? ''));
+            if ($row['subtitle'] === '') {
+                $row['subtitle'] = (string) ($row['email'] ?? '');
+            }
         }
-        $row['display_name'] = $name;
-        $roleKey = strtolower(trim((string) ($row['role'] ?? '')));
-        $row['role_label'] = [
-            'staff' => 'Staff',
-            'accountant' => 'Accountant',
-            'secretary' => 'Secretary',
-        ][$roleKey] ?? ucfirst($roleKey);
-        $staff[] = $row;
+        $people[$seg][] = $row;
     }
 }
 
+$list = $people[$segment];
 $selectedId = (int) ($_GET['id'] ?? $_POST['staff_id'] ?? 0);
-$knownIds = array_map(static fn(array $row): int => (int) $row['id'], $staff);
+$knownIds = array_map(static fn(array $row): int => (int) $row['id'], $list);
 if (!in_array($selectedId, $knownIds, true)) {
     $selectedId = $knownIds[0] ?? 0;
 }
 
-$saved = false;
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $token = (string) ($_POST['csrf_token'] ?? '');
     if ($token === '' || empty($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         $error = 'The form expired. Reload the page and save again.';
     } elseif (!in_array($selectedId, $knownIds, true)) {
-        $error = 'Choose a staff account.';
+        $error = 'Choose an account from this list.';
     } else {
         $allowed = array_fill_keys(array_map('strval', (array) ($_POST['allow'] ?? [])), true);
         $denied = [];
@@ -82,15 +109,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $denied[] = $menuKeyName;
             }
         }
-        pcvc_staff_level_clearance_save($conn, $selectedId, $denied);
-        header('Location: admin-level-clearance.php?id=' . $selectedId . '&saved=1');
+        pcvc_staff_level_clearance_save_configured($conn, $selectedId, $denied);
+        header('Location: admin-level-clearance.php?segment=' . rawurlencode($segment) . '&id=' . $selectedId . '&saved=1');
         exit;
     }
 }
-$saved = $saved || !empty($_GET['saved']);
+$saved = !empty($_GET['saved']);
 $denied = $selectedId > 0 ? array_fill_keys(pcvc_staff_level_clearance_denied($conn, $selectedId), true) : [];
+unset($denied[pcvc_level_clearance_configured_key()]);
 $selected = null;
-foreach ($staff as $row) {
+foreach ($list as $row) {
     if ((int) $row['id'] === $selectedId) {
         $selected = $row;
         break;
@@ -100,6 +128,17 @@ $groups = [];
 foreach ($catalog as $menuKey => $menu) {
     $groups[$menu['group']][$menuKey] = $menu;
 }
+
+$segmentLabels = [
+    'staff' => 'Staff',
+    'agent' => 'Agents',
+    'company' => 'Companies',
+];
+$segmentHints = [
+    'staff' => 'Staff, accountant, and secretary accounts.',
+    'agent' => 'Personal agent accounts (not companies).',
+    'company' => 'Company partner accounts. Checked menus appear when they sign in or when you switch into their dashboard.',
+];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -109,10 +148,14 @@ foreach ($catalog as $menuKey => $menu) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 body { margin: 0; font-family: Segoe UI, sans-serif; background: #f3f6f3; color: #1a2e1a; }
-.layout { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+.layout { display: grid; grid-template-columns: 300px 1fr; min-height: 100vh; }
 .people { background: #fff; border-right: 1px solid #e1ebe1; padding: 16px; }
 .people h1, .editor h1 { font-size: 18px; margin: 0 0 8px; color: #2d5a27; }
 .people p, .note { color: #4d624d; font-size: 13px; line-height: 1.45; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 12px; }
+.tabs a { text-decoration: none; padding: 7px 10px; border-radius: 999px; background: #f1f5f1; color: #334155; font-size: 12px; font-weight: 700; }
+.tabs a.active { background: #14532d; color: #fff; }
+.tabs a .n { opacity: .8; margin-left: 4px; }
 input[type=search] { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #d5e0d5; border-radius: 8px; }
 .person { display: block; padding: 10px 8px; border-radius: 8px; text-decoration: none; color: inherit; }
 .person.active, .person:hover { background: #e8f5e9; }
@@ -135,40 +178,50 @@ button { background: #2d5a27; color: #fff; border: 0; border-radius: 8px; paddin
 <div class="layout">
   <aside class="people">
     <h1>Level Clearance</h1>
-    <p>Staff, accountant, and secretary accounts. A person with nothing unchecked still has every menu.</p>
-    <input type="search" id="filterStaff" placeholder="Find a staff member" oninput="filterStaff(this.value)">
-    <?php foreach ($staff as $row): ?>
-      <a class="person<?= (int) $row['id'] === $selectedId ? ' active' : '' ?>" href="admin-level-clearance.php?id=<?= (int) $row['id'] ?>" data-name="<?= htmlspecialchars(strtolower($row['display_name'] . ' ' . ($row['email'] ?? ''))) ?>">
-        <strong><?= htmlspecialchars($row['display_name']) ?></strong>
-        <span><?= htmlspecialchars((string) ($row['role_label'] ?? 'Staff')) ?><?= $row['position'] ? ' · ' . htmlspecialchars((string) $row['position']) : '' ?></span>
+    <p><?= htmlspecialchars($segmentHints[$segment], ENT_QUOTES, 'UTF-8') ?> A person with nothing unchecked still has every menu once saved.</p>
+    <div class="tabs">
+      <?php foreach ($segmentLabels as $key => $label): ?>
+      <a class="<?= $segment === $key ? 'active' : '' ?>" href="admin-level-clearance.php?segment=<?= rawurlencode($key) ?>">
+        <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?><span class="n"><?= count($people[$key]) ?></span>
+      </a>
+      <?php endforeach; ?>
+    </div>
+    <input type="search" id="filterStaff" placeholder="Find <?= htmlspecialchars(strtolower($segmentLabels[$segment]), ENT_QUOTES, 'UTF-8') ?>" oninput="filterStaff(this.value)">
+    <?php foreach ($list as $row): ?>
+      <a class="person<?= (int) $row['id'] === $selectedId ? ' active' : '' ?>"
+         href="admin-level-clearance.php?segment=<?= rawurlencode($segment) ?>&id=<?= (int) $row['id'] ?>"
+         data-name="<?= htmlspecialchars(strtolower($row['display_name'] . ' ' . ($row['email'] ?? '') . ' ' . ($row['subtitle'] ?? '')), ENT_QUOTES, 'UTF-8') ?>">
+        <strong><?= htmlspecialchars($row['display_name'], ENT_QUOTES, 'UTF-8') ?></strong>
+        <span><?= htmlspecialchars((string) ($row['role_label'] ?? ucfirst($segment)), ENT_QUOTES, 'UTF-8') ?><?= !empty($row['subtitle']) ? ' · ' . htmlspecialchars((string) $row['subtitle'], ENT_QUOTES, 'UTF-8') : '' ?></span>
       </a>
     <?php endforeach; ?>
-    <?php if ($staff === []): ?><p>No active staff, accountant, or secretary accounts.</p><?php endif; ?>
+    <?php if ($list === []): ?><p>No active <?= htmlspecialchars(strtolower($segmentLabels[$segment]), ENT_QUOTES, 'UTF-8') ?> accounts.</p><?php endif; ?>
   </aside>
   <main class="editor">
-    <?php if ($error !== ''): ?><p class="err"><?= htmlspecialchars($error) ?></p><?php endif; ?>
-    <?php if ($saved): ?><p class="alert">Clearance saved. That staff member will see the checked menus the next time the dashboard loads.</p><?php endif; ?>
+    <?php if ($error !== ''): ?><p class="err"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+    <?php if ($saved): ?><p class="alert">Clearance saved. Menus update the next time their dashboard loads (or when you switch into a company view).</p><?php endif; ?>
     <?php if ($selected): ?>
-      <h1><?= htmlspecialchars($selected['display_name']) ?></h1>
-      <p class="note"><?= htmlspecialchars((string) ($selected['email'] ?? '')) ?><?= $selected['position'] ? ' · ' . htmlspecialchars((string) $selected['position']) : '' ?></p>
+      <h1><?= htmlspecialchars($selected['display_name'], ENT_QUOTES, 'UTF-8') ?></h1>
+      <p class="note"><?= htmlspecialchars((string) ($selected['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?><?= !empty($selected['subtitle']) ? ' · ' . htmlspecialchars((string) $selected['subtitle'], ENT_QUOTES, 'UTF-8') : '' ?></p>
       <form method="post">
-        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token'], ENT_QUOTES, 'UTF-8') ?>">
+        <input type="hidden" name="segment" value="<?= htmlspecialchars($segment, ENT_QUOTES, 'UTF-8') ?>">
         <input type="hidden" name="staff_id" value="<?= (int) $selected['id'] ?>">
         <?php foreach ($groups as $groupName => $menus): ?>
           <section class="group">
-            <h2><?= htmlspecialchars($groupName) ?></h2>
+            <h2><?= htmlspecialchars($groupName, ENT_QUOTES, 'UTF-8') ?></h2>
             <?php foreach ($menus as $menuKey => $menu):
                 $menuName = pcvc_staff_level_clearance_menu_key($menuKey);
                 $menuOn = !isset($denied[$menuName]);
             ?>
-              <div class="menu" data-menu="<?= htmlspecialchars($menuKey) ?>">
-                <label class="menu-label"><input type="checkbox" name="allow[]" value="<?= htmlspecialchars($menuName) ?>" <?= $menuOn ? 'checked' : '' ?> data-parent="<?= htmlspecialchars($menuKey) ?>"> <?= htmlspecialchars($menu['label']) ?></label>
+              <div class="menu" data-menu="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>">
+                <label class="menu-label"><input type="checkbox" name="allow[]" value="<?= htmlspecialchars($menuName, ENT_QUOTES, 'UTF-8') ?>" <?= $menuOn ? 'checked' : '' ?> data-parent="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>"> <?= htmlspecialchars($menu['label'], ENT_QUOTES, 'UTF-8') ?></label>
                 <div class="subs">
                   <?php foreach ($menu['items'] as $url => $label):
                       $subName = pcvc_staff_level_clearance_sub_key($menuKey, $url);
                       $subOn = $menuOn && !isset($denied[$subName]);
                   ?>
-                    <label><input type="checkbox" name="allow[]" value="<?= htmlspecialchars($subName) ?>" <?= $subOn ? 'checked' : '' ?> data-child="<?= htmlspecialchars($menuKey) ?>"> <?= htmlspecialchars($label) ?></label>
+                    <label><input type="checkbox" name="allow[]" value="<?= htmlspecialchars($subName, ENT_QUOTES, 'UTF-8') ?>" <?= $subOn ? 'checked' : '' ?> data-child="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>"> <?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></label>
                   <?php endforeach; ?>
                 </div>
               </div>

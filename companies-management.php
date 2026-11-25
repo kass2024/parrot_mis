@@ -7,6 +7,9 @@ require_once __DIR__ . '/includes/company_branding.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/staff_self_register.php';
 require_once __DIR__ . '/helpers/companies_management.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
+require_once __DIR__ . '/helpers/profile_photo_upload.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 
 pcvc_ensure_staff_account_columns($conn);
 
@@ -200,12 +203,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isSuperAdmin) {
         );
         $ok = $upd->execute();
         $upd->close();
+        // Optional company logo (shown top-right in company dashboard view).
+        if ($ok && isset($_FILES['company_logo']) && (int) ($_FILES['company_logo']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {
+            $stored = pcvc_profile_photo_store($_FILES['company_logo']);
+            if (!empty($stored['ok']) && !empty($stored['filename'])) {
+                $logoName = (string) $stored['filename'];
+                $logoUp = $conn->prepare('UPDATE admins SET company_logo = ? WHERE id = ? LIMIT 1');
+                if ($logoUp) {
+                    $logoUp->bind_param('si', $logoName, $id);
+                    $logoUp->execute();
+                    $logoUp->close();
+                }
+            } else {
+                $_SESSION['error'] = (string) ($stored['error'] ?? 'Logo upload failed.');
+                cm_redirect('filter=' . rawurlencode($filter) . '&view=' . $id);
+            }
+        }
+        if ($ok && isset($_POST['remove_company_logo'])) {
+            $empty = '';
+            $logoUp = $conn->prepare('UPDATE admins SET company_logo = ? WHERE id = ? LIMIT 1');
+            if ($logoUp) {
+                $logoUp->bind_param('si', $empty, $id);
+                $logoUp->execute();
+                $logoUp->close();
+            }
+        }
         $_SESSION[$ok ? 'success' : 'error'] = $ok
             ? 'Company details saved.'
             : 'Could not save company details.';
         if ($ok && isset($_POST['save_and_dashboard'])) {
-            header('Location: company-dashboard.php?id=' . $id);
-            exit;
+            cm_redirect('filter=' . rawurlencode($filter) . '&view=' . $id . '&enter_dashboard=1');
         }
         cm_redirect('filter=' . rawurlencode($filter) . '&view=' . $id);
     }
@@ -398,7 +425,7 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
       <?php if ($isSuperAdmin): ?>
       <div>
         <strong style="display:block;margin-bottom:6px;color:#14532d">Edit company details</strong>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
           <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
           <input type="hidden" name="update_company" value="1">
           <input type="hidden" name="id" value="<?= (int)$viewRow['id'] ?>">
@@ -432,6 +459,18 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
           <input type="email" id="email" name="email" required maxlength="190" value="<?= cm_h((string)($viewRow['email'] ?? '')) ?>">
           <label for="phone_number">Contact phone</label>
           <input type="tel" id="phone_number" name="phone_number" required maxlength="24" value="<?= cm_h((string)($viewRow['phone_number'] ?? '')) ?>">
+          <label for="company_logo">Company logo (top-right corner)</label>
+          <?php
+            $logoFile = trim((string) ($viewRow['company_logo'] ?? ''));
+            $logoUrl = $logoFile !== '' ? pcvc_company_logo_url($logoFile) : '';
+          ?>
+          <?php if ($logoUrl !== ''): ?>
+          <div style="display:flex;align-items:center;gap:10px;margin:6px 0 8px">
+            <img src="<?= cm_h($logoUrl) ?>" alt="Logo" style="width:56px;height:56px;object-fit:contain;border:1px solid #d7e7dc;border-radius:12px;background:#fff">
+            <label style="font-weight:650;display:flex;gap:6px;align-items:center;margin:0"><input type="checkbox" name="remove_company_logo" value="1"> Remove logo</label>
+          </div>
+          <?php endif; ?>
+          <input type="file" id="company_logo" name="company_logo" accept="image/*">
           <div class="actions" style="margin-top:12px">
             <button type="submit" class="btn btn-green" style="flex:1">Save company</button>
             <button type="submit" name="save_and_dashboard" value="1" class="btn btn-sky" style="flex:1">Save & open dashboard</button>
@@ -442,7 +481,7 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
     </div>
     <?php if ($status !== 'pending'): ?>
     <div class="actions" style="margin-top:14px">
-      <a class="btn btn-sky" href="<?= cm_h(pcvc_company_dashboard_url((int)$viewRow['id'])) ?>">Open company dashboard</a>
+      <button type="button" class="btn btn-sky btn-enter-company" data-id="<?= (int)$viewRow['id'] ?>" data-name="<?= cm_h(trim((string)($viewRow['company_name'] ?? '')) ?: ('Company #' . (int)$viewRow['id'])) ?>">Open company dashboard</button>
     </div>
     <?php endif; ?>
   </div>
@@ -520,7 +559,7 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
                   <?php endif; ?>
                   <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Review</a>
                 <?php else: ?>
-                  <a class="btn btn-sky btn-sm" href="<?= cm_h($dashUrl) ?>">Dashboard</a>
+                  <button type="button" class="btn btn-sky btn-sm btn-enter-company" data-id="<?= (int)$row['id'] ?>" data-name="<?= cm_h($company !== '' ? $company : ('Company #' . (int)$row['id'])) ?>">Dashboard</button>
                   <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
                   <?php if ($isSuperAdmin && $status !== 'inactive' && (int)$row['id'] !== $currentUserId): ?>
                   <form method="post" onsubmit="return confirm('Deactivate this company account?');">
@@ -570,6 +609,36 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
       if (msg) { msg.style.display = 'block'; setTimeout(function () { msg.style.display = 'none'; }, 1600); }
     });
   });
+
+  function enterCompanyDashboard(id, name) {
+    if (!id) return;
+    const fd = new FormData();
+    fd.append('action', 'enter');
+    fd.append('company_id', String(id));
+    fetch('admin-company-view.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data || !data.ok) {
+          alert((data && data.error) || 'Could not open company dashboard.');
+          return;
+        }
+        const target = data.redirect || ('admin-dashboard.php?open=' + encodeURIComponent('company-dashboard.php?id=' + id));
+        if (window.top && window.top !== window) {
+          window.top.location.href = target;
+        } else {
+          window.location.href = target;
+        }
+      })
+      .catch(() => alert('Could not open company dashboard.'));
+  }
+  document.querySelectorAll('.btn-enter-company').forEach(btn => {
+    btn.addEventListener('click', function () {
+      enterCompanyDashboard(this.getAttribute('data-id'), this.getAttribute('data-name') || '');
+    });
+  });
+  <?php if (!empty($_GET['enter_dashboard']) && $viewRow): ?>
+  enterCompanyDashboard(<?= (int)$viewRow['id'] ?>, <?= json_encode(trim((string)($viewRow['company_name'] ?? '')) ?: ('Company #' . (int)$viewRow['id'])) ?>);
+  <?php endif; ?>
 })();
 </script>
 </body>

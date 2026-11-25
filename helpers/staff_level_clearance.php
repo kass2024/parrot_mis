@@ -328,7 +328,9 @@ function pcvc_staff_level_clearance_save(mysqli $conn, int $adminId, array $deni
 function pcvc_staff_level_clearance_apply(mysqli $conn, int $adminId): array
 {
     $catalog = pcvc_staff_level_clearance_catalog();
-    $denied = array_fill_keys(pcvc_staff_level_clearance_denied($conn, $adminId), true);
+    $deniedList = pcvc_staff_level_clearance_denied($conn, $adminId);
+    $denied = array_fill_keys($deniedList, true);
+    unset($denied[pcvc_level_clearance_configured_key()]);
     $menus = [];
     $index = [];
     foreach ($catalog as $menuKey => $menu) {
@@ -348,6 +350,7 @@ function pcvc_staff_level_clearance_apply(mysqli $conn, int $adminId): array
         'menus' => $menus,
         'denied' => array_keys($denied),
         'index' => $index,
+        'configured' => pcvc_staff_level_clearance_is_configured($conn, $adminId),
     ];
 }
 
@@ -360,6 +363,77 @@ function pcvc_staff_level_clearance_is_target(string $role): bool
     return pcvc_is_staff_role($role) && !pcvc_is_superadmin_role($role);
 }
 
+/** Personal agents (not company accounts). */
+function pcvc_agent_level_clearance_is_target(string $role, array $row = []): bool
+{
+    if (!function_exists('pcvc_is_agent_role') || !pcvc_is_agent_role($role)) {
+        return false;
+    }
+    if ($row !== [] && function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($row)) {
+        return false;
+    }
+
+    return true;
+}
+
+/** Company partner accounts. */
+function pcvc_company_level_clearance_is_target(array $row): bool
+{
+    return function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($row);
+}
+
+function pcvc_level_clearance_segment_for_row(array $row): string
+{
+    if (pcvc_company_level_clearance_is_target($row)) {
+        return 'company';
+    }
+    $role = (string) ($row['role'] ?? '');
+    if (pcvc_agent_level_clearance_is_target($role, $row)) {
+        return 'agent';
+    }
+    if (pcvc_staff_level_clearance_is_target($role)) {
+        return 'staff';
+    }
+
+    return '';
+}
+
+/** Sentinel written on every save so “allow all” still counts as configured. */
+function pcvc_level_clearance_configured_key(): string
+{
+    return 'cfg:1';
+}
+
+function pcvc_staff_level_clearance_is_configured(mysqli $conn, int $adminId): bool
+{
+    pcvc_staff_level_clearance_ensure_schema($conn);
+    if ($adminId <= 0) {
+        return false;
+    }
+    $stmt = $conn->prepare('SELECT 1 FROM staff_level_clearance WHERE admin_id = ? LIMIT 1');
+    if (!$stmt) {
+        return false;
+    }
+    $stmt->bind_param('i', $adminId);
+    $stmt->execute();
+    $ok = (bool) $stmt->get_result()->fetch_row();
+    $stmt->close();
+
+    return $ok;
+}
+
+/**
+ * @param list<string> $denied
+ */
+function pcvc_staff_level_clearance_save_configured(mysqli $conn, int $adminId, array $denied): void
+{
+    $denied = array_values(array_filter(array_map('strval', $denied), static fn(string $k): bool => $k !== ''));
+    if (!in_array(pcvc_level_clearance_configured_key(), $denied, true)) {
+        $denied[] = pcvc_level_clearance_configured_key();
+    }
+    pcvc_staff_level_clearance_save($conn, $adminId, $denied);
+}
+
 function pcvc_staff_clearance_guard_request(mysqli $conn): void
 {
     if (PHP_SAPI === 'cli') {
@@ -368,13 +442,40 @@ function pcvc_staff_clearance_guard_request(mysqli $conn): void
     if (session_status() !== PHP_SESSION_ACTIVE) {
         return;
     }
-    $role = (string) ($_SESSION['role'] ?? '');
-    if (!pcvc_staff_level_clearance_is_target($role)) {
-        return;
+    // Superadmin viewing as a company: enforce that company's clearance.
+    $actingCompanyId = 0;
+    if (function_exists('pcvc_acting_company_id')) {
+        $actingCompanyId = (int) pcvc_acting_company_id();
     }
-    $adminId = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    $adminId = $actingCompanyId > 0
+        ? $actingCompanyId
+        : (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
     if ($adminId <= 0) {
         return;
+    }
+
+    $role = (string) ($_SESSION['role'] ?? '');
+    $row = null;
+    if ($actingCompanyId > 0 || !pcvc_staff_level_clearance_is_target($role)) {
+        $st = $conn->prepare('SELECT id, role, account_type, company_name FROM admins WHERE id = ? LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $adminId);
+            $st->execute();
+            $row = $st->get_result()->fetch_assoc() ?: null;
+            $st->close();
+        }
+        $segment = $row ? pcvc_level_clearance_segment_for_row($row) : '';
+        if ($actingCompanyId <= 0) {
+            if ($segment === '') {
+                return;
+            }
+            // Agents/companies without a saved clearance keep role defaults (no hard block).
+            if (!pcvc_staff_level_clearance_is_configured($conn, $adminId)) {
+                return;
+            }
+        } elseif (!pcvc_staff_level_clearance_is_configured($conn, $adminId)) {
+            return;
+        }
     }
 
     $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
@@ -407,6 +508,7 @@ function pcvc_staff_clearance_guard_request(mysqli $conn): void
         return;
     }
     $denied = array_fill_keys(pcvc_staff_level_clearance_denied($conn, $adminId), true);
+    unset($denied[pcvc_level_clearance_configured_key()]);
     foreach ($checks as [$menuKey, $subKey]) {
         if (!isset($denied[pcvc_staff_level_clearance_menu_key($menuKey)]) && !isset($denied[$subKey])) {
             return;

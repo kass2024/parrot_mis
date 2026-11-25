@@ -5,6 +5,8 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/companies_management.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
+require_once __DIR__ . '/helpers/secure_file.php';
 
 pcvc_ensure_staff_account_columns($conn);
 
@@ -38,8 +40,9 @@ if (!$company || !pcvc_admin_is_company_account($company)) {
     exit('Company account not found.');
 }
 
-// Superadmins monitor any company. The company itself can open its own dashboard.
-$canView = $isSuperAdmin || $viewerId === $companyId;
+// Superadmins (including company view-as), or the company itself.
+$actingId = function_exists('pcvc_acting_company_id') ? pcvc_acting_company_id() : 0;
+$canView = $isSuperAdmin || $viewerId === $companyId || ($actingId > 0 && $actingId === $companyId);
 if (!$canView) {
     http_response_code(403);
     exit('You can only open your own company dashboard.');
@@ -123,6 +126,15 @@ th{background:#f0fdf4;color:#14532d;position:sticky;top:0}
   </div>
   <?php endif; ?>
   <div class="hero">
+    <div style="display:flex;gap:14px;align-items:flex-start;flex-wrap:wrap">
+      <?php
+        $logoFile = trim((string) ($company['company_logo'] ?? ''));
+        $logoUrl = $logoFile !== '' ? pcvc_company_logo_url($logoFile) : '';
+      ?>
+      <?php if ($logoUrl !== ''): ?>
+      <img src="<?= cd_h($logoUrl) ?>" alt="Logo" style="width:64px;height:64px;object-fit:contain;border-radius:14px;background:#fff;border:1px solid rgba(255,255,255,.35)">
+      <?php endif; ?>
+      <div style="flex:1;min-width:220px">
     <h1><?= cd_h($companyName !== '' ? $companyName : 'Company dashboard') ?></h1>
     <p>
       Monitoring applications and self-registrations for this company partner.
@@ -130,13 +142,15 @@ th{background:#f0fdf4;color:#14532d;position:sticky;top:0}
       <?php if ($email !== ''): ?> · <?= cd_h($email) ?><?php endif; ?>
       · <span class="badge <?= cd_h($status) ?>" style="background:rgba(255,255,255,.2);color:#fff"><?= cd_h(ucfirst($status)) ?></span>
     </p>
+      </div>
+    </div>
     <div class="hero-actions">
       <?php if ($isSuperAdmin): ?>
-      <a class="btn btn-ghost" href="companies-management.php?view=<?= (int)$companyId ?>">Back to companies</a>
-      <a class="btn btn-ghost" href="companies-management.php?view=<?= (int)$companyId ?>">Edit / approve</a>
+      <a class="btn btn-ghost js-frame-link" data-url="companies-management.php" data-title="Companies Management" href="companies-management.php">Back to companies</a>
+      <a class="btn btn-ghost js-frame-link" data-url="companies-management.php?view=<?= (int)$companyId ?>" data-title="Companies Management" href="companies-management.php?view=<?= (int)$companyId ?>">Edit / logo</a>
       <?php endif; ?>
-      <a class="btn btn-sky" href="<?= cd_h($reportUrl) ?>">Open application report</a>
-      <a class="btn btn-green" href="<?= cd_h($selfRegUrl) ?>">Self registrations</a>
+      <a class="btn btn-sky js-frame-link" data-url="<?= cd_h($reportUrl) ?>" data-title="Student Application Report" href="<?= cd_h($reportUrl) ?>">Open application report</a>
+      <a class="btn btn-green js-frame-link" data-url="<?= cd_h($selfRegUrl) ?>" data-title="Self Registration" href="<?= cd_h($selfRegUrl) ?>">Self registrations</a>
     </div>
   </div>
 
@@ -247,5 +261,19 @@ th{background:#f0fdf4;color:#14532d;position:sticky;top:0}
     </div>
   </div>
 </div>
+<script>
+(function () {
+  document.querySelectorAll('.js-frame-link').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      var url = a.getAttribute('data-url') || a.getAttribute('href');
+      var title = a.getAttribute('data-title') || '';
+      if (window.parent && window.parent !== window && typeof window.parent.loadInFrame === 'function') {
+        e.preventDefault();
+        window.parent.loadInFrame(url, title);
+      }
+    });
+  });
+})();
+</script>
 </body>
 </html>

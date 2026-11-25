@@ -8,8 +8,11 @@ require_once __DIR__ . '/helpers/university_admins_schema.php';
 require_once __DIR__ . '/helpers/korea_invitation_contract_schema.php';
 require_once __DIR__ . '/helpers/korea_event_schema.php';
 require_once __DIR__ . '/helpers/noble_education_schema.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
+require_once __DIR__ . '/helpers/staff_self_register.php';
 pcvc_ensure_university_admins_schema($conn);
 pcvc_ensure_account_status_column($conn);
+pcvc_ensure_staff_account_columns($conn);
 kic_contract_ensure_schema($conn);
 kep_ensure_schema($conn);
 neg_ensure_schema($conn);
@@ -42,6 +45,47 @@ $displayName = trim(
 
 if ($displayName === '') {
   $displayName = $admin['full_name'] ?? 'Administrator';
+}
+
+// Superadmin “view as company”: keep login identity, filter menus by that company's clearance.
+$actingCompany = null;
+$actingCompanyId = 0;
+$topRightAvatar = pcvc_profile_photo_url($admin['profile_photo'] ?? '');
+$topRightName = trim((string) (($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? '')));
+$topRightRole = ucfirst($role);
+$selfIsCompany = function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($admin);
+if ($selfIsCompany) {
+  $selfLogo = trim((string) ($admin['company_logo'] ?? ''));
+  if ($selfLogo !== '') {
+    $topRightAvatar = pcvc_company_logo_url($selfLogo);
+  }
+  $selfCompanyTitle = trim((string) ($admin['company_name'] ?? ''));
+  if ($selfCompanyTitle !== '') {
+    $topRightName = $selfCompanyTitle;
+  }
+  $topRightRole = 'Company';
+}
+if (pcvc_current_user_is_superadmin($conn) && pcvc_is_viewing_as_company()) {
+  $actingCompany = pcvc_load_acting_company($conn);
+  if (!$actingCompany) {
+    pcvc_exit_company_view();
+  } else {
+    $actingCompanyId = (int) ($actingCompany['id'] ?? 0);
+    $companyLogo = trim((string) ($actingCompany['company_logo'] ?? ''));
+    if ($companyLogo !== '') {
+      $topRightAvatar = pcvc_company_logo_url($companyLogo);
+    } else {
+      $topRightAvatar = pcvc_profile_photo_url($actingCompany['profile_photo'] ?? '');
+    }
+    $companyTitle = trim((string) ($actingCompany['company_name'] ?? ''));
+    if ($companyTitle === '') {
+      $companyTitle = trim((string) (($actingCompany['first_name'] ?? '') . ' ' . ($actingCompany['last_name'] ?? '')));
+    }
+    if ($companyTitle !== '') {
+      $topRightName = $companyTitle;
+    }
+    $topRightRole = 'Company view';
+  }
 }
 
 require_once __DIR__ . '/includes/staff_dashboard_stats.php';
@@ -572,9 +616,31 @@ $pcvcStaffClearanceOn = false;
 $pcvcClearanceDenied = [];
 $pcvcClearanceIndex = [];
 require_once __DIR__ . '/helpers/staff_level_clearance.php';
-if (pcvc_staff_level_clearance_is_target($role)) {
-    $pcvcStaffClearance = pcvc_staff_level_clearance_apply($conn, (int) $admin_id);
-    if (pcvc_is_superadmin_role($role)) {
+$clearanceSubjectId = (int) $admin_id;
+$clearanceSubjectRow = $admin;
+if ($actingCompanyId > 0 && $actingCompany) {
+    $clearanceSubjectId = $actingCompanyId;
+    $clearanceSubjectRow = $actingCompany;
+    // Company view starts from agent menus, then level clearance filters further.
+    $allowedSidebarItems = $sidebarAccess['agent'] ?? $allowedSidebarItems;
+    $dashboardRoleKey = 'agent';
+}
+$clearanceSegment = pcvc_level_clearance_segment_for_row($clearanceSubjectRow);
+$applyClearance = false;
+if ($actingCompanyId > 0) {
+    $applyClearance = pcvc_staff_level_clearance_is_configured($conn, $clearanceSubjectId);
+} elseif (pcvc_staff_level_clearance_is_target($role)) {
+    $applyClearance = true;
+} elseif (in_array($clearanceSegment, ['agent', 'company'], true)
+    && pcvc_staff_level_clearance_is_configured($conn, $clearanceSubjectId)) {
+    $applyClearance = true;
+}
+if ($applyClearance) {
+    $pcvcStaffClearance = pcvc_staff_level_clearance_apply($conn, $clearanceSubjectId);
+    if ($actingCompanyId > 0 || in_array($clearanceSegment, ['agent', 'company'], true)) {
+        // Saved clearance defines the menus for agents, companies, and company view-as.
+        $allowedSidebarItems = $pcvcStaffClearance['menus'];
+    } elseif (pcvc_is_superadmin_role($role)) {
         $pcvcVisibleMenus = array_fill_keys($pcvcStaffClearance['menus'], true);
         $pcvcClearanceCatalog = pcvc_staff_level_clearance_catalog();
         $allowedSidebarItems = array_values(array_filter(
@@ -3354,14 +3420,22 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         
         <div class="page-title">
           <h1 id="pageTitle">Dashboard</h1>
-          <p>Welcome back, <?= htmlspecialchars($displayName) ?>!</p>
+          <p><?= $actingCompanyId > 0
+            ? 'Viewing company: <strong>' . htmlspecialchars($topRightName) . '</strong>'
+            : 'Welcome back, ' . htmlspecialchars($displayName) . '!' ?></p>
         </div>
         
         <div class="topbar-actions">
+          <?php if ($actingCompanyId > 0): ?>
+          <button type="button" class="btn btn-create-reminder" id="btnExitCompanyView" style="background:#0f172a">
+            <i class="bi bi-arrow-left-circle me-1"></i> Superadmin dashboard
+          </button>
+          <?php else: ?>
           <!-- Create Reminder Button -->
           <button class="btn btn-create-reminder" data-bs-toggle="modal" data-bs-target="#createReminderModal">
             <i class="bi bi-plus-circle me-1"></i> Create Reminder
           </button>
+          <?php endif; ?>
           
           <!-- Notifications Bell -->
           <div class="dropdown">
@@ -3376,18 +3450,37 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
             </ul>
           </div>
           
-          <!-- User Profile Dropdown -->
+          <!-- User / company logo (top right) -->
           <div class="dropdown">
             <div class="user-profile-dropdown" data-bs-toggle="dropdown" aria-expanded="false">
-              <img src="<?= htmlspecialchars(pcvc_profile_photo_url($admin['profile_photo'] ?? '')) ?>" 
-                   class="user-avatar" alt="Profile">
+              <img src="<?= htmlspecialchars($topRightAvatar) ?>" 
+                   class="user-avatar" alt="<?= $actingCompanyId > 0 ? 'Company logo' : 'Profile' ?>"
+                   style="<?= $actingCompanyId > 0 ? 'object-fit:contain;background:#fff;border:1px solid #d7e7dc' : '' ?>">
               <div class="user-info">
-                <div class="user-name"><?= htmlspecialchars($admin['first_name'] . ' ' . $admin['last_name']) ?></div>
-                <div class="user-role"><?= ucfirst($role) ?></div>
+                <div class="user-name"><?= htmlspecialchars($topRightName) ?></div>
+                <div class="user-role"><?= htmlspecialchars($topRightRole) ?></div>
               </div>
               <i class="bi bi-chevron-down"></i>
             </div>
             <ul class="dropdown-menu dropdown-menu-end">
+              <?php if ($actingCompanyId > 0): ?>
+              <li>
+                <button type="button" class="dropdown-item" id="btnExitCompanyViewMenu">
+                  <i class="bi bi-shield-lock me-2"></i> Switch back to superadmin
+                </button>
+              </li>
+              <li>
+                <a class="dropdown-item" href="#" onclick="loadInFrame('company-dashboard.php?id=<?= (int)$actingCompanyId ?>', <?= json_encode($topRightName) ?>); return false;">
+                  <i class="bi bi-building me-2"></i> Company activity
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item" href="#" onclick="loadInFrame('companies-management.php?view=<?= (int)$actingCompanyId ?>', 'Companies Management'); return false;">
+                  <i class="bi bi-image me-2"></i> Company profile / logo
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <?php else: ?>
               <li>
                 <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#profileModal">
                   <i class="bi bi-person me-2"></i> My Profile
@@ -3406,6 +3499,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                 </li>
               <?php endif; ?>
               <li><hr class="dropdown-divider"></li>
+              <?php endif; ?>
               <li>
                 <form action="admin-logout.php" method="POST" style="margin: 0;">
                   <button type="submit" class="dropdown-item text-danger">
@@ -4493,6 +4587,37 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       
       return false;
     };
+
+    function pcvcExitCompanyView() {
+      const fd = new FormData();
+      fd.append('action', 'exit');
+      fetch('admin-company-view.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+          if (!data || !data.ok) {
+            alert((data && data.error) || 'Could not return to superadmin.');
+            return;
+          }
+          window.location.href = data.redirect || 'admin-dashboard.php';
+        })
+        .catch(() => alert('Could not return to superadmin.'));
+    }
+    document.getElementById('btnExitCompanyView')?.addEventListener('click', pcvcExitCompanyView);
+    document.getElementById('btnExitCompanyViewMenu')?.addEventListener('click', pcvcExitCompanyView);
+
+    (function autoOpenFrame() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const open = params.get('open');
+        if (!open) return;
+        const title = params.get('title') || 'Content';
+        loadInFrame(open, title);
+        params.delete('open');
+        params.delete('title');
+        const next = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+        window.history.replaceState({}, '', next);
+      } catch (e) {}
+    })();
     
     // Handle iframe load
     document.getElementById('content-frame').addEventListener('load', function() {
