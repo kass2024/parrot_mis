@@ -568,23 +568,21 @@ function pcvc_resend_account_credentials(mysqli $conn, int $adminId): array
         $fullName = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
     }
     $companyName = trim((string) ($row['company_name'] ?? ''));
-    $isCompany = pcvc_admin_is_company_account($row);
     $password = pcvc_generate_staff_password();
     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
     if ($passwordHash === false) {
         return ['ok' => false, 'error' => 'Could not create a new password.'];
     }
     $loginUrl = pcvc_staff_login_url($email);
-    $sent = pcvc_send_staff_welcome_email(
+    $sent = pcvc_send_staff_password_reset_email(
         $email,
         $fullName !== '' ? $fullName : $email,
         $password,
         $loginUrl,
-        $companyName,
-        $isCompany
+        $companyName
     );
     if (empty($sent['ok'])) {
-        return ['ok' => false, 'error' => 'The login email could not be sent. Try again in a moment.'];
+        return ['ok' => false, 'error' => 'The password reset email could not be sent. Try again in a moment.'];
     }
     $upd = $conn->prepare('UPDATE admins SET password_hash = ? WHERE id = ? LIMIT 1');
     if (!$upd) {
@@ -595,6 +593,57 @@ function pcvc_resend_account_credentials(mysqli $conn, int $adminId): array
     $upd->close();
 
     return ['ok' => true, 'email' => $email, 'name' => $fullName !== '' ? $fullName : $email];
+}
+
+/**
+ * Password-reset email with new credentials (used by Resend credentials — not approval).
+ */
+function pcvc_send_staff_password_reset_email(
+    string $email,
+    string $fullName,
+    string $password,
+    string $loginUrl,
+    string $registeredCompany = ''
+): array {
+    $safeName = htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8');
+    $safeEmail = htmlspecialchars($email, ENT_QUOTES, 'UTF-8');
+    $safePassword = htmlspecialchars($password, ENT_QUOTES, 'UTF-8');
+    $safeUrl = htmlspecialchars($loginUrl, ENT_QUOTES, 'UTF-8');
+    $company = defined('PCVC_COMPANY_DISPLAY_NAME') ? PCVC_COMPANY_DISPLAY_NAME : 'Parrot Canada Visa Consultant';
+    $safeCompany = htmlspecialchars($company, ENT_QUOTES, 'UTF-8');
+    $companyLine = '';
+    if (trim($registeredCompany) !== '') {
+        $companyLine = '<div style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.04em">Company</div>'
+            . '<div style="font-weight:700;margin-bottom:12px">' . htmlspecialchars($registeredCompany, ENT_QUOTES, 'UTF-8') . '</div>';
+    }
+
+    $html = '<div style="margin:0;padding:24px 12px;background:#f4f7f4;font-family:Arial,Helvetica,sans-serif;color:#1e293b">'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0">'
+        . '<tr><td style="background:#427431;padding:28px 28px 22px;color:#ffffff">'
+        . '<p style="margin:0 0 6px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;opacity:.9">' . $safeCompany . '</p>'
+        . '<h1 style="margin:0;font-size:22px;line-height:1.3">Your password was reset</h1>'
+        . '</td></tr>'
+        . '<tr><td style="padding:28px">'
+        . '<p style="margin:0 0 14px;font-size:15px;line-height:1.6">Hello <strong>' . $safeName . '</strong>,</p>'
+        . '<p style="margin:0 0 18px;font-size:15px;line-height:1.6">A new password was created for your account. Use the email and password below to sign in. Your previous password no longer works.</p>'
+        . '<p style="margin:0 0 22px"><a href="' . $safeUrl . '" style="display:inline-block;background:#427431;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 18px;border-radius:10px">Sign in</a></p>'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8faf8;border:1px solid #d9e6d4;border-radius:12px">'
+        . '<tr><td style="padding:16px 18px;font-size:14px;line-height:1.7">'
+        . $companyLine
+        . '<div style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.04em">Email</div>'
+        . '<div style="font-weight:700;margin-bottom:12px">' . $safeEmail . '</div>'
+        . '<div style="color:#64748b;font-size:12px;text-transform:uppercase;letter-spacing:.04em">New password</div>'
+        . '<div style="font-weight:700;font-family:Consolas,Monaco,monospace">' . $safePassword . '</div>'
+        . '</td></tr></table>'
+        . '<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#64748b">If the button does not open, copy this link:<br><a href="' . $safeUrl . '" style="color:#3661B9">' . $safeUrl . '</a></p>'
+        . '<p style="margin:18px 0 0;font-size:13px;line-height:1.6;color:#64748b">If you did not request this reset, contact partnership@visaconsultantcanada.com right away.</p>'
+        . '</td></tr></table></div>';
+
+    return sendSMTPMailDetailed(
+        $email,
+        'Your ' . $company . ' password was reset',
+        $html
+    );
 }
 
 function pcvc_send_staff_welcome_email(string $email, string $fullName, string $password, string $loginUrl, string $registeredCompany = '', bool $askCompanyDocuments = false): array
