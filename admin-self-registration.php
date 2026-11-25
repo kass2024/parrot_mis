@@ -125,6 +125,14 @@ th{background:#f0fdf4;color:#14532d;position:sticky;top:0}
 textarea{min-height:70px;resize:vertical}
 .notice{padding:12px 14px;border-radius:12px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-weight:700;margin-bottom:12px}
 .okmsg{padding:10px 12px;border-radius:10px;background:#ecfdf5;border:1px solid #86efac;color:#14532d;font-weight:700;margin-top:10px;display:none}
+.btn-red{background:#dc2626;color:#fff}
+.btn-amber{background:#f59e0b;color:#111}
+.row-actions{display:flex;flex-wrap:wrap;gap:6px}
+.modal-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}
+.modal-backdrop.open{display:flex}
+.modal{width:min(440px,100%);background:#fff;border-radius:16px;padding:16px;box-shadow:0 20px 50px rgba(0,0,0,.2)}
+.modal h3{margin:0 0 10px;color:#14532d;font-size:1.05rem}
+.modal .actions{margin-top:12px;justify-content:flex-end}
 @media(max-width:900px){
   .kpi-grid{grid-template-columns:repeat(2,1fr)}
   .detail-grid{grid-template-columns:1fr}
@@ -245,6 +253,7 @@ textarea{min-height:70px;resize:vertical}
           <label class="muted" style="display:block;margin-top:8px">Note (optional)</label>
           <textarea id="transferNote" placeholder="Why / what to follow up…"></textarea>
           <button type="button" class="btn btn-green" style="margin-top:8px;width:100%" id="btnTransfer" data-id="<?= (int)$viewRow['id'] ?>">Transfer for follow-up</button>
+          <button type="button" class="btn btn-red" style="margin-top:8px;width:100%" id="btnDeleteDetail" data-id="<?= (int)$viewRow['id'] ?>" data-label="<?= sr_admin_h(trim((string)($viewRow['full_name'] ?? '')) ?: ('Application #' . (int)$viewRow['id'])) ?>">Delete application</button>
         </div>
         <?php endif; ?>
         <div style="padding:12px;border:1px solid #e2e8f0;border-radius:12px;background:#f8fafc">
@@ -325,10 +334,25 @@ textarea{min-height:70px;resize:vertical}
             <td><?= sr_admin_h($assignee !== '' ? $assignee : 'Unassigned') ?></td>
             <td class="muted"><?= sr_admin_h((string)($row['created_at'] ?? '')) ?></td>
             <td>
-              <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
-              <?php if ($isSuper): ?>
-              <button type="button" class="btn btn-sky btn-sm copy-row" data-link="<?= sr_admin_h(pcvc_self_reg_public_url((string)$row['token'])) ?>">Copy link</button>
-              <?php endif; ?>
+              <div class="row-actions">
+                <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
+                <?php if ($isSuper): ?>
+                <button type="button" class="btn btn-sky btn-sm copy-row" data-link="<?= sr_admin_h(pcvc_self_reg_public_url((string)$row['token'])) ?>">Copy link</button>
+                <button
+                  type="button"
+                  class="btn btn-amber btn-sm btn-transfer-row"
+                  data-id="<?= (int)$row['id'] ?>"
+                  data-label="<?= sr_admin_h($label) ?>"
+                  data-assigned="<?= (int)($row['assigned_to_admin_id'] ?? 0) ?>"
+                >Transfer</button>
+                <button
+                  type="button"
+                  class="btn btn-red btn-sm btn-delete-row"
+                  data-id="<?= (int)$row['id'] ?>"
+                  data-label="<?= sr_admin_h($label) ?>"
+                >Delete</button>
+                <?php endif; ?>
+              </div>
             </td>
           </tr>
         <?php endforeach; endif; ?>
@@ -337,6 +361,29 @@ textarea{min-height:70px;resize:vertical}
     </div>
   </div>
 </div>
+
+<?php if ($isSuper): ?>
+<div class="modal-backdrop" id="transferModal" aria-hidden="true">
+  <div class="modal" role="dialog" aria-labelledby="transferModalTitle">
+    <h3 id="transferModalTitle">Transfer application</h3>
+    <p class="muted" id="transferModalLabel" style="margin:0 0 10px"></p>
+    <input type="hidden" id="transferModalId" value="">
+    <label class="muted">Staff / agent</label>
+    <select class="select" id="transferModalUser">
+      <option value="">Select staff or agent…</option>
+      <?php foreach ($assignable as $u): ?>
+      <option value="<?= (int)$u['id'] ?>"><?= sr_admin_h($u['full_name'] . ' (' . $u['role'] . ')') ?></option>
+      <?php endforeach; ?>
+    </select>
+    <label class="muted" style="display:block;margin-top:8px">Note (optional)</label>
+    <textarea id="transferModalNote" placeholder="Why / what to follow up…"></textarea>
+    <div class="actions">
+      <button type="button" class="btn btn-ghost" id="transferModalCancel">Cancel</button>
+      <button type="button" class="btn btn-green" id="transferModalSave">Transfer</button>
+    </div>
+  </div>
+</div>
+<?php endif; ?>
 
 <script>
 (function () {
@@ -358,6 +405,43 @@ textarea{min-height:70px;resize:vertical}
     ta.value = text; document.body.appendChild(ta); ta.select();
     try { document.execCommand('copy'); } catch (e) {}
     document.body.removeChild(ta);
+  }
+  function deleteApplication(id, label, btn) {
+    if (!id) return;
+    if (!confirm('Delete application "' + label + '"?\n\nThis permanently removes the form and uploaded documents.')) {
+      return;
+    }
+    if (btn) btn.disabled = true;
+    post('delete', { id: id }).then(data => {
+      if (btn) btn.disabled = false;
+      if (!data || !data.ok) {
+        alert((data && data.error) || 'Delete failed');
+        return;
+      }
+      location.href = 'admin-self-registration.php';
+    }).catch(() => {
+      if (btn) btn.disabled = false;
+      alert('Delete failed');
+    });
+  }
+  const transferModal = document.getElementById('transferModal');
+  const transferModalId = document.getElementById('transferModalId');
+  const transferModalLabel = document.getElementById('transferModalLabel');
+  const transferModalUser = document.getElementById('transferModalUser');
+  const transferModalNote = document.getElementById('transferModalNote');
+  function openTransferModal(id, label, assigned) {
+    if (!transferModal) return;
+    if (transferModalId) transferModalId.value = id;
+    if (transferModalLabel) transferModalLabel.textContent = label || ('Application #' + id);
+    if (transferModalUser) transferModalUser.value = assigned ? String(assigned) : '';
+    if (transferModalNote) transferModalNote.value = '';
+    transferModal.classList.add('open');
+    transferModal.setAttribute('aria-hidden', 'false');
+  }
+  function closeTransferModal() {
+    if (!transferModal) return;
+    transferModal.classList.remove('open');
+    transferModal.setAttribute('aria-hidden', 'true');
   }
 
   const linkBox = document.getElementById('linkBox');
@@ -450,6 +534,46 @@ textarea{min-height:70px;resize:vertical}
       showAction('Status saved. Reloading…', true);
       setTimeout(() => location.reload(), 700);
     }).catch(() => { this.disabled = false; showAction('Update failed', false); });
+  });
+
+  document.querySelectorAll('.btn-transfer-row').forEach(btn => {
+    btn.addEventListener('click', function () {
+      openTransferModal(
+        this.getAttribute('data-id') || '',
+        this.getAttribute('data-label') || '',
+        this.getAttribute('data-assigned') || ''
+      );
+    });
+  });
+
+  document.getElementById('transferModalCancel')?.addEventListener('click', closeTransferModal);
+  transferModal?.addEventListener('click', function (e) {
+    if (e.target === transferModal) closeTransferModal();
+  });
+
+  document.getElementById('transferModalSave')?.addEventListener('click', function () {
+    const id = transferModalId?.value || '';
+    const assigned = transferModalUser?.value || '';
+    const notes = transferModalNote?.value || '';
+    if (!id) return;
+    if (!assigned) { alert('Select a staff or agent'); return; }
+    this.disabled = true;
+    post('transfer', { id, assigned_to_admin_id: assigned, notes }).then(data => {
+      this.disabled = false;
+      if (!data || !data.ok) { alert((data && data.error) || 'Transfer failed'); return; }
+      closeTransferModal();
+      location.reload();
+    }).catch(() => { this.disabled = false; alert('Transfer failed'); });
+  });
+
+  document.querySelectorAll('.btn-delete-row').forEach(btn => {
+    btn.addEventListener('click', function () {
+      deleteApplication(this.getAttribute('data-id') || '', this.getAttribute('data-label') || 'this application', this);
+    });
+  });
+
+  document.getElementById('btnDeleteDetail')?.addEventListener('click', function () {
+    deleteApplication(this.getAttribute('data-id') || '', this.getAttribute('data-label') || 'this application', this);
   });
 })();
 </script>

@@ -67,6 +67,19 @@ if ($action === 'transfer') {
     }
 }
 
+if ($action === 'delete') {
+    if (!$isSuper) {
+        sr_admin_json(['ok' => false, 'error' => 'Only superadmin can delete applications.'], 403);
+    }
+    $id = (int) ($_POST['id'] ?? 0);
+    try {
+        pcvc_self_reg_delete($conn, $id);
+        sr_admin_json(['ok' => true, 'message' => 'Application deleted.']);
+    } catch (Throwable $e) {
+        sr_admin_json(['ok' => false, 'error' => $e->getMessage()], 422);
+    }
+}
+
 if ($action === 'set_status') {
     $id = (int) ($_POST['id'] ?? 0);
     $status = trim((string) ($_POST['followup_status'] ?? ''));

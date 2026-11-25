@@ -342,6 +342,59 @@ function pcvc_self_reg_transfer(
     $stmt->close();
 }
 
+function pcvc_self_reg_delete(mysqli $conn, int $registrationId): void
+{
+    pcvc_self_reg_ensure_schema($conn);
+    $reg = pcvc_self_reg_find_by_id($conn, $registrationId);
+    if (!$reg) {
+        throw new InvalidArgumentException('Application not found.');
+    }
+
+    $token = (string) ($reg['token'] ?? '');
+    $docs = pcvc_self_reg_documents_map($conn, $registrationId);
+    $dir = $token !== ''
+        ? (pcvc_self_reg_upload_root() . DIRECTORY_SEPARATOR . $token)
+        : '';
+
+    foreach ($docs as $doc) {
+        $stored = (string) ($doc['stored_name'] ?? '');
+        if ($dir !== '' && $stored !== '') {
+            $path = $dir . DIRECTORY_SEPARATOR . $stored;
+            if (is_file($path)) {
+                @unlink($path);
+            }
+        }
+    }
+
+    $stmtDocs = $conn->prepare('DELETE FROM self_registration_documents WHERE registration_id = ?');
+    if ($stmtDocs) {
+        $stmtDocs->bind_param('i', $registrationId);
+        $stmtDocs->execute();
+        $stmtDocs->close();
+    }
+
+    $stmt = $conn->prepare('DELETE FROM self_registrations WHERE id = ? LIMIT 1');
+    if (!$stmt) {
+        throw new RuntimeException('Delete prepare failed: ' . $conn->error);
+    }
+    $stmt->bind_param('i', $registrationId);
+    if (!$stmt->execute()) {
+        $err = $stmt->error;
+        $stmt->close();
+        throw new RuntimeException('Delete failed: ' . $err);
+    }
+    $stmt->close();
+
+    if ($dir !== '' && is_dir($dir)) {
+        foreach (glob($dir . DIRECTORY_SEPARATOR . '*') ?: [] as $f) {
+            if (is_file($f)) {
+                @unlink($f);
+            }
+        }
+        @rmdir($dir);
+    }
+}
+
 function pcvc_self_reg_update_followup(
     mysqli $conn,
     int $registrationId,
