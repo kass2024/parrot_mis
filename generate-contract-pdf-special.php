@@ -6,7 +6,6 @@ use Dompdf\Options;
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
 require_once __DIR__ . '/helpers/country_flag.php';
-require_once __DIR__ . '/helpers/student_contract_notice.php';
 require_once __DIR__ . '/vendor/autoload.php';
 
 /* =====================================================
@@ -756,8 +755,6 @@ with exclusive jurisdiction vested in the competent courts of Rwanda.
 This Agreement constitutes the entire understanding between the parties and supersedes
 all prior discussions. Any amendment must be in writing and signed by both parties.
 </p>
-
-<?= pcvc_student_contract_documents_notice('en') ?>
 
 <h2>15. SIGNATURES</h2>
 
