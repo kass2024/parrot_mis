@@ -1,8 +1,9 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 // Fetch role of logged-in user
-$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_id = $_SESSION['admin_id'] ?? $_SESSION['id'] ?? null;
 if (!$admin_id) {
     die("Access denied. Not logged in.");
 }
@@ -10,6 +11,7 @@ $admin_id_safe = mysqli_real_escape_string($conn, $admin_id);
 $admin_result = mysqli_query($conn, "SELECT role FROM admins WHERE id = '$admin_id_safe'");
 $admin = mysqli_fetch_assoc($admin_result);
 $role = strtolower($admin['role'] ?? 'standard');
+$pcvcCoScope = pcvc_company_list_scope($conn);
 
 // Get flag from URL
 $flag = $_GET['flag'] ?? null;
@@ -17,15 +19,23 @@ $flag = $_GET['flag'] ?? null;
 // Allowed flags
 $validFlags = [
     'incomplete_app', 'submitted', 'sent_to_platform', 'admit', 'i20_sent', 'sevis_paid',
-    'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start'
+    'visa_scheduled', 'visa_approved', 'enrolled', 'addn_doc', 'deny', 'app_start', 'caq'
 ];
 
-if (!in_array($flag, $validFlags)) {
+if (!in_array($flag, $validFlags, true)) {
     die("Invalid or missing flag.");
 }
 
-// Build query depending on role
-if ($role === 'catholic university of america') {
+// Build query depending on role / company scope
+if ($pcvcCoScope) {
+    $appsWhere = $pcvcCoScope['apps_where'];
+    $query = "
+        SELECT sa.id, 'student_applications' AS source, sa.first_name, sa.last_name, sa.email, sa.phone_number, sa.destination
+        FROM student_applications sa
+        WHERE sa.`{$flag}` = 1 AND {$appsWhere}
+        ORDER BY sa.id DESC
+    ";
+} elseif ($role === 'catholic university of america') {
     // Catholic user: show only Catholic-specific students
     $query = "
         SELECT id, 'student_applications' AS source, first_name, last_name, email, phone_number, 'Catholic University of America' AS destination

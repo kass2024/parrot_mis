@@ -7,6 +7,7 @@ require_once __DIR__ . '/../helpers/response.php';
 require_once __DIR__ . '/../helpers/role.php';
 require_once __DIR__ . '/../helpers/application_filters.php';
 
+require_once __DIR__ . '/../helpers/company_view_as.php';
 $viewer = pcvc_application_report_viewer($conn);
 if ($viewer['id'] < 1) {
     jsonResponse('Please sign in.', false, 401);
@@ -18,11 +19,36 @@ if ($expr === '') {
     jsonResponse('Unknown list.', false, 400);
 }
 
-$isSuper = pcvc_current_user_is_superadmin($conn);
+$pcvcCoScope = pcvc_company_list_scope($conn);
+$isSuper = pcvc_current_user_is_superadmin($conn) && !$pcvcCoScope;
 $requested = strtolower(trim((string) ($_GET['agent_email'] ?? '')));
 $email = ($isSuper && $requested !== '') ? $requested : strtolower(trim((string) $viewer['email']));
 if ($email === '') {
     jsonResponse([], true, 200, ['count' => 0, 'pipeline' => $stage]);
+}
+if ($pcvcCoScope) {
+    $memberEmails = [];
+    $emRes = $conn->query(
+        'SELECT DISTINCT LOWER(TRIM(email)) AS em FROM admins WHERE id IN ('
+        . $pcvcCoScope['member_sql']
+        . ") AND email IS NOT NULL AND TRIM(email) <> ''"
+    );
+    if ($emRes) {
+        while ($er = $emRes->fetch_assoc()) {
+            $em = strtolower(trim((string) ($er['em'] ?? '')));
+            if ($em !== '') {
+                $memberEmails[$em] = true;
+            }
+        }
+    }
+    if ($requested !== '' && !isset($memberEmails[$requested])) {
+        jsonResponse([], true, 200, ['count' => 0, 'pipeline' => $stage]);
+    }
+    if ($requested !== '') {
+        $email = $requested;
+    } elseif (!isset($memberEmails[$email])) {
+        jsonResponse([], true, 200, ['count' => 0, 'pipeline' => $stage]);
+    }
 }
 
 $labels = pcvc_application_status_labels();

@@ -20,6 +20,10 @@ $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 $showDeleted = isset($_GET['deleted']) && $_GET['deleted'] == '1';
 $showError = isset($_GET['error']) && !empty($_GET['error']);
 
+$pcvcCoScope = $pcvcCoScope ?? (function_exists('pcvc_company_list_scope') ? pcvc_company_list_scope($conn) : null);
+$companyContractFilter = $pcvcCoScope
+    ? (' AND c.student_id IN (' . $pcvcCoScope['app_ids_sql'] . ')')
+    : '';
 $sql = "
     SELECT
         c.id AS contract_id,
@@ -35,6 +39,7 @@ $sql = "
     FROM korea_invitation_contracts c
     LEFT JOIN student_applications s ON s.id = c.student_id
     WHERE c.status = 'signed'
+    {$companyContractFilter}
     ORDER BY c.id DESC
 ";
 

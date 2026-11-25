@@ -287,6 +287,147 @@ function pcvc_company_scoped_application_ids(mysqli $conn, int $companyAdminId, 
     return $ids;
 }
 
+/**
+ * List-page scope for company view / company login.
+ * null = Parrot HQ (no extra filter).
+ * When active, pages without a company ownership column must use hq_block_sql (empty list).
+ *
+ * @return array{
+ *   company_id:int,
+ *   member_sql:string,
+ *   apps_where:string,
+ *   app_ids_sql:string,
+ *   hq_block_sql:string
+ * }|null
+ */
+function pcvc_company_list_scope(mysqli $conn): ?array
+{
+    $ctx = pcvc_effective_company_context($conn);
+    if (!$ctx) {
+        return null;
+    }
+    $companyId = (int) ($ctx['id'] ?? 0);
+    if ($companyId < 1) {
+        return null;
+    }
+    $appIds = pcvc_company_scoped_application_ids($conn, $companyId);
+
+    return [
+        'company_id' => $companyId,
+        'member_sql' => pcvc_company_member_admin_ids_sql($conn, $companyId),
+        'apps_where' => pcvc_company_applications_where_sql($conn, $companyId, 'sa'),
+        'app_ids_sql' => $appIds === [] ? '0' : implode(',', array_map('intval', $appIds)),
+        'hq_block_sql' => '0 = 1',
+    ];
+}
+
+/** True when lists must not show Parrot HQ rows. */
+function pcvc_company_blocks_hq_lists(mysqli $conn): bool
+{
+    return pcvc_company_list_scope($conn) !== null;
+}
+
+/**
+ * Script basenames that store Parrot HQ data only (no company owner column yet).
+ * In company view these pages show an empty state instead of HQ rows.
+ *
+ * @return list<string>
+ */
+function pcvc_company_hq_only_scripts(): array
+{
+    return [
+        'visa-report.php',
+        'visa-export.php',
+        'form-20-report.php',
+        'Credit-Transfer-report.php',
+        'credit-search.php',
+        'malta-courses-applications.php',
+        'eci-malta-applications.php',
+        'job-applicant.php',
+        'export_applicants.php',
+        'ajax_search.php',
+        'live_search.php',
+        'loan-applicants-report.php',
+        'loan_search_ajax.php',
+        'canada-workers-applications.php',
+        'canada-medical-exams-applications.php',
+        'caq-report.php',
+        'caq-export.php',
+        'francophonie-mobility-applications.php',
+        'francophonie_mobility_application_details.php',
+        'employment-opportunities-applications.php',
+        'admin-fm-contracts.php',
+        'admin-eo-contracts.php',
+        'admin-dubai-contracts.php',
+        'admin-czech-contracts.php',
+        'admin-employment-agreements.php',
+        'admin-irs-agreements.php',
+        'admin-german-language-contracts.php',
+        'admin-special-contracts.php',
+        'admin-partner-contracts.php',
+        'admin-agent-contracts.php',
+        'admin-client-consents.php',
+        'contract_esign.php',
+        'applyboard-dashboard.php',
+        'mopay-payment-transactions.php',
+        'special-student-payments.php',
+        'refund-requests-report.php',
+        'old-report.php',
+        'commission-requests-report.php',
+        'receipts_ajax.php',
+    ];
+}
+
+/**
+ * When company view hits an HQ-only module, stop and show an empty state.
+ * Pages that already scope their own queries should not be listed above.
+ */
+function pcvc_company_block_hq_only_script(mysqli $conn): void
+{
+    if (PHP_SAPI === 'cli') {
+        return;
+    }
+    $scope = pcvc_company_list_scope($conn);
+    if ($scope === null) {
+        return;
+    }
+    $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+    $base = strtolower(basename($script));
+    $blocked = array_fill_keys(array_map('strtolower', pcvc_company_hq_only_scripts()), true);
+    if (!isset($blocked[$base])) {
+        return;
+    }
+    // JSON/API style endpoints
+    $accept = (string) ($_SERVER['HTTP_ACCEPT'] ?? '');
+    $isAjax = str_contains($accept, 'application/json')
+        || str_ends_with($base, '_ajax.php')
+        || str_contains($base, 'export')
+        || isset($_GET['format']);
+    if ($isAjax || str_ends_with($base, '-export.php') || str_ends_with($base, '_ajax.php')) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo json_encode([
+            'ok' => true,
+            'rows' => [],
+            'data' => [],
+            'message' => 'No records for this company yet.',
+        ], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    http_response_code(200);
+    header('Content-Type: text/html; charset=UTF-8');
+    $title = htmlspecialchars((string) ($scope['company_id'] ?? ''), ENT_QUOTES, 'UTF-8');
+    echo '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">'
+        . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        . '<title>Company records</title>'
+        . '<style>body{font-family:Segoe UI,Arial,sans-serif;background:#f8fafc;margin:0;padding:40px;color:#0f172a}'
+        . '.box{max-width:640px;margin:40px auto;background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:28px;box-shadow:0 8px 24px rgba(15,23,42,.06)}'
+        . 'h1{font-size:1.25rem;margin:0 0 8px}p{margin:0;color:#64748b;line-height:1.5}</style></head><body>'
+        . '<div class="box"><h1>No records for this company yet</h1>'
+        . '<p>Parrot Canada headquarters data is hidden in company view. '
+        . 'This module will show rows only after this company has its own records.</p></div></body></html>';
+    exit;
+}
+
 /** Attach a newly created staff/agent account to the active company partner. */
 function pcvc_link_admin_to_company(mysqli $conn, int $adminId, int $companyAdminId): void
 {

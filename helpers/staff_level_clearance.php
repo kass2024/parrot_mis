@@ -439,11 +439,22 @@ function pcvc_staff_clearance_guard_request(mysqli $conn): void
     if (PHP_SAPI === 'cli') {
         return;
     }
+    if (session_status() === PHP_SESSION_NONE && !headers_sent() && isset($_COOKIE[session_name()])) {
+        session_start();
+    }
     if (session_status() !== PHP_SESSION_ACTIVE) {
         return;
     }
     if (!function_exists('pcvc_acting_company_id') && is_file(__DIR__ . '/company_view_as.php')) {
         require_once __DIR__ . '/company_view_as.php';
+    }
+    // Company view: hide Parrot HQ-only modules that have no company ownership yet.
+    if (function_exists('pcvc_company_list_scope')) {
+        $pcvcCoScope = pcvc_company_list_scope($conn);
+        $GLOBALS['pcvcCoScope'] = $pcvcCoScope;
+    }
+    if (function_exists('pcvc_company_block_hq_only_script')) {
+        pcvc_company_block_hq_only_script($conn);
     }
     // Superadmin viewing as a company: enforce that company's clearance.
     $actingCompanyId = 0;

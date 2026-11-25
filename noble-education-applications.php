@@ -352,6 +352,10 @@ if ($search !== '') {
     array_push($params, $like, $like, $like, $like, $like);
     $types .= 'sssss';
 }
+$pcvcCoScope = $pcvcCoScope ?? (function_exists('pcvc_company_list_scope') ? pcvc_company_list_scope($conn) : null);
+if ($pcvcCoScope) {
+    $where[] = 'created_by_admin_id IN (' . $pcvcCoScope['member_sql'] . ')';
+}
 
 $sql = 'SELECT * FROM noble_education_applications WHERE ' . implode(' AND ', $where) . ' ORDER BY created_at DESC LIMIT 300';
 $stmt = $conn->prepare($sql);
@@ -363,7 +367,12 @@ $apps = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
 $counts = ['pending' => 0, 'under_review' => 0, 'approved' => 0, 'rejected' => 0, 'total' => 0];
-$cr = $conn->query('SELECT status, COUNT(*) c FROM noble_education_applications GROUP BY status');
+$countSql = 'SELECT status, COUNT(*) c FROM noble_education_applications';
+if ($pcvcCoScope) {
+    $countSql .= ' WHERE created_by_admin_id IN (' . $pcvcCoScope['member_sql'] . ')';
+}
+$countSql .= ' GROUP BY status';
+$cr = $conn->query($countSql);
 if ($cr) {
     while ($r = $cr->fetch_assoc()) {
         if (isset($counts[$r['status']])) {

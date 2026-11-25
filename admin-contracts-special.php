@@ -3,13 +3,15 @@ declare(strict_types=1);
 
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 /* =====================================================
    1. ADMIN AUTH
 ===================================================== */
-if (!isset($_SESSION['admin_id'])) {
+if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
     exit('Unauthorized access');
 }
+$pcvcCoScope = pcvc_company_list_scope($conn);
 
 /* =====================================================
    2. CSRF TOKEN
@@ -26,6 +28,9 @@ $basePath = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\');
 /* =====================================================
    4. FETCH SIGNED CONTRACTS (LOGIC UNCHANGED)
 ===================================================== */
+$companyContractFilter = $pcvcCoScope
+    ? (' AND c.student_id IN (' . $pcvcCoScope['app_ids_sql'] . ')')
+    : '';
 $sql = "
     SELECT
         c.id AS contract_id,
@@ -40,6 +45,7 @@ $sql = "
     LEFT JOIN student_applications s
         ON s.id = c.student_id
     WHERE c.status = 'signed'
+    {$companyContractFilter}
     ORDER BY c.id DESC
 ";
 

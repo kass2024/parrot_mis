@@ -2,11 +2,13 @@
 require_once 'auth.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 require_once __DIR__ . '/helpers/job_application_status.php';
 require_once __DIR__ . '/helpers/form17_application_status.php';
 
 xander_ensure_form17_process_status_column($conn);
 xander_ensure_form17_intake_column($conn);
+$pcvcCoScope = pcvc_company_list_scope($conn);
 
 $visaDestCountries = xander_visa_destination_countries();
 $visaFeaturedDestCountries = array_values(array_filter(
@@ -56,6 +58,10 @@ if ($visaProcessFilterActive) {
     $params[] = $processStatusFilter;
     $paramTypes .= 's';
 }
+// form_17 has no company owner yet — Parrot HQ rows must not appear in company view.
+if ($pcvcCoScope) {
+    $whereParts[] = '0 = 1';
+}
 $whereClause = $whereParts === [] ? '' : 'WHERE ' . implode(' AND ', $whereParts);
 
 // Fetch visa applications
@@ -67,28 +73,36 @@ LEFT JOIN countries c ON f.country_id = c.id
 $whereClause
 ORDER BY f.user_id DESC";
 
-$stmt = $conn->prepare($query);
-if ($stmt) {
-    if (!empty($params)) {
-        $stmt->bind_param($paramTypes, ...$params);
-    }
-    $stmt->execute();
-    $result = $stmt->get_result();
-    $applicants = $result->fetch_all(MYSQLI_ASSOC);
-    $stmt->close();
+$applicants = [];
+if ($pcvcCoScope) {
+    // Empty for company partners until they have their own visa records.
+    $applicants = [];
 } else {
-    die("Error preparing query: " . $conn->error);
+    $stmt = $conn->prepare($query);
+    if ($stmt) {
+        if (!empty($params)) {
+            $stmt->bind_param($paramTypes, ...$params);
+        }
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $applicants = $result->fetch_all(MYSQLI_ASSOC);
+        $stmt->close();
+    } else {
+        die("Error preparing query: " . $conn->error);
+    }
 }
 
 $visaKpiCounts = array_fill_keys(array_keys($JOB_PROCESS_STATUSES), 0);
 $visaKpiTotal = 0;
-$kpiRes = $conn->query('SELECT process_status, COUNT(*) AS c FROM form_17_applications GROUP BY process_status');
-if ($kpiRes) {
-    while ($kpiRow = $kpiRes->fetch_assoc()) {
-        $kpiKey = xander_normalize_visa_process_status($kpiRow['process_status'] ?? null);
-        $kpiCount = (int) ($kpiRow['c'] ?? 0);
-        $visaKpiCounts[$kpiKey] = ($visaKpiCounts[$kpiKey] ?? 0) + $kpiCount;
-        $visaKpiTotal += $kpiCount;
+if (!$pcvcCoScope) {
+    $kpiRes = $conn->query('SELECT process_status, COUNT(*) AS c FROM form_17_applications GROUP BY process_status');
+    if ($kpiRes) {
+        while ($kpiRow = $kpiRes->fetch_assoc()) {
+            $kpiKey = xander_normalize_visa_process_status($kpiRow['process_status'] ?? null);
+            $kpiCount = (int) ($kpiRow['c'] ?? 0);
+            $visaKpiCounts[$kpiKey] = ($visaKpiCounts[$kpiKey] ?? 0) + $kpiCount;
+            $visaKpiTotal += $kpiCount;
+        }
     }
 }
 $visaKpiSearch = [];

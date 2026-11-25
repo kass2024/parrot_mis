@@ -8,6 +8,8 @@ require_once __DIR__ . '/helpers/application_filters.php';
 require_once __DIR__ . '/helpers/caq_status.php';
 session_start();
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
+$pcvcCoScope = pcvc_company_list_scope($conn);
 
 $sessionRole = isset($_SESSION['role']) ? trim((string) $_SESSION['role']) : '';
 $dbRole = '';
@@ -244,6 +246,7 @@ $query1 = $conn->query("
         GROUP BY sc.application_id
     ) AS study_choice_summary
         ON study_choice_summary.application_id = sa.id
+    " . ($pcvcCoScope ? (' WHERE ' . $pcvcCoScope['apps_where']) : '') . "
     ORDER BY 
         sa.visa_approved DESC,
         sa.admit DESC,
@@ -261,9 +264,10 @@ if ($query1) {
 }
 
 // 2. Fetch malta_applications (if table exists) - with country name join
+// Company view: Malta/Turkey HQ pools stay hidden until companies have their own rows.
 $malta_students = [];
 try {
-    $query2 = $conn->query("SHOW TABLES LIKE 'malta_applications'");
+    $query2 = (!$pcvcCoScope) ? $conn->query("SHOW TABLES LIKE 'malta_applications'") : false;
     if ($query2 && $query2->num_rows > 0) {
         $malta_query = $conn->query("
             SELECT 
@@ -320,7 +324,7 @@ try {
 
 // 3. Fetch turkey_applications (if table exists) - with country name join
 try {
-    $query3 = $conn->query("SHOW TABLES LIKE 'turkey_applications'");
+    $query3 = (!$pcvcCoScope) ? $conn->query("SHOW TABLES LIKE 'turkey_applications'") : false;
     if ($query3 && $query3->num_rows > 0) {
         $turkey_query = $conn->query("
             SELECT 

@@ -1,8 +1,10 @@
 <?php
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 // Auth check
-$admin_id = $_SESSION['admin_id'] ?? null;
+$admin_id = $_SESSION['admin_id'] ?? $_SESSION['id'] ?? null;
 if (!$admin_id) {
     header("Location: admin-login.php");
     exit;
@@ -12,6 +14,8 @@ $admin = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM admins WHERE id =
 $role = $admin['role'] ?? 'standard';
 $email = $admin['email'] ?? '';
 $fullName = $admin['full_name'] ?? 'Admin';
+$pcvcCoScope = pcvc_company_list_scope($conn);
+$hqWide = pcvc_is_superadmin_role($role) && !$pcvcCoScope;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -30,7 +34,7 @@ $fullName = $admin['full_name'] ?? 'Admin';
   <a href="admin-dashboard.php" class="btn btn-secondary mb-3">← Back to Dashboard</a>
 
 <?php
-if (pcvc_is_superadmin_role($role)) {
+if ($hqWide) {
     // Get agents (exclude Catholic university)
     $agents = mysqli_query($conn, "
         SELECT email, full_name
@@ -54,6 +58,9 @@ if (pcvc_is_superadmin_role($role)) {
     <?php
     $filterEmail = $_GET['agent_email'] ?? '';
     echo "<p><strong>Superadmin view:</strong> " . ($filterEmail ? htmlspecialchars($filterEmail) : 'All students') . "</p>";
+} elseif ($pcvcCoScope) {
+    $filterEmail = $_GET['agent_email'] ?? '';
+    echo '<p><strong>Company view:</strong> only this company\'s students</p>';
 } else {
     $filterEmail = $email;
     echo "<p><strong>Your students:</strong> " . htmlspecialchars($email) . "</p>";
@@ -69,8 +76,10 @@ LEFT JOIN admins a ON a.email = s.agent_email
 WHERE 1 = 1
 ";
 
-// If superadmin → exclude Catholic university students
-if (pcvc_is_superadmin_role($role)) {
+if ($pcvcCoScope) {
+    $query .= ' AND ' . pcvc_company_applications_where_sql($conn, (int) $pcvcCoScope['company_id'], 's') . ' ';
+} elseif ($hqWide) {
+    // If superadmin → exclude Catholic university students
     $query .= " AND (a.role NOT IN ('Catholic university of America') OR a.role IS NULL) ";
 }
 

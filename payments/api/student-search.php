@@ -23,7 +23,12 @@ if ($q === '' || mb_strlen($q) < 2) {
 // QUERY PREPARATION
 // ========================
 
+require_once __DIR__ . '/../../helpers/company_view_as.php';
 $like = '%' . $q . '%';
+$pcvcCoScope = pcvc_company_list_scope($conn);
+$companyFilter = $pcvcCoScope
+    ? (' AND ' . pcvc_company_applications_where_sql($conn, (int) $pcvcCoScope['company_id'], 'student_applications'))
+    : '';
 
 $sql = "
 SELECT
@@ -34,11 +39,14 @@ SELECT
     phone_number
 FROM student_applications
 WHERE
+    (
     CONCAT(first_name,' ',last_name) LIKE ?
     OR first_name LIKE ?
     OR last_name LIKE ?
     OR email LIKE ?
     OR phone_number LIKE ?
+    )
+    {$companyFilter}
 ORDER BY id DESC
 LIMIT 10
 ";

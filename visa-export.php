@@ -3,6 +3,7 @@ require_once __DIR__ . '/auth.php';
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/form17_application_status.php';
 require_once __DIR__ . '/vendor/autoload.php';
+// Company view is blocked earlier via pcvc_company_block_hq_only_script (db.php).
 
 use Dompdf\Dompdf;
 use Dompdf\Options;
