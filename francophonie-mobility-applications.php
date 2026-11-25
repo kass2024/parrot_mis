@@ -374,6 +374,20 @@ function viewApp(id) {
         .then(html => { document.getElementById('detailBody').innerHTML = html; });
 }
 
+// Delegated auto-upload: choose file → save immediately (avoids broken inline onchange quotes).
+document.getElementById('detailBody').addEventListener('change', function (ev) {
+    const input = ev.target && ev.target.closest ? ev.target.closest('input.fm-auto-upload') : null;
+    if (!input) return;
+    const appId = parseInt(input.getAttribute('data-fm-app-id') || '0', 10);
+    const mode = input.getAttribute('data-fm-upload') || '';
+    if (!appId || !input.files || !input.files.length) return;
+    if (mode === 'attached') {
+        fmUploadAttached(appId, input);
+    } else if (mode === 'group') {
+        fmUploadToGroup(appId, input.getAttribute('data-fm-group') || '', input);
+    }
+});
+
 const FM_STATUS_LABELS = <?= json_encode($fmStatuses, JSON_UNESCAPED_UNICODE) ?>;
 
 function setStatus(id, status) {
@@ -532,7 +546,11 @@ function fmMarkProgress(parts, state, text) {
 async function fmUploadFilesSequential(appId, files, action, extraFields, parts, inputEl) {
     const list = Array.from(files || []).filter(Boolean);
     if (!list.length) return;
-    if (inputEl) inputEl.disabled = true;
+    if (inputEl) {
+        if (inputEl.dataset.fmUploading === '1') return;
+        inputEl.dataset.fmUploading = '1';
+        inputEl.disabled = true;
+    }
     fmResetProgress(parts);
     let okCount = 0;
     let lastError = '';
@@ -551,9 +569,17 @@ async function fmUploadFilesSequential(appId, files, action, extraFields, parts,
         });
         fd.append('file', list[i]);
         try {
-            const res = await fetch('francophonie_mobility_admin_action.php', { method: 'POST', body: fd });
-            const data = await res.json();
-            if (!data.success) throw new Error(data.message || 'Upload failed');
+            const res = await fetch('francophonie_mobility_admin_action.php', {
+                method: 'POST',
+                body: fd,
+                credentials: 'same-origin'
+            });
+            const raw = await res.text();
+            let data = null;
+            try { data = JSON.parse(raw); } catch (e) { data = null; }
+            if (!res.ok || !data || !data.success) {
+                throw new Error((data && data.message) ? data.message : ('Upload failed (HTTP ' + res.status + ')'));
+            }
             okCount++;
         } catch (err) {
             lastError = err && err.message ? err.message : 'Upload failed';
@@ -563,18 +589,19 @@ async function fmUploadFilesSequential(appId, files, action, extraFields, parts,
     if (inputEl) {
         inputEl.value = '';
         inputEl.disabled = false;
+        delete inputEl.dataset.fmUploading;
     }
     if (okCount > 0 && okCount === list.length) {
         fmMarkProgress(parts, 'done', 'Saved');
-        setTimeout(function () { viewApp(appId); }, 700);
+        setTimeout(function () { viewApp(appId); }, 850);
         return;
     }
     if (okCount > 0) {
         fmMarkProgress(parts, 'done', 'Saved ' + okCount + '/' + list.length);
-        setTimeout(function () { viewApp(appId); }, 900);
+        setTimeout(function () { viewApp(appId); }, 1000);
         return;
     }
-    fmMarkProgress(parts, 'fail', 'Save failed');
+    fmMarkProgress(parts, 'fail', lastError || 'Save failed');
     alert(lastError || 'Upload failed');
 }
 

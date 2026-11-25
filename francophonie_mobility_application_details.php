@@ -348,11 +348,12 @@ $appId = (int) $row['id'];
                 <div class="mt-2">
                     <input
                         type="file"
-                        class="form-control form-control-sm"
+                        class="form-control form-control-sm fm-auto-upload"
                         id="fmAttachFile_<?= $appId ?>"
                         accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*"
                         multiple
-                        onchange="fmUploadAttached(<?= $appId ?>, this)"
+                        data-fm-upload="attached"
+                        data-fm-app-id="<?= (int) $appId ?>"
                     >
                     <div class="fm-upload-progress" id="fmAttachProgress_<?= $appId ?>" hidden>
                         <div class="fm-upload-track"><div class="fm-upload-bar" id="fmAttachBar_<?= $appId ?>"></div></div>
@@ -380,11 +381,13 @@ $appId = (int) $row['id'];
                     <div>
                         <input
                             type="file"
-                            class="form-control form-control-sm"
+                            class="form-control form-control-sm fm-auto-upload"
                             id="fmGroupFile_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"
                             accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*"
                             multiple
-                            onchange="fmUploadToGroup(<?= $appId ?>, <?= json_encode($slug) ?>, this)"
+                            data-fm-upload="group"
+                            data-fm-app-id="<?= (int) $appId ?>"
+                            data-fm-group="<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"
                         >
                         <div class="fm-upload-progress" id="fmGroupProgress_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" hidden>
                             <div class="fm-upload-track"><div class="fm-upload-bar" id="fmGroupBar_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"></div></div>

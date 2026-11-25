@@ -157,7 +157,8 @@ function fm_insert_document(
     if (!$st) {
         throw new RuntimeException('Could not save document record.');
     }
-    $st->bind_param(
+    // i s s s s i s i  → id, group, name, path, mime, size, source, uploaded_by
+    if (!$st->bind_param(
         'issssisi',
         $applicationId,
         $group,
@@ -167,9 +168,27 @@ function fm_insert_document(
         $size,
         $source,
         $uploader
-    );
+    )) {
+        $st->close();
+        throw new RuntimeException('Could not bind document record.');
+    }
     if (!$st->execute()) {
         $err = $st->error;
+        // Fallback if older DBs reject source=manager
+        if ($source === 'manager' && stripos($err, 'source') !== false) {
+            $st->close();
+            return fm_insert_document(
+                $conn,
+                $applicationId,
+                $storedPath,
+                $originalName,
+                $group,
+                'staff',
+                $uploadedBy,
+                $mime,
+                $size
+            );
+        }
         $st->close();
         throw new RuntimeException('Could not save document: ' . $err);
     }
