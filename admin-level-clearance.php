@@ -79,6 +79,12 @@ if ($result) {
 }
 
 $list = $people[$segment];
+// Companies: seed default denials (unchecked / hidden) if not configured yet.
+if ($segment === 'company') {
+    foreach ($list as $companyRow) {
+        pcvc_company_ensure_default_clearance($conn, (int) ($companyRow['id'] ?? 0));
+    }
+}
 $selectedId = (int) ($_GET['id'] ?? $_POST['staff_id'] ?? 0);
 $knownIds = array_map(static fn(array $row): int => (int) $row['id'], $list);
 if (!in_array($selectedId, $knownIds, true)) {
@@ -109,6 +115,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $denied[] = $menuKeyName;
             }
         }
+        // Keep company HQ-defaults marker so ensure() does not re-force denials after SA enables menus.
+        if ($segment === 'company') {
+            $denied[] = pcvc_company_hq_defaults_marker();
+        }
         pcvc_staff_level_clearance_save_configured($conn, $selectedId, $denied);
         header('Location: admin-level-clearance.php?segment=' . rawurlencode($segment) . '&id=' . $selectedId . '&saved=1');
         exit;
@@ -116,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 $saved = !empty($_GET['saved']);
 $denied = $selectedId > 0 ? array_fill_keys(pcvc_staff_level_clearance_denied($conn, $selectedId), true) : [];
-unset($denied[pcvc_level_clearance_configured_key()]);
+unset($denied[pcvc_level_clearance_configured_key()], $denied[pcvc_company_hq_defaults_marker()]);
 $selected = null;
 foreach ($list as $row) {
     if ((int) $row['id'] === $selectedId) {
@@ -137,8 +147,9 @@ $segmentLabels = [
 $segmentHints = [
     'staff' => 'Staff, accountant, and secretary accounts.',
     'agent' => 'Personal agent accounts (not companies).',
-    'company' => 'Company partner accounts. Checked menus appear when they sign in or when you switch into their dashboard.',
+    'company' => 'Company partner accounts. Checked menus appear when they sign in or when you switch into their dashboard. HQ-only modules start unchecked (hidden) until you enable them.',
 ];
+$companyDefaultDenied = array_fill_keys(pcvc_company_level_clearance_default_denied_menu_keys(), true);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -165,6 +176,7 @@ input[type=search] { width: 100%; box-sizing: border-box; padding: 8px 10px; bor
 .group { margin: 16px 0; background: #fff; border-radius: 12px; padding: 12px 14px; }
 .group h2 { font-size: 14px; margin: 0 0 8px; color: #2d5a27; }
 .menu { border-top: 1px solid #eef3ee; padding: 8px 0; }
+.menu.is-company-default-off { background: #fff7ed; border-radius: 8px; padding: 8px; margin-top: 6px; }
 .menu label.menu-label { font-weight: 700; }
 label { display: flex; gap: 8px; align-items: flex-start; margin: 4px 0; font-size: 14px; }
 .subs { margin-left: 22px; }
@@ -213,9 +225,10 @@ button { background: #2d5a27; color: #fff; border: 0; border-radius: 8px; paddin
             <?php foreach ($menus as $menuKey => $menu):
                 $menuName = pcvc_staff_level_clearance_menu_key($menuKey);
                 $menuOn = !isset($denied[$menuName]);
+                $isCompanyDefaultOff = $segment === 'company' && isset($companyDefaultDenied[$menuKey]);
             ?>
-              <div class="menu" data-menu="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>">
-                <label class="menu-label"><input type="checkbox" name="allow[]" value="<?= htmlspecialchars($menuName, ENT_QUOTES, 'UTF-8') ?>" <?= $menuOn ? 'checked' : '' ?> data-parent="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>"> <?= htmlspecialchars($menu['label'], ENT_QUOTES, 'UTF-8') ?></label>
+              <div class="menu<?= $isCompanyDefaultOff ? ' is-company-default-off' : '' ?>" data-menu="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>">
+                <label class="menu-label"><input type="checkbox" name="allow[]" value="<?= htmlspecialchars($menuName, ENT_QUOTES, 'UTF-8') ?>" <?= $menuOn ? 'checked' : '' ?> data-parent="<?= htmlspecialchars($menuKey, ENT_QUOTES, 'UTF-8') ?>"> <?= htmlspecialchars($menu['label'], ENT_QUOTES, 'UTF-8') ?><?php if ($isCompanyDefaultOff && !$menuOn): ?> <span style="color:#9a3412;font-weight:650;font-size:12px">(hidden for company by default)</span><?php endif; ?></label>
                 <div class="subs">
                   <?php foreach ($menu['items'] as $url => $label):
                       $subName = pcvc_staff_level_clearance_sub_key($menuKey, $url);

@@ -517,6 +517,12 @@ function pcvc_approve_staff_account(mysqli $conn, int $adminId): array
     if (!$changed) {
         return ['ok' => false, 'error' => 'The email was sent, but the account status did not change. Check the account before approving again.'];
     }
+    if ($isCompany && is_file(__DIR__ . '/staff_level_clearance.php')) {
+        require_once __DIR__ . '/staff_level_clearance.php';
+        if (function_exists('pcvc_company_ensure_default_clearance')) {
+            pcvc_company_ensure_default_clearance($conn, $adminId);
+        }
+    }
 
     return ['ok' => true, 'email' => $email, 'name' => $fullName !== '' ? $fullName : $email];
 }

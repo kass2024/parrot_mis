@@ -667,6 +667,10 @@ if ($actingCompanyId > 0 && $actingCompany) {
     $dashboardRoleKey = 'agent';
 }
 $clearanceSegment = pcvc_level_clearance_segment_for_row($clearanceSubjectRow);
+if ($clearanceSegment === 'company' || $actingCompanyId > 0) {
+    // Seed Parrot HQ-only menus as denied until a superadmin enables them.
+    pcvc_company_ensure_default_clearance($conn, $clearanceSubjectId);
+}
 $applyClearance = false;
 if ($actingCompanyId > 0) {
     $applyClearance = pcvc_staff_level_clearance_is_configured($conn, $clearanceSubjectId);
@@ -3523,7 +3527,8 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           </button>
           <?php endif; ?>
           
-          <!-- Notifications Bell -->
+          <?php if (empty($isCompanyScopedHome) && empty($actingCompanyId)): ?>
+          <!-- Notifications Bell (hidden in company partner view) -->
           <div class="dropdown">
             <button class="notification-bell" data-bs-toggle="dropdown" aria-expanded="false">
               <i class="bi bi-bell"></i>
@@ -3535,6 +3540,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
               <li class="text-center p-2"><a class="small" href="notifications.php">View all</a></li>
             </ul>
           </div>
+          <?php endif; ?>
           
           <!-- User / company logo (top right) -->
           <div class="dropdown">
@@ -4804,22 +4810,24 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       });
     }
     
-    // Notifications functionality
+    // Notifications functionality (bell hidden in company partner view)
     async function loadNotifications() {
+      const badge = document.getElementById('notifBadge');
+      const list = document.getElementById('notifItems');
+      if (!badge || !list) {
+        return;
+      }
       try {
         const response = await fetch('reminders/fetch_notifications.php');
         const data = await response.json();
-        
-        const badge = document.getElementById('notifBadge');
-        const list = document.getElementById('notifItems');
-        
+
         if (data.unread > 0) {
           badge.textContent = data.unread;
           badge.classList.remove('d-none');
         } else {
           badge.classList.add('d-none');
         }
-        
+
         list.innerHTML = '';
         (data.items||[]).forEach(n=>{
           const li = document.createElement('div');

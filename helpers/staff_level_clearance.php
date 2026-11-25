@@ -330,7 +330,7 @@ function pcvc_staff_level_clearance_apply(mysqli $conn, int $adminId): array
     $catalog = pcvc_staff_level_clearance_catalog();
     $deniedList = pcvc_staff_level_clearance_denied($conn, $adminId);
     $denied = array_fill_keys($deniedList, true);
-    unset($denied[pcvc_level_clearance_configured_key()]);
+    unset($denied[pcvc_level_clearance_configured_key()], $denied[pcvc_company_hq_defaults_marker()]);
     $menus = [];
     $index = [];
     foreach ($catalog as $menuKey => $menu) {
@@ -380,6 +380,95 @@ function pcvc_agent_level_clearance_is_target(string $role, array $row = []): bo
 function pcvc_company_level_clearance_is_target(array $row): bool
 {
     return function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($row);
+}
+
+/**
+ * Menu keys hidden by default for every company partner.
+ * Superadmin can still tick them on later in Level Clearance.
+ *
+ * @return list<string>
+ */
+function pcvc_company_level_clearance_default_denied_menu_keys(): array
+{
+    return [
+        'loan_applications',
+        'I-20_applications',
+        'credit_transfer',
+        'german_language_contracts',
+        'jobsabrod',
+        'marketing',
+        'smart_brochure',
+        'refund_requests',
+        'company_accounts',
+        'partner_contracts',
+        'agent_contracts',
+        'special_contracts',
+        'canada_partner_clients',
+        'platform',
+        'website_management',
+        'job_platforms',
+    ];
+}
+
+/**
+ * Full denied item keys (menu + every submenu) for company defaults.
+ *
+ * @return list<string>
+ */
+function pcvc_company_level_clearance_default_denied_keys(): array
+{
+    $catalog = pcvc_staff_level_clearance_catalog();
+    $denied = [];
+    foreach (pcvc_company_level_clearance_default_denied_menu_keys() as $menuKey) {
+        if (!isset($catalog[$menuKey])) {
+            continue;
+        }
+        $denied[] = pcvc_staff_level_clearance_menu_key($menuKey);
+        foreach ($catalog[$menuKey]['items'] as $url => $_label) {
+            $denied[] = pcvc_staff_level_clearance_sub_key($menuKey, $url);
+        }
+    }
+
+    return array_values(array_unique($denied));
+}
+
+/** One-time marker: HQ menus were seeded as denied for this company. */
+function pcvc_company_hq_defaults_marker(): string
+{
+    return 'cfg:co_hq_hide_v1';
+}
+
+/**
+ * Persist company default denials (unchecked + not visible).
+ * Runs once per company (marker). After that, superadmin may enable menus freely.
+ */
+function pcvc_company_ensure_default_clearance(mysqli $conn, int $adminId): void
+{
+    $adminId = max(0, $adminId);
+    if ($adminId < 1) {
+        return;
+    }
+    $st = $conn->prepare('SELECT id, account_type, company_name FROM admins WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return;
+    }
+    $st->bind_param('i', $adminId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc() ?: null;
+    $st->close();
+    if (!$row || !pcvc_company_level_clearance_is_target($row)) {
+        return;
+    }
+
+    $marker = pcvc_company_hq_defaults_marker();
+    $existing = pcvc_staff_level_clearance_denied($conn, $adminId);
+    if (in_array($marker, $existing, true)) {
+        return;
+    }
+
+    $defaults = pcvc_company_level_clearance_default_denied_keys();
+    $merged = array_values(array_unique(array_merge($existing, $defaults, [$marker])));
+    pcvc_staff_level_clearance_save_configured($conn, $adminId, $merged);
 }
 
 function pcvc_level_clearance_segment_for_row(array $row): string
@@ -479,11 +568,15 @@ function pcvc_staff_clearance_guard_request(mysqli $conn): void
             $st->close();
         }
         $segment = $row ? pcvc_level_clearance_segment_for_row($row) : '';
+        if ($segment === 'company' || $actingCompanyId > 0) {
+            pcvc_company_ensure_default_clearance($conn, $adminId);
+        }
         if ($actingCompanyId <= 0) {
             if ($segment === '') {
                 return;
             }
-            // Agents/companies without a saved clearance keep role defaults (no hard block).
+            // Agents without a saved clearance keep role defaults (no hard block).
+            // Companies are seeded with default denials above.
             if (!pcvc_staff_level_clearance_is_configured($conn, $adminId)) {
                 return;
             }
