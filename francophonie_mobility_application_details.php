@@ -293,7 +293,7 @@ $appId = (int) $row['id'];
             $path = (string) ($doc['stored_path'] ?? '');
             $links = pcvc_secure_file_links_html($path, $name);
             $group = (string) ($doc['doc_group'] ?? 'attached');
-            return '<div class="border rounded p-2 mb-2 bg-white">'
+            return '<div class="border rounded p-2 mb-2 bg-white" data-fm-doc-id="' . $id . '">'
                 . '<div class="small fw-semibold mb-1">' . $name . '</div>'
                 . $links
                 . '<div class="d-flex flex-wrap gap-1 mt-2 align-items-center">'
@@ -340,11 +340,13 @@ $appId = (int) $row['id'];
             <div class="card-body">
                 <h6 class="card-title"><i class="fas fa-paperclip me-1 text-primary"></i> Attached</h6>
                 <p class="small text-muted mb-2">Inbox for staff uploads and filed client docs. Choose a file — it saves automatically. Then move into a Visa group if needed.</p>
-                <?php if ($groupedDocs['attached'] === []): ?>
-                <div class="text-muted small mb-2">No files in Attached yet.</div>
-                <?php else: ?>
-                <?php foreach ($groupedDocs['attached'] as $doc) { echo $renderManagedDoc($doc); } ?>
-                <?php endif; ?>
+                <div class="fm-doc-list" data-fm-doc-list="attached" data-fm-app-id="<?= (int) $appId ?>">
+                    <?php if ($groupedDocs['attached'] === []): ?>
+                    <div class="text-muted small mb-2 fm-doc-empty">No files in Attached yet.</div>
+                    <?php else: ?>
+                    <?php foreach ($groupedDocs['attached'] as $doc) { echo $renderManagedDoc($doc); } ?>
+                    <?php endif; ?>
+                </div>
                 <div class="mt-2">
                     <input
                         type="file"
@@ -368,16 +370,18 @@ $appId = (int) $row['id'];
                 <h6 class="card-title"><i class="fas fa-folder me-1 text-success"></i> Visa submission documents</h6>
                 <p class="small text-muted mb-3">File docs here from Attached, from client form uploads, or choose a file in a group — it auto-saves right away.</p>
                 <?php foreach ($visaGroups as $slug => $lab): ?>
-                <div class="mb-3 border-bottom pb-2">
+                <div class="mb-3 border-bottom pb-2" data-fm-group-wrap="<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>">
                     <div class="small fw-bold text-uppercase text-secondary mb-1">
                         <i class="fas fa-folder me-1"></i><?= htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') ?>
-                        <span class="badge text-bg-light"><?= count($groupedDocs['visa'][$slug] ?? []) ?></span>
+                        <span class="badge text-bg-light fm-doc-count"><?= count($groupedDocs['visa'][$slug] ?? []) ?></span>
                     </div>
-                    <?php if (empty($groupedDocs['visa'][$slug])): ?>
-                    <div class="text-muted small ps-1 mb-2">Empty</div>
-                    <?php else: ?>
-                    <?php foreach ($groupedDocs['visa'][$slug] as $doc) { echo $renderManagedDoc($doc); } ?>
-                    <?php endif; ?>
+                    <div class="fm-doc-list" data-fm-doc-list="<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" data-fm-app-id="<?= (int) $appId ?>">
+                        <?php if (empty($groupedDocs['visa'][$slug])): ?>
+                        <div class="text-muted small ps-1 mb-2 fm-doc-empty">Empty</div>
+                        <?php else: ?>
+                        <?php foreach ($groupedDocs['visa'][$slug] as $doc) { echo $renderManagedDoc($doc); } ?>
+                        <?php endif; ?>
+                    </div>
                     <div>
                         <input
                             type="file"

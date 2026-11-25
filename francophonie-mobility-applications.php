@@ -543,6 +543,24 @@ function fmMarkProgress(parts, state, text) {
     if (parts.label) parts.label.textContent = text || '';
 }
 
+function fmInsertUploadedCard(appId, group, cardHtml) {
+    const listKey = group || 'attached';
+    const list = document.querySelector(
+        '.fm-doc-list[data-fm-doc-list="' + listKey + '"][data-fm-app-id="' + appId + '"]'
+    );
+    if (!list || !cardHtml) return;
+    const empty = list.querySelector('.fm-doc-empty');
+    if (empty) empty.remove();
+    list.insertAdjacentHTML('beforeend', cardHtml);
+    const wrap = list.closest('[data-fm-group-wrap]') || list.closest('.card-body');
+    const badge = wrap ? wrap.querySelector('.fm-doc-count') : null;
+    if (badge) {
+        badge.textContent = String(list.querySelectorAll('[data-fm-doc-id]').length || list.querySelectorAll('.border.rounded').length);
+    } else if (listKey === 'attached') {
+        // attached has no numeric badge in header
+    }
+}
+
 async function fmUploadFilesSequential(appId, files, action, extraFields, parts, inputEl) {
     const list = Array.from(files || []).filter(Boolean);
     if (!list.length) return;
@@ -554,6 +572,7 @@ async function fmUploadFilesSequential(appId, files, action, extraFields, parts,
     fmResetProgress(parts);
     let okCount = 0;
     let lastError = '';
+    const targetGroup = (extraFields && extraFields.doc_group) ? extraFields.doc_group : 'attached';
     for (let i = 0; i < list.length; i++) {
         if (parts && parts.label) {
             parts.label.textContent = list.length > 1
@@ -581,6 +600,7 @@ async function fmUploadFilesSequential(appId, files, action, extraFields, parts,
                 throw new Error((data && data.message) ? data.message : ('Upload failed (HTTP ' + res.status + ')'));
             }
             okCount++;
+            fmInsertUploadedCard(appId, data.doc_group || targetGroup, data.card_html || '');
         } catch (err) {
             lastError = err && err.message ? err.message : 'Upload failed';
             break;
@@ -593,12 +613,10 @@ async function fmUploadFilesSequential(appId, files, action, extraFields, parts,
     }
     if (okCount > 0 && okCount === list.length) {
         fmMarkProgress(parts, 'done', 'Saved');
-        setTimeout(function () { viewApp(appId); }, 850);
         return;
     }
     if (okCount > 0) {
         fmMarkProgress(parts, 'done', 'Saved ' + okCount + '/' + list.length);
-        setTimeout(function () { viewApp(appId); }, 1000);
         return;
     }
     fmMarkProgress(parts, 'fail', lastError || 'Save failed');

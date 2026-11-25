@@ -258,11 +258,42 @@ if ($action === 'upload_attached' || $action === 'upload_to_group') {
         echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         exit;
     }
+    require_once __DIR__ . '/helpers/secure_file.php';
+    $visaGroups = fm_visa_submission_groups();
+    $groupOpts = '<option value="">Move to group…</option>'
+        . '<optgroup label="Inbox"><option value="attached"'
+        . ($targetGroup === 'attached' ? ' selected' : '') . '>Attached</option></optgroup>'
+        . '<optgroup label="Visa submission documents">';
+    foreach ($visaGroups as $slug => $lab) {
+        $groupOpts .= '<option value="' . htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') . '"'
+            . ($targetGroup === $slug ? ' selected' : '') . '>'
+            . htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') . '</option>';
+    }
+    $groupOpts .= '</optgroup>';
+    $safeName = htmlspecialchars($orig !== '' ? $orig : basename($rel), ENT_QUOTES, 'UTF-8');
+    $links = pcvc_secure_file_links_html($rel, $safeName);
+    $cardHtml = '<div class="border rounded p-2 mb-2 bg-white" data-fm-doc-id="' . (int) $docId . '">'
+        . '<div class="small fw-semibold mb-1">' . $safeName . '</div>'
+        . $links
+        . '<div class="d-flex flex-wrap gap-1 mt-2 align-items-center">'
+        . '<select class="form-select form-select-sm" style="max-width:240px" data-fm-transfer="' . (int) $docId . '" '
+        . 'onchange="fmTransferDoc(' . (int) $applicationId . ',' . (int) $docId . ', this)">'
+        . $groupOpts
+        . '</select>'
+        . '<button type="button" class="btn btn-sm btn-outline-primary" onclick="fmTransferDoc('
+        . (int) $applicationId . ',' . (int) $docId . ', this)">Move</button>'
+        . '<button type="button" class="btn btn-sm btn-outline-danger" onclick="fmDeleteDoc('
+        . (int) $applicationId . ',' . (int) $docId . ')">Delete</button>'
+        . '</div></div>';
+
     echo json_encode([
         'success' => true,
         'message' => 'Document added to ' . fm_doc_group_label($targetGroup) . '.',
         'document_id' => $docId,
-        'reload' => true,
+        'doc_group' => $targetGroup,
+        'original_name' => $orig,
+        'card_html' => $cardHtml,
+        'reload' => false,
     ]);
     exit;
 }
