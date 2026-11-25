@@ -1507,6 +1507,49 @@ button {
   </div>
 </div>
 
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p719')">
+    7.23 <?= pcvc_country_flag('ca') ?>  Study High School in Canada (Without Loan)
+  </label>
+  <div id="p719" class="package-details">
+    ➤ Registration &amp; Application Fee: CAD 450 (Refundable if admission is not secured within 4 months).<br>
+    ➤ After Visa Approval: CAD 2,050<br>
+    <strong>🔥 Complete Visa Support Package: CAD 2,500</strong><br>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition Fees: Most schools require payment of the full academic year's tuition fees before the study permit application. This helps demonstrate financial preparedness and may strengthen the chances of visa approval.</li>
+        <li>Visa Refusal: Tuition fees are refundable in the event of visa refusal, subject to the school's refund policy and applicable administrative charges.</li>
+        <li>Accompanying Dependents: Each dependent pays CAD 2,000 in service fees after visa approval.</li>
+        <li>Custodianship and Accommodation: Fees are payable separately, where applicable.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p720')">
+    7.24 <?= pcvc_country_flag('ca') ?>  Study Primary School in Canada (Without Loan)
+  </label>
+  <div id="p720" class="package-details">
+    ➤ Registration &amp; Application Fee: CAD 450 (Refundable if admission is not secured within 4 months).<br>
+    ➤ After Visa Approval: CAD 2,050<br>
+    <strong>🔥 Complete Visa Support Package: CAD 2,500</strong><br>
+    <div class="package-notes">
+      <strong>NOTE:</strong>
+      <ol>
+        <li>Tuition Fees: Most schools require payment of the full academic year's tuition fees before submitting the study permit application to strengthen financial evidence and maximize the chances of visa approval.</li>
+        <li>Visa Refusal: Tuition fees are refundable if the visa is refused, subject to the school's refund policy and applicable administrative charges.</li>
+        <li>Accompanying Family Members: Each accompanying parent or eligible family member pays CAD 2,000 in service fees after visa approval.</li>
+        <li>Custodianship and Accommodation: Fees are payable separately, where applicable.</li>
+        <li>Admission Requirements: Admission depends on the child's age, previous academic records and the selected school's requirements.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
 <p class="contract-warning">
   ⚠ <strong>Important:</strong> All government fees, embassy charges, biometric fees,
   tuition deposits, lawyer fees, border pass fees, and third-party charges

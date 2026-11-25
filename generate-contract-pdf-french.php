@@ -424,6 +424,43 @@ function getFrenchPackageDetails(string $code): array
             'total' => '2 000 EUR',
             'total_label' => 'Formule complète d’accompagnement visa PARROT',
         ],
+
+        /* =========================
+           7.23 Canada – High School Without Loan
+        ========================== */
+        'p719' => [
+            'title' => '7.23 Études au secondaire au Canada (sans prêt)',
+            'lines' => [
+                'Frais d’inscription et de dossier : 450 CAD (remboursables si l’admission n’est pas obtenue dans un délai de 4 mois).',
+                'Après l’approbation du visa : 2 050 CAD',
+                'Formule complète d’accompagnement visa : 2 500 CAD',
+                'NOTE : Frais de scolarité : la plupart des écoles exigent le paiement des frais de scolarité pour toute l’année scolaire avant la demande de permis d’études. Cela permet de démontrer la capacité financière et peut renforcer les chances d’approbation du visa.',
+                'NOTE : Refus de visa : les frais de scolarité sont remboursables en cas de refus de visa, sous réserve de la politique de remboursement de l’école et des frais administratifs applicables.',
+                'NOTE : Personnes à charge accompagnantes : chaque personne à charge paie 2 000 CAD de frais de service après l’approbation du visa.',
+                'NOTE : Tutelle et hébergement : les frais sont payables séparément, le cas échéant.',
+            ],
+            'total' => '2 500 CAD',
+            'total_label' => 'Formule complète d’accompagnement visa',
+        ],
+
+        /* =========================
+           7.24 Canada – Primary School Without Loan
+        ========================== */
+        'p720' => [
+            'title' => '7.24 Études au primaire au Canada (sans prêt)',
+            'lines' => [
+                'Frais d’inscription et de dossier : 450 CAD (remboursables si l’admission n’est pas obtenue dans un délai de 4 mois).',
+                'Après l’approbation du visa : 2 050 CAD',
+                'Formule complète d’accompagnement visa : 2 500 CAD',
+                'NOTE : Frais de scolarité : la plupart des écoles exigent le paiement des frais de scolarité pour toute l’année scolaire avant la demande de permis d’études afin de renforcer la preuve financière et de maximiser les chances d’approbation du visa.',
+                'NOTE : Refus de visa : les frais de scolarité sont remboursables si le visa est refusé, sous réserve de la politique de remboursement de l’école et des frais administratifs applicables.',
+                'NOTE : Membres de la famille accompagnants : chaque parent accompagnant ou membre de la famille admissible paie 2 000 CAD de frais de service après l’approbation du visa.',
+                'NOTE : Tutelle et hébergement : les frais sont payables séparément, le cas échéant.',
+                'NOTE : Conditions d’admission : l’admission dépend de l’âge de l’enfant, de ses résultats scolaires antérieurs et des exigences de l’école choisie.',
+            ],
+            'total' => '2 500 CAD',
+            'total_label' => 'Formule complète d’accompagnement visa',
+        ],
     ];
 
     return $packages[$code] ?? [];

@@ -427,6 +427,43 @@ function getPackageDetails(string $code): array
             'total' => 'EUR 2,000',
             'total_label' => 'Complete PARROT Visa Support Package',
         ],
+
+        /* =========================
+           7.23 Canada – High School Without Loan
+        ========================== */
+        'p719' => [
+            'title' => '7.23 Study High School in Canada (Without Loan)',
+            'lines' => [
+                'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months).',
+                'After Visa Approval: CAD 2,050',
+                'Complete Visa Support Package: CAD 2,500',
+                'NOTE: Tuition Fees: Most schools require payment of the full academic year\'s tuition fees before the study permit application. This helps demonstrate financial preparedness and may strengthen the chances of visa approval.',
+                'NOTE: Visa Refusal: Tuition fees are refundable in the event of visa refusal, subject to the school\'s refund policy and applicable administrative charges.',
+                'NOTE: Accompanying Dependents: Each dependent pays CAD 2,000 in service fees after visa approval.',
+                'NOTE: Custodianship and Accommodation: Fees are payable separately, where applicable.',
+            ],
+            'total' => 'CAD 2,500',
+            'total_label' => 'Complete Visa Support Package',
+        ],
+
+        /* =========================
+           7.24 Canada – Primary School Without Loan
+        ========================== */
+        'p720' => [
+            'title' => '7.24 Study Primary School in Canada (Without Loan)',
+            'lines' => [
+                'Registration & Application Fee: CAD 450 (Refundable if admission is not secured within 4 months).',
+                'After Visa Approval: CAD 2,050',
+                'Complete Visa Support Package: CAD 2,500',
+                'NOTE: Tuition Fees: Most schools require payment of the full academic year\'s tuition fees before submitting the study permit application to strengthen financial evidence and maximize the chances of visa approval.',
+                'NOTE: Visa Refusal: Tuition fees are refundable if the visa is refused, subject to the school\'s refund policy and applicable administrative charges.',
+                'NOTE: Accompanying Family Members: Each accompanying parent or eligible family member pays CAD 2,000 in service fees after visa approval.',
+                'NOTE: Custodianship and Accommodation: Fees are payable separately, where applicable.',
+                'NOTE: Admission Requirements: Admission depends on the child\'s age, previous academic records and the selected school\'s requirements.',
+            ],
+            'total' => 'CAD 2,500',
+            'total_label' => 'Complete Visa Support Package',
+        ],
     ];
 
     return $packages[$code] ?? [];

@@ -1507,6 +1507,49 @@ button {
   </div>
 </div>
 
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p719')">
+    7.23 <?= pcvc_country_flag('ca') ?>  Études au secondaire au Canada (sans prêt)
+  </label>
+  <div id="p719" class="package-details">
+    ➤ Frais d’inscription et de dossier : 450 CAD (remboursables si l’admission n’est pas obtenue dans un délai de 4 mois).<br>
+    ➤ Après l’approbation du visa : 2 050 CAD<br>
+    <strong>🔥 Formule complète d’accompagnement visa : 2 500 CAD</strong><br>
+    <div class="package-notes">
+      <strong>NOTE :</strong>
+      <ol>
+        <li>Frais de scolarité : la plupart des écoles exigent le paiement des frais de scolarité pour toute l’année scolaire avant la demande de permis d’études. Cela permet de démontrer la capacité financière et peut renforcer les chances d’approbation du visa.</li>
+        <li>Refus de visa : les frais de scolarité sont remboursables en cas de refus de visa, sous réserve de la politique de remboursement de l’école et des frais administratifs applicables.</li>
+        <li>Personnes à charge accompagnantes : chaque personne à charge paie 2 000 CAD de frais de service après l’approbation du visa.</li>
+        <li>Tutelle et hébergement : les frais sont payables séparément, le cas échéant.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<div class="package-item">
+  <label class="package-label">
+    <input type="radio" name="package" onclick="showPkg('p720')">
+    7.24 <?= pcvc_country_flag('ca') ?>  Études au primaire au Canada (sans prêt)
+  </label>
+  <div id="p720" class="package-details">
+    ➤ Frais d’inscription et de dossier : 450 CAD (remboursables si l’admission n’est pas obtenue dans un délai de 4 mois).<br>
+    ➤ Après l’approbation du visa : 2 050 CAD<br>
+    <strong>🔥 Formule complète d’accompagnement visa : 2 500 CAD</strong><br>
+    <div class="package-notes">
+      <strong>NOTE :</strong>
+      <ol>
+        <li>Frais de scolarité : la plupart des écoles exigent le paiement des frais de scolarité pour toute l’année scolaire avant la demande de permis d’études afin de renforcer la preuve financière et de maximiser les chances d’approbation du visa.</li>
+        <li>Refus de visa : les frais de scolarité sont remboursables si le visa est refusé, sous réserve de la politique de remboursement de l’école et des frais administratifs applicables.</li>
+        <li>Membres de la famille accompagnants : chaque parent accompagnant ou membre de la famille admissible paie 2 000 CAD de frais de service après l’approbation du visa.</li>
+        <li>Tutelle et hébergement : les frais sont payables séparément, le cas échéant.</li>
+        <li>Conditions d’admission : l’admission dépend de l’âge de l’enfant, de ses résultats scolaires antérieurs et des exigences de l’école choisie.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
 <p class="contract-warning">
   ⚠ <strong>Important :</strong> tous les frais gouvernementaux, frais d’ambassade, frais de biométrie,
   acomptes de scolarité, honoraires d’avocat, frais de laissez-passer frontalier et frais de tiers
