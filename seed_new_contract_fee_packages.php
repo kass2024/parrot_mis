@@ -56,6 +56,8 @@ function fee_package_titles(): array
         'p716'        => '7.20 WES EVALUATION – INTERNATIONAL EQUIVALENCE',
         'p717'        => '7.21 GUARANTEED EVALUATION SUPPORT!',
         'p718'        => '7.22 Study Professional Courses in Malta – European Schengen Country',
+        'p719'        => '7.23 Study High School in Canada (Without Loan)',
+        'p720'        => '7.24 Study Primary School in Canada (Without Loan)',
     ];
 }
 
@@ -142,6 +144,22 @@ function packages_to_seed(): array
                 ['name' => '3. University & Verification Coordination', 'amount' => 100.00],
                 ['name' => '4. Document Shipping & Delivery Expenses', 'amount' => 100.00],
                 ['name' => '5. Time, Administrative Work & Follow-up', 'amount' => 200.00],
+            ],
+        ],
+        'p719' => [
+            'currency' => 'CAD',
+            'total' => 2500.00,
+            'items' => [
+                ['name' => 'Registration & Application Fee', 'amount' => 450.00],
+                ['name' => 'After Visa Approval', 'amount' => 2050.00],
+            ],
+        ],
+        'p720' => [
+            'currency' => 'CAD',
+            'total' => 2500.00,
+            'items' => [
+                ['name' => 'Registration & Application Fee', 'amount' => 450.00],
+                ['name' => 'After Visa Approval', 'amount' => 2050.00],
             ],
         ],
     ];
