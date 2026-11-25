@@ -442,6 +442,9 @@ function pcvc_staff_clearance_guard_request(mysqli $conn): void
     if (session_status() !== PHP_SESSION_ACTIVE) {
         return;
     }
+    if (!function_exists('pcvc_acting_company_id') && is_file(__DIR__ . '/company_view_as.php')) {
+        require_once __DIR__ . '/company_view_as.php';
+    }
     // Superadmin viewing as a company: enforce that company's clearance.
     $actingCompanyId = 0;
     if (function_exists('pcvc_acting_company_id')) {
