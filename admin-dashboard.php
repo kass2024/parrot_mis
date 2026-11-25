@@ -207,6 +207,7 @@ $cards = [
     'title' => 'All university admissions',
     'icon' => 'bi-mortarboard',
     'links' => [
+      'admin-self-registration.php' => 'Self Registration',
       'application-list.php' => 'Student application Report',
       'students-manage.php' => 'Applicants Management',
       'receipt_viewer.php' => 'Check payment Receipt',
@@ -2218,6 +2219,10 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="loadInFrame('student-application.php', 'Add student')">
             <i class="bi bi-person-plus"></i>
             Add student
+          </a>
+          <a href="#" onclick="loadInFrame('admin-self-registration.php', 'Self Registration')">
+            <i class="bi bi-link-45deg"></i>
+            Self Registration
           </a>
           <a href="#" onclick="loadInFrame('application-list.php', 'Student Application Report')">
             <i class="bi bi-file-text"></i>

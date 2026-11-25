@@ -14,7 +14,8 @@ function pcvc_staff_level_clearance_catalog(): array
     return [
         'all_admissions' => ['group' => 'Study Abroad', 'label' => 'University & College Admissions', 'items' => [
             'student-application.php' => 'Add student',
-            'application-list.php' => 'Student application Report',
+            'admin-self-registration.php' => 'Self Registration',
+            'application-list.php' => 'Student Application Report',
             'students-manage.php' => 'Applicants Management',
             'receipt_viewer.php' => 'Check payment Receipt',
             'applyboard-dashboard.php' => 'ApplyBoard Applications',
