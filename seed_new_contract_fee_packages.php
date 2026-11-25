@@ -34,7 +34,7 @@ function out(string $line): void
 function fee_package_titles(): array
 {
     return [
-        'p71'         => 'Study in the USA (Loan-Based)',
+        'p71'         => '7.2 Study in the USA (Loan-Based)',
         'p72'         => '7.2 Study in the USA (Without Loan)',
         'p73'         => '7.3 Study in Europe (Without Loan)',
         'p74'         => '7.4 Study in Canada (Loan-Based)',
@@ -127,12 +127,15 @@ function packages_to_seed(): array
                 ['name' => 'After Visa Approval for Canada', 'amount' => 5000.00],
             ],
         ],
-        'p718' => [
-            'currency' => 'EUR',
-            'total' => 2000.00,
+        'p716' => [
+            'currency' => 'CAD',
+            'total' => 900.00,
             'items' => [
-                ['name' => 'Registration & Application Fee', 'amount' => 250.00],
-                ['name' => 'After Visa Approval', 'amount' => 1750.00],
+                ['name' => '1. Professional Service Fees', 'amount' => 200.00],
+                ['name' => '2. Application & Processing Costs', 'amount' => 300.00],
+                ['name' => '3. University & Verification Coordination', 'amount' => 100.00],
+                ['name' => '4. Document Shipping & Delivery Expenses', 'amount' => 100.00],
+                ['name' => '5. Time, Administrative Work & Follow-up', 'amount' => 200.00],
             ],
         ],
         'p717' => [
@@ -144,6 +147,14 @@ function packages_to_seed(): array
                 ['name' => '3. University & Verification Coordination', 'amount' => 100.00],
                 ['name' => '4. Document Shipping & Delivery Expenses', 'amount' => 100.00],
                 ['name' => '5. Time, Administrative Work & Follow-up', 'amount' => 200.00],
+            ],
+        ],
+        'p718' => [
+            'currency' => 'EUR',
+            'total' => 2000.00,
+            'items' => [
+                ['name' => 'Registration & Application Fee', 'amount' => 250.00],
+                ['name' => 'After Visa Approval', 'amount' => 1750.00],
             ],
         ],
         'p719' => [

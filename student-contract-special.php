@@ -1548,7 +1548,7 @@ button {
 
 </div>
 
-<?= pcvc_student_contract_documents_notice('en') ?>
+<?= pcvc_student_contract_documents_notice('en', true) ?>
 
 <!-- ============================
      15. SIGNATURES
@@ -1955,6 +1955,16 @@ button {
       if (!pkg) {
         alert('Please select one service package under Article 7 before signing.');
         document.getElementById('article-7')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      const docsAck = document.getElementById('pcvcDocsAck');
+      if (docsAck && !docsAck.checked) {
+        const docsBox = document.getElementById('requiredDocuments');
+        docsBox?.classList.add('is-pulse');
+        docsBox?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => docsBox?.classList.remove('is-pulse'), 2400);
+        alert('Please review the required documents and confirm the checkbox before signing.');
         return;
       }
 

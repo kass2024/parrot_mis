@@ -581,6 +581,65 @@ body {
   color: #1e3a5f;
 }
 
+.package-smart-bar {
+  margin: 0 0 18px;
+  padding: 14px 14px 12px;
+  border: 1px solid #bbf7d0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 100%);
+  display: grid;
+  gap: 8px;
+}
+
+.package-search-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #14532d;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.package-search-input {
+  width: 100%;
+  border: 2px solid #86efac !important;
+  border-radius: 10px !important;
+  padding: 12px 14px !important;
+  font-size: 15px !important;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.package-search-input:focus {
+  border-color: #16a34a !important;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+  outline: none;
+}
+
+.package-selected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #14532d;
+  color: #fff;
+  font-size: 13px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.package-selected-pill strong {
+  font-weight: 750;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.package-item.is-filtered-out {
+  display: none;
+}
+
 .article-7-intro strong {
   color: #0f172a;
 }
@@ -1123,6 +1182,18 @@ button {
   <strong>Comment choisir :</strong> cochez une seule formule ci-dessous. Le détail des frais s’affiche sous votre choix.
   <?= $isSigned ? 'Cette convention est signée — la formule choisie est affichée ci-dessous.' : 'Vous devez choisir une formule avant de signer au bas de cette page.' ?>
 </div>
+
+<?php if (!$isSigned): ?>
+<div class="package-smart-bar" id="packageSmartBar">
+  <label class="package-search-label" for="packageSearch">
+    <span aria-hidden="true">⌕</span> Rechercher une formule
+  </label>
+  <input type="search" id="packageSearch" class="package-search-input" placeholder="Tapez Canada, secondaire, Malte, visa visite…" autocomplete="off">
+  <div class="package-selected-pill" id="packageSelectedPill" hidden>
+    Choisie : <strong id="packageSelectedLabel"></strong>
+  </div>
+</div>
+<?php endif; ?>
 
 <div class="package-item">
   <label class="package-label">
@@ -1697,7 +1768,7 @@ button {
 
 </div>
 
-<?= pcvc_student_contract_documents_notice('fr') ?>
+<?= pcvc_student_contract_documents_notice('fr', true) ?>
 
 <!-- ============================
      15. SIGNATURES - TWO COLUMNS
@@ -2005,7 +2076,7 @@ function stopDraw() {
 
   if (!selectedRadio) {
     alert("Veuillez choisir une formule de services à l’article 7 avant de signer.");
-    selectedRadio?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.querySelector('.package-item')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
 
@@ -2016,6 +2087,16 @@ function stopDraw() {
 
   if (!selectedPackageLabel) {
     alert("Choix de formule invalide. Veuillez sélectionner de nouveau votre formule.");
+    return;
+  }
+
+  const docsAck = document.getElementById('pcvcDocsAck');
+  if (docsAck && !docsAck.checked) {
+    const docsBox = document.getElementById('requiredDocuments');
+    docsBox?.classList.add('is-pulse');
+    docsBox?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(() => docsBox?.classList.remove('is-pulse'), 2400);
+    alert("Veuillez lire les documents requis et cocher la case de confirmation avant de signer.");
     return;
   }
 
@@ -2574,9 +2655,54 @@ window.showPkg = function (id) {
   if (holder) {
     holder.value = id;
   }
+
+  const pill = document.getElementById('packageSelectedPill');
+  const pillLabel = document.getElementById('packageSelectedLabel');
+  if (pill && pillLabel && radio) {
+    const label = (radio.closest('label')?.textContent || id).replace(/\s+/g, ' ').trim();
+    pillLabel.textContent = label;
+    pill.hidden = false;
+  }
 };
 
 document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('packageSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      const q = (this.value || '').trim().toLowerCase();
+      document.querySelectorAll('.package-item').forEach(item => {
+        const text = (item.textContent || '').toLowerCase();
+        item.classList.toggle('is-filtered-out', q !== '' && !text.includes(q));
+      });
+    });
+  }
+
+  const docsAck = document.getElementById('pcvcDocsAck');
+  const docsAckWrap = document.querySelector('.pcvc-doc-ack');
+  const docsChip = document.getElementById('pcvcDocsChip');
+  if (docsAck) {
+    const syncAck = () => {
+      docsAckWrap?.classList.toggle('is-ok', docsAck.checked);
+      if (docsChip) docsChip.hidden = docsAck.checked;
+    };
+    docsAck.addEventListener('change', syncAck);
+    syncAck();
+  }
+
+  const docsBox = document.getElementById('requiredDocuments');
+  if (docsBox && 'IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          docsBox.classList.add('is-pulse');
+          setTimeout(() => docsBox.classList.remove('is-pulse'), 1800);
+          io.disconnect();
+        }
+      });
+    }, { threshold: 0.35 });
+    io.observe(docsBox);
+  }
+
   document.querySelectorAll('input[name="package"]').forEach(radio => {
     const match = (radio.getAttribute('onclick') || '').match(/showPkg\('([^']+)'\)/);
     if (match && !radio.value) {
