@@ -213,5 +213,6 @@ function pcvc_company_applications(mysqli $conn, int $adminId, string $email, in
 
 function pcvc_company_dashboard_url(int $adminId): string
 {
-    return 'company-dashboard.php?id=' . max(0, $adminId);
+    // Superadmin “Dashboard” opens the executive company home via view-as.
+    return 'companies-management.php?view=' . max(0, $adminId) . '&enter_dashboard=1';
 }

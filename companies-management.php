@@ -622,7 +622,7 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
           alert((data && data.error) || 'Could not open company dashboard.');
           return;
         }
-        const target = data.redirect || ('admin-dashboard.php?open=' + encodeURIComponent('company-dashboard.php?id=' + id));
+        const target = data.redirect || 'admin-dashboard.php?company_home=1';
         if (window.top && window.top !== window) {
           window.top.location.href = target;
         } else {

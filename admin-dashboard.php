@@ -3485,9 +3485,13 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
         
         <div class="page-title">
           <h1 id="pageTitle">Dashboard</h1>
-          <p><?= $actingCompanyId > 0
-            ? 'Viewing company: <strong>' . htmlspecialchars($topRightName) . '</strong>'
-            : 'Welcome back, ' . htmlspecialchars($displayName) . '!' ?></p>
+          <p><?php if ($actingCompanyId > 0): ?>
+            Viewing company: <strong><?= htmlspecialchars($topRightName) ?></strong>
+          <?php elseif (!empty($isCompanyScopedHome)): ?>
+            Company dashboard for <strong><?= htmlspecialchars($topRightName !== '' ? $topRightName : $displayName) ?></strong>
+          <?php else: ?>
+            Welcome back, <?= htmlspecialchars($displayName) ?>!
+          <?php endif; ?></p>
         </div>
         
         <div class="topbar-actions">
@@ -4676,6 +4680,16 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     (function autoOpenFrame() {
       try {
         const params = new URLSearchParams(window.location.search);
+        // Company switch lands on the executive home — never auto-hide it for activity pages.
+        if (params.get('company_home') === '1') {
+          params.delete('company_home');
+          const clean = window.location.pathname + (params.toString() ? ('?' + params.toString()) : '');
+          window.history.replaceState({}, '', clean);
+          if (typeof showDashboard === 'function') {
+            showDashboard();
+          }
+          return;
+        }
         const open = params.get('open');
         if (!open) return;
         const title = params.get('title') || 'Content';

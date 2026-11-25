@@ -41,10 +41,11 @@ $name = trim((string) ($company['company_name'] ?? ''));
 if ($name === '') {
     $name = trim((string) (($company['first_name'] ?? '') . ' ' . ($company['last_name'] ?? '')));
 }
+// Land on the same executive admin home (KPIs, payments, roster), scoped to this company.
+// Do not auto-open company-dashboard.php in the iframe — that hid the real dashboard.
 pcvc_company_view_json([
     'ok' => true,
     'company_id' => $companyId,
     'company_name' => $name,
-    'redirect' => 'admin-dashboard.php?open=' . rawurlencode('company-dashboard.php?id=' . $companyId)
-        . '&title=' . rawurlencode($name !== '' ? $name : 'Company dashboard'),
+    'redirect' => 'admin-dashboard.php?company_home=1',
 ]);
