@@ -210,6 +210,10 @@ function pcvc_staff_level_clearance_catalog(): array
             'finance-budget.php' => 'Monthly budget',
             'finance-request.php' => 'Request from a budget line',
         ]],
+        'company_accounts' => ['group' => 'Partners & Operations', 'label' => 'Companies Management', 'items' => [
+            'companies-management.php' => 'Approve and manage companies',
+            'register.php?type=company' => 'Company signup link',
+        ]],
         'partner_contracts' => ['group' => 'Partners & Operations', 'label' => 'B2B Partner Contracts', 'items' => [
             'admin-generate-partner-contract.php' => 'Issue partner contract link (English)',
             'admin-generate-partner-contract-french.php' => 'Issue partner contract link (French)',

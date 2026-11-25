@@ -8,13 +8,20 @@ if (empty($_SESSION['pcvc_reg_csrf'])) {
     $_SESSION['pcvc_reg_csrf'] = bin2hex(random_bytes(16));
 }
 
+$companyOnly = strtolower(trim((string) ($_GET['type'] ?? ''))) === 'company'
+    || strtolower(trim((string) ($_POST['signup_mode'] ?? ''))) === 'company';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $result = pcvc_self_register_staff($conn, $_POST, (string) $_SESSION['pcvc_reg_csrf']);
+    $post = $_POST;
+    if ($companyOnly) {
+        $post['account_type'] = 'company';
+    }
+    $result = pcvc_self_register_staff($conn, $post, (string) $_SESSION['pcvc_reg_csrf']);
     if (!empty($result['rotate_csrf'])) {
         $_SESSION['pcvc_reg_csrf'] = bin2hex(random_bytes(16));
     }
     $_SESSION['pcvc_reg_flash'] = $result;
-    header('Location: register.php');
+    header('Location: register.php' . ($companyOnly ? '?type=company' : ''));
     exit;
 }
 
@@ -25,6 +32,9 @@ $old = is_array($flash['old'] ?? null) ? $flash['old'] : [];
 $sentEmail = (is_array($flash) && !empty($flash['ok'])) ? (string) ($flash['email'] ?? '') : '';
 $error = (is_array($flash) && empty($flash['ok'])) ? (string) ($flash['error'] ?? '') : '';
 $fieldErrors = (is_array($flash) && is_array($flash['fields'] ?? null)) ? $flash['fields'] : [];
+if ($companyOnly) {
+    $old['account_type'] = 'company';
+}
 
 $val = static function (string $key) use ($old): string {
     return htmlspecialchars((string) ($old[$key] ?? ''), ENT_QUOTES, 'UTF-8');
@@ -269,8 +279,10 @@ button:disabled { opacity: .65; cursor: progress; }
     </ol>
   </aside>
   <section class="panel">
-    <h2>Create your account</h2>
-    <p class="sub">New accounts sign in with email. Existing staff can still sign in with a username or an email.</p>
+    <h2><?= $companyOnly ? 'Create a company account' : 'Create your account' ?></h2>
+    <p class="sub"><?= $companyOnly
+      ? 'Partner company registration. Sign in uses this email. A superadmin must approve the company before you can sign in.'
+      : 'New accounts sign in with email. Existing staff can still sign in with a username or an email.' ?></p>
 
     <?php if ($sentEmail !== ''): ?>
       <div class="notice" role="status">
@@ -281,13 +293,18 @@ button:disabled { opacity: .65; cursor: progress; }
       <?php if ($error !== ''): ?>
         <div class="error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES, 'UTF-8') ?></div>
       <?php endif; ?>
-      <form method="post" action="register.php" id="staffForm" novalidate>
+      <form method="post" action="register.php<?= $companyOnly ? '?type=company' : '' ?>" id="staffForm" novalidate>
         <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+        <?php if ($companyOnly): ?>
+        <input type="hidden" name="signup_mode" value="company">
+        <input type="hidden" name="account_type" value="company">
+        <?php endif; ?>
         <div class="hp" aria-hidden="true">
           <label for="leave_blank">Leave blank</label>
           <input type="text" name="leave_blank" id="leave_blank" tabindex="-1" autocomplete="off">
         </div>
-        <?php $isCompany = $val('account_type') === 'company'; ?>
+        <?php $isCompany = $companyOnly || $val('account_type') === 'company'; ?>
+        <?php if (!$companyOnly): ?>
         <fieldset class="kind">
           <legend>Account type</legend>
           <div class="choices">
@@ -301,6 +318,7 @@ button:disabled { opacity: .65; cursor: progress; }
             </label>
           </div>
         </fieldset>
+        <?php endif; ?>
         <div class="company-box<?= $isCompany ? '' : ' is-off' ?>" id="companyFields">
           <h3>Company details</h3>
           <p class="lead">All company fields are required. Website is the only optional one.</p>
@@ -372,9 +390,14 @@ button:disabled { opacity: .65; cursor: progress; }
   var personalChoice = document.getElementById('choicePersonal');
   var companyChoice = document.getElementById('choiceCompany');
   if (!form) return;
+  function selectedAccountType() {
+    var checked = form.querySelector('input[name="account_type"]:checked');
+    if (checked) return checked.value;
+    var hidden = form.querySelector('input[name="account_type"][type="hidden"]');
+    return hidden ? hidden.value : 'personal';
+  }
   function syncAccountType() {
-    var company = form.querySelector('input[name="account_type"]:checked');
-    var on = company && company.value === 'company';
+    var on = selectedAccountType() === 'company';
     if (companyBox) companyBox.classList.toggle('is-off', !on);
     if (personalChoice) personalChoice.classList.toggle('is-on', !on);
     if (companyChoice) companyChoice.classList.toggle('is-on', on);
@@ -431,8 +454,7 @@ button:disabled { opacity: .65; cursor: progress; }
     field.addEventListener('input', function () { clearMissing(field); });
   });
   form.addEventListener('submit', function (event) {
-    var company = form.querySelector('input[name="account_type"]:checked');
-    var on = company && company.value === 'company';
+    var on = selectedAccountType() === 'company';
     var required = ['first_name', 'last_name', 'phone_number', 'email'];
     if (on) required = required.concat(['company_name', 'company_registration', 'company_address', 'company_phone']);
     var first = null;

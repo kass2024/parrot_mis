@@ -580,7 +580,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reactivate_account'])
 /* ============================================================
    FETCH ADMINS + OFFICES
 ============================================================ */
-$admins  = $conn->query("SELECT * FROM admins ORDER BY 
+// Staff / agents only — company partners are managed on companies-management.php
+$admins  = $conn->query("SELECT * FROM admins
+    WHERE LOWER(TRIM(COALESCE(account_type,''))) <> 'company'
+      AND TRIM(COALESCE(company_name,'')) = ''
+    ORDER BY 
     CASE 
         WHEN role IN ('superadmin', 'director', 'secretary') THEN 1
         WHEN role = 'admin' THEN 2
@@ -594,6 +598,8 @@ $pendingRes = $conn->query(
             company_registration, company_address, company_phone, company_website_url, created_at
      FROM admins
      WHERE account_status = 'pending'
+       AND LOWER(TRIM(COALESCE(account_type,''))) <> 'company'
+       AND TRIM(COALESCE(company_name,'')) = ''
      ORDER BY created_at ASC"
 );
 if ($pendingRes) {
@@ -1534,7 +1540,7 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
         <div class="pending-head">
             <div>
                 <h2>Waiting for approval</h2>
-                <p>Approve an account to email the sign-in link and password. Company accounts also receive the document request.</p>
+                <p>Approve personal agent/staff signups here. Company partners are approved under <strong>Companies Management</strong>.</p>
             </div>
             <div class="pending-count"><?= count($pendingAccounts) ?></div>
         </div>
@@ -1614,9 +1620,6 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
         <div class="filter-badge" onclick="filterByRole('pending', this)">
             <i class="bi bi-hourglass-split"></i> Waiting
         </div>
-        <div class="filter-badge" onclick="filterByRole('company', this)">
-            <i class="bi bi-building"></i> Company
-        </div>
         <div class="filter-badge" onclick="filterByRole('inactive', this)">
             <i class="bi bi-person-x"></i> Inactive
         </div>
@@ -1625,6 +1628,9 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
         </div>
 
         <?php if ($isSuperAdmin): ?>
+        <a href="companies-management.php" class="btn-add-staff" style="text-decoration:none;">
+            <i class="bi bi-building"></i> Companies
+        </a>
         <button type="button" class="btn-add-staff" data-bs-toggle="modal" data-bs-target="#addStaffModal">
             <i class="bi bi-person-plus-fill"></i> Add Staff
         </button>

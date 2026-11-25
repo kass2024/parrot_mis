@@ -96,7 +96,7 @@ function pcvc_generate_staff_password(): string
     return implode('', $chars);
 }
 
-function pcvc_staff_login_url(string $email): string
+function pcvc_staff_public_base_url(): string
 {
     $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
     $host = (string) preg_replace('/:\d+$/', '', $host);
@@ -111,10 +111,88 @@ function pcvc_staff_login_url(string $email): string
         $dir = '';
     }
 
-    return ($https ? 'https' : 'http')
-        . '://' . $host
-        . $dir
-        . '/admin-login.php?email=' . rawurlencode($email);
+    return ($https ? 'https' : 'http') . '://' . $host . $dir;
+}
+
+function pcvc_staff_login_url(string $email): string
+{
+    return pcvc_staff_public_base_url() . '/admin-login.php?email=' . rawurlencode($email);
+}
+
+/** Public signup link that opens the company-only registration form. */
+function pcvc_company_registration_url(): string
+{
+    return pcvc_staff_public_base_url() . '/register.php?type=company';
+}
+
+function pcvc_admin_is_company_account(array $row): bool
+{
+    return strtolower(trim((string) ($row['account_type'] ?? ''))) === 'company'
+        || trim((string) ($row['company_name'] ?? '')) !== '';
+}
+
+/**
+ * @return array{pending:int,active:int,inactive:int,total:int}
+ */
+function pcvc_company_account_kpis(mysqli $conn): array
+{
+    pcvc_ensure_staff_account_columns($conn);
+    $kpi = ['pending' => 0, 'active' => 0, 'inactive' => 0, 'total' => 0];
+    $res = $conn->query(
+        "SELECT
+            COUNT(*) AS total,
+            SUM(LOWER(TRIM(COALESCE(account_status,''))) = 'pending') AS pending,
+            SUM(LOWER(TRIM(COALESCE(account_status,''))) = 'inactive') AS inactive,
+            SUM(LOWER(TRIM(COALESCE(account_status,''))) NOT IN ('pending','inactive')) AS active
+         FROM admins
+         WHERE LOWER(TRIM(COALESCE(account_type,''))) = 'company'
+            OR TRIM(COALESCE(company_name,'')) <> ''"
+    );
+    if ($res && ($row = $res->fetch_assoc())) {
+        foreach ($kpi as $k => $_) {
+            $kpi[$k] = (int) ($row[$k] ?? 0);
+        }
+    }
+
+    return $kpi;
+}
+
+/**
+ * @return list<array<string,mixed>>
+ */
+function pcvc_list_company_accounts(mysqli $conn, string $filter = 'all'): array
+{
+    pcvc_ensure_staff_account_columns($conn);
+    $where = [
+        "(LOWER(TRIM(COALESCE(account_type,''))) = 'company' OR TRIM(COALESCE(company_name,'')) <> '')",
+    ];
+    $filter = strtolower(trim($filter));
+    if ($filter === 'pending') {
+        $where[] = "LOWER(TRIM(COALESCE(account_status,''))) = 'pending'";
+    } elseif ($filter === 'inactive') {
+        $where[] = "LOWER(TRIM(COALESCE(account_status,''))) = 'inactive'";
+    } elseif ($filter === 'active') {
+        $where[] = "LOWER(TRIM(COALESCE(account_status,''))) NOT IN ('pending','inactive')";
+    }
+    $sql = 'SELECT * FROM admins WHERE ' . implode(' AND ', $where)
+        . " ORDER BY
+            CASE LOWER(TRIM(COALESCE(account_status,'')))
+                WHEN 'pending' THEN 0
+                WHEN 'active' THEN 1
+                WHEN '' THEN 1
+                WHEN 'inactive' THEN 2
+                ELSE 3
+            END,
+            company_name ASC, full_name ASC, id DESC";
+    $rows = [];
+    $res = $conn->query($sql);
+    if ($res) {
+        while ($row = $res->fetch_assoc()) {
+            $rows[] = $row;
+        }
+    }
+
+    return $rows;
 }
 
 function pcvc_staff_username_for_email(mysqli $conn, string $email): string

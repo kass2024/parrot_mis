@@ -398,6 +398,14 @@ $cards = [
       'admin/contract_esign.php' => 'Signed PhD Contracts',
     ]
   ],
+  'company_accounts' => [
+    'title' => 'Companies Management',
+    'icon' => 'bi-building',
+    'links' => [
+      'companies-management.php' => 'Approve and manage companies',
+      'register.php?type=company' => 'Company signup link',
+    ]
+  ],
   'partner_contracts' => [
     'title' => 'Partner Contract',
     'icon' => 'bi-handshake',
@@ -512,7 +520,7 @@ $sidebarAccess = [
   'superadmin' => [
     'all_admissions', 'loan_applications', 'I-20_applications', 'staff_reporting',
     'commission_request', 'credit_transfer', 'visit_study_visa', 'staff_attendance',
-    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'student_consent', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
+    'university_portal', 'marketing', 'smart_brochure', 'jobsabrod', 'canada_medical', 'francophonie_mobility', 'employment_opportunities', 'meeting_invitation', 'refund_requests', 'platform', 'website_management', 'job_platforms', 'contracts', 'student_consent', 'company_accounts', 'partner_contracts', 'canada_partner_clients', 'finance', 'client_consent', 'employment_agreement', 'dubai_work', 'czech_work', 'korea_invitation_contracts', 'korea_event_participation', 'noble_education', 'malta_courses', 'eci_malta', 'canada_workers', 'agent_contracts', 'german_language_contracts', 'special_contracts',
   ],
   'agent' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
@@ -2179,7 +2187,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
       'study' => ['all_admissions', 'loan_applications', 'I-20_applications', 'credit_transfer', 'german_language_contracts', 'noble_education', 'malta_courses', 'eci_malta', 'contracts', 'student_consent'],
       'work' => ['jobsabrod', 'francophonie_mobility', 'canada_workers', 'employment_opportunities', 'employment_agreement', 'dubai_work', 'czech_work'],
       'visit' => ['visit_study_visa', 'canada_medical', 'korea_event_participation', 'korea_invitation_contracts', 'client_consent', 'immigration_records'],
-      'partners' => ['staff_reporting', 'staff_attendance', 'commission_request', 'marketing', 'smart_brochure', 'meeting_invitation', 'refund_requests', 'partner_contracts', 'agent_contracts', 'special_contracts'],
+      'partners' => ['staff_reporting', 'staff_attendance', 'commission_request', 'marketing', 'smart_brochure', 'meeting_invitation', 'refund_requests', 'company_accounts', 'partner_contracts', 'agent_contracts', 'special_contracts'],
       'connect' => ['canada_partner_clients'],
       'finance' => ['finance'],
       'system' => ['platform', 'website_management', 'job_platforms'],
@@ -3097,6 +3105,27 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           <a href="#" onclick="loadInFrame('refund-requests-report.php?status=rejected', 'Rejected Refunds')">
             <i class="bi bi-x-circle"></i>
             Rejected
+          </a>
+        </div>
+        <?php endif; ?>
+  <?php if (in_array('company_accounts', $allowedSidebarItems) && ($isSuperExecutive || $pcvcStaffClearanceOn)): ?>
+        <a href="#company_accounts" class="sidebar-link" onclick="toggleSidebarMenu('company_accounts')">
+          <i class="bi bi-building"></i>
+          <span>Companies Management</span>
+          <i class="bi bi-chevron-down arrow"></i>
+        </a>
+        <div class="sidebar-submenu" id="submenu_company_accounts">
+          <a href="#" onclick="loadInFrame('companies-management.php', 'Companies Management')">
+            <i class="bi bi-building-check"></i>
+            Approve and manage companies
+          </a>
+          <a href="#" onclick="loadInFrame('companies-management.php', 'Companies Management')">
+            <i class="bi bi-link-45deg"></i>
+            Company signup smart link
+          </a>
+          <a href="register.php?type=company" target="_blank" rel="noopener">
+            <i class="bi bi-box-arrow-up-right"></i>
+            Open company signup form
           </a>
         </div>
         <?php endif; ?>
