@@ -7,6 +7,7 @@ require_once __DIR__ . '/helpers/secure_file.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/staff_self_register.php';
 require_once __DIR__ . '/helpers/staff_contract_schema.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 pcvc_ensure_staff_account_columns($conn);
 pcvc_ensure_director_role($conn);
 $companyBrandName = PCVC_COMPANY_DISPLAY_NAME;
@@ -414,6 +415,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSu
         }
         $_SESSION['success'] = $msg;
 
+        // Company dashboard: keep new staff inside this company only.
+        $companyCtxForLink = pcvc_effective_company_context($conn);
+        if ($newId > 0 && $companyCtxForLink) {
+            pcvc_link_admin_to_company($conn, $newId, (int) ($companyCtxForLink['id'] ?? 0));
+        }
+
         if ($newId > 0 && !empty($_FILES['profile_photo']['name']) && $_FILES['profile_photo']['error'] === UPLOAD_ERR_OK) {
             $uploadDir = __DIR__ . '/uploads/';
             if (!is_dir($uploadDir)) {
@@ -580,28 +587,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reactivate_account'])
 /* ============================================================
    FETCH ADMINS + OFFICES
 ============================================================ */
-// Staff / agents only — company partners are managed on companies-management.php
-$admins  = $conn->query("SELECT * FROM admins
-    WHERE LOWER(TRIM(COALESCE(account_type,''))) <> 'company'
-      AND TRIM(COALESCE(company_name,'')) = ''
-    ORDER BY 
-    CASE 
-        WHEN role IN ('superadmin', 'director', 'secretary') THEN 1
-        WHEN role = 'admin' THEN 2
-        ELSE 3
-    END, created_at DESC");
+// Company dashboard view: only this company + its linked staff/agents (no Parrot HQ mix).
+$actingCompanyCtx = pcvc_effective_company_context($conn);
+$companyScopeIds = [];
+if ($actingCompanyCtx) {
+    $companyScopeIds = pcvc_company_member_admin_ids($conn, (int) ($actingCompanyCtx['id'] ?? 0));
+}
+$companyScopeSql = $companyScopeIds !== []
+    ? ('id IN (' . implode(',', array_map('intval', $companyScopeIds)) . ')')
+    : '';
+
+if ($companyScopeSql !== '') {
+    $admins = $conn->query(
+        "SELECT * FROM admins WHERE {$companyScopeSql}
+         ORDER BY created_at DESC"
+    );
+} else {
+    // Staff / agents only — company partners are managed on companies-management.php
+    $admins = $conn->query("SELECT * FROM admins
+        WHERE LOWER(TRIM(COALESCE(account_type,''))) <> 'company'
+          AND TRIM(COALESCE(company_name,'')) = ''
+        ORDER BY 
+        CASE 
+            WHEN role IN ('superadmin', 'director', 'secretary') THEN 1
+            WHEN role = 'admin' THEN 2
+            ELSE 3
+        END, created_at DESC");
+}
     
 $offices = $conn->query("SELECT id, office_name FROM offices ORDER BY office_name ASC");
 $pendingAccounts = [];
-$pendingRes = $conn->query(
-    "SELECT id, full_name, first_name, last_name, email, phone_number, account_type, company_name,
-            company_registration, company_address, company_phone, company_website_url, created_at
-     FROM admins
-     WHERE account_status = 'pending'
-       AND LOWER(TRIM(COALESCE(account_type,''))) <> 'company'
-       AND TRIM(COALESCE(company_name,'')) = ''
-     ORDER BY created_at ASC"
-);
+if ($companyScopeSql === '') {
+    $pendingRes = $conn->query(
+        "SELECT id, full_name, first_name, last_name, email, phone_number, account_type, company_name,
+                company_registration, company_address, company_phone, company_website_url, created_at
+         FROM admins
+         WHERE account_status = 'pending'
+           AND LOWER(TRIM(COALESCE(account_type,''))) <> 'company'
+           AND TRIM(COALESCE(company_name,'')) = ''
+         ORDER BY created_at ASC"
+    );
+} else {
+    $pendingRes = false;
+}
 if ($pendingRes) {
     while ($pendingRow = $pendingRes->fetch_assoc()) {
         $pendingAccounts[] = $pendingRow;

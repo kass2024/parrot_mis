@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/self_registration.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 
 if (!isset($_SESSION['admin_id']) && empty($_SESSION['id'])) {
     http_response_code(403);
@@ -18,17 +19,21 @@ if (!isset($conn) || $conn->connect_error) {
 pcvc_self_reg_ensure_schema($conn);
 
 $adminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
-$isSuper = pcvc_current_user_is_superadmin($conn);
+$companyCtx = pcvc_effective_company_context($conn);
+$dataAdminId = pcvc_effective_data_admin_id($conn);
+// While switched into a company, never use HQ-wide superadmin lists.
+$isSuper = pcvc_current_user_is_superadmin($conn) && !pcvc_company_view_limits_data();
 $filter = trim((string) ($_GET['filter'] ?? 'all'));
 $viewId = (int) ($_GET['view'] ?? 0);
 
-$kpis = $isSuper ? pcvc_self_reg_kpis($conn) : pcvc_self_reg_kpis($conn, $adminId);
+$kpis = $isSuper ? pcvc_self_reg_kpis($conn) : pcvc_self_reg_kpis($conn, $dataAdminId);
 $assignable = $isSuper ? pcvc_self_reg_assignable_users($conn) : [];
 $statuses = pcvc_self_reg_followup_statuses();
 $fixedLink = pcvc_self_reg_fixed_public_url();
-// Every account gets a stable personal link that auto-fills their name on the form.
-$shareLink = $adminId > 0 ? pcvc_self_reg_referral_url($adminId) : $fixedLink;
-$issuerLabel = $adminId > 0 ? pcvc_self_reg_admin_label($conn, $adminId) : '';
+// Company view uses that company's referral link; otherwise the signed-in account.
+$linkAdminId = $dataAdminId > 0 ? $dataAdminId : $adminId;
+$shareLink = $linkAdminId > 0 ? pcvc_self_reg_referral_url($linkAdminId) : $fixedLink;
+$issuerLabel = $linkAdminId > 0 ? pcvc_self_reg_admin_label($conn, $linkAdminId) : '';
 $manualLink = $shareLink . (str_contains($shareLink, '?') ? '&' : '?') . 'manual=1';
 
 // Only submitted applications appear in the list.
@@ -40,14 +45,14 @@ if ($isSuper) {
     $apps = pcvc_self_reg_list_applications($conn, null, $filter, 300);
 } else {
     // Staff / agents / companies: apps they referred or that were transferred to them
-    $apps = pcvc_self_reg_list_applications($conn, $adminId, $filter, 300, $adminId);
+    $apps = pcvc_self_reg_list_applications($conn, $dataAdminId, $filter, 300, $dataAdminId);
 }
 
 $viewRow = null;
 if ($viewId > 0) {
     $viewRow = pcvc_self_reg_find_by_id($conn, $viewId);
     if ($viewRow) {
-        if (!pcvc_self_reg_can_access_row($viewRow, $adminId, $isSuper)) {
+        if (!pcvc_self_reg_can_access_row($viewRow, $dataAdminId, $isSuper)) {
             $viewRow = null;
         } else {
             $assigneeId = (int) ($viewRow['assigned_to_admin_id'] ?? 0);

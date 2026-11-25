@@ -60,12 +60,6 @@ $sidebarBrandSubtitle = 'Canada Visa Consultant';
 $sidebarBrandIsCompany = false;
 $selfIsCompany = function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($admin);
 if ($selfIsCompany) {
-  $selfLogo = trim((string) ($admin['company_logo'] ?? ''));
-  if ($selfLogo !== '') {
-    $topRightAvatar = pcvc_company_logo_url($selfLogo);
-    $sidebarBrandLogo = $topRightAvatar;
-    $sidebarBrandLogoFallback = $topRightAvatar;
-  }
   $selfCompanyTitle = trim((string) ($admin['company_name'] ?? ''));
   if ($selfCompanyTitle !== '') {
     $topRightName = $selfCompanyTitle;
@@ -74,6 +68,16 @@ if ($selfIsCompany) {
   $topRightRole = 'Company';
   $sidebarBrandSubtitle = 'Company partner';
   $sidebarBrandIsCompany = true;
+  $selfLogo = trim((string) ($admin['company_logo'] ?? ''));
+  if ($selfLogo !== '') {
+    $topRightAvatar = pcvc_company_logo_url($selfLogo);
+    $sidebarBrandLogo = $topRightAvatar;
+    $sidebarBrandLogoFallback = pcvc_company_brand_mark_data_uri($sidebarBrandTitle);
+  } else {
+    $sidebarBrandLogo = pcvc_company_brand_mark_data_uri($sidebarBrandTitle);
+    $sidebarBrandLogoFallback = $sidebarBrandLogo;
+    $topRightAvatar = $sidebarBrandLogo;
+  }
 }
 if (pcvc_current_user_is_superadmin($conn) && pcvc_is_viewing_as_company()) {
   $actingCompany = pcvc_load_acting_company($conn);
@@ -95,17 +99,23 @@ if (pcvc_current_user_is_superadmin($conn) && pcvc_is_viewing_as_company()) {
       $topRightName = $companyTitle;
     }
     $topRightRole = 'Company view';
-    // Sidebar upper brand switches to the company.
+    // Sidebar upper brand switches to the company (never keep Parrot seal).
     $sidebarBrandIsCompany = true;
     $sidebarBrandTitle = $companyTitle !== '' ? $companyTitle : 'Company partner';
     $contactName = trim((string) (($actingCompany['first_name'] ?? '') . ' ' . ($actingCompany['last_name'] ?? '')));
     $sidebarBrandSubtitle = $contactName !== '' ? $contactName : 'Company partner dashboard';
     if ($companyLogo !== '') {
       $sidebarBrandLogo = pcvc_company_logo_url($companyLogo);
-      $sidebarBrandLogoFallback = $sidebarBrandLogo;
+      $sidebarBrandLogoFallback = pcvc_company_brand_mark_data_uri($sidebarBrandTitle);
     } elseif (trim((string) ($actingCompany['profile_photo'] ?? '')) !== '') {
       $sidebarBrandLogo = pcvc_profile_photo_url($actingCompany['profile_photo'] ?? '');
+      $sidebarBrandLogoFallback = pcvc_company_brand_mark_data_uri($sidebarBrandTitle);
+    } else {
+      $sidebarBrandLogo = pcvc_company_brand_mark_data_uri($sidebarBrandTitle);
       $sidebarBrandLogoFallback = $sidebarBrandLogo;
+    }
+    if ($companyLogo === '' && trim((string) ($actingCompany['profile_photo'] ?? '')) === '') {
+      $topRightAvatar = $sidebarBrandLogo;
     }
   }
 }
@@ -692,7 +702,13 @@ $chart_data = [];
 $cyprusStatsAvailable = false;
 
 if (strtolower($role) !== 'catholic university of america') {
-    $agentsQuery = "SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM admins";
+    $companyDashCtx = pcvc_effective_company_context($conn);
+    $companyMemberIn = $companyDashCtx
+        ? pcvc_company_member_admin_ids_sql($conn, (int) ($companyDashCtx['id'] ?? 0))
+        : '';
+    $agentsQuery = $companyMemberIn !== ''
+        ? "SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM admins WHERE id IN ({$companyMemberIn})"
+        : "SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM admins";
     $resAgents = mysqli_query($conn, $agentsQuery);
     while ($agent = mysqli_fetch_assoc($resAgents)) {
         $email = strtolower(trim($agent['email'] ?? ''));
@@ -2279,11 +2295,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
           src="<?= htmlspecialchars($sidebarBrandLogo, ENT_QUOTES, 'UTF-8') ?>"
           alt="<?= htmlspecialchars($sidebarBrandTitle, ENT_QUOTES, 'UTF-8') ?>"
           decoding="async"
-          <?php if (empty($sidebarBrandIsCompany)): ?>
-          onerror="this.onerror=null;this.src='<?= htmlspecialchars($sidebarBrandLogoFallback, ENT_QUOTES, 'UTF-8') ?>';this.classList.add('logo-fallback-svg');"
-          <?php else: ?>
-          onerror="this.onerror=null;this.src='parrot-canada-logo.png';this.parentElement.classList.remove('is-company-logo');"
-          <?php endif; ?>
+          onerror="this.onerror=null;this.src=<?= json_encode($sidebarBrandLogoFallback, JSON_UNESCAPED_SLASHES) ?>;<?php if (empty($sidebarBrandIsCompany)): ?>this.classList.add('logo-fallback-svg');<?php endif; ?>"
         >
       </div>
       <h3><?= htmlspecialchars($sidebarBrandTitle, ENT_QUOTES, 'UTF-8') ?><br><small><?= htmlspecialchars($sidebarBrandSubtitle, ENT_QUOTES, 'UTF-8') ?></small></h3>

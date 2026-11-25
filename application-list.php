@@ -30,9 +30,12 @@ $canDeleteApplication = xander_is_superadmin_role($dbRole) || xander_is_superadm
 $reportViewer = pcvc_application_report_viewer($conn);
 $canAssignStaff = pcvc_can_assign_application_staff($conn);
 $seesAllApplications = ($reportViewer['scope'] ?? '') === 'all';
+$isCompanyScoped = (($reportViewer['account_type'] ?? '') === 'company') && !$seesAllApplications;
 $listSubtitle = $seesAllApplications
     ? 'All applications, grouped by the staff, agent, or company in charge'
-    : 'Students assigned to you, and students you added';
+    : ($isCompanyScoped
+        ? 'Only this company’s students (assigned to the company or its linked staff)'
+        : 'Students assigned to you, and students you added');
 
 $appRoot = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
 ?>

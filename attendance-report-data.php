@@ -1,6 +1,7 @@
 <?php
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 require_once __DIR__ . '/includes/payroll_helpers.php';
 session_start();
 
@@ -19,6 +20,11 @@ $roleQuery->fetch();
 $roleQuery->close();
 
 $isSuperAdmin = pcvc_is_superadmin_role($role ?? '');
+$companyCtx = pcvc_effective_company_context($conn);
+$companyMemberSql = '';
+if ($companyCtx) {
+    $companyMemberSql = pcvc_company_member_admin_ids_sql($conn, (int) ($companyCtx['id'] ?? 0));
+}
 
 $filter = $_POST['filter'] ?? 'daily';
 $date   = $_POST['date'] ?? date('Y-m-d');
@@ -61,15 +67,24 @@ if ($filter == "monthly") {
     $bind .= "s";
 }
 
+// Company dashboard: only that company's linked people (never Parrot HQ staff).
+if ($companyMemberSql !== '') {
+    $sql .= " AND a.id IN ({$companyMemberSql}) ";
+}
+
 // STAFF FILTER
-if ($isSuperAdmin && !empty($staff)) {
+if ($isSuperAdmin && $companyMemberSql === '' && !empty($staff)) {
+    $sql .= " AND a.full_name LIKE ? ";
+    $params[] = "%$staff%";
+    $bind .= "s";
+} elseif ($companyMemberSql !== '' && !empty($staff)) {
     $sql .= " AND a.full_name LIKE ? ";
     $params[] = "%$staff%";
     $bind .= "s";
 }
 
-// NORMAL ADMIN CAN ONLY SEE HIS
-if (!$isSuperAdmin) {
+// NORMAL ADMIN CAN ONLY SEE HIS (unless already scoped to company members)
+if (!$isSuperAdmin && $companyMemberSql === '') {
     $sql .= " AND a.id = ? ";
     $params[] = $admin_id;
     $bind .= "i";

@@ -2,6 +2,7 @@
 session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 
 $admin_id = $_SESSION['admin_id'] ?? $_SESSION['id'] ?? null;
 if (!$admin_id) {
@@ -17,6 +18,9 @@ $stmt->fetch();
 $stmt->close();
 
 $isSuperAdmin = pcvc_is_superadmin_role($role ?? '');
+$companyAttendanceCtx = pcvc_effective_company_context($conn);
+// Company view: allow searching within that company's staff only (API already scopes results).
+$canSearchStaff = $isSuperAdmin || $companyAttendanceCtx !== null;
 ?>
 <!DOCTYPE html>
 <html>
@@ -261,7 +265,7 @@ body {
                     </div>
 
                     <!-- Staff Search -->
-                    <?php if ($isSuperAdmin): ?>
+                    <?php if ($canSearchStaff): ?>
                     <div class="col-md-3 position-relative">
                         <label class="form-label fw-bold">Search Staff</label>
                         <input type="text" class="form-control" name="staff" id="staff" autocomplete="off" placeholder="Type name...">

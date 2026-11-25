@@ -5,6 +5,7 @@ session_start();
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/role.php';
 require_once __DIR__ . '/helpers/self_registration.php';
+require_once __DIR__ . '/helpers/company_view_as.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -24,25 +25,27 @@ if ($adminId <= 0) {
     sr_admin_json(['ok' => false, 'error' => 'Unauthorized.'], 403);
 }
 
-$isSuper = pcvc_current_user_is_superadmin($conn);
+$dataAdminId = pcvc_effective_data_admin_id($conn);
+$isSuper = pcvc_current_user_is_superadmin($conn) && !pcvc_company_view_limits_data();
 $action = trim((string) ($_POST['action'] ?? $_GET['action'] ?? ''));
 pcvc_self_reg_ensure_schema($conn);
 
 if ($action === 'issue_link' || $action === 'issue_manual') {
     try {
         $source = $action === 'issue_manual' ? 'manual' : 'link';
-        $refName = pcvc_self_reg_admin_label($conn, $adminId);
-        $created = pcvc_self_reg_issue_link($conn, $adminId, $source, $adminId, $refName);
+        $issuerId = $dataAdminId > 0 ? $dataAdminId : $adminId;
+        $refName = pcvc_self_reg_admin_label($conn, $issuerId);
+        $created = pcvc_self_reg_issue_link($conn, $issuerId, $source, $issuerId, $refName);
         $url = $action === 'issue_manual'
             ? pcvc_self_reg_public_url($created['token'])
-            : pcvc_self_reg_referral_url($adminId);
+            : pcvc_self_reg_referral_url($issuerId);
         sr_admin_json([
             'ok' => true,
             'id' => $created['id'],
             'token' => $created['token'],
             'source' => $source,
             'url' => $url,
-            'referral_url' => pcvc_self_reg_referral_url($adminId),
+            'referral_url' => pcvc_self_reg_referral_url($issuerId),
         ]);
     } catch (Throwable $e) {
         sr_admin_json(['ok' => false, 'error' => $e->getMessage()], 500);

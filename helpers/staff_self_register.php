@@ -17,6 +17,7 @@ function pcvc_ensure_staff_account_columns(mysqli $conn): void
         'company_phone' => 'VARCHAR(40) NULL DEFAULT NULL',
         'company_website_url' => 'VARCHAR(190) NULL DEFAULT NULL',
         'company_logo' => 'VARCHAR(255) NULL DEFAULT NULL',
+        'parent_company_admin_id' => 'INT NULL DEFAULT NULL',
         'account_status' => "VARCHAR(20) NOT NULL DEFAULT 'active'",
     ];
     foreach ($columns as $name => $definition) {

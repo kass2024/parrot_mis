@@ -95,7 +95,8 @@ function pcvc_charge_kind(string $accountType, string $role, string $companyName
  */
 if ($action === 'filter_options') {
     $staff = [];
-    $res = $conn->query("
+    $viewerOpts = pcvc_application_report_viewer($conn);
+    $staffSql = "
         SELECT
             id,
             first_name,
@@ -107,9 +108,19 @@ if ($action === 'filter_options') {
             email,
             phone_number
         FROM admins
-        WHERE " . pcvc_sql_assignable_application_owner_condition() . "
-        ORDER BY last_name ASC, first_name ASC, id ASC
-    ");
+        WHERE " . pcvc_sql_assignable_application_owner_condition();
+    if (($viewerOpts['scope'] ?? '') === 'own' && ($viewerOpts['account_type'] ?? '') === 'company') {
+        if (!function_exists('pcvc_company_member_admin_ids_sql') && is_file(__DIR__ . '/../helpers/company_view_as.php')) {
+            require_once __DIR__ . '/../helpers/company_view_as.php';
+        }
+        $cid = (int) ($viewerOpts['id'] ?? 0);
+        $inList = function_exists('pcvc_company_member_admin_ids_sql')
+            ? pcvc_company_member_admin_ids_sql($conn, $cid)
+            : (string) max(0, $cid);
+        $staffSql .= ' AND id IN (' . $inList . ')';
+    }
+    $staffSql .= ' ORDER BY last_name ASC, first_name ASC, id ASC';
+    $res = $conn->query($staffSql);
     if ($res) {
         while ($row = $res->fetch_assoc()) {
             $id = (int) ($row['id'] ?? 0);
@@ -1036,15 +1047,41 @@ if ($reportViewer['scope'] === 'own') {
     $ownEmail = strtolower(trim($reportViewer['email']));
     $ownId = (int) $reportViewer['id'];
     $ownParts = [];
-    if ($hasAssignedCol && $ownId > 0) {
-        $ownParts[] = 'sa.assigned_to_admin_id = ?';
-        $types .= 'i';
-        $values[] = $ownId;
+    // Company view: include linked company staff/agents as well as the company account.
+    $memberIds = [$ownId];
+    if (($reportViewer['account_type'] ?? '') === 'company' && $ownId > 0) {
+        if (!function_exists('pcvc_company_member_admin_ids') && is_file(__DIR__ . '/../helpers/company_view_as.php')) {
+            require_once __DIR__ . '/../helpers/company_view_as.php';
+        }
+        if (function_exists('pcvc_company_member_admin_ids')) {
+            $memberIds = pcvc_company_member_admin_ids($conn, $ownId);
+        }
+    }
+    $memberIds = array_values(array_filter(array_map('intval', $memberIds), static fn(int $id): bool => $id > 0));
+    if ($hasAssignedCol && $memberIds !== []) {
+        $ownParts[] = 'sa.assigned_to_admin_id IN (' . implode(',', $memberIds) . ')';
     }
     if ($ownEmail !== '') {
         $ownParts[] = "LOWER(TRIM(COALESCE(sa.agent_email, ''))) = ?";
         $types .= 's';
         $values[] = $ownEmail;
+    }
+    // Also match agent_email of linked member accounts.
+    if ($memberIds !== [] && count($memberIds) > 1) {
+        $emailRows = $conn->query(
+            'SELECT DISTINCT LOWER(TRIM(email)) AS em FROM admins WHERE id IN (' . implode(',', $memberIds) . ') AND email IS NOT NULL AND TRIM(email) <> \'\''
+        );
+        if ($emailRows) {
+            while ($er = $emailRows->fetch_assoc()) {
+                $em = strtolower(trim((string) ($er['em'] ?? '')));
+                if ($em === '' || $em === $ownEmail) {
+                    continue;
+                }
+                $ownParts[] = "LOWER(TRIM(COALESCE(sa.agent_email, ''))) = ?";
+                $types .= 's';
+                $values[] = $em;
+            }
+        }
     }
     $where[] = $ownParts !== [] ? '(' . implode(' OR ', $ownParts) . ')' : '1 = 0';
 } elseif (!empty($_GET['agent_email'])) {

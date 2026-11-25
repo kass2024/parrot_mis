@@ -572,6 +572,26 @@ function pcvc_application_report_viewer(mysqli $conn): array
     if (session_status() === PHP_SESSION_NONE) {
         session_start();
     }
+    // Company dashboard switch: isolate students to that company only.
+    if (!function_exists('pcvc_acting_company_id') && is_file(__DIR__ . '/company_view_as.php')) {
+        require_once __DIR__ . '/company_view_as.php';
+    }
+    if (function_exists('pcvc_is_viewing_as_company') && pcvc_is_viewing_as_company()) {
+        $company = function_exists('pcvc_load_acting_company') ? pcvc_load_acting_company($conn) : null;
+        if ($company) {
+            $email = strtolower(trim((string) ($company['email'] ?? '')));
+            $username = strtolower(trim((string) ($company['username'] ?? '')));
+            return [
+                'id' => (int) ($company['id'] ?? 0),
+                'role' => 'agent',
+                'email' => $email,
+                'username' => $username,
+                'scope' => 'own',
+                'account_type' => 'company',
+            ];
+        }
+    }
+
     $adminId = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
     $viewer = ['id' => $adminId, 'role' => '', 'email' => '', 'username' => '', 'scope' => 'own', 'account_type' => 'personal'];
     if ($adminId < 1) {
@@ -622,6 +642,13 @@ function pcvc_application_report_viewer(mysqli $conn): array
 /** Superadmin, director, secretary, or the login whose username is Robert, may reassign an application. */
 function pcvc_can_assign_application_staff(mysqli $conn): bool
 {
+    // While switched into a company dashboard, do not expose global reassignment.
+    if (!function_exists('pcvc_is_viewing_as_company') && is_file(__DIR__ . '/company_view_as.php')) {
+        require_once __DIR__ . '/company_view_as.php';
+    }
+    if (function_exists('pcvc_is_viewing_as_company') && pcvc_is_viewing_as_company()) {
+        return false;
+    }
     $viewer = pcvc_application_report_viewer($conn);
     if (($viewer['id'] ?? 0) < 1) {
         return false;
@@ -674,6 +701,18 @@ function pcvc_viewer_can_see_application(mysqli $conn, int $applicationId, array
         return false;
     }
 
+    $memberIds = [$adminId];
+    if (($viewer['account_type'] ?? '') === 'company') {
+        if (!function_exists('pcvc_company_member_admin_ids') && is_file(__DIR__ . '/company_view_as.php')) {
+            require_once __DIR__ . '/company_view_as.php';
+        }
+        if (function_exists('pcvc_company_member_admin_ids')) {
+            $memberIds = pcvc_company_member_admin_ids($conn, $adminId);
+        }
+    }
+    $memberIds = array_values(array_filter(array_map('intval', $memberIds), static fn(int $id): bool => $id > 0));
+    $inList = $memberIds !== [] ? implode(',', $memberIds) : (string) $adminId;
+
     $hasAssign = false;
     $chk = $conn->query("SHOW COLUMNS FROM student_applications LIKE 'assigned_to_admin_id'");
     if ($chk && $chk->num_rows > 0) {
@@ -687,7 +726,7 @@ function pcvc_viewer_can_see_application(mysqli $conn, int $applicationId, array
         $sql = "SELECT id FROM student_applications
                 WHERE id = ?
                   AND (
-                    assigned_to_admin_id = ?
+                    assigned_to_admin_id IN ({$inList})
                     OR LOWER(TRIM(COALESCE(agent_email, ''))) = ?
                   )
                 LIMIT 1";
@@ -695,13 +734,13 @@ function pcvc_viewer_can_see_application(mysqli $conn, int $applicationId, array
         if (!$st) {
             return false;
         }
-        $st->bind_param('iis', $applicationId, $adminId, $email);
+        $st->bind_param('is', $applicationId, $email);
     } elseif ($hasAssign) {
-        $st = $conn->prepare('SELECT id FROM student_applications WHERE id = ? AND assigned_to_admin_id = ? LIMIT 1');
+        $st = $conn->prepare("SELECT id FROM student_applications WHERE id = ? AND assigned_to_admin_id IN ({$inList}) LIMIT 1");
         if (!$st) {
             return false;
         }
-        $st->bind_param('ii', $applicationId, $adminId);
+        $st->bind_param('i', $applicationId);
     } elseif ($email !== '') {
         return pcvc_agent_owns_application($conn, $applicationId, $email);
     } else {
