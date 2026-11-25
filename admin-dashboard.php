@@ -3609,9 +3609,6 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     <div class="content-wrapper">
       <!-- Dashboard View -->
       <div id="dashboard-view">
-        <?php if (!$isCatholicPortal && !$cyprusStatsAvailable): ?>
-        <p class="alert alert-warning" role="status">Cyprus application counts are temporarily unavailable.</p>
-        <?php endif; ?>
         <?php if ($showStaffPersonalDashboard):
             $sd = $staffDashStats;
             $attMin = (int) ($sd['attendance_minutes_month'] ?? 0);
