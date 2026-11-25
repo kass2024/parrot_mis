@@ -114,6 +114,36 @@ function fm_status_badge(string $s): string
         @media (max-width: 575.98px) {
             .modal-dialog { margin:.5rem; }
         }
+        .fm-upload-progress { margin-top:.45rem; }
+        .fm-upload-track {
+            height:8px; border-radius:999px; background:#e2e8f0; overflow:hidden;
+        }
+        .fm-upload-bar {
+            height:100%; width:8%; border-radius:999px;
+            background:linear-gradient(90deg,#1e4d2b,#3661B9,#1e4d2b);
+            background-size:200% 100%;
+            animation:fmUploadSlide 1s linear infinite, fmUploadGrow 8s ease-out forwards;
+        }
+        .fm-upload-progress.is-done .fm-upload-bar {
+            width:100% !important; animation:none; background:#16a34a;
+        }
+        .fm-upload-progress.is-fail .fm-upload-bar {
+            width:100% !important; animation:none; background:#dc2626;
+        }
+        .fm-upload-label { font-size:.78rem; color:#64748b; margin-top:.28rem; }
+        .fm-upload-progress.is-done .fm-upload-label { color:#15803d; font-weight:700; }
+        .fm-upload-progress.is-fail .fm-upload-label { color:#b91c1c; font-weight:650; }
+        @keyframes fmUploadSlide {
+            0% { background-position:0% 0; }
+            100% { background-position:-200% 0; }
+        }
+        @keyframes fmUploadGrow {
+            0% { width:8%; }
+            25% { width:35%; }
+            55% { width:62%; }
+            80% { width:82%; }
+            100% { width:92%; }
+        }
     </style>
 </head>
 <body>
@@ -469,22 +499,49 @@ function fmDeleteDoc(appId, docId) {
     }).catch(e => alert(e.message));
 }
 
-function fmSetUploadStatus(el, text, busy) {
-    if (!el) return;
-    el.textContent = text || 'Auto-saves';
-    el.classList.toggle('text-primary', !!busy);
-    el.classList.toggle('text-muted', !busy);
+function fmProgressParts(progressId, barId, labelId) {
+    return {
+        wrap: document.getElementById(progressId),
+        bar: document.getElementById(barId),
+        label: document.getElementById(labelId)
+    };
 }
 
-async function fmUploadFilesSequential(appId, files, action, extraFields, statusEl, inputEl) {
+function fmResetProgress(parts) {
+    if (!parts || !parts.wrap) return;
+    parts.wrap.hidden = false;
+    parts.wrap.classList.remove('is-done', 'is-fail');
+    if (parts.bar) {
+        const fresh = parts.bar.cloneNode(true);
+        fresh.removeAttribute('style');
+        parts.bar.replaceWith(fresh);
+        parts.bar = fresh;
+    }
+    if (parts.label) parts.label.textContent = 'Saving…';
+}
+
+function fmMarkProgress(parts, state, text) {
+    if (!parts || !parts.wrap) return;
+    parts.wrap.hidden = false;
+    parts.wrap.classList.remove('is-done', 'is-fail');
+    if (state === 'done') parts.wrap.classList.add('is-done');
+    if (state === 'fail') parts.wrap.classList.add('is-fail');
+    if (parts.label) parts.label.textContent = text || '';
+}
+
+async function fmUploadFilesSequential(appId, files, action, extraFields, parts, inputEl) {
     const list = Array.from(files || []).filter(Boolean);
     if (!list.length) return;
     if (inputEl) inputEl.disabled = true;
-    fmSetUploadStatus(statusEl, 'Saving…', true);
+    fmResetProgress(parts);
     let okCount = 0;
     let lastError = '';
     for (let i = 0; i < list.length; i++) {
-        fmSetUploadStatus(statusEl, 'Saving ' + (i + 1) + '/' + list.length + '…', true);
+        if (parts && parts.label) {
+            parts.label.textContent = list.length > 1
+                ? ('Saving ' + (i + 1) + '/' + list.length + '…')
+                : ('Saving ' + (list[i].name || 'file') + '…');
+        }
         const fd = new FormData();
         fd.append('csrf_token', CSRF);
         fd.append('application_id', String(appId));
@@ -507,12 +564,17 @@ async function fmUploadFilesSequential(appId, files, action, extraFields, status
         inputEl.value = '';
         inputEl.disabled = false;
     }
-    if (okCount > 0) {
-        fmSetUploadStatus(statusEl, okCount === list.length ? 'Saved' : 'Partial save', false);
-        viewApp(appId);
+    if (okCount > 0 && okCount === list.length) {
+        fmMarkProgress(parts, 'done', 'Saved');
+        setTimeout(function () { viewApp(appId); }, 700);
         return;
     }
-    fmSetUploadStatus(statusEl, 'Failed', false);
+    if (okCount > 0) {
+        fmMarkProgress(parts, 'done', 'Saved ' + okCount + '/' + list.length);
+        setTimeout(function () { viewApp(appId); }, 900);
+        return;
+    }
+    fmMarkProgress(parts, 'fail', 'Save failed');
     alert(lastError || 'Upload failed');
 }
 
@@ -522,8 +584,12 @@ function fmUploadAttached(appId, inputEl) {
         alert('Choose a file first.');
         return;
     }
-    const statusEl = document.getElementById('fmAttachStatus_' + appId);
-    fmUploadFilesSequential(appId, input.files, 'upload_attached', {}, statusEl, input);
+    const parts = fmProgressParts(
+        'fmAttachProgress_' + appId,
+        'fmAttachBar_' + appId,
+        'fmAttachStatus_' + appId
+    );
+    fmUploadFilesSequential(appId, input.files, 'upload_attached', {}, parts, input);
 }
 
 function fmUploadToGroup(appId, group, inputEl) {
@@ -532,8 +598,12 @@ function fmUploadToGroup(appId, group, inputEl) {
         alert('Choose a file first.');
         return;
     }
-    const statusEl = document.getElementById('fmGroupStatus_' + appId + '_' + group);
-    fmUploadFilesSequential(appId, input.files, 'upload_to_group', { doc_group: group }, statusEl, input);
+    const parts = fmProgressParts(
+        'fmGroupProgress_' + appId + '_' + group,
+        'fmGroupBar_' + appId + '_' + group,
+        'fmGroupStatus_' + appId + '_' + group
+    );
+    fmUploadFilesSequential(appId, input.files, 'upload_to_group', { doc_group: group }, parts, input);
 }
 
 function fmFileClientDoc(appId, btn) {

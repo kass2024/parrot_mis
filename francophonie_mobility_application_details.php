@@ -345,16 +345,19 @@ $appId = (int) $row['id'];
                 <?php else: ?>
                 <?php foreach ($groupedDocs['attached'] as $doc) { echo $renderManagedDoc($doc); } ?>
                 <?php endif; ?>
-                <div class="input-group input-group-sm mt-2">
+                <div class="mt-2">
                     <input
                         type="file"
-                        class="form-control"
+                        class="form-control form-control-sm"
                         id="fmAttachFile_<?= $appId ?>"
                         accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*"
                         multiple
                         onchange="fmUploadAttached(<?= $appId ?>, this)"
                     >
-                    <span class="input-group-text bg-light small text-muted" id="fmAttachStatus_<?= $appId ?>">Auto-saves</span>
+                    <div class="fm-upload-progress" id="fmAttachProgress_<?= $appId ?>" hidden>
+                        <div class="fm-upload-track"><div class="fm-upload-bar" id="fmAttachBar_<?= $appId ?>"></div></div>
+                        <div class="fm-upload-label" id="fmAttachStatus_<?= $appId ?>">Preparing…</div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -374,16 +377,19 @@ $appId = (int) $row['id'];
                     <?php else: ?>
                     <?php foreach ($groupedDocs['visa'][$slug] as $doc) { echo $renderManagedDoc($doc); } ?>
                     <?php endif; ?>
-                    <div class="input-group input-group-sm">
+                    <div>
                         <input
                             type="file"
-                            class="form-control"
+                            class="form-control form-control-sm"
                             id="fmGroupFile_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"
                             accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*"
                             multiple
                             onchange="fmUploadToGroup(<?= $appId ?>, <?= json_encode($slug) ?>, this)"
                         >
-                        <span class="input-group-text bg-light small text-muted" id="fmGroupStatus_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>">Auto-saves</span>
+                        <div class="fm-upload-progress" id="fmGroupProgress_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" hidden>
+                            <div class="fm-upload-track"><div class="fm-upload-bar" id="fmGroupBar_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"></div></div>
+                            <div class="fm-upload-label" id="fmGroupStatus_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>">Preparing…</div>
+                        </div>
                     </div>
                 </div>
                 <?php endforeach; ?>
