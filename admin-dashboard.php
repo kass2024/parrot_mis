@@ -53,17 +53,27 @@ $actingCompanyId = 0;
 $topRightAvatar = pcvc_profile_photo_url($admin['profile_photo'] ?? '');
 $topRightName = trim((string) (($admin['first_name'] ?? '') . ' ' . ($admin['last_name'] ?? '')));
 $topRightRole = ucfirst($role);
+$sidebarBrandLogo = 'parrot-canada-logo.png';
+$sidebarBrandLogoFallback = 'assets/brand/parrot-mark.svg';
+$sidebarBrandTitle = 'Partners of Parrot';
+$sidebarBrandSubtitle = 'Canada Visa Consultant';
+$sidebarBrandIsCompany = false;
 $selfIsCompany = function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($admin);
 if ($selfIsCompany) {
   $selfLogo = trim((string) ($admin['company_logo'] ?? ''));
   if ($selfLogo !== '') {
     $topRightAvatar = pcvc_company_logo_url($selfLogo);
+    $sidebarBrandLogo = $topRightAvatar;
+    $sidebarBrandLogoFallback = $topRightAvatar;
   }
   $selfCompanyTitle = trim((string) ($admin['company_name'] ?? ''));
   if ($selfCompanyTitle !== '') {
     $topRightName = $selfCompanyTitle;
+    $sidebarBrandTitle = $selfCompanyTitle;
   }
   $topRightRole = 'Company';
+  $sidebarBrandSubtitle = 'Company partner';
+  $sidebarBrandIsCompany = true;
 }
 if (pcvc_current_user_is_superadmin($conn) && pcvc_is_viewing_as_company()) {
   $actingCompany = pcvc_load_acting_company($conn);
@@ -85,6 +95,18 @@ if (pcvc_current_user_is_superadmin($conn) && pcvc_is_viewing_as_company()) {
       $topRightName = $companyTitle;
     }
     $topRightRole = 'Company view';
+    // Sidebar upper brand switches to the company.
+    $sidebarBrandIsCompany = true;
+    $sidebarBrandTitle = $companyTitle !== '' ? $companyTitle : 'Company partner';
+    $contactName = trim((string) (($actingCompany['first_name'] ?? '') . ' ' . ($actingCompany['last_name'] ?? '')));
+    $sidebarBrandSubtitle = $contactName !== '' ? $contactName : 'Company partner dashboard';
+    if ($companyLogo !== '') {
+      $sidebarBrandLogo = pcvc_company_logo_url($companyLogo);
+      $sidebarBrandLogoFallback = $sidebarBrandLogo;
+    } elseif (trim((string) ($actingCompany['profile_photo'] ?? '')) !== '') {
+      $sidebarBrandLogo = pcvc_profile_photo_url($actingCompany['profile_photo'] ?? '');
+      $sidebarBrandLogoFallback = $sidebarBrandLogo;
+    }
   }
 }
 
@@ -926,6 +948,17 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     .logo-container img.logo-fallback-svg {
       width: 70%;
       height: 70%;
+    }
+
+    .logo-container.is-company-logo {
+      background: #ffffff;
+      border-color: rgba(255, 255, 255, 0.7);
+    }
+
+    .logo-container.is-company-logo img {
+      width: 92%;
+      height: 92%;
+      object-fit: contain;
     }
 
     .sidebar-header h3 {
@@ -2241,10 +2274,19 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <div class="logo-container">
-        <img src="parrot-canada-logo.png" alt="" decoding="async" onerror="this.onerror=null;this.src='assets/brand/parrot-mark.svg';this.classList.add('logo-fallback-svg');">
+      <div class="logo-container<?= !empty($sidebarBrandIsCompany) ? ' is-company-logo' : '' ?>">
+        <img
+          src="<?= htmlspecialchars($sidebarBrandLogo, ENT_QUOTES, 'UTF-8') ?>"
+          alt="<?= htmlspecialchars($sidebarBrandTitle, ENT_QUOTES, 'UTF-8') ?>"
+          decoding="async"
+          <?php if (empty($sidebarBrandIsCompany)): ?>
+          onerror="this.onerror=null;this.src='<?= htmlspecialchars($sidebarBrandLogoFallback, ENT_QUOTES, 'UTF-8') ?>';this.classList.add('logo-fallback-svg');"
+          <?php else: ?>
+          onerror="this.onerror=null;this.src='parrot-canada-logo.png';this.parentElement.classList.remove('is-company-logo');"
+          <?php endif; ?>
+        >
       </div>
-      <h3>Partners of Parrot<br><small>Canada Visa Consultant</small></h3>
+      <h3><?= htmlspecialchars($sidebarBrandTitle, ENT_QUOTES, 'UTF-8') ?><br><small><?= htmlspecialchars($sidebarBrandSubtitle, ENT_QUOTES, 'UTF-8') ?></small></h3>
     </div>
     
     <!-- Five main menus -->
