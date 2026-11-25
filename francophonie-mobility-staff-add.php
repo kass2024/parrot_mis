@@ -548,7 +548,7 @@ $statusHints = [
 
         <div class="mb-2">
             <h2 class="section-title"><span class="num">3</span> Documents by group</h2>
-            <p class="hint mb-3">All uploads are optional — nothing here is mandatory. Attach files into a Visa submission folder, or leave them in <strong>Attached</strong> to sort later. Each folder can hold multiple files. PDF, JPG, PNG, DOC, DOCX — max 12 MB each.</p>
+            <p class="hint mb-3">All uploads are optional — nothing here is mandatory. Choose files into a Visa submission folder (or <strong>Attached</strong>); they are saved when you click <strong>Save candidate</strong>. Each folder can hold multiple files. PDF, JPG, PNG, DOC, DOCX — max 12 MB each.</p>
             <div class="doc-panel">
                 <?php foreach ($docBuckets as $slug => $lab): ?>
                 <?php $isAttached = $slug === fm_doc_attached_group(); ?>

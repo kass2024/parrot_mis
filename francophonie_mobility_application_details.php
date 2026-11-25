@@ -339,17 +339,22 @@ $appId = (int) $row['id'];
         <div class="card mt-3 border-primary-subtle">
             <div class="card-body">
                 <h6 class="card-title"><i class="fas fa-paperclip me-1 text-primary"></i> Attached</h6>
-                <p class="small text-muted mb-2">Inbox for staff uploads and filed client docs. Choose a group to move directly.</p>
+                <p class="small text-muted mb-2">Inbox for staff uploads and filed client docs. Choose a file — it saves automatically. Then move into a Visa group if needed.</p>
                 <?php if ($groupedDocs['attached'] === []): ?>
                 <div class="text-muted small mb-2">No files in Attached yet.</div>
                 <?php else: ?>
                 <?php foreach ($groupedDocs['attached'] as $doc) { echo $renderManagedDoc($doc); } ?>
                 <?php endif; ?>
                 <div class="input-group input-group-sm mt-2">
-                    <input type="file" class="form-control" id="fmAttachFile_<?= $appId ?>" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*">
-                    <button type="button" class="btn btn-primary" onclick="fmUploadAttached(<?= $appId ?>)">
-                        <i class="fas fa-upload me-1"></i> Add to Attached
-                    </button>
+                    <input
+                        type="file"
+                        class="form-control"
+                        id="fmAttachFile_<?= $appId ?>"
+                        accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*"
+                        multiple
+                        onchange="fmUploadAttached(<?= $appId ?>, this)"
+                    >
+                    <span class="input-group-text bg-light small text-muted" id="fmAttachStatus_<?= $appId ?>">Auto-saves</span>
                 </div>
             </div>
         </div>
@@ -357,7 +362,7 @@ $appId = (int) $row['id'];
         <div class="card mt-3">
             <div class="card-body">
                 <h6 class="card-title"><i class="fas fa-folder me-1 text-success"></i> Visa submission documents</h6>
-                <p class="small text-muted mb-3">File docs here from Attached, from client form uploads, or upload directly into a group.</p>
+                <p class="small text-muted mb-3">File docs here from Attached, from client form uploads, or choose a file in a group — it auto-saves right away.</p>
                 <?php foreach ($visaGroups as $slug => $lab): ?>
                 <div class="mb-3 border-bottom pb-2">
                     <div class="small fw-bold text-uppercase text-secondary mb-1">
@@ -370,10 +375,15 @@ $appId = (int) $row['id'];
                     <?php foreach ($groupedDocs['visa'][$slug] as $doc) { echo $renderManagedDoc($doc); } ?>
                     <?php endif; ?>
                     <div class="input-group input-group-sm">
-                        <input type="file" class="form-control" id="fmGroupFile_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*">
-                        <button type="button" class="btn btn-outline-success" onclick="fmUploadToGroup(<?= $appId ?>, <?= json_encode($slug) ?>)">
-                            <i class="fas fa-upload me-1"></i> Add here
-                        </button>
+                        <input
+                            type="file"
+                            class="form-control"
+                            id="fmGroupFile_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>"
+                            accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx,application/pdf,image/*"
+                            multiple
+                            onchange="fmUploadToGroup(<?= $appId ?>, <?= json_encode($slug) ?>, this)"
+                        >
+                        <span class="input-group-text bg-light small text-muted" id="fmGroupStatus_<?= $appId ?>_<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>">Auto-saves</span>
                     </div>
                 </div>
                 <?php endforeach; ?>

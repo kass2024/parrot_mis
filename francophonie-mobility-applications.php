@@ -469,47 +469,71 @@ function fmDeleteDoc(appId, docId) {
     }).catch(e => alert(e.message));
 }
 
-function fmUploadAttached(appId) {
-    const input = document.getElementById('fmAttachFile_' + appId);
-    if (!input || !input.files || !input.files[0]) {
-        alert('Choose a file first.');
-        return;
-    }
-    const fd = new FormData();
-    fd.append('csrf_token', CSRF);
-    fd.append('application_id', String(appId));
-    fd.append('action', 'upload_attached');
-    fd.append('file', input.files[0]);
-    fetch('francophonie_mobility_admin_action.php', { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => {
-            if (!d.success) throw new Error(d.message || 'Upload failed');
-            alert(d.message || 'Uploaded');
-            viewApp(appId);
-        })
-        .catch(e => alert(e.message));
+function fmSetUploadStatus(el, text, busy) {
+    if (!el) return;
+    el.textContent = text || 'Auto-saves';
+    el.classList.toggle('text-primary', !!busy);
+    el.classList.toggle('text-muted', !busy);
 }
 
-function fmUploadToGroup(appId, group) {
-    const input = document.getElementById('fmGroupFile_' + appId + '_' + group);
-    if (!input || !input.files || !input.files[0]) {
+async function fmUploadFilesSequential(appId, files, action, extraFields, statusEl, inputEl) {
+    const list = Array.from(files || []).filter(Boolean);
+    if (!list.length) return;
+    if (inputEl) inputEl.disabled = true;
+    fmSetUploadStatus(statusEl, 'Saving…', true);
+    let okCount = 0;
+    let lastError = '';
+    for (let i = 0; i < list.length; i++) {
+        fmSetUploadStatus(statusEl, 'Saving ' + (i + 1) + '/' + list.length + '…', true);
+        const fd = new FormData();
+        fd.append('csrf_token', CSRF);
+        fd.append('application_id', String(appId));
+        fd.append('action', action);
+        Object.keys(extraFields || {}).forEach(function (k) {
+            fd.append(k, extraFields[k]);
+        });
+        fd.append('file', list[i]);
+        try {
+            const res = await fetch('francophonie_mobility_admin_action.php', { method: 'POST', body: fd });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || 'Upload failed');
+            okCount++;
+        } catch (err) {
+            lastError = err && err.message ? err.message : 'Upload failed';
+            break;
+        }
+    }
+    if (inputEl) {
+        inputEl.value = '';
+        inputEl.disabled = false;
+    }
+    if (okCount > 0) {
+        fmSetUploadStatus(statusEl, okCount === list.length ? 'Saved' : 'Partial save', false);
+        viewApp(appId);
+        return;
+    }
+    fmSetUploadStatus(statusEl, 'Failed', false);
+    alert(lastError || 'Upload failed');
+}
+
+function fmUploadAttached(appId, inputEl) {
+    const input = inputEl || document.getElementById('fmAttachFile_' + appId);
+    if (!input || !input.files || !input.files.length) {
         alert('Choose a file first.');
         return;
     }
-    const fd = new FormData();
-    fd.append('csrf_token', CSRF);
-    fd.append('application_id', String(appId));
-    fd.append('action', 'upload_to_group');
-    fd.append('doc_group', group);
-    fd.append('file', input.files[0]);
-    fetch('francophonie_mobility_admin_action.php', { method: 'POST', body: fd })
-        .then(r => r.json())
-        .then(d => {
-            if (!d.success) throw new Error(d.message || 'Upload failed');
-            alert(d.message || 'Uploaded');
-            viewApp(appId);
-        })
-        .catch(e => alert(e.message));
+    const statusEl = document.getElementById('fmAttachStatus_' + appId);
+    fmUploadFilesSequential(appId, input.files, 'upload_attached', {}, statusEl, input);
+}
+
+function fmUploadToGroup(appId, group, inputEl) {
+    const input = inputEl || document.getElementById('fmGroupFile_' + appId + '_' + group);
+    if (!input || !input.files || !input.files.length) {
+        alert('Choose a file first.');
+        return;
+    }
+    const statusEl = document.getElementById('fmGroupStatus_' + appId + '_' + group);
+    fmUploadFilesSequential(appId, input.files, 'upload_to_group', { doc_group: group }, statusEl, input);
 }
 
 function fmFileClientDoc(appId, btn) {
