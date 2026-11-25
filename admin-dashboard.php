@@ -711,19 +711,26 @@ $chart_data = [];
 $cyprusStatsAvailable = false;
 
 if (strtolower($role) !== 'catholic university of america') {
-    $companyDashCtx = pcvc_effective_company_context($conn);
-    $companyMemberIn = $companyDashCtx
+    // Prefer the already-resolved company home context (acting company or company login).
+    if (empty($companyDashCtx) || !is_array($companyDashCtx)) {
+        $companyDashCtx = pcvc_effective_company_context($conn);
+    }
+    $companyScopedAgents = is_array($companyDashCtx) && (int) ($companyDashCtx['id'] ?? 0) > 0;
+    $companyMemberIn = $companyScopedAgents
         ? pcvc_company_member_admin_ids_sql($conn, (int) ($companyDashCtx['id'] ?? 0))
         : '';
     $agentsQuery = $companyMemberIn !== ''
-        ? "SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM admins WHERE id IN ({$companyMemberIn})"
+        ? "SELECT email, COALESCE(NULLIF(TRIM(company_name),''), CONCAT(COALESCE(first_name,''),' ',COALESCE(last_name,''))) AS full_name FROM admins WHERE id IN ({$companyMemberIn})"
         : "SELECT email, CONCAT(first_name, ' ', last_name) AS full_name FROM admins";
     $resAgents = mysqli_query($conn, $agentsQuery);
     while ($agent = mysqli_fetch_assoc($resAgents)) {
         $email = strtolower(trim($agent['email'] ?? ''));
+        if ($email === '') {
+            continue;
+        }
         $agentsCombined[$email] = [
             'email' => $email,
-            'name' => $agent['full_name'] ?: $email,
+            'name' => trim((string) ($agent['full_name'] ?? '')) ?: $email,
             'total' => 0,
             'submitted' => 0,
             'admit' => 0,
@@ -738,7 +745,9 @@ if (strtolower($role) !== 'catholic university of america') {
     $admitExpr = pcvc_agent_pipeline_expr('admit');
     $visaExpr = pcvc_agent_pipeline_expr('visa_approved');
     $enrolledExpr = pcvc_agent_pipeline_expr('enrolled');
-    $agentScopeWhere = $companyAppsWhereSql !== '' ? (' AND ' . $companyAppsWhereSql) : '';
+    $agentScopeWhere = ($companyAppsWhereSql !== '' && $companyScopedAgents)
+        ? (' AND ' . $companyAppsWhereSql)
+        : '';
     $mainAgentsQuery = "
       SELECT 
         LOWER(TRIM(sa.agent_email)) AS agent_email_norm,
@@ -763,56 +772,64 @@ if (strtolower($role) !== 'catholic university of america') {
         $agentsCombined[$email]['enrolled'] += (int)$r['enrolled'];
     }
 
-    $cyprusQuery = "
-      SELECT 
-        agent_email,
-        agent_first_name,
-        agent_last_name,
-        COUNT(*) AS total_students,
-        SUM(status = 'verified') AS submitted,
-        SUM(is_admitted = 1) AS admit
-      FROM applications
-      WHERE agent_email IS NOT NULL AND agent_email != ''
-      GROUP BY agent_email
-    ";
-    $res2 = null;
-    $cyprusConfig = __DIR__ . '/database.php';
-    if (is_file($cyprusConfig)) {
-        $driver = new mysqli_driver();
-        $reportMode = $driver->report_mode;
-        try {
-            $driver->report_mode = MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT;
-            require_once $cyprusConfig;
-            $res2 = $conn2->query($cyprusQuery);
-        } catch (mysqli_sql_exception $error) {
-            $conn2 = null;
-            error_log('Cyprus dashboard statistics unavailable (database error ' . $error->getCode() . ')');
-        } finally {
-            $driver->report_mode = $reportMode;
+    // Cyprus pool is Parrot HQ data — never merge into a company partner dashboard.
+    $cyprusStatsAvailable = false;
+    if (!$companyScopedAgents) {
+        $cyprusQuery = "
+          SELECT 
+            agent_email,
+            agent_first_name,
+            agent_last_name,
+            COUNT(*) AS total_students,
+            SUM(status = 'verified') AS submitted,
+            SUM(is_admitted = 1) AS admit
+          FROM applications
+          WHERE agent_email IS NOT NULL AND agent_email != ''
+          GROUP BY agent_email
+        ";
+        $res2 = null;
+        $cyprusConfig = __DIR__ . '/database.php';
+        if (is_file($cyprusConfig)) {
+            $driver = new mysqli_driver();
+            $reportMode = $driver->report_mode;
+            try {
+                $driver->report_mode = MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT;
+                require_once $cyprusConfig;
+                $res2 = $conn2->query($cyprusQuery);
+            } catch (mysqli_sql_exception $error) {
+                $conn2 = null;
+                error_log('Cyprus dashboard statistics unavailable (database error ' . $error->getCode() . ')');
+            } finally {
+                $driver->report_mode = $reportMode;
+            }
         }
-    }
-    $cyprusStatsAvailable = $res2 instanceof mysqli_result;
-    while ($cyprusStatsAvailable && ($r = $res2->fetch_assoc())) {
-        $email = strtolower(trim($r['agent_email']));
-        $name = trim(($r['agent_first_name'] ?? '') . ' ' . ($r['agent_last_name'] ?? ''));
-        if (!isset($agentsCombined[$email])) {
-            $agentsCombined[$email] = [
-                'email' => $email,
-                'name' => $name ?: $email,
-                'total' => 0,
-                'submitted' => 0,
-                'admit' => 0,
-                'visa_approved' => 0,
-                'enrolled' => 0,
-            ];
+        $cyprusStatsAvailable = $res2 instanceof mysqli_result;
+        while ($cyprusStatsAvailable && ($r = $res2->fetch_assoc())) {
+            $email = strtolower(trim($r['agent_email']));
+            $name = trim(($r['agent_first_name'] ?? '') . ' ' . ($r['agent_last_name'] ?? ''));
+            if (!isset($agentsCombined[$email])) {
+                $agentsCombined[$email] = [
+                    'email' => $email,
+                    'name' => $name ?: $email,
+                    'total' => 0,
+                    'submitted' => 0,
+                    'admit' => 0,
+                    'visa_approved' => 0,
+                    'enrolled' => 0,
+                ];
+            }
+            $agentsCombined[$email]['total'] += (int)$r['total_students'];
+            $agentsCombined[$email]['submitted'] += (int)$r['submitted'];
+            $agentsCombined[$email]['admit'] += (int)$r['admit'];
         }
-        $agentsCombined[$email]['total'] += (int)$r['total_students'];
-        $agentsCombined[$email]['submitted'] += (int)$r['submitted'];
-        $agentsCombined[$email]['admit'] += (int)$r['admit'];
     }
 
     foreach ($agentsCombined as $agent) {
-        if (!pcvc_is_superadmin_role($role) && strtolower(trim($agent['email'] ?? '')) !== strtolower(trim($admin['email'] ?? ''))) continue;
+        if ($companyScopedAgents) {
+            // Company home: only this company's linked people (already filtered above).
+        } elseif (!pcvc_is_superadmin_role($role) && strtolower(trim($agent['email'] ?? '')) !== strtolower(trim($admin['email'] ?? ''))) {
+            continue;
+        }
         $chart_labels[] = $agent['name'];
         $chart_data[] = (int)$agent['total'];
     }

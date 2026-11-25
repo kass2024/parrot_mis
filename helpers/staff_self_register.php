@@ -521,6 +521,76 @@ function pcvc_approve_staff_account(mysqli $conn, int $adminId): array
     return ['ok' => true, 'email' => $email, 'name' => $fullName !== '' ? $fullName : $email];
 }
 
+/**
+ * Reset password and resend login details to a company (or staff) account email.
+ *
+ * @return array{ok:bool, error?:string, email?:string, name?:string}
+ */
+function pcvc_resend_account_credentials(mysqli $conn, int $adminId): array
+{
+    if ($adminId < 1) {
+        return ['ok' => false, 'error' => 'Choose an account.'];
+    }
+    pcvc_ensure_staff_account_columns($conn);
+    $st = $conn->prepare(
+        'SELECT id, email, first_name, last_name, full_name, account_type, company_name, account_status
+         FROM admins WHERE id = ? LIMIT 1'
+    );
+    if (!$st) {
+        return ['ok' => false, 'error' => 'Could not load that account.'];
+    }
+    $st->bind_param('i', $adminId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$row) {
+        return ['ok' => false, 'error' => 'That account was not found.'];
+    }
+    $status = strtolower(trim((string) ($row['account_status'] ?? 'active')));
+    if ($status === 'inactive') {
+        return ['ok' => false, 'error' => 'Reactivate this account before resending login details.'];
+    }
+    if ($status === 'pending') {
+        return ['ok' => false, 'error' => 'Approve this account first — approval already emails sign-in details.'];
+    }
+    $email = strtolower(trim((string) ($row['email'] ?? '')));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['ok' => false, 'error' => 'This account has no valid email for login details.'];
+    }
+    $fullName = trim((string) ($row['full_name'] ?? ''));
+    if ($fullName === '') {
+        $fullName = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
+    }
+    $companyName = trim((string) ($row['company_name'] ?? ''));
+    $isCompany = pcvc_admin_is_company_account($row);
+    $password = pcvc_generate_staff_password();
+    $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+    if ($passwordHash === false) {
+        return ['ok' => false, 'error' => 'Could not create a new password.'];
+    }
+    $loginUrl = pcvc_staff_login_url($email);
+    $sent = pcvc_send_staff_welcome_email(
+        $email,
+        $fullName !== '' ? $fullName : $email,
+        $password,
+        $loginUrl,
+        $companyName,
+        $isCompany
+    );
+    if (empty($sent['ok'])) {
+        return ['ok' => false, 'error' => 'The login email could not be sent. Try again in a moment.'];
+    }
+    $upd = $conn->prepare('UPDATE admins SET password_hash = ? WHERE id = ? LIMIT 1');
+    if (!$upd) {
+        return ['ok' => false, 'error' => 'Email sent, but the password was not updated. Contact support before trying again.'];
+    }
+    $upd->bind_param('si', $passwordHash, $adminId);
+    $upd->execute();
+    $upd->close();
+
+    return ['ok' => true, 'email' => $email, 'name' => $fullName !== '' ? $fullName : $email];
+}
+
 function pcvc_send_staff_welcome_email(string $email, string $fullName, string $password, string $loginUrl, string $registeredCompany = '', bool $askCompanyDocuments = false): array
 {
     $safeName = htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8');

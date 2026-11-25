@@ -7,11 +7,12 @@ $rosterMemberIds = null;
 if (isset($dashboardRosterMemberIds) && is_array($dashboardRosterMemberIds)) {
     $rosterMemberIds = $dashboardRosterMemberIds;
 }
-$roster = pcvc_dashboard_roster(
-    $conn,
-    (isset($conn2) && $conn2 instanceof mysqli) ? $conn2 : null,
-    $rosterMemberIds
-);
+// Company home: never merge Parrot HQ Cyprus applicants into the roster.
+$rosterConn2 = null;
+if ($rosterMemberIds === null && isset($conn2) && $conn2 instanceof mysqli) {
+    $rosterConn2 = $conn2;
+}
+$roster = pcvc_dashboard_roster($conn, $rosterConn2, $rosterMemberIds);
 
 $renderStudents = static function (array $people): string {
     if ($people === []) {

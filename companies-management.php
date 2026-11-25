@@ -71,6 +71,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isSuperAdmin) {
         cm_redirect('filter=pending');
     }
 
+    if (isset($_POST['resend_company_credentials'])) {
+        $id = (int) ($_POST['id'] ?? 0);
+        $row = null;
+        $st = $conn->prepare('SELECT * FROM admins WHERE id = ? LIMIT 1');
+        if ($st) {
+            $st->bind_param('i', $id);
+            $st->execute();
+            $row = $st->get_result()->fetch_assoc() ?: null;
+            $st->close();
+        }
+        if (!$row || !pcvc_admin_is_company_account($row)) {
+            $_SESSION['error'] = 'That company account was not found.';
+            cm_redirect('filter=' . rawurlencode($filter) . ($viewId > 0 ? '&view=' . $viewId : ''));
+        }
+        $result = pcvc_resend_account_credentials($conn, $id);
+        if (!empty($result['ok'])) {
+            $_SESSION['success'] = 'New login details were emailed to '
+                . (string) ($result['email'] ?? 'the company contact')
+                . '.';
+        } else {
+            $_SESSION['error'] = (string) ($result['error'] ?? 'Could not resend credentials.');
+        }
+        cm_redirect('filter=' . rawurlencode($filter) . '&view=' . $id);
+    }
+
     if (isset($_POST['deactivate_company'])) {
         $id = (int) ($_POST['id'] ?? 0);
         if ($id < 1 || $id === $currentUserId) {
@@ -482,6 +507,14 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
     <?php if ($status !== 'pending'): ?>
     <div class="actions" style="margin-top:14px">
       <button type="button" class="btn btn-sky btn-enter-company" data-id="<?= (int)$viewRow['id'] ?>" data-name="<?= cm_h(trim((string)($viewRow['company_name'] ?? '')) ?: ('Company #' . (int)$viewRow['id'])) ?>">Open company dashboard</button>
+      <?php if ($isSuperAdmin && $status === 'active' && trim((string)($viewRow['email'] ?? '')) !== ''): ?>
+      <form method="post" onsubmit="return confirm('Reset password and email new login details to <?= cm_h((string)$viewRow['email']) ?>?');">
+        <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
+        <input type="hidden" name="resend_company_credentials" value="1">
+        <input type="hidden" name="id" value="<?= (int)$viewRow['id'] ?>">
+        <button type="submit" class="btn btn-ghost">Resend credentials</button>
+      </form>
+      <?php endif; ?>
     </div>
     <?php endif; ?>
   </div>
@@ -561,6 +594,14 @@ input[type=text],input[type=email],input[type=tel],input[type=url]{width:100%;pa
                 <?php else: ?>
                   <button type="button" class="btn btn-sky btn-sm btn-enter-company" data-id="<?= (int)$row['id'] ?>" data-name="<?= cm_h($company !== '' ? $company : ('Company #' . (int)$row['id'])) ?>">Dashboard</button>
                   <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
+                  <?php if ($isSuperAdmin && $status === 'active' && $email !== ''): ?>
+                  <form method="post" onsubmit="return confirm('Reset password and email new login details to <?= cm_h($email) ?>?');">
+                    <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
+                    <input type="hidden" name="resend_company_credentials" value="1">
+                    <input type="hidden" name="id" value="<?= (int)$row['id'] ?>">
+                    <button type="submit" class="btn btn-ghost btn-sm">Resend credentials</button>
+                  </form>
+                  <?php endif; ?>
                   <?php if ($isSuperAdmin && $status !== 'inactive' && (int)$row['id'] !== $currentUserId): ?>
                   <form method="post" onsubmit="return confirm('Deactivate this company account?');">
                     <input type="hidden" name="csrf_token" value="<?= cm_h($csrf) ?>">
