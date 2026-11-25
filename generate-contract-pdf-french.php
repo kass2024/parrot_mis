@@ -8,6 +8,7 @@ require_once __DIR__ . '/vendor/autoload.php';
 require_once __DIR__ . '/helpers/contract_price_highlight.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
 require_once __DIR__ . '/helpers/country_flag.php';
+require_once __DIR__ . '/helpers/student_contract_notice.php';
 
 /* =====================================================
    SAFE ESCAPE
@@ -1031,6 +1032,7 @@ Les tribunaux compétents du Rwanda ont compétence exclusive.
 La présente convention constitue l’intégralité de l’accord entre les parties et remplace
 toute discussion antérieure. Toute modification doit être faite par écrit et signée par les deux parties.
 </p>
+<?= pcvc_student_contract_documents_notice('fr') ?>
 <div class="signatures-section">
 <h2>15. SIGNATURES</h2>
 

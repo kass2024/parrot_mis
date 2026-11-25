@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/country_flag.php';
 require_once __DIR__ . '/helpers/contract_signature_image.php';
+require_once __DIR__ . '/helpers/student_contract_notice.php';
 /**
  * 0. Safety check: DB connection
  */
@@ -1546,6 +1547,9 @@ button {
 </p>
 
 </div>
+
+<?= pcvc_student_contract_documents_notice('en') ?>
+
 <!-- ============================
      15. SIGNATURES
      Left: Dr. Twajamahoro | Right: Student e-sign
