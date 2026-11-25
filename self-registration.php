@@ -1,6 +1,10 @@
 <?php
 declare(strict_types=1);
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers/self_registration.php';
 
@@ -12,10 +16,45 @@ if (!isset($conn) || $conn->connect_error) {
 pcvc_self_reg_ensure_schema($conn);
 
 $token = trim((string) ($_GET['token'] ?? ''));
-$reg = pcvc_self_reg_find_by_token($conn, $token);
-if (!$reg) {
-    http_response_code(404);
-    exit('This self-registration link is invalid or has expired. Please contact Parrot Canada Visa Consultant.');
+$isManualAdmin = isset($_GET['manual']) && (string) $_GET['manual'] === '1'
+    && (!empty($_SESSION['admin_id']) || !empty($_SESSION['id']));
+$reg = null;
+
+if ($token !== '') {
+    $reg = pcvc_self_reg_find_by_token($conn, $token);
+    if (!$reg) {
+        http_response_code(404);
+        exit('This self-registration link is invalid or has expired. Please contact Parrot Canada Visa Consultant.');
+    }
+} else {
+    // Fixed public link (no token): one draft per browser session until submitted.
+    // Admin "Add manually" always starts a fresh draft.
+    if (!$isManualAdmin) {
+        $sessionToken = trim((string) ($_SESSION['self_reg_draft_token'] ?? ''));
+        if ($sessionToken !== '') {
+            $reg = pcvc_self_reg_find_by_token($conn, $sessionToken);
+            if ($reg && (($reg['status'] ?? '') === 'submitted')) {
+                $reg = null;
+                unset($_SESSION['self_reg_draft_token']);
+            }
+        }
+    }
+    if (!$reg) {
+        $adminId = $isManualAdmin
+            ? (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0)
+            : null;
+        $source = $isManualAdmin ? 'manual' : 'link';
+        $created = pcvc_self_reg_issue_link($conn, $adminId > 0 ? $adminId : null, $source);
+        if (!$isManualAdmin) {
+            $_SESSION['self_reg_draft_token'] = $created['token'];
+        }
+        $reg = pcvc_self_reg_find_by_token($conn, $created['token']);
+    }
+    if (!$reg) {
+        http_response_code(500);
+        exit('Could not start self-registration form. Please try again.');
+    }
+    $token = (string) $reg['token'];
 }
 
 $docs = pcvc_self_reg_documents_map($conn, (int) $reg['id']);

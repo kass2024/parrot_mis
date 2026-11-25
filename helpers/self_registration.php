@@ -178,16 +178,17 @@ function pcvc_self_reg_kpis(mysqli $conn): array
         'waiting_documents' => 0,
         'closed' => 0,
     ];
+    // Dashboard KPIs / list focus on submitted applications only.
     $res = $conn->query(
         "SELECT
-            COUNT(*) AS total,
+            SUM(status = 'submitted') AS total,
             SUM(status = 'draft') AS draft,
             SUM(status = 'submitted') AS submitted,
-            SUM(assigned_to_admin_id IS NULL OR assigned_to_admin_id = 0) AS unassigned,
-            SUM(assigned_to_admin_id IS NOT NULL AND assigned_to_admin_id > 0) AS assigned,
-            SUM(followup_status = 'in_progress') AS in_progress,
-            SUM(followup_status = 'waiting_documents') AS waiting_documents,
-            SUM(followup_status IN ('closed','cancelled')) AS closed
+            SUM(status = 'submitted' AND (assigned_to_admin_id IS NULL OR assigned_to_admin_id = 0)) AS unassigned,
+            SUM(status = 'submitted' AND assigned_to_admin_id IS NOT NULL AND assigned_to_admin_id > 0) AS assigned,
+            SUM(status = 'submitted' AND followup_status = 'in_progress') AS in_progress,
+            SUM(status = 'submitted' AND followup_status = 'waiting_documents') AS waiting_documents,
+            SUM(status = 'submitted' AND followup_status IN ('closed','cancelled')) AS closed
          FROM self_registrations"
     );
     if ($res && ($row = $res->fetch_assoc())) {
@@ -213,19 +214,20 @@ function pcvc_self_reg_list_applications(
     $types = '';
     $params = [];
 
+    // Never list non-submitted drafts in the dashboard.
+    $where[] = "r.status = 'submitted'";
+
     if ($assignedTo !== null && $assignedTo > 0) {
         $where[] = 'r.assigned_to_admin_id = ?';
         $types .= 'i';
         $params[] = $assignedTo;
     }
-    if ($filter === 'submitted') {
-        $where[] = "r.status = 'submitted'";
-    } elseif ($filter === 'draft') {
-        $where[] = "r.status = 'draft'";
-    } elseif ($filter === 'unassigned') {
+    if ($filter === 'unassigned') {
         $where[] = '(r.assigned_to_admin_id IS NULL OR r.assigned_to_admin_id = 0)';
     } elseif ($filter === 'assigned') {
         $where[] = 'r.assigned_to_admin_id IS NOT NULL AND r.assigned_to_admin_id > 0';
+    } elseif ($filter === 'closed') {
+        $where[] = "r.followup_status IN ('closed','cancelled')";
     } elseif (pcvc_self_reg_is_valid_followup_status($filter)) {
         $where[] = 'r.followup_status = ?';
         $types .= 's';
@@ -665,12 +667,24 @@ function pcvc_self_reg_documents_map(mysqli $conn, int $registrationId): array
     return $out;
 }
 
-function pcvc_self_reg_public_url(string $token): string
+function pcvc_self_reg_base_url(): string
 {
     $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
     $basePath = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
-    return "{$scheme}://{$host}{$basePath}/self-registration.php?token=" . rawurlencode($token);
+    return "{$scheme}://{$host}{$basePath}";
+}
+
+/** Fixed public link students always receive (no random token). */
+function pcvc_self_reg_fixed_public_url(): string
+{
+    return pcvc_self_reg_base_url() . '/self-registration.php';
+}
+
+/** Tokenized URL for a specific draft/application (admin/manual use). */
+function pcvc_self_reg_public_url(string $token): string
+{
+    return pcvc_self_reg_fixed_public_url() . '?token=' . rawurlencode($token);
 }
 
 /**

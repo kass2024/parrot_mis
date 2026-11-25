@@ -25,11 +25,17 @@ $viewId = (int) ($_GET['view'] ?? 0);
 $kpis = $isSuper ? pcvc_self_reg_kpis($conn) : null;
 $assignable = $isSuper ? pcvc_self_reg_assignable_users($conn) : [];
 $statuses = pcvc_self_reg_followup_statuses();
+$fixedLink = pcvc_self_reg_fixed_public_url();
+
+// Only submitted applications appear in the list.
+if ($filter === 'draft' || $filter === 'submitted') {
+    $filter = 'all';
+}
 
 if ($isSuper) {
     $apps = pcvc_self_reg_list_applications($conn, null, $filter, 300);
 } else {
-    // Staff/agents only see applications transferred to them
+    // Staff/agents only see submitted apps transferred to them
     $apps = pcvc_self_reg_list_applications($conn, $adminId, 'all', 300);
 }
 
@@ -144,15 +150,13 @@ textarea{min-height:70px;resize:vertical}
   <div class="hero">
     <h1>Self Registration Dashboard</h1>
     <p><?= $isSuper
-      ? 'Superadmin view — create private links, add applications manually, transfer to staff/agents, and track follow-up.'
+      ? 'Superadmin view — copy the fixed student link, add applications manually, transfer to staff/agents, and track submitted follow-ups.'
       : 'Your assigned self-registration follow-ups. Mark status as you work each file.' ?></p>
   </div>
 
   <?php if ($isSuper && $kpis): ?>
   <div class="kpi-grid">
-    <div class="kpi"><div class="n"><?= (int)$kpis['total'] ?></div><div class="l">All applications</div></div>
-    <div class="kpi"><div class="n"><?= (int)$kpis['submitted'] ?></div><div class="l">Submitted</div></div>
-    <div class="kpi"><div class="n"><?= (int)$kpis['draft'] ?></div><div class="l">Draft / incomplete</div></div>
+    <div class="kpi"><div class="n"><?= (int)$kpis['submitted'] ?></div><div class="l">Submitted applications</div></div>
     <div class="kpi"><div class="n"><?= (int)$kpis['unassigned'] ?></div><div class="l">Unassigned</div></div>
     <div class="kpi"><div class="n"><?= (int)$kpis['assigned'] ?></div><div class="l">Transferred</div></div>
     <div class="kpi"><div class="n"><?= (int)$kpis['in_progress'] ?></div><div class="l">In progress</div></div>
@@ -163,18 +167,15 @@ textarea{min-height:70px;resize:vertical}
 
   <?php if ($isSuper): ?>
   <div class="card">
-    <h2>Create application</h2>
-    <p class="muted" style="margin:0 0 12px">Private link for the student after payment, or fill the same form yourself on this page.</p>
-    <div class="actions">
-      <button type="button" class="btn btn-green" id="btnIssueLink">Create private self-registration link</button>
-      <button type="button" class="btn btn-amber" id="btnManual">Add manually (same form)</button>
-    </div>
-    <div class="link-box" id="linkBox" hidden>
-      <label for="srLink" style="display:block;font-weight:750;margin-bottom:6px;color:#14532d">Private link</label>
-      <input id="srLink" type="text" readonly value="">
+    <h2>Student registration link</h2>
+    <p class="muted" style="margin:0 0 12px">This link is always the same. Copy and send it to students after payment. Incomplete drafts never appear in the applications list — only submitted forms do.</p>
+    <div class="link-box" id="linkBox">
+      <label for="srLink" style="display:block;font-weight:750;margin-bottom:6px;color:#14532d">Fixed link</label>
+      <input id="srLink" type="text" readonly value="<?= sr_admin_h($fixedLink) ?>">
       <div class="actions" style="margin-top:10px">
-        <button type="button" class="btn btn-sky" id="btnCopy">Copy private link</button>
-        <a class="btn btn-ghost" id="btnOpenLink" href="#" target="_blank" rel="noopener">Open form</a>
+        <button type="button" class="btn btn-sky" id="btnCopy">Copy link</button>
+        <a class="btn btn-ghost" id="btnOpenLink" href="<?= sr_admin_h($fixedLink) ?>" target="_blank" rel="noopener">Open form</a>
+        <button type="button" class="btn btn-amber" id="btnManual">Add manually (same form)</button>
       </div>
       <div class="okmsg" id="copyMsg">Link copied</div>
     </div>
@@ -274,14 +275,12 @@ textarea{min-height:70px;resize:vertical}
   <?php endif; ?>
 
   <div class="card">
-    <h2><?= $isSuper ? 'All applications' : 'My assigned applications' ?></h2>
+    <h2><?= $isSuper ? 'Submitted applications' : 'My assigned applications' ?></h2>
     <?php if ($isSuper): ?>
     <div class="filters">
       <?php
         $filterLinks = [
-          'all' => 'All',
-          'submitted' => 'Submitted',
-          'draft' => 'Draft',
+          'all' => 'All submitted',
           'unassigned' => 'Unassigned',
           'assigned' => 'Transferred',
           'in_progress' => 'In progress',
@@ -289,7 +288,7 @@ textarea{min-height:70px;resize:vertical}
           'closed' => 'Closed',
         ];
         foreach ($filterLinks as $fk => $fl):
-          $active = ($filter === $fk) || ($fk === 'closed' && in_array($filter, ['closed','cancelled'], true));
+          $active = ($filter === $fk);
       ?>
       <a class="<?= $active ? 'active' : '' ?>" href="?filter=<?= rawurlencode($fk) ?>"><?= sr_admin_h($fl) ?></a>
       <?php endforeach; ?>
@@ -337,7 +336,7 @@ textarea{min-height:70px;resize:vertical}
               <div class="row-actions">
                 <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
                 <?php if ($isSuper): ?>
-                <button type="button" class="btn btn-sky btn-sm copy-row" data-link="<?= sr_admin_h(pcvc_self_reg_public_url((string)$row['token'])) ?>">Copy link</button>
+                <button type="button" class="btn btn-sky btn-sm copy-row" data-link="<?= sr_admin_h($fixedLink) ?>">Copy link</button>
                 <button
                   type="button"
                   class="btn btn-amber btn-sm btn-transfer-row"
@@ -451,30 +450,11 @@ textarea{min-height:70px;resize:vertical}
   const manualPanel = document.getElementById('manualPanel');
   const manualFrame = document.getElementById('manualFrame');
 
-  document.getElementById('btnIssueLink')?.addEventListener('click', function () {
-    const btn = this; btn.disabled = true;
-    post('issue_link', {}).then(data => {
-      btn.disabled = false;
-      if (!data || !data.ok) { alert((data && data.error) || 'Failed'); return; }
-      if (srLink) srLink.value = data.url;
-      if (btnOpen) btnOpen.href = data.url;
-      if (linkBox) linkBox.hidden = false;
-      if (manualPanel) manualPanel.classList.remove('open');
-    }).catch(() => { btn.disabled = false; alert('Failed'); });
-  });
-
   document.getElementById('btnManual')?.addEventListener('click', function () {
-    const btn = this; btn.disabled = true;
-    post('issue_manual', {}).then(data => {
-      btn.disabled = false;
-      if (!data || !data.ok) { alert((data && data.error) || 'Failed'); return; }
-      if (srLink) srLink.value = data.url;
-      if (btnOpen) btnOpen.href = data.url;
-      if (linkBox) linkBox.hidden = false;
-      if (manualFrame) manualFrame.src = data.url;
-      if (manualPanel) manualPanel.classList.add('open');
-      manualPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }).catch(() => { btn.disabled = false; alert('Failed'); });
+    const manualUrl = <?= json_encode($fixedLink . '?manual=1', JSON_UNESCAPED_SLASHES) ?>;
+    if (manualFrame) manualFrame.src = manualUrl + '&t=' + Date.now();
+    if (manualPanel) manualPanel.classList.add('open');
+    manualPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   document.getElementById('btnCloseManual')?.addEventListener('click', function () {
