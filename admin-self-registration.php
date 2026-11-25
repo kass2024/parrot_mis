@@ -22,10 +22,14 @@ $isSuper = pcvc_current_user_is_superadmin($conn);
 $filter = trim((string) ($_GET['filter'] ?? 'all'));
 $viewId = (int) ($_GET['view'] ?? 0);
 
-$kpis = $isSuper ? pcvc_self_reg_kpis($conn) : null;
+$kpis = $isSuper ? pcvc_self_reg_kpis($conn) : pcvc_self_reg_kpis($conn, $adminId);
 $assignable = $isSuper ? pcvc_self_reg_assignable_users($conn) : [];
 $statuses = pcvc_self_reg_followup_statuses();
 $fixedLink = pcvc_self_reg_fixed_public_url();
+// Every account gets a stable personal link that auto-fills their name on the form.
+$shareLink = $adminId > 0 ? pcvc_self_reg_referral_url($adminId) : $fixedLink;
+$issuerLabel = $adminId > 0 ? pcvc_self_reg_admin_label($conn, $adminId) : '';
+$manualLink = $shareLink . (str_contains($shareLink, '?') ? '&' : '?') . 'manual=1';
 
 // Only submitted applications appear in the list.
 if ($filter === 'draft' || $filter === 'submitted') {
@@ -35,15 +39,15 @@ if ($filter === 'draft' || $filter === 'submitted') {
 if ($isSuper) {
     $apps = pcvc_self_reg_list_applications($conn, null, $filter, 300);
 } else {
-    // Staff/agents only see submitted apps transferred to them
-    $apps = pcvc_self_reg_list_applications($conn, $adminId, 'all', 300);
+    // Staff / agents / companies: apps they referred or that were transferred to them
+    $apps = pcvc_self_reg_list_applications($conn, $adminId, $filter, 300, $adminId);
 }
 
 $viewRow = null;
 if ($viewId > 0) {
     $viewRow = pcvc_self_reg_find_by_id($conn, $viewId);
     if ($viewRow) {
-        if (!$isSuper && (int) ($viewRow['assigned_to_admin_id'] ?? 0) !== $adminId) {
+        if (!pcvc_self_reg_can_access_row($viewRow, $adminId, $isSuper)) {
             $viewRow = null;
         } else {
             $assigneeId = (int) ($viewRow['assigned_to_admin_id'] ?? 0);
@@ -150,31 +154,40 @@ textarea{min-height:70px;resize:vertical}
   <div class="hero">
     <h1>Self Registration Dashboard</h1>
     <p><?= $isSuper
-      ? 'Superadmin view — copy the fixed student link, add applications manually, transfer to staff/agents, and track submitted follow-ups.'
-      : 'Your assigned self-registration follow-ups. Mark status as you work each file.' ?></p>
+      ? 'Copy your student link, add applications manually, transfer to staff/agents, and track submitted follow-ups. Your link auto-fills your name as the referrer.'
+      : 'Copy your personal student link (it auto-fills your name as the referring agent/staff/company), add applications manually, and track submitted follow-ups from your link or transfers.' ?></p>
   </div>
 
-  <?php if ($isSuper && $kpis): ?>
+  <?php if ($kpis): ?>
   <div class="kpi-grid">
     <div class="kpi"><div class="n"><?= (int)$kpis['submitted'] ?></div><div class="l">Submitted applications</div></div>
+    <?php if ($isSuper): ?>
     <div class="kpi"><div class="n"><?= (int)$kpis['unassigned'] ?></div><div class="l">Unassigned</div></div>
     <div class="kpi"><div class="n"><?= (int)$kpis['assigned'] ?></div><div class="l">Transferred</div></div>
+    <?php else: ?>
+    <div class="kpi"><div class="n"><?= (int)$kpis['assigned'] ?></div><div class="l">Assigned to me</div></div>
+    <?php endif; ?>
     <div class="kpi"><div class="n"><?= (int)$kpis['in_progress'] ?></div><div class="l">In progress</div></div>
     <div class="kpi"><div class="n"><?= (int)$kpis['waiting_documents'] ?></div><div class="l">Waiting documents</div></div>
     <div class="kpi"><div class="n"><?= (int)$kpis['closed'] ?></div><div class="l">Closed / cancelled</div></div>
   </div>
   <?php endif; ?>
 
-  <?php if ($isSuper): ?>
   <div class="card">
     <h2>Student registration link</h2>
-    <p class="muted" style="margin:0 0 12px">This link is always the same. Copy and send it to students after payment. Incomplete drafts never appear in the applications list — only submitted forms do.</p>
+    <p class="muted" style="margin:0 0 12px">
+      This link is always the same for your account.
+      <?php if ($issuerLabel !== ''): ?>
+      Students who open it will see <strong><?= sr_admin_h($issuerLabel) ?></strong> filled in as the referring agent or staff member.
+      <?php endif; ?>
+      Incomplete drafts never appear in the applications list — only submitted forms do.
+    </p>
     <div class="link-box" id="linkBox">
-      <label for="srLink" style="display:block;font-weight:750;margin-bottom:6px;color:#14532d">Fixed link</label>
-      <input id="srLink" type="text" readonly value="<?= sr_admin_h($fixedLink) ?>">
+      <label for="srLink" style="display:block;font-weight:750;margin-bottom:6px;color:#14532d">Your registration link</label>
+      <input id="srLink" type="text" readonly value="<?= sr_admin_h($shareLink) ?>">
       <div class="actions" style="margin-top:10px">
         <button type="button" class="btn btn-sky" id="btnCopy">Copy link</button>
-        <a class="btn btn-ghost" id="btnOpenLink" href="<?= sr_admin_h($fixedLink) ?>" target="_blank" rel="noopener">Open form</a>
+        <a class="btn btn-ghost" id="btnOpenLink" href="<?= sr_admin_h($shareLink) ?>" target="_blank" rel="noopener">Open form</a>
         <button type="button" class="btn btn-amber" id="btnManual">Add manually (same form)</button>
       </div>
       <div class="okmsg" id="copyMsg">Link copied</div>
@@ -187,9 +200,6 @@ textarea{min-height:70px;resize:vertical}
       <iframe id="manualFrame" title="Manual self registration form" src="about:blank"></iframe>
     </div>
   </div>
-  <?php else: ?>
-  <div class="notice">You can only view and update applications transferred to you by a superadmin.</div>
-  <?php endif; ?>
 
   <?php if ($viewRow): ?>
   <div class="card" id="detailCard">
@@ -222,6 +232,7 @@ textarea{min-height:70px;resize:vertical}
             echo $chs ? sr_admin_h(implode(' · ', $chs)) : '—';
           ?></dd>
           <dt>Sponsor</dt><dd><?= sr_admin_h((string)($viewRow['sponsor'] ?? '')) ?: '—' ?></dd>
+          <dt>Referring</dt><dd><?= sr_admin_h(trim((string)($viewRow['referring_agent'] ?? '')) ?: '—') ?></dd>
           <dt>Assignee</dt><dd><?= sr_admin_h(trim((string)($viewRow['assignee_name'] ?? '')) ?: 'Unassigned') ?></dd>
         </dl>
         <p style="margin:12px 0 6px;font-weight:750;color:#14532d">Documents</p>
@@ -275,25 +286,30 @@ textarea{min-height:70px;resize:vertical}
   <?php endif; ?>
 
   <div class="card">
-    <h2><?= $isSuper ? 'Submitted applications' : 'My assigned applications' ?></h2>
-    <?php if ($isSuper): ?>
+    <h2><?= $isSuper ? 'Submitted applications' : 'My referrals & assigned applications' ?></h2>
     <div class="filters">
       <?php
-        $filterLinks = [
-          'all' => 'All submitted',
-          'unassigned' => 'Unassigned',
-          'assigned' => 'Transferred',
-          'in_progress' => 'In progress',
-          'waiting_documents' => 'Waiting docs',
-          'closed' => 'Closed',
-        ];
+        $filterLinks = $isSuper
+          ? [
+              'all' => 'All submitted',
+              'unassigned' => 'Unassigned',
+              'assigned' => 'Transferred',
+              'in_progress' => 'In progress',
+              'waiting_documents' => 'Waiting docs',
+              'closed' => 'Closed',
+            ]
+          : [
+              'all' => 'All mine',
+              'in_progress' => 'In progress',
+              'waiting_documents' => 'Waiting docs',
+              'closed' => 'Closed',
+            ];
         foreach ($filterLinks as $fk => $fl):
           $active = ($filter === $fk);
       ?>
       <a class="<?= $active ? 'active' : '' ?>" href="?filter=<?= rawurlencode($fk) ?>"><?= sr_admin_h($fl) ?></a>
       <?php endforeach; ?>
     </div>
-    <?php endif; ?>
 
     <div class="table-wrap">
       <table>
@@ -303,6 +319,7 @@ textarea{min-height:70px;resize:vertical}
             <th>Form</th>
             <th>Follow-up</th>
             <th>Destination / Intake</th>
+            <th>Referring</th>
             <th>Assignee</th>
             <th>Created</th>
             <th>Actions</th>
@@ -310,13 +327,14 @@ textarea{min-height:70px;resize:vertical}
         </thead>
         <tbody>
         <?php if (!$apps): ?>
-          <tr><td colspan="7" class="muted"><?= $isSuper ? 'No applications yet.' : 'No applications transferred to you yet.' ?></td></tr>
+          <tr><td colspan="8" class="muted"><?= $isSuper ? 'No applications yet.' : 'No applications from your link or transferred to you yet.' ?></td></tr>
         <?php else: foreach ($apps as $row):
           $name = trim((string)($row['full_name'] ?? ''));
           $email = trim((string)($row['email'] ?? ''));
           $label = $name !== '' ? $name : ($email !== '' ? $email : 'Not filled yet');
           $fu = (string)($row['followup_status'] ?? 'new');
           $assignee = trim((string)($row['assignee_name'] ?? ''));
+          $referring = trim((string)($row['referring_agent'] ?? ''));
         ?>
           <tr>
             <td>
@@ -330,13 +348,14 @@ textarea{min-height:70px;resize:vertical}
               <?= sr_admin_h(trim((string)($row['destination_country'] ?? '')) ?: '—') ?>
               <div class="muted"><?= sr_admin_h((string)($row['preferred_intake'] ?? '')) ?></div>
             </td>
+            <td><?= sr_admin_h($referring !== '' ? $referring : '—') ?></td>
             <td><?= sr_admin_h($assignee !== '' ? $assignee : 'Unassigned') ?></td>
             <td class="muted"><?= sr_admin_h((string)($row['created_at'] ?? '')) ?></td>
             <td>
               <div class="row-actions">
                 <a class="btn btn-ghost btn-sm" href="?view=<?= (int)$row['id'] ?>&filter=<?= rawurlencode($filter) ?>">Open</a>
+                <button type="button" class="btn btn-sky btn-sm copy-row" data-link="<?= sr_admin_h($shareLink) ?>">Copy link</button>
                 <?php if ($isSuper): ?>
-                <button type="button" class="btn btn-sky btn-sm copy-row" data-link="<?= sr_admin_h($fixedLink) ?>">Copy link</button>
                 <button
                   type="button"
                   class="btn btn-amber btn-sm btn-transfer-row"
@@ -451,8 +470,9 @@ textarea{min-height:70px;resize:vertical}
   const manualFrame = document.getElementById('manualFrame');
 
   document.getElementById('btnManual')?.addEventListener('click', function () {
-    const manualUrl = <?= json_encode($fixedLink . '?manual=1', JSON_UNESCAPED_SLASHES) ?>;
-    if (manualFrame) manualFrame.src = manualUrl + '&t=' + Date.now();
+    const manualUrl = <?= json_encode($manualLink, JSON_UNESCAPED_SLASHES) ?>;
+    const sep = manualUrl.indexOf('?') >= 0 ? '&' : '?';
+    if (manualFrame) manualFrame.src = manualUrl + sep + 't=' + Date.now();
     if (manualPanel) manualPanel.classList.add('open');
     manualPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });

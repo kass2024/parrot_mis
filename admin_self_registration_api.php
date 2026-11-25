@@ -29,19 +29,20 @@ $action = trim((string) ($_POST['action'] ?? $_GET['action'] ?? ''));
 pcvc_self_reg_ensure_schema($conn);
 
 if ($action === 'issue_link' || $action === 'issue_manual') {
-    if (!$isSuper) {
-        sr_admin_json(['ok' => false, 'error' => 'Only superadmin can create self-registration links.'], 403);
-    }
     try {
         $source = $action === 'issue_manual' ? 'manual' : 'link';
-        $created = pcvc_self_reg_issue_link($conn, $adminId, $source);
-        $url = pcvc_self_reg_public_url($created['token']);
+        $refName = pcvc_self_reg_admin_label($conn, $adminId);
+        $created = pcvc_self_reg_issue_link($conn, $adminId, $source, $adminId, $refName);
+        $url = $action === 'issue_manual'
+            ? pcvc_self_reg_public_url($created['token'])
+            : pcvc_self_reg_referral_url($adminId);
         sr_admin_json([
             'ok' => true,
             'id' => $created['id'],
             'token' => $created['token'],
             'source' => $source,
             'url' => $url,
+            'referral_url' => pcvc_self_reg_referral_url($adminId),
         ]);
     } catch (Throwable $e) {
         sr_admin_json(['ok' => false, 'error' => $e->getMessage()], 500);
@@ -89,9 +90,8 @@ if ($action === 'set_status') {
         sr_admin_json(['ok' => false, 'error' => 'Application not found.'], 404);
     }
 
-    $assignedTo = (int) ($reg['assigned_to_admin_id'] ?? 0);
-    if (!$isSuper && $assignedTo !== $adminId) {
-        sr_admin_json(['ok' => false, 'error' => 'You can only update applications assigned to you.'], 403);
+    if (!pcvc_self_reg_can_access_row($reg, $adminId, $isSuper)) {
+        sr_admin_json(['ok' => false, 'error' => 'You can only update applications assigned to you or from your referral link.'], 403);
     }
 
     try {
@@ -103,10 +103,10 @@ if ($action === 'set_status') {
 }
 
 if ($action === 'kpis') {
-    if (!$isSuper) {
-        sr_admin_json(['ok' => false, 'error' => 'Forbidden.'], 403);
-    }
-    sr_admin_json(['ok' => true, 'kpis' => pcvc_self_reg_kpis($conn)]);
+    sr_admin_json([
+        'ok' => true,
+        'kpis' => $isSuper ? pcvc_self_reg_kpis($conn) : pcvc_self_reg_kpis($conn, $adminId),
+    ]);
 }
 
 sr_admin_json(['ok' => false, 'error' => 'Unknown action.'], 400);

@@ -38,9 +38,15 @@ if ($action === 'save_fields') {
     $sets = [];
     $types = '';
     $values = [];
+    // Keep attribution from the issued referral link.
+    $lockReferrer = ((int) ($reg['referred_by_admin_id'] ?? 0) > 0)
+        && trim((string) ($reg['referring_agent'] ?? '')) !== '';
 
     foreach ($fields as $col => $type) {
         if (!array_key_exists($col, $_POST)) {
+            continue;
+        }
+        if ($lockReferrer && $col === 'referring_agent') {
             continue;
         }
         $san = pcvc_self_reg_sanitize_value($type, $_POST[$col]);

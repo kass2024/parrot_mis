@@ -18,6 +18,24 @@ pcvc_self_reg_ensure_schema($conn);
 $token = trim((string) ($_GET['token'] ?? ''));
 $isManualAdmin = isset($_GET['manual']) && (string) $_GET['manual'] === '1'
     && (!empty($_SESSION['admin_id']) || !empty($_SESSION['id']));
+$refAdminId = (int) ($_GET['ref'] ?? 0);
+$refLabel = '';
+if ($refAdminId > 0) {
+    $refLabel = pcvc_self_reg_admin_label($conn, $refAdminId);
+    if ($refLabel === '') {
+        $refAdminId = 0;
+    }
+}
+// Manual add by a logged-in account: attribute to that account when no ?ref= given.
+if ($isManualAdmin && $refAdminId <= 0) {
+    $refAdminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
+    if ($refAdminId > 0) {
+        $refLabel = pcvc_self_reg_admin_label($conn, $refAdminId);
+        if ($refLabel === '') {
+            $refAdminId = 0;
+        }
+    }
+}
 $reg = null;
 
 if ($token !== '') {
@@ -26,8 +44,12 @@ if ($token !== '') {
         http_response_code(404);
         exit('This self-registration link is invalid or has expired. Please contact Parrot Canada Visa Consultant.');
     }
+    if ($refAdminId > 0 && (($reg['status'] ?? '') === 'draft')) {
+        pcvc_self_reg_apply_referral($conn, (int) $reg['id'], $refAdminId, $refLabel);
+        $reg = pcvc_self_reg_find_by_token($conn, $token) ?: $reg;
+    }
 } else {
-    // Fixed public link (no token): one draft per browser session until submitted.
+    // Fixed / referral public link (no token): one draft per browser session until submitted.
     // Admin "Add manually" always starts a fresh draft.
     if (!$isManualAdmin) {
         $sessionToken = trim((string) ($_SESSION['self_reg_draft_token'] ?? ''));
@@ -39,12 +61,22 @@ if ($token !== '') {
             }
         }
     }
+    if ($reg && $refAdminId > 0 && (($reg['status'] ?? '') === 'draft')) {
+        pcvc_self_reg_apply_referral($conn, (int) $reg['id'], $refAdminId, $refLabel);
+        $reg = pcvc_self_reg_find_by_token($conn, (string) $reg['token']) ?: $reg;
+    }
     if (!$reg) {
         $adminId = $isManualAdmin
             ? (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0)
             : null;
         $source = $isManualAdmin ? 'manual' : 'link';
-        $created = pcvc_self_reg_issue_link($conn, $adminId > 0 ? $adminId : null, $source);
+        $created = pcvc_self_reg_issue_link(
+            $conn,
+            $adminId > 0 ? $adminId : null,
+            $source,
+            $refAdminId > 0 ? $refAdminId : null,
+            $refLabel
+        );
         if (!$isManualAdmin) {
             $_SESSION['self_reg_draft_token'] = $created['token'];
         }
@@ -56,6 +88,9 @@ if ($token !== '') {
     }
     $token = (string) $reg['token'];
 }
+
+$referrerLocked = ((int) ($reg['referred_by_admin_id'] ?? 0) > 0)
+    && trim((string) ($reg['referring_agent'] ?? '')) !== '';
 
 $docs = pcvc_self_reg_documents_map($conn, (int) $reg['id']);
 $isSubmitted = (($reg['status'] ?? '') === 'submitted');
@@ -460,7 +495,10 @@ body {
         </div>
         <div class="sr-field full">
           <label for="referring_agent">Name of referring agent or staff member (if applicable)</label>
-          <input id="referring_agent" name="referring_agent" value="<?= sr_val($reg, 'referring_agent') ?>" <?= $isSubmitted ? 'readonly' : '' ?>>
+          <input id="referring_agent" name="referring_agent" value="<?= sr_val($reg, 'referring_agent') ?>" <?= ($isSubmitted || $referrerLocked) ? 'readonly' : '' ?>>
+          <?php if ($referrerLocked && !$isSubmitted): ?>
+          <div class="sr-hint" style="margin-top:6px;color:#64748b;font-size:.85rem">Filled automatically from the registration link you received.</div>
+          <?php endif; ?>
         </div>
       </div>
     </section>

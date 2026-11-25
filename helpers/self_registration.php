@@ -100,6 +100,7 @@ function pcvc_self_reg_ensure_schema(mysqli $conn): void
         'assigned_by_admin_id' => "ALTER TABLE `self_registrations` ADD COLUMN `assigned_by_admin_id` INT NULL AFTER `assigned_to_admin_id`",
         'assigned_at' => "ALTER TABLE `self_registrations` ADD COLUMN `assigned_at` DATETIME NULL AFTER `assigned_by_admin_id`",
         'followup_notes' => "ALTER TABLE `self_registrations` ADD COLUMN `followup_notes` TEXT NULL AFTER `assigned_at`",
+        'referred_by_admin_id' => "ALTER TABLE `self_registrations` ADD COLUMN `referred_by_admin_id` INT NULL AFTER `followup_notes`",
     ];
     foreach ($cols as $name => $sql) {
         $chk = $conn->query("SHOW COLUMNS FROM `self_registrations` LIKE '{$name}'");
@@ -110,6 +111,52 @@ function pcvc_self_reg_ensure_schema(mysqli $conn): void
             $chk->free();
         }
     }
+}
+
+/**
+ * Display name for staff / agent / company account used on referral links.
+ */
+function pcvc_self_reg_admin_label(mysqli $conn, int $adminId): string
+{
+    if ($adminId <= 0) {
+        return '';
+    }
+    $stmt = $conn->prepare(
+        'SELECT full_name, username, role, email FROM admins WHERE id = ? LIMIT 1'
+    );
+    if (!$stmt) {
+        return '';
+    }
+    $stmt->bind_param('i', $adminId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$row) {
+        return '';
+    }
+    $name = trim((string) ($row['full_name'] ?? ''));
+    if ($name === '') {
+        $name = trim((string) ($row['username'] ?? ''));
+    }
+    if ($name === '') {
+        $name = trim((string) ($row['email'] ?? ''));
+    }
+    $role = trim((string) ($row['role'] ?? ''));
+    if ($name !== '' && $role !== '' && stripos($name, $role) === false) {
+        // Keep clean name only for the student-facing field.
+        return $name;
+    }
+    return $name;
+}
+
+/** Stable per-account student link (same URL every time for that account). */
+function pcvc_self_reg_referral_url(int $adminId): string
+{
+    $base = pcvc_self_reg_fixed_public_url();
+    if ($adminId <= 0) {
+        return $base;
+    }
+    return $base . '?ref=' . $adminId;
 }
 
 /** @return array<string, string> */
@@ -165,7 +212,7 @@ function pcvc_self_reg_assignable_users(mysqli $conn): array
 }
 
 /** @return array{total:int,draft:int,submitted:int,unassigned:int,assigned:int,in_progress:int,waiting_documents:int,closed:int} */
-function pcvc_self_reg_kpis(mysqli $conn): array
+function pcvc_self_reg_kpis(mysqli $conn, ?int $scopeAdminId = null): array
 {
     pcvc_self_reg_ensure_schema($conn);
     $kpi = [
@@ -178,6 +225,34 @@ function pcvc_self_reg_kpis(mysqli $conn): array
         'waiting_documents' => 0,
         'closed' => 0,
     ];
+    $scope = ($scopeAdminId !== null && $scopeAdminId > 0) ? $scopeAdminId : 0;
+    if ($scope > 0) {
+        $stmt = $conn->prepare(
+            "SELECT
+                SUM(status = 'submitted') AS total,
+                SUM(status = 'draft') AS draft,
+                SUM(status = 'submitted') AS submitted,
+                SUM(status = 'submitted' AND (assigned_to_admin_id IS NULL OR assigned_to_admin_id = 0)) AS unassigned,
+                SUM(status = 'submitted' AND assigned_to_admin_id IS NOT NULL AND assigned_to_admin_id > 0) AS assigned,
+                SUM(status = 'submitted' AND followup_status = 'in_progress') AS in_progress,
+                SUM(status = 'submitted' AND followup_status = 'waiting_documents') AS waiting_documents,
+                SUM(status = 'submitted' AND followup_status IN ('closed','cancelled')) AS closed
+             FROM self_registrations
+             WHERE assigned_to_admin_id = ? OR referred_by_admin_id = ?"
+        );
+        if ($stmt) {
+            $stmt->bind_param('ii', $scope, $scope);
+            $stmt->execute();
+            $row = $stmt->get_result()->fetch_assoc() ?: null;
+            $stmt->close();
+            if ($row) {
+                foreach ($kpi as $k => $_) {
+                    $kpi[$k] = (int) ($row[$k] ?? 0);
+                }
+            }
+        }
+        return $kpi;
+    }
     // Dashboard KPIs / list focus on submitted applications only.
     $res = $conn->query(
         "SELECT
@@ -199,6 +274,50 @@ function pcvc_self_reg_kpis(mysqli $conn): array
     return $kpi;
 }
 
+/** Attach / refresh referral attribution on an existing draft. */
+function pcvc_self_reg_apply_referral(
+    mysqli $conn,
+    int $registrationId,
+    int $referredByAdminId,
+    string $referringAgentName = ''
+): void {
+    if ($registrationId <= 0 || $referredByAdminId <= 0) {
+        return;
+    }
+    $refName = mb_substr(trim($referringAgentName), 0, 200);
+    if ($refName === '') {
+        $refName = pcvc_self_reg_admin_label($conn, $referredByAdminId);
+    }
+    $stmt = $conn->prepare(
+        "UPDATE self_registrations
+         SET referred_by_admin_id = ?,
+             referring_agent = ?,
+             assigned_to_admin_id = COALESCE(NULLIF(assigned_to_admin_id, 0), ?),
+             assigned_at = COALESCE(assigned_at, NOW()),
+             followup_status = IF(followup_status = 'new' OR followup_status = '' OR followup_status IS NULL, 'assigned', followup_status)
+         WHERE id = ? AND status = 'draft'
+         LIMIT 1"
+    );
+    if (!$stmt) {
+        return;
+    }
+    $stmt->bind_param('isii', $referredByAdminId, $refName, $referredByAdminId, $registrationId);
+    $stmt->execute();
+    $stmt->close();
+}
+
+function pcvc_self_reg_can_access_row(array $row, int $adminId, bool $isSuper): bool
+{
+    if ($isSuper) {
+        return true;
+    }
+    if ($adminId <= 0) {
+        return false;
+    }
+    return (int) ($row['assigned_to_admin_id'] ?? 0) === $adminId
+        || (int) ($row['referred_by_admin_id'] ?? 0) === $adminId;
+}
+
 /**
  * @return list<array>
  */
@@ -206,7 +325,8 @@ function pcvc_self_reg_list_applications(
     mysqli $conn,
     ?int $assignedTo = null,
     string $filter = 'all',
-    int $limit = 200
+    int $limit = 200,
+    ?int $referredBy = null
 ): array {
     pcvc_self_reg_ensure_schema($conn);
     $limit = max(1, min(500, $limit));
@@ -217,10 +337,19 @@ function pcvc_self_reg_list_applications(
     // Never list non-submitted drafts in the dashboard.
     $where[] = "r.status = 'submitted'";
 
-    if ($assignedTo !== null && $assignedTo > 0) {
+    if ($assignedTo !== null && $assignedTo > 0 && $referredBy !== null && $referredBy > 0) {
+        $where[] = '(r.assigned_to_admin_id = ? OR r.referred_by_admin_id = ?)';
+        $types .= 'ii';
+        $params[] = $assignedTo;
+        $params[] = $referredBy;
+    } elseif ($assignedTo !== null && $assignedTo > 0) {
         $where[] = 'r.assigned_to_admin_id = ?';
         $types .= 'i';
         $params[] = $assignedTo;
+    } elseif ($referredBy !== null && $referredBy > 0) {
+        $where[] = 'r.referred_by_admin_id = ?';
+        $types .= 'i';
+        $params[] = $referredBy;
     }
     if ($filter === 'unassigned') {
         $where[] = '(r.assigned_to_admin_id IS NULL OR r.assigned_to_admin_id = 0)';
@@ -605,19 +734,47 @@ function pcvc_self_reg_document_slots(): array
     ];
 }
 
-function pcvc_self_reg_issue_link(mysqli $conn, ?int $adminId = null, string $source = 'link'): array
-{
+function pcvc_self_reg_issue_link(
+    mysqli $conn,
+    ?int $adminId = null,
+    string $source = 'link',
+    ?int $referredByAdminId = null,
+    string $referringAgentName = ''
+): array {
     pcvc_self_reg_ensure_schema($conn);
     $source = in_array($source, ['link', 'manual'], true) ? $source : 'link';
     $token = bin2hex(random_bytes(32));
-    $stmt = $conn->prepare(
-        'INSERT INTO self_registrations (token, source, followup_status, created_by_admin_id)
-         VALUES (?, ?, \'new\', ?)'
-    );
-    if (!$stmt) {
-        throw new RuntimeException('Could not prepare self-registration insert: ' . $conn->error);
+    $refId = ($referredByAdminId !== null && $referredByAdminId > 0) ? $referredByAdminId : null;
+    $refName = mb_substr(trim($referringAgentName), 0, 200);
+    if ($refName === '' && $refId !== null) {
+        $refName = pcvc_self_reg_admin_label($conn, $refId);
     }
-    $stmt->bind_param('ssi', $token, $source, $adminId);
+    $createdBy = ($adminId !== null && $adminId > 0) ? $adminId : null;
+    $assignedTo = $refId; // auto-route referrals to the issuing account for follow-up
+
+    if ($refId !== null) {
+        $stmt = $conn->prepare(
+            'INSERT INTO self_registrations
+                (token, source, followup_status, created_by_admin_id, referred_by_admin_id,
+                 assigned_to_admin_id, assigned_at, referring_agent)
+             VALUES (?, ?, \'assigned\', ?, ?, ?, NOW(), ?)'
+        );
+        if (!$stmt) {
+            throw new RuntimeException('Could not prepare self-registration insert: ' . $conn->error);
+        }
+        $stmt->bind_param('ssiiis', $token, $source, $createdBy, $refId, $assignedTo, $refName);
+    } else {
+        $stmt = $conn->prepare(
+            'INSERT INTO self_registrations
+                (token, source, followup_status, created_by_admin_id, referring_agent)
+             VALUES (?, ?, \'new\', ?, ?)'
+        );
+        if (!$stmt) {
+            throw new RuntimeException('Could not prepare self-registration insert: ' . $conn->error);
+        }
+        $stmt->bind_param('ssis', $token, $source, $createdBy, $refName);
+    }
+
     if (!$stmt->execute()) {
         $err = $stmt->error;
         $stmt->close();
