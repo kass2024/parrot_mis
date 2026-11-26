@@ -306,6 +306,25 @@ function pcvc_self_reg_apply_referral(
     $stmt->close();
 }
 
+/**
+ * HQ-wide Self Registration access: superadmin or Admission Manager
+ * (never while switched into a company partner view).
+ */
+function pcvc_self_reg_has_hq_access(mysqli $conn): bool
+{
+    if (function_exists('pcvc_company_view_limits_data') && pcvc_company_view_limits_data()) {
+        return false;
+    }
+    if (function_exists('pcvc_current_user_is_superadmin') && pcvc_current_user_is_superadmin($conn)) {
+        return true;
+    }
+    if (function_exists('pcvc_current_user_is_admission_manager') && pcvc_current_user_is_admission_manager($conn)) {
+        return true;
+    }
+
+    return false;
+}
+
 function pcvc_self_reg_can_access_row(array $row, int $adminId, bool $isSuper): bool
 {
     if ($isSuper) {

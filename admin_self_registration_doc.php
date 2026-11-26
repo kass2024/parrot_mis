@@ -18,7 +18,7 @@ if (!isset($conn) || $conn->connect_error) {
 
 $adminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 $dataAdminId = pcvc_effective_data_admin_id($conn);
-$isSuper = pcvc_current_user_is_superadmin($conn) && !pcvc_company_view_limits_data();
+$isSuper = pcvc_self_reg_has_hq_access($conn);
 $regId = (int) ($_GET['id'] ?? 0);
 $docKey = trim((string) ($_GET['doc'] ?? ''));
 $inline = ((string) ($_GET['inline'] ?? '')) === '1';

@@ -26,7 +26,7 @@ if ($adminId <= 0) {
 }
 
 $dataAdminId = pcvc_effective_data_admin_id($conn);
-$isSuper = pcvc_current_user_is_superadmin($conn) && !pcvc_company_view_limits_data();
+$isSuper = pcvc_self_reg_has_hq_access($conn);
 $action = trim((string) ($_POST['action'] ?? $_GET['action'] ?? ''));
 pcvc_self_reg_ensure_schema($conn);
 
@@ -54,7 +54,7 @@ if ($action === 'issue_link' || $action === 'issue_manual') {
 
 if ($action === 'transfer') {
     if (!$isSuper) {
-        sr_admin_json(['ok' => false, 'error' => 'Only superadmin can transfer applications.'], 403);
+        sr_admin_json(['ok' => false, 'error' => 'Only superadmin or Admission Manager can transfer applications.'], 403);
     }
     $id = (int) ($_POST['id'] ?? 0);
     $assignee = (int) ($_POST['assigned_to_admin_id'] ?? 0);
@@ -73,7 +73,7 @@ if ($action === 'transfer') {
 
 if ($action === 'delete') {
     if (!$isSuper) {
-        sr_admin_json(['ok' => false, 'error' => 'Only superadmin can delete applications.'], 403);
+        sr_admin_json(['ok' => false, 'error' => 'Only superadmin or Admission Manager can delete applications.'], 403);
     }
     $id = (int) ($_POST['id'] ?? 0);
     try {

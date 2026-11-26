@@ -21,8 +21,8 @@ pcvc_self_reg_ensure_schema($conn);
 $adminId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 $companyCtx = pcvc_effective_company_context($conn);
 $dataAdminId = pcvc_effective_data_admin_id($conn);
-// While switched into a company, never use HQ-wide superadmin lists.
-$isSuper = pcvc_current_user_is_superadmin($conn) && !pcvc_company_view_limits_data();
+// Superadmin + Admission Manager share HQ-wide Self Registration (not in company view).
+$isSuper = pcvc_self_reg_has_hq_access($conn);
 $filter = trim((string) ($_GET['filter'] ?? 'all'));
 $viewId = (int) ($_GET['view'] ?? 0);
 

@@ -167,6 +167,37 @@ function pcvc_current_user_is_superadmin(mysqli $conn): bool
 }
 
 /**
+ * Whether the logged-in admin is Admission Manager (session role and/or DB role).
+ */
+function pcvc_current_user_is_admission_manager(mysqli $conn): bool
+{
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+
+    $sessionRole = trim((string) ($_SESSION['role'] ?? ''));
+    if (pcvc_is_admission_manager_role($sessionRole)) {
+        return true;
+    }
+
+    $adminPk = (int) ($_SESSION['id'] ?? $_SESSION['admin_id'] ?? 0);
+    if ($adminPk <= 0) {
+        return false;
+    }
+
+    $st = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+    if (!$st) {
+        return false;
+    }
+    $st->bind_param('i', $adminPk);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+
+    return pcvc_is_admission_manager_role((string) ($row['role'] ?? ''));
+}
+
+/**
  * Compact admins.role for SQL comparisons (matches pcvc_is_superadmin_role / pcvc_is_staff_role).
  */
 function pcvc_sql_role_compact_expr(string $column = 'role'): string
