@@ -287,7 +287,9 @@ function pcvc_dashboard_roster(mysqli $conn, ?mysqli $conn2 = null, ?array $memb
             ? 'Company'
             : ($isAgentPerson
                 ? 'Agent'
-                : (pcvc_is_superadmin_role($admin['role']) ? 'Superadmin' : 'Staff'));
+                : (pcvc_is_superadmin_role($admin['role'])
+                    ? 'Superadmin'
+                    : (function_exists('pcvc_admin_role_label') ? pcvc_admin_role_label($admin['role']) : 'Staff')));
         if ($isAgentPerson || $isCompany) {
             $agents[] = $admin;
         } else {

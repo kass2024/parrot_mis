@@ -28,6 +28,15 @@ function pcvc_is_accountant_role($role): bool
     return $s === 'accountant';
 }
 
+function pcvc_is_admission_manager_role($role): bool
+{
+    $s = strtolower(pcvc_normalize_role_string($role));
+    $s = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $s);
+    $s = preg_replace('/[\s_\-]+/u', '', $s);
+
+    return $s === 'admissionmanager';
+}
+
 function pcvc_is_secretary_role($role): bool
 {
     $s = strtolower(pcvc_normalize_role_string($role));
@@ -43,7 +52,39 @@ function pcvc_is_staff_role($role): bool
     $s = preg_replace('/[\x{200B}-\x{200D}\x{FEFF}\x{00A0}]/u', '', $s);
     $compact = preg_replace('/[\s_\-]+/u', '', $s);
 
-    return $compact === 'staff' || $compact === 'staffadmin' || $compact === 'accountant';
+    return $compact === 'staff'
+        || $compact === 'staffadmin'
+        || $compact === 'accountant'
+        || $compact === 'admissionmanager';
+}
+
+/** Stored role values allowed when creating/editing accounts. */
+function pcvc_admin_role_options(): array
+{
+    return [
+        'superadmin' => 'Superadmin',
+        'director' => 'Director',
+        'secretary' => 'Secretary',
+        'admin' => 'Admin',
+        'staff' => 'Staff',
+        'admission_manager' => 'Admission Manager',
+        'accountant' => 'Accountant',
+        'agent' => 'Agent',
+    ];
+}
+
+function pcvc_admin_role_label(string $role): string
+{
+    $key = strtolower(trim(pcvc_normalize_role_string($role)));
+    $options = pcvc_admin_role_options();
+    if (isset($options[$key])) {
+        return $options[$key];
+    }
+    if (pcvc_is_admission_manager_role($role)) {
+        return 'Admission Manager';
+    }
+
+    return $key !== '' ? ucwords(str_replace('_', ' ', $key)) : 'Account';
 }
 
 /** Staff or superadmin (session role and/or DB role). */
@@ -83,8 +124,9 @@ function pcvc_current_user_is_staff_or_superadmin(mysqli $conn): bool
  */
 function pcvc_sql_assignable_application_owner_condition(): string
 {
-    return '(LOWER(TRIM(COALESCE(role, \'\'))) IN (\'staff\', \'accountant\')'
-        . ' OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(role, \'\'))), \' \', \'\'), \'_\', \'\'), \'-\', \'\') IN (\'superadmin\', \'director\', \'secretary\'))';
+    return '(LOWER(TRIM(COALESCE(role, \'\'))) IN (\'staff\', \'accountant\', \'admission_manager\')'
+        . ' OR REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(role, \'\'))), \' \', \'\'), \'_\', \'\'), \'-\', \'\')'
+        . ' IN (\'superadmin\', \'director\', \'secretary\', \'admissionmanager\'))';
 }
 
 /** @deprecated Use pcvc_is_superadmin_role() */
@@ -141,7 +183,7 @@ function pcvc_sql_is_payroll_employee_expr(string $column = 'role'): string
 {
     $compact = pcvc_sql_role_compact_expr($column);
 
-    return "({$compact} = 'staff' OR {$compact} = 'accountant' OR {$compact} = 'superadmin' OR {$compact} = 'director' OR {$compact} = 'secretary')";
+    return "({$compact} = 'staff' OR {$compact} = 'accountant' OR {$compact} = 'admissionmanager' OR {$compact} = 'superadmin' OR {$compact} = 'director' OR {$compact} = 'secretary')";
 }
 
 /**
@@ -169,6 +211,10 @@ function pcvc_resolve_dashboard_role_key(string $role, array $accessMap, string 
         return isset($accessMap['superadmin']) ? 'superadmin' : $fallback;
     }
 
+    if (pcvc_is_admission_manager_role($role) && isset($accessMap['admission_manager'])) {
+        return 'admission_manager';
+    }
+
     if (pcvc_is_staff_role($role)) {
         return isset($accessMap['staff']) ? 'staff' : $fallback;
     }
@@ -188,7 +234,7 @@ function pcvc_resolve_dashboard_role_key(string $role, array $accessMap, string 
     return isset($accessMap[$fallback]) ? $fallback : (string) array_key_first($accessMap);
 }
 
-/** Allow Director, Accountant, and Secretary on admins.role when that column is a fixed list. */
+/** Allow Director, Accountant, Secretary, and Admission Manager on admins.role when that column is a fixed list. */
 function pcvc_ensure_director_role(mysqli $conn): void
 {
     static $done = false;
@@ -207,7 +253,7 @@ function pcvc_ensure_director_role(mysqli $conn): void
         return;
     }
     $missing = [];
-    foreach (['director', 'accountant', 'secretary'] as $roleName) {
+    foreach (['director', 'accountant', 'secretary', 'admission_manager'] as $roleName) {
         if (stripos($match[1], "'" . $roleName . "'") === false) {
             $missing[] = "'" . $roleName . "'";
         }

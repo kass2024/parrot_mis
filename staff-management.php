@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_staff']) && $i
 
     // Role update (superadmin only can change roles)
     $role = trim((string) ($_POST['role'] ?? 'staff'));
-    if (!in_array($role, ['superadmin', 'director', 'secretary', 'admin', 'staff', 'accountant', 'agent'], true)) {
+    if (!isset(pcvc_admin_role_options()[$role])) {
         $role = 'staff';
     }
 
@@ -274,7 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_staff']) && $isSu
     $usernameIn = trim((string) ($_POST['username'] ?? ''));
     $passwordIn = (string) ($_POST['password'] ?? '');
     $role       = trim((string) ($_POST['role'] ?? 'staff'));
-    if (!in_array($role, ['superadmin', 'director', 'secretary', 'admin', 'staff', 'accountant', 'agent'], true)) {
+    if (!isset(pcvc_admin_role_options()[$role])) {
         $role = 'staff';
     }
 
@@ -1842,13 +1842,9 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
                             <label>Username<input name="username" required value="<?= $esc($row['username'] ?? '') ?>" <?= $ro ?>></label>
                             <label>Role
                                 <select name="role" <?= $dis ?>>
-                                    <option value="superadmin" <?= ($row['role'] ?? '') === 'superadmin' ? 'selected' : '' ?>>Superadmin</option>
-                                    <option value="director" <?= ($row['role'] ?? '') === 'director' ? 'selected' : '' ?>>Director</option>
-                                    <option value="secretary" <?= ($row['role'] ?? '') === 'secretary' ? 'selected' : '' ?>>Secretary</option>
-                                    <option value="admin" <?= ($row['role'] ?? '') === 'admin' ? 'selected' : '' ?>>Admin</option>
-                                    <option value="staff" <?= ($row['role'] ?? '') === 'staff' ? 'selected' : '' ?>>Staff</option>
-                                    <option value="accountant" <?= ($row['role'] ?? '') === 'accountant' ? 'selected' : '' ?>>Accountant</option>
-                                    <option value="agent" <?= ($row['role'] ?? '') === 'agent' ? 'selected' : '' ?>>Agent</option>
+                                    <?php foreach (pcvc_admin_role_options() as $roleValue => $roleLabel): ?>
+                                    <option value="<?= $esc($roleValue) ?>" <?= ($row['role'] ?? '') === $roleValue ? 'selected' : '' ?>><?= $esc($roleLabel) ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                             </label>
                             <label>Position<input name="position" value="<?= $esc($row['position'] ?? '') ?>" <?= $ro ?>></label>
@@ -2011,13 +2007,9 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
                         <div class="col-md-3">
                             <label class="form-label">Role</label>
                             <select name="role" class="form-select">
-                                <option value="staff" selected>Staff</option>
-                                <option value="accountant">Accountant</option>
-                                <option value="admin">Admin</option>
-                                <option value="agent">Agent</option>
-                                <option value="superadmin">Super</option>
-                                <option value="director">Director</option>
-                                <option value="secretary">Secretary</option>
+                                <?php foreach (pcvc_admin_role_options() as $roleValue => $roleLabel): ?>
+                                <option value="<?= htmlspecialchars($roleValue, ENT_QUOTES, 'UTF-8') ?>" <?= $roleValue === 'staff' ? 'selected' : '' ?>><?= htmlspecialchars($roleLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
                             </select>
                         </div>
                         <div class="col-md-3">

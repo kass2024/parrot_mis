@@ -63,12 +63,15 @@ if ($result) {
             }
             $row['display_name'] = $name;
             $roleKey = strtolower(trim((string) ($row['role'] ?? '')));
-            $row['role_label'] = [
-                'staff' => 'Staff',
-                'accountant' => 'Accountant',
-                'secretary' => 'Secretary',
-                'agent' => 'Agent',
-            ][$roleKey] ?? ucfirst($roleKey !== '' ? $roleKey : $seg);
+            $row['role_label'] = function_exists('pcvc_admin_role_label')
+                ? pcvc_admin_role_label($roleKey)
+                : ([
+                    'staff' => 'Staff',
+                    'admission_manager' => 'Admission Manager',
+                    'accountant' => 'Accountant',
+                    'secretary' => 'Secretary',
+                    'agent' => 'Agent',
+                ][$roleKey] ?? ucfirst($roleKey !== '' ? $roleKey : $seg));
             $row['subtitle'] = trim((string) ($row['position'] ?? ''));
             if ($row['subtitle'] === '') {
                 $row['subtitle'] = (string) ($row['email'] ?? '');

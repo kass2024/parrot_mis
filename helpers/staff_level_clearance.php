@@ -356,7 +356,7 @@ function pcvc_staff_level_clearance_apply(mysqli $conn, int $adminId): array
 
 function pcvc_staff_level_clearance_is_target(string $role): bool
 {
-    if (pcvc_is_accountant_role($role) || pcvc_is_secretary_role($role)) {
+    if (pcvc_is_accountant_role($role) || pcvc_is_secretary_role($role) || pcvc_is_admission_manager_role($role)) {
         return true;
     }
 

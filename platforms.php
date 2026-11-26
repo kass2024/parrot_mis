@@ -249,7 +249,7 @@ if (isset($_GET["delete"])) {
                     <label class="fw-semibold">Person in charge</label>
                     <select class="selectpicker w-100" name="person_in_charge" data-live-search="true" required>
                         <?php
-                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','accountant','superadmin','director','secretary','agent')");
+                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','accountant','admission_manager','superadmin','director','secretary','agent')");
                         while ($a = $adminQ->fetch_assoc()) {
                             echo "<option value='{$a['id']}'>{$a['full_name']}</option>";
                         }
@@ -316,7 +316,7 @@ if (isset($_GET["delete"])) {
                     <label class="fw-semibold">Person in charge</label>
                     <select class="selectpicker w-100" id="edit_person" name="person_in_charge" data-live-search="true" required>
                         <?php
-                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','accountant','superadmin','director','secretary')");
+                        $adminQ = $conn->query("SELECT id, full_name FROM admins WHERE role IN ('staff','accountant','admission_manager','superadmin','director','secretary')");
                         while ($a = $adminQ->fetch_assoc()) {
                             echo "<option value='{$a['id']}'>{$a['full_name']}</option>";
                         }

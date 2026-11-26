@@ -598,6 +598,7 @@ $allowedCardsByRole = [
   'standard' => ['university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions','agent_report','university_portal','commission_request','staff_attendance','schools','marketing'],
   'Catholic university of America' => ['university_admissions', 'application_flag_summary','schools','marketing','abroad'],
   'staff' => ['staff_attendance','agent_report','university_portal','commission_request','all_admissions','loan_applications','schools','marketing','contracts','meeting_invitation'],
+  'admission_manager' => ['all_admissions','loan_applications','I-20_applications','credit_transfer','visit_study_visa','agent_report','university_portal','commission_request','staff_attendance','schools','marketing','contracts','meeting_invitation','jobsabrod','german_language_contracts'],
   'agent' => ['staff_attendance','agent_report','university_portal','commission_request','all_admissions','schools','marketing']
 ];
 
@@ -615,6 +616,13 @@ $sidebarAccess = [
   'staff' => [
     'staff_attendance', 'agent_report', 'university_portal', 'commission_request',
     'all_admissions', 'loan_applications', 'schools', 'marketing', 'smart_brochure', 'contracts', 'student_consent', 'jobsabrod','credit_transfer', 'visit_study_visa', 'employment_opportunities', 'meeting_invitation', 'korea_event_participation', 'malta_courses', 'eci_malta', 'platform', 'agent_contracts', 'german_language_contracts', 'special_contracts', 'finance'
+  ],
+  'admission_manager' => [
+    'all_admissions', 'loan_applications', 'I-20_applications', 'credit_transfer', 'visit_study_visa',
+    'staff_attendance', 'agent_report', 'university_portal', 'commission_request', 'schools',
+    'marketing', 'smart_brochure', 'contracts', 'student_consent', 'jobsabrod', 'meeting_invitation',
+    'korea_event_participation', 'malta_courses', 'eci_malta', 'platform', 'agent_contracts',
+    'german_language_contracts', 'special_contracts'
   ],
   'standard' => [
     'university_admissions', 'loan_applications', 'I-20_applications', 'all_admissions',
@@ -4372,7 +4380,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
                   $conn,
                   "SELECT id, full_name, email, role
                    FROM admins
-                   WHERE LOWER(TRIM(COALESCE(role,''))) IN ('staff','accountant','superadmin','director','secretary','admin')
+                   WHERE LOWER(TRIM(COALESCE(role,''))) IN ('staff','accountant','admission_manager','superadmin','director','secretary','admin')
                    ORDER BY full_name"
                 );
                 while ($row = mysqli_fetch_assoc($adminsQ)) {

@@ -191,7 +191,7 @@ function pcvc_self_reg_assignable_users(mysqli $conn): array
     $sql = "SELECT id, full_name, username, role
             FROM admins
             WHERE REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(role,''))),' ',''),'_',''),'-','')
-                  IN ('staff','staffadmin','accountant','agent')
+                  IN ('staff','staffadmin','accountant','admission_manager','admissionmanager','agent')
             ORDER BY full_name ASC, username ASC";
     $res = $conn->query($sql);
     if (!$res) {
