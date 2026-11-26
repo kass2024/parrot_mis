@@ -528,6 +528,114 @@ function pcvc_approve_staff_account(mysqli $conn, int $adminId): array
 }
 
 /**
+ * Reject a pending personal signup, email the reason, then remove the pending account.
+ *
+ * @return array{ok:bool, error?:string, email?:string, name?:string}
+ */
+function pcvc_reject_staff_account(mysqli $conn, int $adminId, string $reason): array
+{
+    if ($adminId < 1) {
+        return ['ok' => false, 'error' => 'Choose an account to reject.'];
+    }
+    $reason = trim(preg_replace('/\s+/u', ' ', $reason) ?? $reason);
+    if ($reason === '') {
+        return ['ok' => false, 'error' => 'Enter a reason for the rejection.'];
+    }
+    if (mb_strlen($reason) < 8) {
+        return ['ok' => false, 'error' => 'Give a clearer rejection reason (at least a short sentence).'];
+    }
+    if (mb_strlen($reason) > 1000) {
+        return ['ok' => false, 'error' => 'Keep the rejection reason under 1000 characters.'];
+    }
+
+    pcvc_ensure_staff_account_columns($conn);
+    $st = $conn->prepare(
+        'SELECT id, email, first_name, last_name, full_name, account_type, company_name, account_status
+         FROM admins WHERE id = ? LIMIT 1'
+    );
+    if (!$st) {
+        return ['ok' => false, 'error' => 'Rejection is unavailable right now.'];
+    }
+    $st->bind_param('i', $adminId);
+    $st->execute();
+    $row = $st->get_result()->fetch_assoc();
+    $st->close();
+    if (!$row) {
+        return ['ok' => false, 'error' => 'That account was not found.'];
+    }
+    $status = strtolower(trim((string) ($row['account_status'] ?? 'active')));
+    if ($status !== 'pending') {
+        return ['ok' => false, 'error' => 'Only accounts waiting for approval can be rejected.'];
+    }
+    $isCompany = function_exists('pcvc_admin_is_company_account') && pcvc_admin_is_company_account($row);
+    if ($isCompany) {
+        return ['ok' => false, 'error' => 'Reject company partners under Companies Management.'];
+    }
+
+    $email = strtolower(trim((string) ($row['email'] ?? '')));
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        return ['ok' => false, 'error' => 'This account has no valid email for the rejection notice.'];
+    }
+    $fullName = trim((string) ($row['full_name'] ?? ''));
+    if ($fullName === '') {
+        $fullName = trim((string) ($row['first_name'] ?? '') . ' ' . (string) ($row['last_name'] ?? ''));
+    }
+    $display = $fullName !== '' ? $fullName : $email;
+
+    $sent = pcvc_send_staff_rejection_email($email, $display, $reason);
+    if (empty($sent['ok'])) {
+        return ['ok' => false, 'error' => 'The rejection email could not be sent, so the account was left waiting.'];
+    }
+
+    if (!function_exists('pcvc_delete_admin_account')) {
+        require_once __DIR__ . '/role.php';
+    }
+    $deleted = pcvc_delete_admin_account($conn, $adminId);
+    if (empty($deleted['ok'])) {
+        return [
+            'ok' => false,
+            'error' => 'The rejection email was sent, but the pending account could not be removed. '
+                . (string) ($deleted['error'] ?? 'Try deleting it from Accounts management.'),
+        ];
+    }
+
+    return ['ok' => true, 'email' => $email, 'name' => $display];
+}
+
+/**
+ * Rejection notice after a pending signup is declined.
+ */
+function pcvc_send_staff_rejection_email(string $email, string $fullName, string $reason): array
+{
+    $safeName = htmlspecialchars($fullName, ENT_QUOTES, 'UTF-8');
+    $safeReason = nl2br(htmlspecialchars($reason, ENT_QUOTES, 'UTF-8'));
+    $company = defined('PCVC_COMPANY_DISPLAY_NAME') ? PCVC_COMPANY_DISPLAY_NAME : 'Parrot Canada Visa Consultant';
+    $safeCompany = htmlspecialchars($company, ENT_QUOTES, 'UTF-8');
+
+    $html = '<div style="margin:0;padding:24px 12px;background:#f4f7f4;font-family:Arial,Helvetica,sans-serif;color:#1e293b">'
+        . '<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e2e8f0">'
+        . '<tr><td style="background:#9a3412;padding:28px 28px 22px;color:#ffffff">'
+        . '<p style="margin:0 0 6px;font-size:13px;letter-spacing:.04em;text-transform:uppercase;opacity:.9">' . $safeCompany . '</p>'
+        . '<h1 style="margin:0;font-size:22px;line-height:1.3">Your signup was not approved</h1>'
+        . '</td></tr>'
+        . '<tr><td style="padding:28px">'
+        . '<p style="margin:0 0 14px;font-size:15px;line-height:1.6">Hello <strong>' . $safeName . '</strong>,</p>'
+        . '<p style="margin:0 0 18px;font-size:15px;line-height:1.6">Thank you for registering. A superadmin reviewed your request and could not approve it at this time.</p>'
+        . '<div style="margin:0 0 18px;padding:14px 16px;background:#fff7ed;border:1px solid #fdba74;border-radius:12px;font-size:14px;line-height:1.6">'
+        . '<div style="color:#9a3412;font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;margin-bottom:6px">Reason</div>'
+        . '<div>' . $safeReason . '</div>'
+        . '</div>'
+        . '<p style="margin:0;font-size:13px;line-height:1.6;color:#64748b">If you believe this was a mistake, reply to partnership@visaconsultantcanada.com with any missing details and you may register again.</p>'
+        . '</td></tr></table></div>';
+
+    return sendSMTPMailDetailed(
+        $email,
+        'Your ' . $company . ' signup was not approved',
+        $html
+    );
+}
+
+/**
  * Reset password and resend login details to a company (or staff) account email.
  *
  * @return array{ok:bool, error?:string, email?:string, name?:string}

@@ -533,6 +533,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_account']) &&
     exit;
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reject_account']) && $isSuperAdmin) {
+    $postedToken = (string) ($_POST['csrf_token'] ?? '');
+    if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
+        $_SESSION['error'] = 'This rejection request expired. Refresh the page and try again.';
+        header('Location: staff-management.php');
+        exit;
+    }
+    $result = pcvc_reject_staff_account(
+        $conn,
+        (int) ($_POST['id'] ?? 0),
+        (string) ($_POST['rejection_reason'] ?? '')
+    );
+    if (!empty($result['ok'])) {
+        $_SESSION['success'] = 'Rejected ' . (string) ($result['name'] ?? 'the account')
+            . '. The reason was emailed to ' . (string) ($result['email'] ?? 'the applicant') . '.';
+    } else {
+        $_SESSION['error'] = (string) ($result['error'] ?? 'Rejection failed.');
+    }
+    header('Location: staff-management.php');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['deactivate_account']) && $isSuperAdmin) {
     $postedToken = (string) ($_POST['csrf_token'] ?? '');
     if ($postedToken === '' || !hash_equals((string) $_SESSION['staff_csrf'], $postedToken)) {
@@ -1298,8 +1320,73 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
             color: #fff;
             font-weight: 700;
             padding: 10px 12px;
+            width: 100%;
+            cursor: pointer;
         }
         .approve-btn:hover { background: #356a2a; }
+        .reject-btn {
+            margin-top: 6px;
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            background: #fff;
+            color: #b91c1c;
+            font-weight: 700;
+            padding: 10px 12px;
+            width: 100%;
+            cursor: pointer;
+        }
+        .reject-btn:hover { background: #fef2f2; }
+        .pending-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+        .reject-panel {
+            display: none;
+            margin-top: 4px;
+            padding: 10px;
+            border: 1px solid #fed7aa;
+            border-radius: 12px;
+            background: #fff7ed;
+        }
+        .reject-panel.open { display: block; }
+        .reject-panel label {
+            display: block;
+            font-size: .78rem;
+            font-weight: 700;
+            color: #9a3412;
+            margin-bottom: 6px;
+        }
+        .reject-panel textarea {
+            width: 100%;
+            min-height: 72px;
+            border: 1px solid #fdba74;
+            border-radius: 10px;
+            padding: 8px 10px;
+            font: inherit;
+            resize: vertical;
+        }
+        .reject-panel .reject-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .reject-panel .reject-actions .btn-ghost {
+            flex: 1;
+            border: 0;
+            border-radius: 10px;
+            background: #f1f5f9;
+            color: #0f172a;
+            font-weight: 700;
+            padding: 9px 10px;
+            cursor: pointer;
+        }
+        .reject-panel .reject-actions .btn-reject-confirm {
+            flex: 1.2;
+            border: 0;
+            border-radius: 10px;
+            background: #dc2626;
+            color: #fff;
+            font-weight: 700;
+            padding: 9px 10px;
+            cursor: pointer;
+        }
         .status-wait {
             display: inline-block;
             margin-left: 6px;
@@ -1604,12 +1691,35 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
                         <?php endif; ?>
                     <?php endif; ?>
                 </div>
-                <form method="post">
-                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
-                    <input type="hidden" name="approve_account" value="1">
-                    <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
-                    <button type="submit" class="approve-btn">Approve and email sign-in</button>
-                </form>
+                <div class="pending-actions">
+                    <form method="post">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                        <input type="hidden" name="approve_account" value="1">
+                        <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
+                        <button type="submit" class="approve-btn">Approve and email sign-in</button>
+                    </form>
+                    <button type="button" class="reject-btn btn-open-reject" data-target="reject-panel-<?= (int) $pending['id'] ?>">Reject with a reason</button>
+                    <div class="reject-panel" id="reject-panel-<?= (int) $pending['id'] ?>">
+                        <form method="post" class="reject-form">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="reject_account" value="1">
+                            <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
+                            <label for="rejection_reason_<?= (int) $pending['id'] ?>">Reason (emailed to the applicant)</label>
+                            <textarea
+                                id="rejection_reason_<?= (int) $pending['id'] ?>"
+                                name="rejection_reason"
+                                required
+                                minlength="8"
+                                maxlength="1000"
+                                placeholder="Explain why this signup cannot be approved…"
+                            ></textarea>
+                            <div class="reject-actions">
+                                <button type="button" class="btn-ghost btn-cancel-reject" data-target="reject-panel-<?= (int) $pending['id'] ?>">Cancel</button>
+                                <button type="submit" class="btn-reject-confirm">Send rejection</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </article>
             <?php endforeach; ?>
         </div>
@@ -2172,6 +2282,34 @@ $(function() {
     // Show loading on form submit
     $('.staff-form').on('submit', function() {
         $('#loadingOverlay').fadeIn();
+        return true;
+    });
+
+    $(document).on('click', '.btn-open-reject', function () {
+        const id = this.getAttribute('data-target');
+        const panel = id ? document.getElementById(id) : null;
+        if (!panel) return;
+        document.querySelectorAll('.reject-panel.open').forEach(el => {
+            if (el !== panel) el.classList.remove('open');
+        });
+        panel.classList.add('open');
+        const ta = panel.querySelector('textarea');
+        if (ta) ta.focus();
+    });
+    $(document).on('click', '.btn-cancel-reject', function () {
+        const id = this.getAttribute('data-target');
+        const panel = id ? document.getElementById(id) : null;
+        if (panel) panel.classList.remove('open');
+    });
+    $(document).on('submit', '.reject-form', function () {
+        const reason = String((this.querySelector('[name="rejection_reason"]') || {}).value || '').trim();
+        if (reason.length < 8) {
+            alert('Enter a short reason for the rejection.');
+            return false;
+        }
+        if (!confirm('Reject this signup and email the reason to the applicant? The pending account will be removed.')) {
+            return false;
+        }
         return true;
     });
 
