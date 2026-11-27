@@ -1252,24 +1252,69 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
         }
 
         .pending-board {
-            margin: 0 0 18px;
+            margin: 0 0 14px;
             background: #fff;
             border: 1px solid #d9e6d4;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 10px 30px rgba(47, 90, 38, 0.06);
         }
-        .pending-head {
+        .pending-board > summary.pending-head {
             display: flex;
             justify-content: space-between;
             gap: 12px;
             align-items: center;
-            padding: 16px 18px;
+            padding: 12px 16px;
             background: #f4faf3;
-            border-bottom: 1px solid #d9e6d4;
+            border-bottom: 1px solid transparent;
+            list-style: none;
+            cursor: pointer;
+            user-select: none;
         }
-        .pending-head h2 { margin: 0; font-size: 1.05rem; }
-        .pending-head p { margin: 4px 0 0; color: var(--text-muted); font-size: .85rem; }
+        .pending-board > summary.pending-head::-webkit-details-marker { display: none; }
+        .pending-board[open] > summary.pending-head {
+            border-bottom-color: #d9e6d4;
+        }
+        .pending-head-main {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+            flex: 1;
+        }
+        .pending-fold-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: #e7f3e4;
+            color: #2f5a26;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
+            transition: transform .18s ease;
+        }
+        .pending-board[open] .pending-fold-icon {
+            transform: rotate(90deg);
+        }
+        .pending-head h2 { margin: 0; font-size: 1.02rem; }
+        .pending-head p { margin: 3px 0 0; color: var(--text-muted); font-size: .82rem; }
+        .pending-head-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 0 0 auto;
+        }
+        .pending-fold-hint {
+            font-size: .78rem;
+            font-weight: 700;
+            color: #2f5a26;
+            background: #e7f3e4;
+            border-radius: 999px;
+            padding: 5px 10px;
+            white-space: nowrap;
+        }
+        .pending-board[open] .pending-fold-hint::after { content: 'Hide'; }
+        .pending-board:not([open]) .pending-fold-hint::after { content: 'Show'; }
         .pending-count {
             min-width: 36px;
             height: 36px;
@@ -1279,6 +1324,10 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
             background: #427431;
             color: #fff;
             font-weight: 700;
+        }
+        .pending-body {
+            max-height: min(38vh, 360px);
+            overflow: auto;
         }
         .pending-grid {
             display: grid;
@@ -1649,82 +1698,92 @@ unset($_SESSION['success'], $_SESSION['error'], $_SESSION['reset_credentials']);
     </div>
     <?php endif; ?>
     
-    <!-- Waiting for approval -->
-    <?php if ($isSuperAdmin): ?>
-    <section class="pending-board">
-        <div class="pending-head">
-            <div>
-                <h2>Waiting for approval</h2>
-                <p>Approve personal agent/staff signups here. Company partners are approved under <strong>Companies Management</strong>.</p>
-            </div>
-            <div class="pending-count"><?= count($pendingAccounts) ?></div>
-        </div>
-        <?php if ($pendingAccounts === []): ?>
-            <p class="pending-meta" style="padding:14px 18px;">No new accounts are waiting.</p>
-        <?php else: ?>
-        <div class="pending-grid">
-            <?php foreach ($pendingAccounts as $pending):
-                $pendingName = trim((string) ($pending['full_name'] ?? ''));
-                if ($pendingName === '') {
-                    $pendingName = trim((string) (($pending['first_name'] ?? '') . ' ' . ($pending['last_name'] ?? '')));
-                }
-                $isCompanyAccount = strtolower((string) ($pending['account_type'] ?? '')) === 'company'
-                    || trim((string) ($pending['company_name'] ?? '')) !== '';
-            ?>
-            <article class="pending-card">
+    <!-- Waiting for approval (folded by default so the staff list stays visible) -->
+    <?php if ($isSuperAdmin):
+        $pendingCount = count($pendingAccounts);
+    ?>
+    <details class="pending-board" id="pendingApprovalBoard"<?= $pendingCount === 0 ? ' open' : '' ?>>
+        <summary class="pending-head">
+            <div class="pending-head-main">
+                <span class="pending-fold-icon" aria-hidden="true"><i class="bi bi-chevron-right"></i></span>
                 <div>
-                    <span class="kind-pill<?= $isCompanyAccount ? ' is-company' : '' ?>"><?= $isCompanyAccount ? 'Company' : 'Personal' ?></span>
+                    <h2>Waiting for approval</h2>
+                    <p>Approve personal agent/staff signups here. Company partners are approved under <strong>Companies Management</strong>.</p>
                 </div>
-                <strong><?= htmlspecialchars($pendingName !== '' ? $pendingName : 'New account', ENT_QUOTES, 'UTF-8') ?></strong>
-                <div class="pending-meta">
-                    <?= htmlspecialchars((string) ($pending['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                    <?php if (trim((string) ($pending['phone_number'] ?? '')) !== ''): ?>
-                        <br><?= htmlspecialchars((string) $pending['phone_number'], ENT_QUOTES, 'UTF-8') ?>
-                    <?php endif; ?>
-                    <?php if ($isCompanyAccount): ?>
-                        <br><strong><?= htmlspecialchars((string) ($pending['company_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                        <?php if (trim((string) ($pending['company_registration'] ?? '')) !== ''): ?>
-                            · <?= htmlspecialchars((string) $pending['company_registration'], ENT_QUOTES, 'UTF-8') ?>
-                        <?php endif; ?>
-                        <?php if (trim((string) ($pending['company_address'] ?? '')) !== ''): ?>
-                            <br><?= htmlspecialchars((string) $pending['company_address'], ENT_QUOTES, 'UTF-8') ?>
-                        <?php endif; ?>
-                    <?php endif; ?>
-                </div>
-                <div class="pending-actions">
-                    <form method="post">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
-                        <input type="hidden" name="approve_account" value="1">
-                        <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
-                        <button type="submit" class="approve-btn">Approve and email sign-in</button>
-                    </form>
-                    <button type="button" class="reject-btn btn-open-reject" data-target="reject-panel-<?= (int) $pending['id'] ?>">Reject with a reason</button>
-                    <div class="reject-panel" id="reject-panel-<?= (int) $pending['id'] ?>">
-                        <form method="post" class="reject-form">
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
-                            <input type="hidden" name="reject_account" value="1">
-                            <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
-                            <label for="rejection_reason_<?= (int) $pending['id'] ?>">Reason (emailed to the applicant)</label>
-                            <textarea
-                                id="rejection_reason_<?= (int) $pending['id'] ?>"
-                                name="rejection_reason"
-                                required
-                                minlength="8"
-                                maxlength="1000"
-                                placeholder="Explain why this signup cannot be approved…"
-                            ></textarea>
-                            <div class="reject-actions">
-                                <button type="button" class="btn-ghost btn-cancel-reject" data-target="reject-panel-<?= (int) $pending['id'] ?>">Cancel</button>
-                                <button type="submit" class="btn-reject-confirm">Send rejection</button>
-                            </div>
-                        </form>
+            </div>
+            <div class="pending-head-right">
+                <span class="pending-fold-hint" aria-hidden="true"></span>
+                <div class="pending-count" title="<?= (int) $pendingCount ?> waiting"><?= (int) $pendingCount ?></div>
+            </div>
+        </summary>
+        <div class="pending-body">
+            <?php if ($pendingAccounts === []): ?>
+                <p class="pending-meta" style="padding:14px 18px;">No new accounts are waiting.</p>
+            <?php else: ?>
+            <div class="pending-grid">
+                <?php foreach ($pendingAccounts as $pending):
+                    $pendingName = trim((string) ($pending['full_name'] ?? ''));
+                    if ($pendingName === '') {
+                        $pendingName = trim((string) (($pending['first_name'] ?? '') . ' ' . ($pending['last_name'] ?? '')));
+                    }
+                    $isCompanyAccount = strtolower((string) ($pending['account_type'] ?? '')) === 'company'
+                        || trim((string) ($pending['company_name'] ?? '')) !== '';
+                ?>
+                <article class="pending-card">
+                    <div>
+                        <span class="kind-pill<?= $isCompanyAccount ? ' is-company' : '' ?>"><?= $isCompanyAccount ? 'Company' : 'Personal' ?></span>
                     </div>
-                </div>
-            </article>
-            <?php endforeach; ?>
+                    <strong><?= htmlspecialchars($pendingName !== '' ? $pendingName : 'New account', ENT_QUOTES, 'UTF-8') ?></strong>
+                    <div class="pending-meta">
+                        <?= htmlspecialchars((string) ($pending['email'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                        <?php if (trim((string) ($pending['phone_number'] ?? '')) !== ''): ?>
+                            <br><?= htmlspecialchars((string) $pending['phone_number'], ENT_QUOTES, 'UTF-8') ?>
+                        <?php endif; ?>
+                        <?php if ($isCompanyAccount): ?>
+                            <br><strong><?= htmlspecialchars((string) ($pending['company_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                            <?php if (trim((string) ($pending['company_registration'] ?? '')) !== ''): ?>
+                                · <?= htmlspecialchars((string) $pending['company_registration'], ENT_QUOTES, 'UTF-8') ?>
+                            <?php endif; ?>
+                            <?php if (trim((string) ($pending['company_address'] ?? '')) !== ''): ?>
+                                <br><?= htmlspecialchars((string) $pending['company_address'], ENT_QUOTES, 'UTF-8') ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                    <div class="pending-actions">
+                        <form method="post">
+                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="approve_account" value="1">
+                            <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
+                            <button type="submit" class="approve-btn">Approve and email sign-in</button>
+                        </form>
+                        <button type="button" class="reject-btn btn-open-reject" data-target="reject-panel-<?= (int) $pending['id'] ?>">Reject with a reason</button>
+                        <div class="reject-panel" id="reject-panel-<?= (int) $pending['id'] ?>">
+                            <form method="post" class="reject-form">
+                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['staff_csrf'], ENT_QUOTES, 'UTF-8') ?>">
+                                <input type="hidden" name="reject_account" value="1">
+                                <input type="hidden" name="id" value="<?= (int) $pending['id'] ?>">
+                                <label for="rejection_reason_<?= (int) $pending['id'] ?>">Reason (emailed to the applicant)</label>
+                                <textarea
+                                    id="rejection_reason_<?= (int) $pending['id'] ?>"
+                                    name="rejection_reason"
+                                    required
+                                    minlength="8"
+                                    maxlength="1000"
+                                    placeholder="Explain why this signup cannot be approved…"
+                                ></textarea>
+                                <div class="reject-actions">
+                                    <button type="button" class="btn-ghost btn-cancel-reject" data-target="reject-panel-<?= (int) $pending['id'] ?>">Cancel</button>
+                                    <button type="submit" class="btn-reject-confirm">Send rejection</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </article>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
         </div>
-        <?php endif; ?>
-    </section>
+    </details>
     <?php endif; ?>
 
     <!-- Search and Filters - Compact -->
@@ -2278,6 +2337,23 @@ $(function() {
     setTimeout(function() {
         $('.alert').fadeOut('slow');
     }, 3000);
+
+    // Remember waiting-approval fold so the staff list stays usable.
+    (function () {
+        const board = document.getElementById('pendingApprovalBoard');
+        if (!board) return;
+        const key = 'pcvc_staff_pending_board_open';
+        try {
+            const saved = sessionStorage.getItem(key);
+            if (saved === '1') board.open = true;
+            if (saved === '0') board.open = false;
+        } catch (e) {}
+        board.addEventListener('toggle', function () {
+            try {
+                sessionStorage.setItem(key, board.open ? '1' : '0');
+            } catch (e) {}
+        });
+    })();
     
     // Show loading on form submit
     $('.staff-form').on('submit', function() {
