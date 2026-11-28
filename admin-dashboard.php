@@ -714,6 +714,27 @@ if ($applyClearance) {
 if (pcvc_admin_row_is_akayezu_sonia($admin)) {
     $allowedSidebarItems = array_values(array_diff($allowedSidebarItems, ['website_management']));
 }
+// Overtime request is available to every internal staff/agent/admin role.
+$canUseOvertimeRequest = $actingCompanyId <= 0 && (
+    pcvc_is_superadmin_role($role)
+    || pcvc_is_staff_role($role)
+    || pcvc_is_agent_role($role)
+    || pcvc_is_admission_manager_role($role)
+    || in_array(strtolower(trim(pcvc_normalize_role_string($role))), ['admin', 'director', 'secretary'], true)
+);
+if ($canUseOvertimeRequest) {
+    if (!in_array('staff_attendance', $allowedSidebarItems, true)) {
+        $allowedSidebarItems[] = 'staff_attendance';
+    }
+    if ($pcvcStaffClearanceOn) {
+        $otMenuKey = pcvc_staff_level_clearance_menu_key('staff_attendance');
+        $otSubKey = pcvc_staff_level_clearance_sub_key('staff_attendance', 'staff_overtime_request.php');
+        $pcvcClearanceDenied = array_values(array_filter(
+            $pcvcClearanceDenied,
+            static fn($key): bool => !in_array((string) $key, [$otMenuKey, $otSubKey], true)
+        ));
+    }
+}
 $allowedDashboardCards = $allowedCardsByRole[$dashboardRoleKey] ?? ($allowedCardsByRole['standard'] ?? []);
 
 // Get agent data for chart
@@ -3481,7 +3502,9 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
   window.pcvcClearanceDenied = <?= json_encode(array_values($pcvcClearanceDenied), JSON_UNESCAPED_SLASHES) ?>;
   window.pcvcClearanceIndex = <?= json_encode($pcvcClearanceIndex, JSON_UNESCAPED_SLASHES) ?>;
   window.pcvcClearanceBlocks = function (url) {
-    const keys = window.pcvcClearanceIndex[url] || window.pcvcClearanceIndex[url.split('?')[0]] || [];
+    const path = String(url || '').split('?')[0];
+    if (path === 'staff_overtime_request.php' || path === 'save_overtime_request.php') return false;
+    const keys = window.pcvcClearanceIndex[url] || window.pcvcClearanceIndex[path] || [];
     if (!keys.length) return false;
     return keys.every(key => window.pcvcClearanceDenied.indexOf(key) !== -1);
   };
@@ -3490,6 +3513,7 @@ if (!empty($showStaffPersonalDashboard) && strtolower($role) !== 'catholic unive
     if (!match) return;
     const menu = (link.closest('.sidebar-submenu') || {}).id || '';
     const url = window.pcvcClearanceIndex[match[1]] ? match[1] : match[1].split('?')[0];
+    if (url === 'staff_overtime_request.php') return;
     const key = 'sub:' + menu.replace('submenu_', '') + '|' + url;
     if (window.pcvcClearanceDenied.indexOf(key) !== -1) link.style.display = 'none';
   });

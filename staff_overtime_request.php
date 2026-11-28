@@ -1,6 +1,9 @@
 <?php
+declare(strict_types=1);
+
 session_start();
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/helpers/role.php';
 
 $staffId = (int) ($_SESSION['admin_id'] ?? $_SESSION['id'] ?? 0);
 if ($staffId <= 0) {
@@ -8,8 +11,33 @@ if ($staffId <= 0) {
     exit;
 }
 
+$sessionRole = (string) ($_SESSION['role'] ?? '');
+$dbRole = $sessionRole;
+$stRole = $conn->prepare('SELECT role FROM admins WHERE id = ? LIMIT 1');
+if ($stRole) {
+    $stRole->bind_param('i', $staffId);
+    $stRole->execute();
+    $roleRow = $stRole->get_result()->fetch_assoc() ?: null;
+    $stRole->close();
+    if ($roleRow) {
+        $dbRole = (string) ($roleRow['role'] ?? $sessionRole);
+    }
+}
+$roleKey = strtolower(trim(pcvc_normalize_role_string($dbRole !== '' ? $dbRole : $sessionRole)));
+$canRequest = pcvc_is_superadmin_role($dbRole)
+    || pcvc_is_staff_role($dbRole)
+    || pcvc_is_agent_role($dbRole)
+    || pcvc_is_admission_manager_role($dbRole)
+    || in_array($roleKey, ['admin', 'director', 'secretary', 'agent', 'staff', 'accountant', 'admission_manager'], true);
+if (!$canRequest) {
+    http_response_code(403);
+    echo 'Overtime requests are available to staff, agents, and admin roles.';
+    exit;
+}
+
 $today = (new DateTime('now', new DateTimeZone('America/Toronto')))->format('Y-m-d');
 
+$history = null;
 $stmt = $conn->prepare("
     SELECT
         o.id,
@@ -25,9 +53,11 @@ $stmt = $conn->prepare("
     WHERE o.staff_id = ?
     ORDER BY o.created_at DESC
 ");
-$stmt->bind_param('i', $staffId);
-$stmt->execute();
-$history = $stmt->get_result();
+if ($stmt) {
+    $stmt->bind_param('i', $staffId);
+    $stmt->execute();
+    $history = $stmt->get_result();
+}
 
 $policy = [
     [
@@ -109,8 +139,14 @@ body { margin: 0; background: #f3f6f4; color: #142033; font-family: Manrope, "Se
 .policy h3 { margin: 16px 0 8px; font-size: 16px; }
 .policy li { margin: 6px 0; font-weight: 600; line-height: 1.45; }
 .policy p { font-weight: 600; line-height: 1.5; }
-.accept-row { display: flex; justify-content: flex-end; margin-top: 14px; }
+.accept-row { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; margin-top: 14px; align-items: center; }
 .hint { color: #64748b; font-size: 13px; font-weight: 700; margin-right: auto; align-self: center; }
+.policy-check {
+  display: flex; gap: 10px; align-items: flex-start; margin-top: 12px;
+  padding: 12px; border: 1px solid #d9e6d4; border-radius: 12px; background: #f8faf8;
+  font-weight: 700; font-size: 14px; cursor: pointer;
+}
+.policy-check input { width: 18px; height: 18px; margin-top: 2px; flex: 0 0 auto; }
 label { display: block; font-size: 13px; font-weight: 800; margin: 12px 0 6px; }
 input, select, textarea { width: 100%; border: 1px solid #d7e3dc; border-radius: 12px; padding: 12px; font: 600 15px Manrope, sans-serif; }
 .task-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
@@ -138,10 +174,9 @@ input, select, textarea { width: 100%; border: 1px solid #d7e3dc; border-radius:
     </div>
   </div>
 
-  <?php if ($history->num_rows === 0): ?>
+  <?php if (!$history || $history->num_rows === 0): ?>
     <div class="card empty">No overtime requests yet.</div>
-  <?php endif; ?>
-  <?php while ($row = $history->fetch_assoc()): ?>
+  <?php else: while ($row = $history->fetch_assoc()): ?>
     <?php
       $status = (string) $row['status'];
       $paid = $row['paid_amount'] !== null;
@@ -161,7 +196,7 @@ input, select, textarea { width: 100%; border: 1px solid #d7e3dc; border-radius:
       </div>
       <div class="tasks"><?= htmlspecialchars((string) $row['reason'], ENT_QUOTES, 'UTF-8') ?></div>
     </article>
-  <?php endwhile; ?>
+  <?php endwhile; endif; ?>
 </div>
 
 <div class="modal" id="request-modal">
@@ -189,8 +224,12 @@ input, select, textarea { width: 100%; border: 1px solid #d7e3dc; border-radius:
           <?php endif; ?>
         <?php endforeach; ?>
       </div>
+      <label class="policy-check">
+        <input type="checkbox" id="policy-check">
+        <span>I have read and accept the Overtime Work Policy.</span>
+      </label>
       <div class="accept-row">
-        <span class="hint" id="policy-hint">Read to the end to accept.</span>
+        <span class="hint" id="policy-hint">Read to the end, or tick the box to accept.</span>
         <button class="btn btn-green" type="button" id="accept-policy" disabled>Accept</button>
       </div>
     </section>
@@ -227,22 +266,37 @@ const modal = document.getElementById('request-modal');
 const policyBox = document.getElementById('policy-scroll');
 const acceptBtn = document.getElementById('accept-policy');
 const hint = document.getElementById('policy-hint');
+const policyCheck = document.getElementById('policy-check');
 
 function policyReady() {
-  const atEnd = policyBox.scrollTop + policyBox.clientHeight >= policyBox.scrollHeight - 12;
-  acceptBtn.disabled = !atEnd;
-  hint.textContent = atEnd ? 'You can accept the policy.' : 'Read to the end to accept.';
+  if (!policyBox || !acceptBtn) return;
+  const scrolled = policyBox.scrollTop + policyBox.clientHeight >= policyBox.scrollHeight - 16;
+  const noScrollNeeded = policyBox.scrollHeight <= policyBox.clientHeight + 8;
+  const checked = !!(policyCheck && policyCheck.checked);
+  const ready = checked || scrolled || noScrollNeeded;
+  acceptBtn.disabled = !ready;
+  if (hint) {
+    hint.textContent = ready
+      ? 'You can accept the policy.'
+      : 'Read to the end, or tick the box to accept.';
+  }
 }
 
 document.getElementById('open-request').addEventListener('click', () => {
   document.getElementById('policy-step').hidden = false;
   document.getElementById('form-step').hidden = true;
+  if (policyCheck) policyCheck.checked = false;
   modal.classList.add('open');
   policyBox.scrollTop = 0;
-  policyReady();
+  requestAnimationFrame(() => {
+    policyReady();
+    setTimeout(policyReady, 120);
+  });
 });
 
 policyBox.addEventListener('scroll', policyReady);
+policyCheck?.addEventListener('change', policyReady);
+window.addEventListener('resize', policyReady);
 acceptBtn.addEventListener('click', () => {
   if (acceptBtn.disabled) return;
   document.getElementById('policy-step').hidden = true;
@@ -292,21 +346,31 @@ document.getElementById('ot-form').addEventListener('submit', async (event) => {
   document.querySelectorAll('.task-field').forEach((field, index) => {
     if (field.value.trim()) tasks.push((index + 1) + '. ' + field.value.trim());
   });
-  if (!tasks.length) return;
+  if (!tasks.length) {
+    alert('Add at least one task.');
+    return;
+  }
   document.getElementById('reason').value = tasks.join('\n');
   const button = document.getElementById('submit-request');
   button.disabled = true;
   button.textContent = 'Sending…';
   try {
-    const response = await fetch('save_overtime_request.php', { method: 'POST', body: new FormData(event.target) });
-    const data = await response.json();
-    if (data.success) {
+    const response = await fetch('save_overtime_request.php', {
+      method: 'POST',
+      body: new FormData(event.target),
+      credentials: 'same-origin',
+      headers: { 'Accept': 'application/json' }
+    });
+    const text = await response.text();
+    let data = null;
+    try { data = JSON.parse(text); } catch (e) { data = null; }
+    if (data && data.success) {
       location.reload();
       return;
     }
     button.disabled = false;
     button.textContent = 'Submit request';
-    alert(data.message || 'The request could not be saved.');
+    alert((data && data.message) || ('The request could not be saved.' + (response.ok ? '' : ' (HTTP ' + response.status + ')')));
   } catch (error) {
     button.disabled = false;
     button.textContent = 'Submit request';

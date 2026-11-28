@@ -587,6 +587,11 @@ function pcvc_staff_clearance_guard_request(mysqli $conn): void
 
     $script = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
     $script = ltrim($script, '/');
+    $scriptBase = strtolower(basename($script));
+    // Overtime request + save are open to all signed-in staff/agent/admin roles.
+    if (in_array($scriptBase, ['staff_overtime_request.php', 'save_overtime_request.php'], true)) {
+        return;
+    }
     $query = (string) ($_SERVER['QUERY_STRING'] ?? '');
     $catalog = pcvc_staff_level_clearance_catalog();
     $applicable = [];
